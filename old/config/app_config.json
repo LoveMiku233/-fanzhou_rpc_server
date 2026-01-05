@@ -1,0 +1,21 @@
+{
+  "ui": {
+    "theme": "dark",
+    "language": "zh_CN",
+    "fontSize": 14,
+    "enableAnimations": true,
+    "animationDuration": 250
+  },
+  "rpc": {
+    "serverHost": "127.0.0.1",
+    "serverPort": 12345,
+    "reconnectInterval": 5000,
+    "autoReconnect": true
+  },
+  "log": {
+    "logToConsole": true,
+    "logToFile": false,
+    "logFilePath": "logs/app.log",
+    "logLevel": 0
+  }
+}
