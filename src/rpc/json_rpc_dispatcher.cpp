@@ -1,6 +1,6 @@
 /**
  * @file json_rpc_dispatcher.cpp
- * @brief JSON-RPC method dispatcher implementation
+ * @brief JSON-RPC方法分发器实现
  */
 
 #include "json_rpc_dispatcher.h"
@@ -53,25 +53,25 @@ QJsonObject JsonRpcDispatcher::makeResult(const QJsonValue &id,
 
 QJsonObject JsonRpcDispatcher::handle(const QJsonObject &request) const
 {
-    // Validate JSON-RPC version
+    // 验证JSON-RPC版本
     if (request.value(QStringLiteral("jsonrpc")).toString() != QStringLiteral("2.0")) {
         LOG_WARNING(kLogSource, QStringLiteral("Invalid request: jsonrpc != 2.0"));
         return makeError(request.value(QStringLiteral("id")), -32600,
                         QStringLiteral("Invalid Request: jsonrpc must be '2.0'"));
     }
 
-    // Check if this is a notification (no id)
+    // 检查是否为通知（无id）
     const bool isNotification = !request.contains(QStringLiteral("id"));
     const QJsonValue id = request.value(QStringLiteral("id"));
 
-    // Get method name
+    // 获取方法名
     const QString method = request.value(QStringLiteral("method")).toString();
     if (method.isEmpty()) {
         LOG_WARNING(kLogSource, QStringLiteral("Invalid request: missing method"));
         return makeError(id, -32600, QStringLiteral("Invalid Request: method missing"));
     }
 
-    // Find handler
+    // 查找处理器
     const auto it = handlers_.find(method);
     if (it == handlers_.end()) {
         LOG_WARNING(kLogSource, QStringLiteral("Method not found: %1").arg(method));
@@ -79,7 +79,7 @@ QJsonObject JsonRpcDispatcher::handle(const QJsonObject &request) const
                               : makeError(id, -32601, QStringLiteral("Method not found"));
     }
 
-    // Parse parameters
+    // 解析参数
     QJsonObject params;
     if (request.contains(QStringLiteral("params"))) {
         if (!request.value(QStringLiteral("params")).isObject()) {
@@ -92,7 +92,7 @@ QJsonObject JsonRpcDispatcher::handle(const QJsonObject &request) const
         params = request.value(QStringLiteral("params")).toObject();
     }
 
-    // Execute handler
+    // 执行处理器
     LOG_DEBUG(kLogSource, QStringLiteral("Executing method: %1").arg(method));
     const QJsonValue result = it.value()(params);
 

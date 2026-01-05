@@ -1,6 +1,6 @@
 /**
  * @file serial_comm.cpp
- * @brief Serial port communication adapter implementation
+ * @brief 串口通信适配器实现
  */
 
 #include "serial_comm.h"
@@ -25,7 +25,7 @@ namespace comm {
 namespace {
 
 /**
- * @brief Convert baud rate to termios speed constant
+ * @brief 将波特率转换为termios速度常量
  */
 speed_t toBaudConstant(int baud)
 {

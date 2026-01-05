@@ -1,8 +1,8 @@
 /**
  * @file json_rpc_server.h
- * @brief JSON-RPC TCP server
+ * @brief JSON-RPC TCP服务器
  *
- * Provides a TCP server for JSON-RPC 2.0 requests.
+ * 提供JSON-RPC 2.0请求的TCP服务器。
  */
 
 #ifndef FANZHOU_JSON_RPC_SERVER_H
@@ -20,10 +20,9 @@ namespace rpc {
 class JsonRpcDispatcher;
 
 /**
- * @brief JSON-RPC 2.0 TCP server
+ * @brief JSON-RPC 2.0 TCP服务器
  *
- * Accepts TCP connections and processes JSON-RPC requests using
- * line-delimited JSON format.
+ * 接受TCP连接并使用行分隔JSON格式处理JSON-RPC请求。
  */
 class JsonRpcServer : public QTcpServer
 {
@@ -31,9 +30,9 @@ class JsonRpcServer : public QTcpServer
 
 public:
     /**
-     * @brief Construct a JSON-RPC server
-     * @param dispatcher Request dispatcher
-     * @param parent Parent object
+     * @brief 构造JSON-RPC服务器
+     * @param dispatcher 请求分发器
+     * @param parent 父对象
      */
     explicit JsonRpcServer(JsonRpcDispatcher *dispatcher,
                            QObject *parent = nullptr);

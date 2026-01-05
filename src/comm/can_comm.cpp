@@ -1,6 +1,6 @@
 /**
  * @file can_comm.cpp
- * @brief CAN bus communication adapter implementation
+ * @brief CAN总线通信适配器实现
  */
 
 #include "can_comm.h"

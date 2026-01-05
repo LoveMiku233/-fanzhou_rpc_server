@@ -1,8 +1,8 @@
 /**
  * @file json_rpc_dispatcher.h
- * @brief JSON-RPC method dispatcher
+ * @brief JSON-RPC方法分发器
  *
- * Provides method registration and request dispatching for JSON-RPC 2.0.
+ * 提供JSON-RPC 2.0的方法注册和请求分发功能。
  */
 
 #ifndef FANZHOU_JSON_RPC_DISPATCHER_H
@@ -20,10 +20,9 @@ namespace fanzhou {
 namespace rpc {
 
 /**
- * @brief JSON-RPC 2.0 method dispatcher
+ * @brief JSON-RPC 2.0方法分发器
  *
- * Manages method handlers and dispatches incoming requests to the
- * appropriate handler.
+ * 管理方法处理器并将传入请求分发到适当的处理器。
  */
 class JsonRpcDispatcher : public QObject
 {
@@ -31,9 +30,9 @@ class JsonRpcDispatcher : public QObject
 
 public:
     /**
-     * @brief Method handler function type
+     * @brief 方法处理器函数类型
      *
-     * Takes a JSON object of parameters and returns a result value.
+     * 接收JSON参数对象并返回结果值。
      */
     using Handler = std::function<QJsonValue(const QJsonObject &params)>;
 
@@ -41,22 +40,22 @@ public:
         : QObject(parent) {}
 
     /**
-     * @brief Register a method handler
-     * @param method Method name
-     * @param handler Handler function
+     * @brief 注册方法处理器
+     * @param method 方法名称
+     * @param handler 处理器函数
      */
     void registerMethod(const QString &method, Handler handler);
 
     /**
-     * @brief Get list of registered methods
-     * @return Sorted list of method names
+     * @brief 获取已注册方法列表
+     * @return 排序后的方法名称列表
      */
     QStringList methods() const;
 
     /**
-     * @brief Handle a JSON-RPC request
-     * @param request Request object
-     * @return Response object (empty for notifications)
+     * @brief 处理JSON-RPC请求
+     * @param request 请求对象
+     * @return 响应对象（通知请求返回空对象）
      */
     QJsonObject handle(const QJsonObject &request) const;
 

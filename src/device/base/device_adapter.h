@@ -1,8 +1,8 @@
 /**
  * @file device_adapter.h
- * @brief Abstract device adapter interface
+ * @brief 设备适配器抽象接口
  *
- * Defines the base interface for all device adapters.
+ * 定义所有设备适配器的基础接口。
  */
 
 #ifndef FANZHOU_DEVICE_ADAPTER_H
@@ -15,10 +15,10 @@ namespace fanzhou {
 namespace device {
 
 /**
- * @brief Abstract base class for device adapters
+ * @brief 设备适配器抽象基类
  *
- * Provides a common interface for different device types.
- * Subclasses implement specific device protocols.
+ * 为不同设备类型提供通用接口。
+ * 子类实现特定的设备协议。
  */
 class DeviceAdapter : public QObject
 {
@@ -31,25 +31,25 @@ public:
     virtual ~DeviceAdapter() = default;
 
     /**
-     * @brief Initialize the device
-     * @return True if successful
+     * @brief 初始化设备
+     * @return 成功返回true
      */
     virtual bool init() = 0;
 
     /**
-     * @brief Poll the device for status updates
+     * @brief 轮询设备以更新状态
      */
     virtual void poll() = 0;
 
     /**
-     * @brief Get device name
-     * @return Device name string
+     * @brief 获取设备名称
+     * @return 设备名称字符串
      */
     virtual QString name() const = 0;
 
 signals:
     /**
-     * @brief Emitted when device status is updated
+     * @brief 设备状态更新时发出
      */
     void updated();
 };

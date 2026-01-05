@@ -1,6 +1,6 @@
 /**
  * @file relay_gd427.cpp
- * @brief GD427 CAN relay device implementation
+ * @brief GD427 CAN继电器设备实现
  */
 
 #include "relay_gd427.h"

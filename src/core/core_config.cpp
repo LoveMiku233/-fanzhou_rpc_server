@@ -1,6 +1,6 @@
 /**
  * @file core_config.cpp
- * @brief Core configuration implementation
+ * @brief 核心配置实现
  */
 
 #include "core_config.h"
@@ -126,7 +126,7 @@ bool CoreConfig::loadFromFile(const QString &path, QString *error)
     }
     const QJsonObject root = doc.object();
 
-    // Main configuration
+    // 主配置
     if (root.contains(QStringLiteral("main")) &&
         root[QStringLiteral("main")].isObject()) {
         const auto mainObj = root[QStringLiteral("main")].toObject();
@@ -136,7 +136,7 @@ bool CoreConfig::loadFromFile(const QString &path, QString *error)
         }
     }
 
-    // Log configuration
+    // 日志配置
     if (root.contains(QStringLiteral("log")) &&
         root[QStringLiteral("log")].isObject()) {
         const auto logObj = root[QStringLiteral("log")].toObject();
@@ -155,7 +155,7 @@ bool CoreConfig::loadFromFile(const QString &path, QString *error)
         }
     }
 
-    // CAN configuration
+    // CAN配置
     if (root.contains(QStringLiteral("can")) &&
         root[QStringLiteral("can")].isObject()) {
         const auto canObj = root[QStringLiteral("can")].toObject();
@@ -174,7 +174,7 @@ bool CoreConfig::loadFromFile(const QString &path, QString *error)
         }
     }
 
-    // Devices
+    // 设备列表
     devices.clear();
     if (root.contains(QStringLiteral("devices")) &&
         root[QStringLiteral("devices")].isArray()) {
@@ -200,7 +200,7 @@ bool CoreConfig::loadFromFile(const QString &path, QString *error)
         }
     }
 
-    // Groups
+    // 设备组
     groups.clear();
     if (root.contains(QStringLiteral("groups")) &&
         root[QStringLiteral("groups")].isArray()) {
@@ -226,7 +226,7 @@ bool CoreConfig::loadFromFile(const QString &path, QString *error)
         }
     }
 
-    // Strategies
+    // 控制策略
     strategies.clear();
     if (root.contains(QStringLiteral("strategies")) &&
         root[QStringLiteral("strategies")].isArray()) {
@@ -256,12 +256,12 @@ bool CoreConfig::saveToFile(const QString &path, QString *error) const
 {
     QJsonObject root;
 
-    // Main configuration
+    // 主配置
     QJsonObject mainObj;
     mainObj[QStringLiteral("rpcPort")] = static_cast<int>(main.rpcPort);
     root[QStringLiteral("main")] = mainObj;
 
-    // Log configuration
+    // 日志配置
     QJsonObject logObj;
     logObj[QStringLiteral("logToConsole")] = log.logToConsole;
     logObj[QStringLiteral("logToFile")] = log.logToFile;
@@ -269,7 +269,7 @@ bool CoreConfig::saveToFile(const QString &path, QString *error) const
     logObj[QStringLiteral("logLevel")] = log.logLevel;
     root[QStringLiteral("log")] = logObj;
 
-    // CAN configuration
+    // CAN配置
     QJsonObject canObj;
     canObj[QStringLiteral("ifname")] = can.interface;
     canObj[QStringLiteral("bitrate")] = can.bitrate;
@@ -277,7 +277,7 @@ bool CoreConfig::saveToFile(const QString &path, QString *error) const
     canObj[QStringLiteral("canFd")] = can.canFd;
     root[QStringLiteral("can")] = canObj;
 
-    // Devices
+    // 设备列表
     QJsonArray devArr;
     for (const auto &dev : devices) {
         QJsonObject obj;
@@ -297,7 +297,7 @@ bool CoreConfig::saveToFile(const QString &path, QString *error) const
     }
     root[QStringLiteral("devices")] = devArr;
 
-    // Groups
+    // 设备组
     QJsonArray groupArr;
     for (const auto &grp : groups) {
         QJsonObject obj;
@@ -315,7 +315,7 @@ bool CoreConfig::saveToFile(const QString &path, QString *error) const
     }
     root[QStringLiteral("groups")] = groupArr;
 
-    // Strategies
+    // 控制策略
     QJsonArray stratArr;
     for (const auto &strat : strategies) {
         QJsonObject obj;

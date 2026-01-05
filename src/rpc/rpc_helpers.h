@@ -1,8 +1,8 @@
 /**
  * @file rpc_helpers.h
- * @brief RPC helper functions
+ * @brief RPC辅助函数
  *
- * Provides utilities for parsing JSON-RPC parameters and building responses.
+ * 提供解析JSON-RPC参数和构建响应的工具函数。
  */
 
 #ifndef FANZHOU_RPC_HELPERS_H
@@ -17,69 +17,69 @@ namespace fanzhou {
 namespace rpc {
 
 /**
- * @brief RPC helper utilities
+ * @brief RPC辅助工具
  */
 namespace RpcHelpers {
 
 /**
- * @brief Extract unsigned 8-bit integer from JSON object
- * @param params JSON parameters object
- * @param key Parameter key
- * @param out Output value
- * @return True if successful
+ * @brief 从JSON对象提取无符号8位整数
+ * @param params JSON参数对象
+ * @param key 参数键
+ * @param out 输出值
+ * @return 成功返回true
  */
 bool getU8(const QJsonObject &params, const char *key, quint8 &out);
 
 /**
- * @brief Extract boolean from JSON object
- * @param params JSON parameters object
- * @param key Parameter key
- * @param out Output value
- * @param defaultValue Default value if key not present
- * @return True if successful
+ * @brief 从JSON对象提取布尔值
+ * @param params JSON参数对象
+ * @param key 参数键
+ * @param out 输出值
+ * @param defaultValue 键不存在时的默认值
+ * @return 成功返回true
  */
 bool getBool(const QJsonObject &params, const char *key, bool &out,
              bool defaultValue = false);
 
 /**
- * @brief Extract 32-bit integer from JSON object
- * @param params JSON parameters object
- * @param key Parameter key
- * @param out Output value
- * @return True if successful
+ * @brief 从JSON对象提取32位整数
+ * @param params JSON参数对象
+ * @param key 参数键
+ * @param out 输出值
+ * @return 成功返回true
  */
 bool getI32(const QJsonObject &params, const char *key, qint32 &out);
 
 /**
- * @brief Extract string from JSON object
- * @param params JSON parameters object
- * @param key Parameter key
- * @param out Output value
- * @return True if successful
+ * @brief 从JSON对象提取字符串
+ * @param params JSON参数对象
+ * @param key 参数键
+ * @param out 输出值
+ * @return 成功返回true
  */
 bool getString(const QJsonObject &params, const char *key, QString &out);
 
 /**
- * @brief Extract hex-encoded bytes from JSON object
- * @param params JSON parameters object
- * @param key Parameter key
- * @param out Output byte array
- * @return True if successful
+ * @brief 从JSON对象提取十六进制编码字节
+ * @param params JSON参数对象
+ * @param key 参数键
+ * @param out 输出字节数组
+ * @return 成功返回true
  */
 bool getHexBytes(const QJsonObject &params, const char *key, QByteArray &out);
 
 /**
- * @brief Create success response object
- * @param value Success flag
- * @return JSON response object
+ * @brief 创建成功响应对象
+ * @param value 成功标志
+ * @return JSON响应对象
  */
 QJsonObject ok(bool value = true);
 
 /**
- * @brief Create error response object
- * @param code Error code
- * @param message Error message
- * @return JSON error response object
+ * @brief 创建错误响应对象
+ * @param code 错误码
+ * @param message 错误消息
+ * @return JSON错误响应对象
  */
 QJsonObject err(int code, const QString &message);
 

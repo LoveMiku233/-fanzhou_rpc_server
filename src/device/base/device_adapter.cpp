@@ -1,6 +1,6 @@
 /**
  * @file device_adapter.cpp
- * @brief Abstract device adapter implementation
+ * @brief 设备适配器抽象实现
  */
 
 #include "device_adapter.h"
@@ -8,7 +8,7 @@
 namespace fanzhou {
 namespace device {
 
-// Base class implementation is empty as all methods are pure virtual
+// 基类实现为空，因为所有方法都是纯虚函数
 
 }  // namespace device
 }  // namespace fanzhou

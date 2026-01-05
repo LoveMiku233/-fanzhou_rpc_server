@@ -1,6 +1,6 @@
 /**
  * @file system_settings.cpp
- * @brief System settings implementation
+ * @brief 系统设置实现
  */
 
 #include "system_settings.h"

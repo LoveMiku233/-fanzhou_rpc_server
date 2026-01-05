@@ -1,6 +1,6 @@
 /**
  * @file can_device_manager.cpp
- * @brief CAN device manager implementation
+ * @brief CAN设备管理器实现
  */
 
 #include "can_device_manager.h"
@@ -47,6 +47,7 @@ void CanDeviceManager::onCanFrame(quint32 canId, const QByteArray &payload,
 void CanDeviceManager::pollAll()
 {
     // Polling implementation for devices that need periodic updates
+    // 需要定期更新的设备轮询实现
 }
 
 }  // namespace device

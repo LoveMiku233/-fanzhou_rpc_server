@@ -1,6 +1,6 @@
 /**
  * @file json_rpc_client.cpp
- * @brief JSON-RPC TCP client implementation
+ * @brief JSON-RPC TCP客户端实现
  */
 
 #include "json_rpc_client.h"

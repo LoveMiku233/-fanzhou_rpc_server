@@ -1,8 +1,8 @@
 /**
  * @file utils.h
- * @brief Common utility functions
+ * @brief 通用工具函数
  *
- * Provides system-level utility functions for error handling and other common operations.
+ * 提供系统级工具函数，用于错误处理和其他常用操作。
  */
 
 #ifndef FANZHOU_UTILS_H
@@ -14,9 +14,9 @@ namespace fanzhou {
 namespace utils {
 
 /**
- * @brief Get system error string with prefix
- * @param prefix Error message prefix
- * @return Formatted error string including errno message
+ * @brief 获取带前缀的系统错误字符串
+ * @param prefix 错误消息前缀
+ * @return 格式化的错误字符串，包含errno消息
  */
 QString sysErrorString(const char *prefix);
 
