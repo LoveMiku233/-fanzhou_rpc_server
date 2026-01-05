@@ -425,12 +425,15 @@ echo '{"jsonrpc":"2.0","id":1,"method":"relay.nodes","params":{}}' | socat - TCP
             log('>>>', request);
             
             // 模拟响应（实际使用时需要WebSocket代理）
-            const host = document.getElementById('serverHost').value;
-            const port = document.getElementById('serverPort').value;
+            const host = document.getElementById('serverHost').value.replace(/[^a-zA-Z0-9.-]/g, '');
+            const port = parseInt(document.getElementById('serverPort').value) || 12345;
+            
+            // 安全地转义JSON字符串用于shell命令
+            const jsonStr = JSON.stringify(request).replace(/'/g, "'\\''");
             
             log('<<<', {
                 info: `请使用命令行工具连接到 ${host}:${port}`,
-                command: `echo '${JSON.stringify(request)}' | nc ${host} ${port}`
+                command: `echo '${jsonStr}' | nc ${host} ${port}`
             });
         }
         
@@ -514,7 +517,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"relay.nodes","params":{}}' | socat - TCP
         function deleteGroup() {
             const groupId = parseInt(document.getElementById('groupId').value);
             
-            if (confirm('确定要删除分组 ' + groupId + ' 吗？')) {
+            if (confirm(`确定要删除分组 ${groupId} 吗？`)) {
                 callMethod('group.delete', {
                     groupId: groupId
                 });
