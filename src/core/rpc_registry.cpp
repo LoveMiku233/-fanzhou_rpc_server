@@ -61,6 +61,45 @@ const QString kKeyAutoStart = QStringLiteral("autoStart");
 const QString kKeyAttached = QStringLiteral("attached");
 const QString kKeyRunning = QStringLiteral("running");
 const QString kKeyStrategies = QStringLiteral("strategies");
+
+// 设备在线超时阈值（毫秒）：30秒内收到过响应认为在线
+constexpr qint64 kOnlineTimeoutMs = 30000;
+
+/**
+ * @brief 计算设备在线状态信息
+ * @param lastSeenMs 设备最后响应时间戳（毫秒）
+ * @param now 当前时间戳（毫秒）
+ * @param outAgeMs 输出：设备响应时间间隔（毫秒），-1表示从未响应
+ * @param outOnline 输出：设备是否在线
+ */
+void calcDeviceOnlineStatus(qint64 lastSeenMs, qint64 now, qint64 &outAgeMs, bool &outOnline)
+{
+    if (lastSeenMs > 0) {
+        outAgeMs = now - lastSeenMs;
+        outOnline = (outAgeMs <= kOnlineTimeoutMs);
+    } else {
+        outAgeMs = -1;  // 表示从未响应
+        outOnline = false;
+    }
+}
+
+/**
+ * @brief 构建设备状态JSON对象
+ * @param node 节点ID
+ * @param ageMs 设备响应时间间隔（毫秒），-1表示从未响应
+ * @param online 设备是否在线
+ * @return 包含node、online、ageMs字段的JSON对象
+ */
+QJsonObject buildDeviceStatusObject(quint8 node, qint64 ageMs, bool online)
+{
+    QJsonObject obj;
+    obj[kKeyNode] = static_cast<int>(node);
+    obj[kKeyOnline] = online;
+    // ageMs为-1时表示从未响应，返回null
+    obj[kKeyAgeMs] = (ageMs >= 0) ? static_cast<double>(ageMs) : QJsonValue();
+    return obj;
+}
+
 }  // namespace
 
 RpcRegistry::RpcRegistry(CoreContext *context, rpc::JsonRpcDispatcher *dispatcher,
@@ -282,15 +321,16 @@ void RpcRegistry::registerRelay()
         }
 
         const qint64 now = QDateTime::currentMSecsSinceEpoch();
-        const qint64 last = dev->lastSeenMs();
-        const qint64 ageMs = (last > 0) ? (now - last) : std::numeric_limits<qint64>::max();
-        const bool online = (ageMs <= 30000);
+        const qint64 lastSeen = dev->lastSeenMs();
+        qint64 ageMs = 0;
+        bool online = false;
+        calcDeviceOnlineStatus(lastSeen, now, ageMs, online);
 
         return QJsonObject{
             {kKeyOk, true},
             {kKeyNode, static_cast<int>(node)},
             {kKeyOnline, online},
-            {kKeyAgeMs, static_cast<double>(ageMs)},
+            {kKeyAgeMs, (ageMs >= 0) ? static_cast<double>(ageMs) : QJsonValue()},
             {kKeyChannels, channels}
         };
     });
@@ -303,17 +343,13 @@ void RpcRegistry::registerRelay()
         for (auto it = context_->relays.begin(); it != context_->relays.end(); ++it) {
             const quint8 node = it.key();
             auto *dev = it.value();
-            
-            // 计算设备在线状态：30秒内收到过响应认为在线
             const qint64 lastSeen = dev ? dev->lastSeenMs() : 0;
-            const qint64 ageMs = (lastSeen > 0) ? (now - lastSeen) : std::numeric_limits<qint64>::max();
-            const bool online = (ageMs <= 30000);
             
-            QJsonObject nodeObj;
-            nodeObj[kKeyNode] = static_cast<int>(node);
-            nodeObj[kKeyOnline] = online;
-            nodeObj[kKeyAgeMs] = (lastSeen > 0) ? static_cast<double>(ageMs) : QJsonValue();
-            arr.append(nodeObj);
+            qint64 ageMs = 0;
+            bool online = false;
+            calcDeviceOnlineStatus(lastSeen, now, ageMs, online);
+            
+            arr.append(buildDeviceStatusObject(node, ageMs, online));
         }
         return QJsonObject{{kKeyOk, true}, {kKeyNodes, arr}};
     });
@@ -379,15 +415,13 @@ void RpcRegistry::registerGroup()
         for (quint8 node : nodeList) {
             auto *dev = context_->relays.value(node, nullptr);
             const qint64 lastSeen = dev ? dev->lastSeenMs() : 0;
-            const qint64 ageMs = (lastSeen > 0) ? (now - lastSeen) : std::numeric_limits<qint64>::max();
-            const bool online = (ageMs <= 30000);
+            
+            qint64 ageMs = 0;
+            bool online = false;
+            calcDeviceOnlineStatus(lastSeen, now, ageMs, online);
             if (online) onlineCount++;
 
-            QJsonObject devObj;
-            devObj[kKeyNode] = static_cast<int>(node);
-            devObj[kKeyOnline] = online;
-            devObj[kKeyAgeMs] = (lastSeen > 0) ? static_cast<double>(ageMs) : QJsonValue();
-            devices.append(devObj);
+            devices.append(buildDeviceStatusObject(node, ageMs, online));
         }
 
         return QJsonObject{

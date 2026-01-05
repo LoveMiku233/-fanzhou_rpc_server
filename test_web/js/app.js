@@ -323,7 +323,7 @@ function escapeHtml(text) {
  */
 function formatAge(ms) {
     if (ms < 1000) {
-        return `${Math.round(ms)}ms`;
+        return `${Math.round(ms)}毫秒前`;
     } else if (ms < 60000) {
         return `${(ms / 1000).toFixed(1)}秒前`;
     } else if (ms < 3600000) {
