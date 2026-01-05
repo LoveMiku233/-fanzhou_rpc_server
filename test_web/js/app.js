@@ -510,6 +510,68 @@ function controlGroup() {
     });
 }
 
+/**
+ * 验证分组和设备ID的输入值
+ * @returns {{valid: boolean, groupId: number, nodeId: number}} 验证结果
+ */
+function validateGroupDeviceInput() {
+    const groupId = parseInt(document.getElementById('addDeviceGroupId').value);
+    const nodeId = parseInt(document.getElementById('addDeviceNodeId').value);
+    
+    if (!groupId || groupId <= 0) {
+        alert('请输入有效的分组ID');
+        return { valid: false, groupId: 0, nodeId: 0 };
+    }
+    if (!nodeId || nodeId <= 0 || nodeId > 255) {
+        alert('请输入有效的设备节点ID (1-255)');
+        return { valid: false, groupId: 0, nodeId: 0 };
+    }
+    
+    return { valid: true, groupId: groupId, nodeId: nodeId };
+}
+
+/**
+ * 添加设备到分组
+ */
+function addDeviceToGroup() {
+    const input = validateGroupDeviceInput();
+    if (!input.valid) return;
+    
+    callMethod('group.addDevice', {
+        groupId: input.groupId,
+        node: input.nodeId
+    }, function(response) {
+        if (response.result && response.result.ok) {
+            log('info', `设备 ${input.nodeId} 已添加到分组 ${input.groupId}`);
+            refreshGroupList();
+        } else if (response.error) {
+            log('error', `添加失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 从分组移除设备
+ */
+function removeDeviceFromGroup() {
+    const input = validateGroupDeviceInput();
+    if (!input.valid) return;
+    
+    if (confirm(`确定要从分组 ${input.groupId} 移除设备 ${input.nodeId} 吗？`)) {
+        callMethod('group.removeDevice', {
+            groupId: input.groupId,
+            node: input.nodeId
+        }, function(response) {
+            if (response.result && response.result.ok) {
+                log('info', `设备 ${input.nodeId} 已从分组 ${input.groupId} 移除`);
+                refreshGroupList();
+            } else if (response.error) {
+                log('error', `移除失败: ${response.error.message || '未知错误'}`);
+            }
+        });
+    }
+}
+
 /* ========================================================
  * 设备管理功能
  * ======================================================== */
@@ -674,6 +736,160 @@ function callCustomMethod() {
     }
     
     callMethod(method, params);
+}
+
+/* ========================================================
+ * 策略管理功能
+ * ======================================================== */
+
+// 策略列表缓存
+let strategyListCache = [];
+
+/**
+ * 刷新策略列表
+ */
+function refreshStrategyList() {
+    callMethod('auto.strategy.list', {}, function(response) {
+        if (response.result) {
+            strategyListCache = response.result.strategies || [];
+            renderStrategyList();
+        } else if (response.error) {
+            log('error', `获取策略列表失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 渲染策略列表
+ */
+function renderStrategyList() {
+    const contentEl = document.getElementById('strategyListContent');
+    const emptyEl = document.getElementById('strategyListEmpty');
+    
+    if (!strategyListCache || strategyListCache.length === 0) {
+        contentEl.innerHTML = '';
+        emptyEl.style.display = 'block';
+        return;
+    }
+    
+    emptyEl.style.display = 'none';
+    
+    // 动作名称映射
+    const actionNames = {
+        'stop': '⏹️ 停止',
+        'fwd': '▶️ 正转',
+        'rev': '◀️ 反转'
+    };
+    
+    let html = '';
+    strategyListCache.forEach(strategy => {
+        const id = strategy.id;
+        const name = strategy.name || `策略${id}`;
+        const groupId = strategy.groupId;
+        const channel = strategy.channel;
+        const action = actionNames[strategy.action] || strategy.action;
+        const intervalSec = strategy.intervalSec;
+        const enabled = strategy.enabled !== false;
+        const running = strategy.running === true;
+        const attached = strategy.attached === true;
+        
+        html += `
+            <div class="data-list-item">
+                <div class="item-info">
+                    <span class="item-name">⚙️ ${escapeHtml(name)}</span>
+                    <span class="item-detail">
+                        ID: ${id} | 
+                        分组: ${groupId} | 
+                        通道: ${channel} | 
+                        动作: ${action} | 
+                        间隔: ${intervalSec}秒
+                    </span>
+                    <span class="item-detail">
+                        状态: ${enabled ? '✅ 启用' : '❌ 禁用'} | 
+                        ${attached ? '🔗 已挂载' : '⭕ 未挂载'} | 
+                        ${running ? '🏃 运行中' : '⏸️ 暂停'}
+                    </span>
+                </div>
+                <div class="item-actions">
+                    <button onclick="toggleStrategyEnabled(${id}, ${!enabled})">${enabled ? '❌ 禁用' : '✅ 启用'}</button>
+                    <button class="success" onclick="triggerStrategy(${id})">🎯 触发</button>
+                </div>
+            </div>
+        `;
+    });
+    
+    contentEl.innerHTML = html;
+}
+
+/**
+ * 切换策略启用状态
+ * @param {number} id - 策略ID
+ * @param {boolean} enabled - 是否启用
+ */
+function toggleStrategyEnabled(id, enabled) {
+    callMethod('auto.strategy.enable', {
+        id: id,
+        enabled: enabled
+    }, function(response) {
+        if (response.result && response.result.ok) {
+            log('info', `策略 ${id} 已${enabled ? '启用' : '禁用'}`);
+            refreshStrategyList();
+        } else if (response.error) {
+            log('error', `操作失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 手动触发策略
+ * @param {number} id - 策略ID
+ */
+function triggerStrategy(id) {
+    callMethod('auto.strategy.trigger', {
+        id: id
+    }, function(response) {
+        if (response.result && response.result.ok) {
+            log('info', `策略 ${id} 已触发`);
+        } else if (response.error) {
+            log('error', `触发失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/* ========================================================
+ * 设备配置功能
+ * ======================================================== */
+
+/**
+ * 读取设备配置
+ */
+function readDeviceConfig() {
+    callMethod('sys.info', {}, function(response) {
+        const panel = document.getElementById('deviceConfigPanel');
+        const content = document.getElementById('deviceConfigContent');
+        
+        if (response.result) {
+            const configInfo = {
+                serverVersion: response.result.serverVersion,
+                rpcPort: response.result.rpcPort,
+                canInterface: response.result.canInterface,
+                canBitrate: response.result.canBitrate,
+                deviceCount: response.result.deviceCount,
+                groupCount: response.result.groupCount
+            };
+            
+            content.textContent = JSON.stringify(configInfo, null, 2);
+            panel.style.display = 'block';
+            log('info', '设备配置读取成功');
+        } else if (response.error) {
+            content.textContent = `读取失败: ${response.error.message || '未知错误'}`;
+            panel.style.display = 'block';
+            log('error', `设备配置读取失败: ${response.error.message || '未知错误'}`);
+        } else {
+            content.textContent = '无法读取设备配置';
+            panel.style.display = 'block';
+        }
+    });
 }
 
 /* ========================================================

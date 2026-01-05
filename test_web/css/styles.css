@@ -40,7 +40,7 @@
     }
 }
 
-/* 动态背景容器 */
+/* 动态背景容器 - 已禁用动画 */
 .animated-background {
     position: fixed;
     top: 0;
@@ -48,13 +48,14 @@
     width: 100%;
     height: 100%;
     background: linear-gradient(-45deg, #667eea, #764ba2, #6B8DD6, #8E37D7);
-    background-size: 400% 400%;
-    animation: gradientAnimation 15s ease infinite;
+    background-size: 100% 100%;
+    /* animation: gradientAnimation 15s ease infinite; */
     z-index: -2;
 }
 
-/* 浮动装饰元素容器 */
+/* 浮动装饰元素容器 - 已禁用动画 */
 .floating-shapes {
+    display: none;
     position: fixed;
     top: 0;
     left: 0;
@@ -65,12 +66,13 @@
     pointer-events: none;
 }
 
-/* 浮动形状基础样式 */
+/* 浮动形状基础样式 - 已禁用动画 */
 .floating-shape {
+    display: none;
     position: absolute;
     background: rgba(255, 255, 255, 0.1);
     border-radius: 50%;
-    animation: floatAnimation 6s ease-in-out infinite;
+    /* animation: floatAnimation 6s ease-in-out infinite; */
 }
 
 /* 不同大小和位置的浮动形状 */
@@ -137,7 +139,7 @@ body {
     position: relative;
 }
 
-/* ==================== 主布局容器 - 三栏布局 ==================== */
+/* ==================== 主布局容器 - 三栏布局（导航-日志-内容） ==================== */
 .main-layout {
     display: flex;
     max-width: 1900px;
@@ -153,15 +155,10 @@ body {
     position: sticky;
     top: 20px;
     height: fit-content;
+    order: 1;
 }
 
-/* 中间内容区 */
-.content-area {
-    flex: 1;
-    min-width: 0;
-}
-
-/* 右侧通信日志面板 */
+/* 中间通信日志面板 */
 .log-sidebar {
     width: 380px;
     flex-shrink: 0;
@@ -169,6 +166,14 @@ body {
     top: 20px;
     height: fit-content;
     max-height: calc(100vh - 40px);
+    order: 2;
+}
+
+/* 右侧内容区 */
+.content-area {
+    flex: 1;
+    min-width: 0;
+    order: 3;
 }
 
 .log-sidebar .log-card {

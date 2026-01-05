@@ -101,6 +101,9 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                 <button class="nav-btn" onclick="showPage('groups')" data-page="groups">
                     📂 分组管理
                 </button>
+                <button class="nav-btn" onclick="showPage('strategy')" data-page="strategy">
+                    ⚙️ 策略管理
+                </button>
                 <button class="nav-btn" onclick="showPage('relay')" data-page="relay">
                     🎛️ 继电器控制
                 </button>
@@ -149,7 +152,7 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                         <span class="icon">📊</span>
                         队列状态
                     </button>
-                    <button class="quick-action-btn" onclick="callMethod('auto.strategy.list', {})">
+                    <button class="quick-action-btn" onclick="refreshStrategyList()">
                         <span class="icon">⚙️</span>
                         策略列表
                     </button>
@@ -160,8 +163,18 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
             <div class="page-content" id="page-devices">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                     <h3 style="color: #333;">设备列表</h3>
-                    <button onclick="refreshDeviceList()">🔄 刷新列表</button>
+                    <div class="btn-group">
+                        <button onclick="refreshDeviceList()">🔄 刷新列表</button>
+                        <button class="secondary" onclick="readDeviceConfig()">📋 读取配置</button>
+                    </div>
                 </div>
+                
+                <!-- 设备配置显示区域 -->
+                <div id="deviceConfigPanel" style="display: none; background: #f8f9fa; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                    <h4 style="margin-bottom: 15px; color: #333;">📋 设备配置信息</h4>
+                    <pre id="deviceConfigContent" style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 13px;"></pre>
+                </div>
+                
                 <div class="data-list" id="deviceList">
                     <div class="data-list-header">
                         <span>设备节点</span>
@@ -200,6 +213,25 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                     <button class="success" onclick="createGroup()">➕ 创建分组</button>
                 </div>
 
+                <!-- 添加设备到分组 -->
+                <div style="background: #e8f5e9; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                    <h4 style="margin-bottom: 15px; color: #333;">🔗 添加设备到分组</h4>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>分组ID</label>
+                            <input type="number" id="addDeviceGroupId" value="1" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label>设备节点ID</label>
+                            <input type="number" id="addDeviceNodeId" value="1" min="1" max="255">
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="success" onclick="addDeviceToGroup()">➕ 添加设备</button>
+                        <button class="danger" onclick="removeDeviceFromGroup()">➖ 移除设备</button>
+                    </div>
+                </div>
+
                 <!-- 分组列表 -->
                 <div class="data-list" id="groupList">
                     <div class="data-list-header">
@@ -211,6 +243,80 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                         <p style="font-size: 12px; margin-top: 10px;">请先连接服务器并点击"刷新列表"</p>
                     </div>
                     <div id="groupListContent"></div>
+                </div>
+            </div>
+
+            <!-- ==================== 策略管理页面 ==================== -->
+            <div class="page-content" id="page-strategy">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="color: #333;">策略管理</h3>
+                    <button onclick="refreshStrategyList()">🔄 刷新列表</button>
+                </div>
+                
+                <!-- 传感器绑定设置 -->
+                <div style="background: #fff3e0; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                    <h4 style="margin-bottom: 15px; color: #333;">📡 传感器阈值设置</h4>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>策略ID</label>
+                            <input type="number" id="sensorStrategyId" value="1" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label>传感器类型</label>
+                            <select id="sensorType">
+                                <option value="temperature">🌡️ 温度传感器</option>
+                                <option value="humidity">💧 湿度传感器</option>
+                                <option value="light">💡 光照传感器</option>
+                                <option value="pressure">📊 压力传感器</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>阈值条件</label>
+                            <select id="sensorCondition">
+                                <option value="gt">大于 (>)</option>
+                                <option value="lt">小于 (<)</option>
+                                <option value="eq">等于 (=)</option>
+                                <option value="gte">大于等于 (>=)</option>
+                                <option value="lte">小于等于 (<=)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>阈值</label>
+                            <input type="number" id="sensorThreshold" value="25" step="0.1">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>绑定分组ID</label>
+                            <input type="number" id="sensorGroupId" value="1" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label>触发动作</label>
+                            <select id="sensorAction">
+                                <option value="stop">⏹️ 停止</option>
+                                <option value="fwd">▶️ 正转</option>
+                                <option value="rev">◀️ 反转</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="help-section" style="background: #fff; margin-top: 15px; padding: 15px;">
+                        <p style="color: #666; font-size: 13px;">
+                            ⚠️ 传感器阈值设置功能需要RPC服务端支持。当传感器数值满足条件时，将自动触发绑定分组的控制动作。
+                        </p>
+                    </div>
+                </div>
+
+                <!-- 策略列表 -->
+                <div class="data-list" id="strategyList">
+                    <div class="data-list-header">
+                        <span>策略信息</span>
+                        <span>操作</span>
+                    </div>
+                    <div class="data-list-empty" id="strategyListEmpty">
+                        <p>暂无策略数据</p>
+                        <p style="font-size: 12px; margin-top: 10px;">请先连接服务器并点击"刷新列表"</p>
+                    </div>
+                    <div id="strategyListContent"></div>
                 </div>
             </div>
 
