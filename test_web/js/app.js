@@ -316,6 +316,23 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+/**
+ * 格式化时间间隔为人类可读格式
+ * @param {number} ms - 毫秒数
+ * @returns {string} 格式化的时间字符串
+ */
+function formatAge(ms) {
+    if (ms < 1000) {
+        return `${Math.round(ms)}ms`;
+    } else if (ms < 60000) {
+        return `${(ms / 1000).toFixed(1)}秒前`;
+    } else if (ms < 3600000) {
+        return `${Math.floor(ms / 60000)}分钟前`;
+    } else {
+        return `超过1小时`;
+    }
+}
+
 /* ========================================================
  * 继电器控制功能
  * ======================================================== */
@@ -512,6 +529,7 @@ function refreshDeviceList() {
 
 /**
  * 渲染设备列表
+ * 设备在线状态由服务端根据最后通信时间判断（30秒内有响应认为在线）
  */
 function renderDeviceList() {
     const contentEl = document.getElementById('deviceListContent');
@@ -530,7 +548,11 @@ function renderDeviceList() {
         const nodeId = device.nodeId || device.node || device;
         const name = device.name || `节点 ${nodeId}`;
         const type = device.type || 'relay';
-        const online = device.online !== false;
+        // 在线状态必须由服务端明确返回true才认为在线
+        const online = device.online === true;
+        // 显示上次响应时间（如果有）
+        const ageMs = device.ageMs;
+        const ageText = (typeof ageMs === 'number') ? formatAge(ageMs) : '';
         
         html += `
             <div class="data-list-item">
@@ -539,7 +561,7 @@ function renderDeviceList() {
                     <span class="item-detail">
                         节点ID: ${nodeId} | 
                         类型: ${escapeHtml(type)} | 
-                        状态: ${online ? '🟢 在线' : '🔴 离线'}
+                        状态: ${online ? '🟢 在线' : '🔴 离线'}${ageText ? ' | 响应: ' + ageText : ''}
                     </span>
                 </div>
                 <div class="item-actions">
@@ -556,6 +578,7 @@ function renderDeviceList() {
 
 /**
  * 渲染设备卡片视图
+ * 设备在线状态由服务端根据最后通信时间判断
  */
 function renderDeviceCards() {
     const container = document.getElementById('deviceCards');
@@ -569,7 +592,8 @@ function renderDeviceCards() {
     deviceListCache.forEach(device => {
         const nodeId = device.nodeId || device.node || device;
         const name = device.name || `节点 ${nodeId}`;
-        const online = device.online !== false;
+        // 在线状态必须由服务端明确返回true才认为在线
+        const online = device.online === true;
         const channels = device.channels || 4;
         
         let channelHtml = '';

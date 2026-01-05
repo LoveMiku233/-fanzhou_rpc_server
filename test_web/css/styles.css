@@ -137,10 +137,10 @@ body {
     position: relative;
 }
 
-/* ==================== 主布局容器 - 左右布局 ==================== */
+/* ==================== 主布局容器 - 三栏布局 ==================== */
 .main-layout {
     display: flex;
-    max-width: 1600px;
+    max-width: 1900px;
     margin: 0 auto;
     gap: 20px;
     min-height: calc(100vh - 140px);
@@ -155,10 +155,34 @@ body {
     height: fit-content;
 }
 
-/* 右侧内容区 */
+/* 中间内容区 */
 .content-area {
     flex: 1;
     min-width: 0;
+}
+
+/* 右侧通信日志面板 */
+.log-sidebar {
+    width: 380px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 20px;
+    height: fit-content;
+    max-height: calc(100vh - 40px);
+}
+
+.log-sidebar .log-card {
+    position: sticky;
+    top: 20px;
+    max-height: calc(100vh - 60px);
+    display: flex;
+    flex-direction: column;
+}
+
+.log-sidebar .log-container {
+    flex: 1;
+    overflow-y: auto;
+    max-height: calc(100vh - 180px);
 }
 
 /* ==================== 头部样式 ==================== */
@@ -721,6 +745,36 @@ button:disabled {
 }
 
 /* ==================== 响应式布局 ==================== */
+@media (max-width: 1400px) {
+    /* 中等屏幕：日志面板变窄 */
+    .log-sidebar {
+        width: 320px;
+    }
+}
+
+@media (max-width: 1200px) {
+    /* 较小屏幕：日志面板移到下方 */
+    .main-layout {
+        flex-wrap: wrap;
+    }
+
+    .log-sidebar {
+        width: 100%;
+        position: static;
+        order: 3;
+        max-height: none;
+    }
+
+    .log-sidebar .log-card {
+        position: static;
+        max-height: none;
+    }
+
+    .log-sidebar .log-container {
+        max-height: 400px;
+    }
+}
+
 @media (max-width: 992px) {
     .main-layout {
         flex-direction: column;
@@ -781,5 +835,9 @@ button:disabled {
 
     .nav-btn {
         width: 100%;
+    }
+
+    .log-sidebar .log-container {
+        max-height: 300px;
     }
 }

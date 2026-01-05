@@ -105,6 +105,22 @@ void RpcRegistry::registerBase()
 
 void RpcRegistry::registerSystem()
 {
+    // 获取系统信息
+    dispatcher_->registerMethod(QStringLiteral("sys.info"),
+                                 [this](const QJsonObject &) {
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        return QJsonObject{
+            {QStringLiteral("ok"), true},
+            {QStringLiteral("serverVersion"), QStringLiteral("1.0.0")},
+            {QStringLiteral("serverTime"), QString::number(now)},
+            {QStringLiteral("rpcPort"), context_->rpcPort},
+            {QStringLiteral("canInterface"), context_->canInterface},
+            {QStringLiteral("canBitrate"), context_->canBitrate},
+            {QStringLiteral("deviceCount"), context_->relays.size()},
+            {QStringLiteral("groupCount"), context_->deviceGroups.size()}
+        };
+    });
+
     dispatcher_->registerMethod(QStringLiteral("sys.can.setBitrate"),
                                  [this](const QJsonObject &params) {
         QString interface;
@@ -279,13 +295,47 @@ void RpcRegistry::registerRelay()
         };
     });
 
+    // 获取所有继电器节点列表，包含在线状态
     dispatcher_->registerMethod(QStringLiteral("relay.nodes"),
                                  [this](const QJsonObject &) {
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
         QJsonArray arr;
         for (auto it = context_->relays.begin(); it != context_->relays.end(); ++it) {
-            arr.append(static_cast<int>(it.key()));
+            const quint8 node = it.key();
+            auto *dev = it.value();
+            
+            // 计算设备在线状态：30秒内收到过响应认为在线
+            const qint64 lastSeen = dev ? dev->lastSeenMs() : 0;
+            const qint64 ageMs = (lastSeen > 0) ? (now - lastSeen) : std::numeric_limits<qint64>::max();
+            const bool online = (ageMs <= 30000);
+            
+            QJsonObject nodeObj;
+            nodeObj[kKeyNode] = static_cast<int>(node);
+            nodeObj[kKeyOnline] = online;
+            nodeObj[kKeyAgeMs] = (lastSeen > 0) ? static_cast<double>(ageMs) : QJsonValue();
+            arr.append(nodeObj);
         }
         return QJsonObject{{kKeyOk, true}, {kKeyNodes, arr}};
+    });
+
+    // 批量查询所有设备状态
+    dispatcher_->registerMethod(QStringLiteral("relay.queryAll"),
+                                 [this](const QJsonObject &) {
+        int queriedCount = 0;
+        for (auto it = context_->relays.begin(); it != context_->relays.end(); ++it) {
+            auto *dev = it.value();
+            if (dev) {
+                // 查询每个设备的所有通道
+                for (quint8 ch = 0; ch < 4; ++ch) {
+                    dev->query(ch);
+                }
+                queriedCount++;
+            }
+        }
+        return QJsonObject{
+            {kKeyOk, true},
+            {QStringLiteral("queriedDevices"), queriedCount}
+        };
     });
 }
 
@@ -309,6 +359,45 @@ void RpcRegistry::registerGroup()
             arr.append(obj);
         }
         return QJsonObject{{QStringLiteral("ok"), true}, {QStringLiteral("groups"), arr}};
+    });
+
+    // 获取指定分组详情
+    dispatcher_->registerMethod(QStringLiteral("group.get"),
+                                 [this](const QJsonObject &params) {
+        qint32 groupId = 0;
+        if (!rpc::RpcHelpers::getI32(params, "groupId", groupId))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing groupId"));
+
+        if (!context_->deviceGroups.contains(groupId))
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("group not found"));
+
+        const auto &nodeList = context_->deviceGroups.value(groupId);
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+
+        QJsonArray devices;
+        int onlineCount = 0;
+        for (quint8 node : nodeList) {
+            auto *dev = context_->relays.value(node, nullptr);
+            const qint64 lastSeen = dev ? dev->lastSeenMs() : 0;
+            const qint64 ageMs = (lastSeen > 0) ? (now - lastSeen) : std::numeric_limits<qint64>::max();
+            const bool online = (ageMs <= 30000);
+            if (online) onlineCount++;
+
+            QJsonObject devObj;
+            devObj[kKeyNode] = static_cast<int>(node);
+            devObj[kKeyOnline] = online;
+            devObj[kKeyAgeMs] = (lastSeen > 0) ? static_cast<double>(ageMs) : QJsonValue();
+            devices.append(devObj);
+        }
+
+        return QJsonObject{
+            {kKeyOk, true},
+            {kKeyGroupId, groupId},
+            {kKeyName, context_->groupNames.value(groupId, QString())},
+            {kKeyDevices, devices},
+            {kKeyDeviceCount, nodeList.size()},
+            {QStringLiteral("onlineCount"), onlineCount}
+        };
     });
 
     dispatcher_->registerMethod(QStringLiteral("group.create"),
