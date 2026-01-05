@@ -1,0 +1,78 @@
+{
+  "main": {
+    "rpcPort": 12345
+  },
+  "log": {
+    "logToConsole": true,
+    "logToFile": true,
+    "logFilePath": "/var/log/fanzhou_core/core.log",
+    "logLevel": 0
+  },
+  "can": {
+    "ifname": "can0",
+    "bitrate": 125000,
+    "tripleSampling": true,
+    "canFd": false
+  },
+  "devices": [
+    {
+      "name": "relay01",
+      "type": 1,
+      "commType": 2,
+      "nodeId": 1,
+      "bus": "can0",
+      "params": {
+        "channels": 4,
+        "enabled": true
+      }
+    },
+    {
+      "name": "relay02",
+      "type": 1,
+      "commType": 2,
+      "nodeId": 2,
+      "bus": "can0",
+      "params": {
+        "channels": 4,
+        "enabled": true
+      }
+    },
+    {
+      "name": "relay03",
+      "type": 1,
+      "commType": 2,
+      "nodeId": 3,
+      "bus": "can0",
+      "params": {
+        "channels": 4,
+        "enabled": true
+      }
+    }
+  ],
+  "groups": [
+    {
+      "groupId": 1,
+      "name": "main-group",
+      "enabled": true,
+      "devices": [1, 2]
+    },
+    {
+      "groupId": 2,
+      "name": "backup-group",
+      "enabled": true,
+      "devices": [3]
+    }
+  ],
+  "strategies": [
+    {
+      "id": 1,
+      "name": "default-stop",
+      "groupId": 1,
+      "channel": 0,
+      "action": "stop",
+      "intervalSec": 120,
+      "enabled": true,
+      "autoStart": false
+    }
+  ]
+}
