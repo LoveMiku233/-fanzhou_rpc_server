@@ -1,8 +1,8 @@
 /**
  * @file rpc_registry.h
- * @brief RPC method registry
+ * @brief RPC方法注册器
  *
- * Registers all RPC methods with the dispatcher.
+ * 将所有RPC方法注册到分发器。
  */
 
 #ifndef FANZHOU_RPC_REGISTRY_H
@@ -20,9 +20,9 @@ namespace core {
 class CoreContext;
 
 /**
- * @brief RPC method registry
+ * @brief RPC方法注册器
  *
- * Registers all available RPC methods organized by category.
+ * 按类别注册所有可用的RPC方法。
  */
 class RpcRegistry : public QObject
 {
@@ -30,16 +30,16 @@ class RpcRegistry : public QObject
 
 public:
     /**
-     * @brief Construct an RPC registry
-     * @param context Core context
-     * @param dispatcher RPC dispatcher
-     * @param parent Parent object
+     * @brief 构造RPC注册器
+     * @param context 核心上下文
+     * @param dispatcher RPC分发器
+     * @param parent 父对象
      */
     explicit RpcRegistry(CoreContext *context, rpc::JsonRpcDispatcher *dispatcher,
                          QObject *parent = nullptr);
 
     /**
-     * @brief Register all RPC methods
+     * @brief 注册所有RPC方法
      */
     void registerAll();
 

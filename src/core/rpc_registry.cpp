@@ -1,6 +1,6 @@
 /**
  * @file rpc_registry.cpp
- * @brief RPC method registry implementation
+ * @brief RPC方法注册器实现
  */
 
 #include "rpc_registry.h"
@@ -23,7 +23,7 @@ namespace fanzhou {
 namespace core {
 
 namespace {
-// Common JSON keys - avoid repeated QStringLiteral allocations
+// 通用JSON键 - 避免重复的QStringLiteral分配
 const QString kKeyOk = QStringLiteral("ok");
 const QString kKeyCh = QStringLiteral("ch");
 const QString kKeyChannel = QStringLiteral("channel");

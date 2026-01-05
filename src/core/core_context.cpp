@@ -1,6 +1,6 @@
 /**
  * @file core_context.cpp
- * @brief Core system context implementation
+ * @brief 核心系统上下文实现
  */
 
 #include "core_context.h"

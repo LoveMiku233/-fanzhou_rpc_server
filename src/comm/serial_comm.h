@@ -1,8 +1,8 @@
 /**
  * @file serial_comm.h
- * @brief Serial port communication adapter
+ * @brief 串口通信适配器
  *
- * Provides serial port communication with RS485 support on Linux.
+ * 在Linux上提供支持RS485的串口通信。
  */
 
 #ifndef FANZHOU_SERIAL_COMM_H
@@ -17,23 +17,23 @@ namespace fanzhou {
 namespace comm {
 
 /**
- * @brief Serial port configuration
+ * @brief 串口配置
  */
 struct SerialConfig {
-    QString device;                 ///< Device path (e.g., "/dev/ttyS0")
-    int baudRate = 115200;          ///< Baud rate
-    int dataBits = 8;               ///< Data bits (5-8)
-    int stopBits = 1;               ///< Stop bits (1 or 2)
-    char parity = 'N';              ///< Parity: 'N'=None, 'E'=Even, 'O'=Odd
-    bool rs485 = false;             ///< Enable RS485 mode
-    int rs485DelayBeforeUs = 0;     ///< RS485 delay before send (microseconds)
-    int rs485DelayAfterUs = 0;      ///< RS485 delay after send (microseconds)
+    QString device;                 ///< 设备路径（如"/dev/ttyS0"）
+    int baudRate = 115200;          ///< 波特率
+    int dataBits = 8;               ///< 数据位（5-8）
+    int stopBits = 1;               ///< 停止位（1或2）
+    char parity = 'N';              ///< 校验：'N'=无, 'E'=偶, 'O'=奇
+    bool rs485 = false;             ///< 启用RS485模式
+    int rs485DelayBeforeUs = 0;     ///< RS485发送前延迟（微秒）
+    int rs485DelayAfterUs = 0;      ///< RS485发送后延迟（微秒）
 };
 
 /**
- * @brief Serial port communication adapter
+ * @brief 串口通信适配器
  *
- * Implements serial port communication with optional RS485 mode support.
+ * 实现带可选RS485模式支持的串口通信。
  */
 class SerialComm : public CommAdapter
 {
@@ -41,9 +41,9 @@ class SerialComm : public CommAdapter
 
 public:
     /**
-     * @brief Construct a serial communication adapter
-     * @param config Serial port configuration
-     * @param parent Parent object
+     * @brief 构造串口通信适配器
+     * @param config 串口配置
+     * @param parent 父对象
      */
     explicit SerialComm(SerialConfig config, QObject *parent = nullptr);
 

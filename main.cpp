@@ -1,8 +1,9 @@
 /**
  * @file main.cpp
- * @brief FanZhou RPC Server entry point
+ * @brief 泛舟RPC服务器入口
  *
- * Greenhouse control system core service main entry.
+ * 温室控制系统核心服务主入口。
+ * 目标平台：全志A133
  */
 
 #include <QCoreApplication>
@@ -25,22 +26,22 @@ const QString kDefaultLogPath = QStringLiteral("/var/log/fanzhou_core/core.log")
 const QString kDefaultConfigPath = QStringLiteral("/var/lib/fanzhou_core/core.json");
 
 /**
- * @brief Get configuration file path
- * @param app Application instance
- * @return Configuration file path
+ * @brief 获取配置文件路径
+ * @param app 应用程序实例
+ * @return 配置文件路径
  */
 QString getConfigPath(const QCoreApplication &app)
 {
     Q_UNUSED(app);
-    // TODO: Support command line argument for config path
+    // TODO: 支持命令行参数指定配置文件路径
     return kDefaultConfigPath;
 }
 
 /**
- * @brief Ensure parent directory exists
- * @param filePath File path
- * @param error Error message output
- * @return True if successful
+ * @brief 确保父目录存在
+ * @param filePath 文件路径
+ * @param error 错误信息输出
+ * @return 成功返回true
  */
 bool ensureParentDir(const QString &filePath, QString *error = nullptr)
 {
@@ -66,14 +67,14 @@ int main(int argc, char *argv[])
     app.setApplicationName(QStringLiteral("fanzhou-rpc-server"));
     app.setApplicationVersion(QStringLiteral("1.0.0"));
 
-    // 1. Load configuration
+    // 1. 加载配置
     const QString configPath = getConfigPath(app);
 
     fanzhou::core::CoreConfig config = fanzhou::core::CoreConfig::makeDefault();
     QString error;
     bool configLoaded = config.loadFromFile(configPath, &error);
 
-    // 2. Initialize logging system
+    // 2. 初始化日志系统
     const QString logPath = config.log.logToFile ? config.log.logFilePath : QString();
     const fanzhou::LogLevel logLevel = static_cast<fanzhou::LogLevel>(config.log.logLevel);
     fanzhou::Logger::instance().init(logPath, logLevel, config.log.logToConsole);
@@ -100,7 +101,7 @@ int main(int argc, char *argv[])
         LOG_INFO(kLogSource, QStringLiteral("Configuration loaded successfully"));
     }
 
-    // 3. Initialize core context
+    // 3. 初始化核心上下文
     fanzhou::core::CoreContext context;
     LOG_INFO(kLogSource, QStringLiteral("Initializing core context..."));
     if (!context.init(config)) {
@@ -109,14 +110,14 @@ int main(int argc, char *argv[])
     }
     LOG_INFO(kLogSource, QStringLiteral("Core context initialized"));
 
-    // 4. Register RPC methods
+    // 4. 注册RPC方法
     LOG_INFO(kLogSource, QStringLiteral("Registering RPC methods..."));
     fanzhou::rpc::JsonRpcDispatcher dispatcher;
     fanzhou::core::RpcRegistry registry(&context, &dispatcher);
     registry.registerAll();
     LOG_INFO(kLogSource, QStringLiteral("RPC methods registered"));
 
-    // 5. Start JSON-RPC server
+    // 5. 启动JSON-RPC服务器
     fanzhou::rpc::JsonRpcServer server(&dispatcher);
     const quint16 port = context.rpcPort;
     LOG_INFO(kLogSource, QStringLiteral("Starting JSON-RPC server on port %1...").arg(port));

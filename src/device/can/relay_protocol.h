@@ -1,8 +1,8 @@
 /**
  * @file relay_protocol.h
- * @brief CAN relay protocol definitions
+ * @brief CAN继电器协议定义
  *
- * Defines the protocol for communicating with CAN-based relay devices.
+ * 定义与CAN继电器设备通信的协议。
  */
 
 #ifndef FANZHOU_RELAY_PROTOCOL_H
@@ -17,55 +17,55 @@ namespace fanzhou {
 namespace device {
 
 /**
- * @brief Relay CAN protocol namespace
+ * @brief 继电器CAN协议命名空间
  *
- * Contains protocol constants, types, and encoding/decoding functions.
+ * 包含协议常量、类型和编解码函数。
  */
 namespace RelayProtocol {
 
-// CAN ID base addresses
-constexpr quint32 kCtrlBaseId = 0x100;    ///< Control command base ID
-constexpr quint32 kStatusBaseId = 0x200;  ///< Status response base ID
+// CAN ID基地址
+constexpr quint32 kCtrlBaseId = 0x100;    ///< 控制命令基地址
+constexpr quint32 kStatusBaseId = 0x200;  ///< 状态响应基地址
 
 /**
- * @brief Command types
+ * @brief 命令类型
  */
 enum class CmdType : quint8 {
-    ControlRelay = 0x01,  ///< Control relay output
-    QueryStatus = 0x02    ///< Query relay status
+    ControlRelay = 0x01,  ///< 控制继电器输出
+    QueryStatus = 0x02    ///< 查询继电器状态
 };
 
 /**
- * @brief Relay action types
+ * @brief 继电器动作类型
  */
 enum class Action : quint8 {
-    Stop = 0x00,     ///< Stop (both outputs off)
-    Forward = 0x01,  ///< Forward direction
-    Reverse = 0x02   ///< Reverse direction
+    Stop = 0x00,     ///< 停止（两路输出都关闭）
+    Forward = 0x01,  ///< 正转方向
+    Reverse = 0x02   ///< 反转方向
 };
 
 /**
- * @brief Control command structure
+ * @brief 控制命令结构
  */
 struct CtrlCmd {
     CmdType type = CmdType::ControlRelay;
-    quint8 channel = 0;         ///< Channel (0-3)
+    quint8 channel = 0;         ///< 通道（0-3）
     Action action = Action::Stop;
 };
 
 /**
- * @brief Status response structure
+ * @brief 状态响应结构
  */
 struct Status {
-    quint8 channel = 0;     ///< Channel (0-3)
-    quint8 statusByte = 0;  ///< Status flags
-    float currentA = 0.0f;  ///< Current in amps
+    quint8 channel = 0;     ///< 通道（0-3）
+    quint8 statusByte = 0;  ///< 状态标志
+    float currentA = 0.0f;  ///< 电流（安培）
 };
 
 /**
- * @brief Extract mode bits from status byte
- * @param statusByte Raw status byte
- * @return Mode bits (0-3)
+ * @brief 从状态字节提取模式位
+ * @param statusByte 原始状态字节
+ * @return 模式位（0-3）
  */
 inline quint8 modeBits(quint8 statusByte)
 {
@@ -73,9 +73,9 @@ inline quint8 modeBits(quint8 statusByte)
 }
 
 /**
- * @brief Check phase lost flag from status byte
- * @param statusByte Raw status byte
- * @return True if phase lost
+ * @brief 从状态字节检查缺相标志
+ * @param statusByte 原始状态字节
+ * @return 如果缺相返回true
  */
 inline bool phaseLost(quint8 statusByte)
 {
@@ -83,9 +83,9 @@ inline bool phaseLost(quint8 statusByte)
 }
 
 /**
- * @brief Decode little-endian float from 4 bytes
- * @param bytes Pointer to 4 bytes
- * @return Decoded float value
+ * @brief 从4字节解码小端浮点数
+ * @param bytes 指向4字节的指针
+ * @return 解码后的浮点值
  */
 inline float leFloat(const quint8 bytes[4])
 {
@@ -100,9 +100,9 @@ inline float leFloat(const quint8 bytes[4])
 }
 
 /**
- * @brief Encode float as little-endian bytes
- * @param out Output byte array
- * @param value Float value to encode
+ * @brief 将浮点数编码为小端字节
+ * @param out 输出字节数组
+ * @param value 要编码的浮点值
  */
 inline void putLeFloat(QByteArray &out, float value)
 {
@@ -115,9 +115,9 @@ inline void putLeFloat(QByteArray &out, float value)
 }
 
 /**
- * @brief Encode control command to CAN payload
- * @param cmd Control command
- * @return 8-byte CAN payload
+ * @brief 将控制命令编码为CAN载荷
+ * @param cmd 控制命令
+ * @return 8字节CAN载荷
  */
 inline QByteArray encodeCtrl(const CtrlCmd &cmd)
 {
@@ -133,10 +133,10 @@ inline QByteArray encodeCtrl(const CtrlCmd &cmd)
 }
 
 /**
- * @brief Decode status from CAN payload
- * @param data CAN payload (must be 8 bytes)
- * @param status Output status structure
- * @return True if decode successful
+ * @brief 从CAN载荷解码状态
+ * @param data CAN载荷（必须8字节）
+ * @param status 输出状态结构
+ * @return 解码成功返回true
  */
 inline bool decodeStatus(const QByteArray &data, Status &status)
 {

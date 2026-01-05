@@ -1,6 +1,6 @@
 /**
  * @file rpc_helpers.cpp
- * @brief RPC helper functions implementation
+ * @brief RPC辅助函数实现
  */
 
 #include "rpc_helpers.h"

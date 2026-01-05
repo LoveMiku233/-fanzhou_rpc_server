@@ -1,8 +1,8 @@
 /**
  * @file relay_gd427.h
- * @brief GD427 CAN relay device
+ * @brief GD427 CAN继电器设备
  *
- * Implements control and monitoring for GD427 CAN relay modules.
+ * 实现GD427 CAN继电器模块的控制和监控。
  */
 
 #ifndef FANZHOU_RELAY_GD427_H
@@ -24,10 +24,9 @@ class CanComm;
 namespace device {
 
 /**
- * @brief GD427 CAN relay device controller
+ * @brief GD427 CAN继电器设备控制器
  *
- * Provides control and status monitoring for 4-channel relay modules
- * connected via CAN bus.
+ * 为通过CAN总线连接的4通道继电器模块提供控制和状态监控。
  */
 class RelayGd427 : public DeviceAdapter, public ICanDevice
 {
@@ -35,53 +34,53 @@ class RelayGd427 : public DeviceAdapter, public ICanDevice
 
 public:
     /**
-     * @brief Construct a relay device
-     * @param nodeId CAN node identifier
-     * @param bus CAN communication bus
-     * @param parent Parent object
+     * @brief 构造继电器设备
+     * @param nodeId CAN节点标识符
+     * @param bus CAN通信总线
+     * @param parent 父对象
      */
     RelayGd427(quint8 nodeId, comm::CanComm *bus, QObject *parent = nullptr);
 
-    // DeviceAdapter interface
+    // DeviceAdapter接口
     bool init() override;
     void poll() override;
     QString name() const override;
 
     /**
-     * @brief Get node ID
-     * @return CAN node identifier
+     * @brief 获取节点ID
+     * @return CAN节点标识符
      */
     quint8 nodeId() const { return nodeId_; }
 
     /**
-     * @brief Control a relay channel
-     * @param channel Channel number (0-3)
-     * @param action Relay action
-     * @return True if command sent successfully
+     * @brief 控制继电器通道
+     * @param channel 通道号（0-3）
+     * @param action 继电器动作
+     * @return 命令发送成功返回true
      */
     bool control(quint8 channel, RelayProtocol::Action action);
 
     /**
-     * @brief Query a channel's status
-     * @param channel Channel number (0-3)
-     * @return True if query sent successfully
+     * @brief 查询通道状态
+     * @param channel 通道号（0-3）
+     * @return 查询发送成功返回true
      */
     bool query(quint8 channel);
 
     /**
-     * @brief Get last status for a channel
-     * @param channel Channel number (0-3)
-     * @return Channel status
+     * @brief 获取通道的最后状态
+     * @param channel 通道号（0-3）
+     * @return 通道状态
      */
     RelayProtocol::Status lastStatus(quint8 channel) const;
 
     /**
-     * @brief Get timestamp of last received status
-     * @return Milliseconds since epoch, or 0 if never received
+     * @brief 获取最后接收状态的时间戳
+     * @return 自纪元以来的毫秒数，从未接收过返回0
      */
     qint64 lastSeenMs() const;
 
-    // ICanDevice interface
+    // ICanDevice接口
     QString canDeviceName() const override { return name(); }
     bool canAccept(quint32 canId, bool extended, bool rtr) const override;
     void canOnFrame(quint32 canId, const QByteArray &payload,
@@ -89,9 +88,9 @@ public:
 
 signals:
     /**
-     * @brief Emitted when channel status is updated
-     * @param channel Channel number
-     * @param status New status
+     * @brief 通道状态更新时发出
+     * @param channel 通道号
+     * @param status 新状态
      */
     void statusUpdated(quint8 channel, fanzhou::device::RelayProtocol::Status status);
 

@@ -1,8 +1,8 @@
 /**
  * @file core_context.h
- * @brief Core system context
+ * @brief 核心系统上下文
  *
- * Manages the core components of the control system.
+ * 管理控制系统的核心组件。
  */
 
 #ifndef FANZHOU_CORE_CONTEXT_H
@@ -34,7 +34,7 @@ class RelayGd427;
 namespace core {
 
 /**
- * @brief Control job structure
+ * @brief 控制任务结构
  */
 struct ControlJob {
     quint64 id = 0;
@@ -46,7 +46,7 @@ struct ControlJob {
 };
 
 /**
- * @brief Control job result
+ * @brief 控制任务结果
  */
 struct ControlJobResult {
     bool ok = false;
@@ -55,7 +55,7 @@ struct ControlJobResult {
 };
 
 /**
- * @brief Enqueue operation result
+ * @brief 入队操作结果
  */
 struct EnqueueResult {
     quint64 jobId = 0;
@@ -66,7 +66,7 @@ struct EnqueueResult {
 };
 
 /**
- * @brief Group control statistics
+ * @brief 分组控制统计
  */
 struct GroupControlStats {
     int total = 0;
@@ -76,7 +76,7 @@ struct GroupControlStats {
 };
 
 /**
- * @brief Queue status snapshot
+ * @brief 队列状态快照
  */
 struct QueueSnapshot {
     int pending = 0;
@@ -85,7 +85,7 @@ struct QueueSnapshot {
 };
 
 /**
- * @brief Auto strategy state
+ * @brief 自动策略状态
  */
 struct AutoStrategyState {
     AutoStrategyConfig config;
@@ -94,10 +94,9 @@ struct AutoStrategyState {
 };
 
 /**
- * @brief Core system context
+ * @brief 核心系统上下文
  *
- * Manages all core components including system settings, CAN bus,
- * device manager, and relay devices.
+ * 管理所有核心组件，包括系统设置、CAN总线、设备管理器和继电器设备。
  */
 class CoreContext : public QObject
 {
@@ -107,51 +106,51 @@ public:
     explicit CoreContext(QObject *parent = nullptr);
 
     /**
-     * @brief Initialize with default configuration
-     * @return True if successful
+     * @brief 使用默认配置初始化
+     * @return 成功返回true
      */
     bool init();
 
     /**
-     * @brief Initialize with specified configuration
-     * @param config Core configuration
-     * @return True if successful
+     * @brief 使用指定配置初始化
+     * @param config 核心配置
+     * @return 成功返回true
      */
     bool init(const CoreConfig &config);
 
     /**
-     * @brief Get RPC method group names
-     * @return List of method group prefixes
+     * @brief 获取RPC方法组名称
+     * @return 方法组前缀列表
      */
     QStringList methodGroups() const;
 
-    // Component pointers
+    // 组件指针
     config::SystemSettings *systemSettings = nullptr;
     comm::CanComm *canBus = nullptr;
     device::CanDeviceManager *canManager = nullptr;
 
-    // Device registry: node ID -> device
+    // 设备注册表：节点ID -> 设备
     QHash<quint8, device::RelayGd427 *> relays;
 
-    // Device groups: group ID -> node IDs
+    // 设备分组：分组ID -> 节点ID列表
     QHash<int, QList<quint8>> deviceGroups;
     QHash<int, QString> groupNames;
 
-    // CAN configuration
+    // CAN配置
     QString canInterface = QStringLiteral("can0");
     int canBitrate = 125000;
     bool tripleSampling = true;
 
-    // Server configuration
+    // 服务器配置
     quint16 rpcPort = 12345;
 
-    // Group management
+    // 分组管理
     bool createGroup(int groupId, const QString &name, QString *error = nullptr);
     bool deleteGroup(int groupId, QString *error = nullptr);
     bool addDeviceToGroup(int groupId, quint8 node, QString *error = nullptr);
     bool removeDeviceFromGroup(int groupId, quint8 node, QString *error = nullptr);
 
-    // Control queue
+    // 控制队列
     EnqueueResult enqueueControl(quint8 node, quint8 channel,
                                   device::RelayProtocol::Action action,
                                   const QString &source, bool forceQueue = false);
@@ -162,7 +161,7 @@ public:
     ControlJobResult jobResult(quint64 jobId) const;
     device::RelayProtocol::Action parseAction(const QString &str, bool *ok = nullptr) const;
 
-    // Strategy management
+    // 策略管理
     QList<AutoStrategyState> strategyStates() const;
     bool setStrategyEnabled(int strategyId, bool enabled);
     bool triggerStrategy(int strategyId);

@@ -1,8 +1,8 @@
 /**
  * @file i_can_device.h
- * @brief CAN device interface
+ * @brief CAN设备接口
  *
- * Defines the interface for devices that communicate over CAN bus.
+ * 定义通过CAN总线通信的设备接口。
  */
 
 #ifndef FANZHOU_I_CAN_DEVICE_H
@@ -16,9 +16,9 @@ namespace fanzhou {
 namespace device {
 
 /**
- * @brief Interface for CAN bus devices
+ * @brief CAN总线设备接口
  *
- * Provides methods for receiving and filtering CAN frames.
+ * 提供接收和过滤CAN帧的方法。
  */
 class ICanDevice
 {
@@ -26,26 +26,26 @@ public:
     virtual ~ICanDevice() = default;
 
     /**
-     * @brief Get CAN device name
-     * @return Device name for identification
+     * @brief 获取CAN设备名称
+     * @return 用于识别的设备名称
      */
     virtual QString canDeviceName() const = 0;
 
     /**
-     * @brief Check if device accepts a specific CAN frame
-     * @param canId CAN identifier
-     * @param extended True if extended identifier
-     * @param rtr True if remote transmission request
-     * @return True if device handles this frame
+     * @brief 检查设备是否接受特定CAN帧
+     * @param canId CAN标识符
+     * @param extended 是否为扩展标识符
+     * @param rtr 是否为远程传输请求
+     * @return 如果设备处理此帧返回true
      */
     virtual bool canAccept(quint32 canId, bool extended, bool rtr) const = 0;
 
     /**
-     * @brief Process received CAN frame
-     * @param canId CAN identifier
-     * @param payload Frame data
-     * @param extended True if extended identifier
-     * @param rtr True if remote transmission request
+     * @brief 处理接收到的CAN帧
+     * @param canId CAN标识符
+     * @param payload 帧数据
+     * @param extended 是否为扩展标识符
+     * @param rtr 是否为远程传输请求
      */
     virtual void canOnFrame(quint32 canId, const QByteArray &payload,
                             bool extended, bool rtr) = 0;

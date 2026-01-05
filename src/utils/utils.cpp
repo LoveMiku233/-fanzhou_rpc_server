@@ -1,6 +1,6 @@
 /**
  * @file utils.cpp
- * @brief Common utility functions implementation
+ * @brief 通用工具函数实现
  */
 
 #include "utils.h"

@@ -1,8 +1,8 @@
 /**
  * @file json_rpc_client.h
- * @brief JSON-RPC TCP client
+ * @brief JSON-RPC TCP客户端
  *
- * Provides a TCP client for JSON-RPC 2.0 requests.
+ * 提供JSON-RPC 2.0请求的TCP客户端。
  */
 
 #ifndef FANZHOU_JSON_RPC_CLIENT_H
@@ -20,9 +20,9 @@ namespace fanzhou {
 namespace rpc {
 
 /**
- * @brief JSON-RPC 2.0 TCP client
+ * @brief JSON-RPC 2.0 TCP客户端
  *
- * Provides synchronous and asynchronous RPC calls over TCP.
+ * 提供同步和异步RPC调用功能。
  */
 class JsonRpcClient : public QObject
 {
@@ -30,7 +30,7 @@ class JsonRpcClient : public QObject
 
 public:
     /**
-     * @brief Callback type for asynchronous calls
+     * @brief 异步调用回调类型
      */
     using Callback = std::function<void(const QJsonValue &result,
                                          const QJsonObject &error)>;
@@ -38,57 +38,57 @@ public:
     explicit JsonRpcClient(QObject *parent = nullptr);
 
     /**
-     * @brief Set server endpoint
-     * @param host Server host
-     * @param port Server port
+     * @brief 设置服务器端点
+     * @param host 服务器主机
+     * @param port 服务器端口
      */
     void setEndpoint(const QString &host, quint16 port);
 
     /**
-     * @brief Connect to server
-     * @param timeoutMs Connection timeout in milliseconds
-     * @return True if connected
+     * @brief 连接到服务器
+     * @param timeoutMs 连接超时（毫秒）
+     * @return 连接成功返回true
      */
     bool connectToServer(int timeoutMs = 1500);
 
     /**
-     * @brief Disconnect from server
+     * @brief 断开服务器连接
      */
     void disconnectFromServer();
 
     /**
-     * @brief Check if connected
-     * @return True if connected
+     * @brief 检查是否已连接
+     * @return 已连接返回true
      */
     bool isConnected() const;
 
     /**
-     * @brief Synchronous RPC call (blocking)
-     * @param method Method name
-     * @param params Parameters
-     * @param timeoutMs Timeout in milliseconds
-     * @return Result value
+     * @brief 同步RPC调用（阻塞）
+     * @param method 方法名
+     * @param params 参数
+     * @param timeoutMs 超时（毫秒）
+     * @return 结果值
      */
     QJsonValue call(const QString &method,
                     const QJsonObject &params = QJsonObject(),
                     int timeoutMs = 1500);
 
     /**
-     * @brief Asynchronous RPC call
-     * @param method Method name
-     * @param params Parameters
-     * @return Request ID, or -1 on failure
+     * @brief 异步RPC调用
+     * @param method 方法名
+     * @param params 参数
+     * @return 请求ID，失败返回-1
      */
     int callAsync(const QString &method,
                   const QJsonObject &params = QJsonObject());
 
     /**
-     * @brief Asynchronous RPC call with callback
-     * @param method Method name
-     * @param params Parameters
-     * @param callback Result callback
-     * @param timeoutMs Timeout in milliseconds
-     * @return Request ID, or -1 on failure
+     * @brief 带回调的异步RPC调用
+     * @param method 方法名
+     * @param params 参数
+     * @param callback 结果回调
+     * @param timeoutMs 超时（毫秒）
+     * @return 请求ID，失败返回-1
      */
     int callAsync(const QString &method,
                   const QJsonObject &params,

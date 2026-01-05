@@ -1,8 +1,8 @@
 /**
  * @file core_config.h
- * @brief Core configuration management
+ * @brief 核心配置管理
  *
- * Defines configuration structures and loading/saving for the system.
+ * 定义系统的配置结构和加载/保存功能。
  */
 
 #ifndef FANZHOU_CORE_CONFIG_H
@@ -19,7 +19,7 @@ namespace fanzhou {
 namespace core {
 
 /**
- * @brief Device configuration
+ * @brief 设备配置
  */
 struct DeviceConfig {
     QString name;
@@ -31,7 +31,7 @@ struct DeviceConfig {
 };
 
 /**
- * @brief Relay node configuration
+ * @brief 继电器节点配置
  */
 struct RelayNodeConfig {
     int nodeId = 1;
@@ -41,7 +41,7 @@ struct RelayNodeConfig {
 };
 
 /**
- * @brief CAN bus configuration
+ * @brief CAN总线配置
  */
 struct CanConfig {
     QString interface = QStringLiteral("can0");
@@ -51,7 +51,7 @@ struct CanConfig {
 };
 
 /**
- * @brief Log configuration
+ * @brief 日志配置
  */
 struct LogConfig {
     bool logToConsole = true;
@@ -61,14 +61,14 @@ struct LogConfig {
 };
 
 /**
- * @brief Main configuration
+ * @brief 主配置
  */
 struct MainConfig {
     quint16 rpcPort = 12345;
 };
 
 /**
- * @brief Device group configuration
+ * @brief 设备组配置
  */
 struct DeviceGroupConfig {
     int groupId = 0;
@@ -78,7 +78,7 @@ struct DeviceGroupConfig {
 };
 
 /**
- * @brief Automatic control strategy configuration
+ * @brief 自动控制策略配置
  */
 struct AutoStrategyConfig {
     int strategyId = 0;
@@ -92,10 +92,9 @@ struct AutoStrategyConfig {
 };
 
 /**
- * @brief Core system configuration
+ * @brief 核心系统配置
  *
- * Manages all configuration for the control system including
- * RPC settings, CAN bus parameters, device list, and groups.
+ * 管理控制系统的所有配置，包括RPC设置、CAN总线参数、设备列表和分组。
  */
 class CoreConfig
 {
@@ -108,24 +107,24 @@ public:
     QList<AutoStrategyConfig> strategies;
 
     /**
-     * @brief Load configuration from file
-     * @param path File path
-     * @param error Error message output
-     * @return True if successful
+     * @brief 从文件加载配置
+     * @param path 文件路径
+     * @param error 错误信息输出
+     * @return 成功返回true
      */
     bool loadFromFile(const QString &path, QString *error = nullptr);
 
     /**
-     * @brief Save configuration to file
-     * @param path File path
-     * @param error Error message output
-     * @return True if successful
+     * @brief 保存配置到文件
+     * @param path 文件路径
+     * @param error 错误信息输出
+     * @return 成功返回true
      */
     bool saveToFile(const QString &path, QString *error = nullptr) const;
 
     /**
-     * @brief Create default configuration
-     * @return Default configuration object
+     * @brief 创建默认配置
+     * @return 默认配置对象
      */
     static CoreConfig makeDefault();
 };

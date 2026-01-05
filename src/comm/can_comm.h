@@ -1,8 +1,8 @@
 /**
  * @file can_comm.h
- * @brief CAN bus communication adapter
+ * @brief CAN总线通信适配器
  *
- * Provides CAN bus communication using SocketCAN on Linux.
+ * 在Linux上使用SocketCAN提供CAN总线通信。
  */
 
 #ifndef FANZHOU_CAN_COMM_H
@@ -21,18 +21,18 @@ namespace fanzhou {
 namespace comm {
 
 /**
- * @brief CAN bus configuration
+ * @brief CAN总线配置
  */
 struct CanConfig {
-    QString interface = QStringLiteral("can0");  ///< CAN interface name
-    bool canFd = false;                          ///< Enable CAN FD mode
+    QString interface = QStringLiteral("can0");  ///< CAN接口名
+    bool canFd = false;                          ///< 启用CAN FD模式
 };
 
 /**
- * @brief CAN bus communication adapter
+ * @brief CAN总线通信适配器
  *
- * Implements CAN bus communication using Linux SocketCAN.
- * Supports standard CAN and CAN FD modes.
+ * 使用Linux SocketCAN实现CAN总线通信。
+ * 支持标准CAN和CAN FD模式。
  */
 class CanComm : public CommAdapter
 {
@@ -40,9 +40,9 @@ class CanComm : public CommAdapter
 
 public:
     /**
-     * @brief Construct a CAN communication adapter
-     * @param config CAN configuration
-     * @param parent Parent object
+     * @brief 构造CAN通信适配器
+     * @param config CAN配置
+     * @param parent 父对象
      */
     explicit CanComm(CanConfig config, QObject *parent = nullptr);
 
@@ -53,23 +53,23 @@ public:
     qint64 writeBytes(const QByteArray &data) override;
 
     /**
-     * @brief Send a CAN frame
-     * @param canId CAN identifier
-     * @param payload Frame data (max 8 bytes for classic CAN)
-     * @param extended Use extended (29-bit) identifier
-     * @param rtr Remote transmission request
-     * @return True if frame was queued successfully
+     * @brief 发送CAN帧
+     * @param canId CAN标识符
+     * @param payload 帧数据（经典CAN最大8字节）
+     * @param extended 使用扩展（29位）标识符
+     * @param rtr 远程传输请求
+     * @return 帧成功入队返回true
      */
     bool sendFrame(quint32 canId, const QByteArray &payload,
                    bool extended = false, bool rtr = false);
 
 signals:
     /**
-     * @brief Emitted when a CAN frame is received
-     * @param canId CAN identifier
-     * @param payload Frame data
-     * @param extended True if extended identifier
-     * @param rtr True if remote transmission request
+     * @brief 接收到CAN帧时发出
+     * @param canId CAN标识符
+     * @param payload 帧数据
+     * @param extended 是否为扩展标识符
+     * @param rtr 是否为远程传输请求
      */
     void canFrameReceived(quint32 canId, QByteArray payload,
                           bool extended, bool rtr);

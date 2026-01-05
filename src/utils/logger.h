@@ -1,9 +1,8 @@
 /**
  * @file logger.h
- * @brief Thread-safe logging system
+ * @brief 线程安全日志系统
  *
- * Provides a singleton logger with multiple log levels, file output,
- * and console output control.
+ * 提供单例日志器，支持多日志级别、文件输出和控制台输出控制。
  */
 
 #ifndef FANZHOU_LOGGER_H
@@ -18,76 +17,76 @@
 namespace fanzhou {
 
 /**
- * @brief Log level enumeration
+ * @brief 日志级别枚举
  *
- * Defines supported log levels from lowest to highest priority
+ * 定义支持的日志级别，从最低到最高优先级
  */
 enum class LogLevel {
-    Debug = 0,     ///< Debug information
-    Info = 1,      ///< General information
-    Warning = 2,   ///< Warning messages
-    Error = 3,     ///< Error messages
-    Critical = 4   ///< Critical errors
+    Debug = 0,     ///< 调试信息
+    Info = 1,      ///< 一般信息
+    Warning = 2,   ///< 警告消息
+    Error = 3,     ///< 错误消息
+    Critical = 4   ///< 严重错误
 };
 
 /**
- * @brief Thread-safe logging utility class
+ * @brief 线程安全日志工具类
  *
- * Provides multi-level logging with file and console output control.
- * All log messages include context information (timestamp, source, level).
+ * 提供多级别日志记录，支持文件和控制台输出控制。
+ * 所有日志消息包含上下文信息（时间戳、来源、级别）。
  */
 class Logger
 {
 public:
     /**
-     * @brief Get logger singleton instance
-     * @return Reference to the logger instance
+     * @brief 获取日志器单例实例
+     * @return 日志器实例的引用
      */
     static Logger &instance();
 
     /**
-     * @brief Initialize the logging system
-     * @param logFilePath Log file path (empty for console-only output)
-     * @param minLevel Minimum log level to output
-     * @param logToConsole Whether to output to console
+     * @brief 初始化日志系统
+     * @param logFilePath 日志文件路径（空则仅控制台输出）
+     * @param minLevel 最小输出日志级别
+     * @param logToConsole 是否输出到控制台
      */
     void init(const QString &logFilePath = QString(),
               LogLevel minLevel = LogLevel::Debug,
               bool logToConsole = true);
 
     /**
-     * @brief Set minimum log level
-     * @param level Minimum level to output
+     * @brief 设置最小日志级别
+     * @param level 最小输出级别
      */
     void setMinLevel(LogLevel level);
 
     /**
-     * @brief Get current minimum log level
-     * @return Current minimum log level
+     * @brief 获取当前最小日志级别
+     * @return 当前最小日志级别
      */
     LogLevel minLevel() const;
 
     /**
-     * @brief Set console output enabled
-     * @param enabled Whether to enable console output
+     * @brief 设置控制台输出开关
+     * @param enabled 是否启用控制台输出
      */
     void setConsoleEnabled(bool enabled);
 
     /**
-     * @brief Check if console output is enabled
-     * @return True if console output is enabled
+     * @brief 检查控制台输出是否启用
+     * @return 如果启用控制台输出则返回true
      */
     bool isConsoleEnabled() const;
 
     /**
-     * @brief Log a message at the specified level
-     * @param level Log level
-     * @param source Source component name
-     * @param message Log message
+     * @brief 记录指定级别的日志消息
+     * @param level 日志级别
+     * @param source 来源组件名称
+     * @param message 日志消息
      */
     void log(LogLevel level, const QString &source, const QString &message);
 
-    // Convenience methods for each log level
+    // 各日志级别的便捷方法
     void debug(const QString &source, const QString &message);
     void info(const QString &source, const QString &message);
     void warning(const QString &source, const QString &message);
@@ -95,12 +94,12 @@ public:
     void critical(const QString &source, const QString &message);
 
     /**
-     * @brief Flush log buffer to file
+     * @brief 刷新日志缓冲区到文件
      */
     void flush();
 
     /**
-     * @brief Close log file
+     * @brief 关闭日志文件
      */
     void close();
 
@@ -123,7 +122,7 @@ private:
     bool consoleEnabled_ = true;
 };
 
-// Convenience logging macros
+// 便捷日志宏
 #define LOG_DEBUG(source, msg) \
     fanzhou::Logger::instance().debug(source, msg)
 #define LOG_INFO(source, msg) \

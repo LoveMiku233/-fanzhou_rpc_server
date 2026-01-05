@@ -1,6 +1,6 @@
 /**
  * @file logger.cpp
- * @brief Thread-safe logging system implementation
+ * @brief 线程安全日志系统实现
  */
 
 #include "logger.h"
