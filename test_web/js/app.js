@@ -511,27 +511,38 @@ function controlGroup() {
 }
 
 /**
- * 添加设备到分组
+ * 验证分组和设备ID的输入值
+ * @returns {{valid: boolean, groupId: number, nodeId: number}} 验证结果
  */
-function addDeviceToGroup() {
+function validateGroupDeviceInput() {
     const groupId = parseInt(document.getElementById('addDeviceGroupId').value);
     const nodeId = parseInt(document.getElementById('addDeviceNodeId').value);
     
     if (!groupId || groupId <= 0) {
         alert('请输入有效的分组ID');
-        return;
+        return { valid: false, groupId: 0, nodeId: 0 };
     }
     if (!nodeId || nodeId <= 0 || nodeId > 255) {
         alert('请输入有效的设备节点ID (1-255)');
-        return;
+        return { valid: false, groupId: 0, nodeId: 0 };
     }
     
+    return { valid: true, groupId: groupId, nodeId: nodeId };
+}
+
+/**
+ * 添加设备到分组
+ */
+function addDeviceToGroup() {
+    const input = validateGroupDeviceInput();
+    if (!input.valid) return;
+    
     callMethod('group.addDevice', {
-        groupId: groupId,
-        node: nodeId
+        groupId: input.groupId,
+        node: input.nodeId
     }, function(response) {
         if (response.result && response.result.ok) {
-            log('info', `设备 ${nodeId} 已添加到分组 ${groupId}`);
+            log('info', `设备 ${input.nodeId} 已添加到分组 ${input.groupId}`);
             refreshGroupList();
         } else if (response.error) {
             log('error', `添加失败: ${response.error.message || '未知错误'}`);
@@ -543,25 +554,16 @@ function addDeviceToGroup() {
  * 从分组移除设备
  */
 function removeDeviceFromGroup() {
-    const groupId = parseInt(document.getElementById('addDeviceGroupId').value);
-    const nodeId = parseInt(document.getElementById('addDeviceNodeId').value);
+    const input = validateGroupDeviceInput();
+    if (!input.valid) return;
     
-    if (!groupId || groupId <= 0) {
-        alert('请输入有效的分组ID');
-        return;
-    }
-    if (!nodeId || nodeId <= 0 || nodeId > 255) {
-        alert('请输入有效的设备节点ID (1-255)');
-        return;
-    }
-    
-    if (confirm(`确定要从分组 ${groupId} 移除设备 ${nodeId} 吗？`)) {
+    if (confirm(`确定要从分组 ${input.groupId} 移除设备 ${input.nodeId} 吗？`)) {
         callMethod('group.removeDevice', {
-            groupId: groupId,
-            node: nodeId
+            groupId: input.groupId,
+            node: input.nodeId
         }, function(response) {
             if (response.result && response.result.ok) {
-                log('info', `设备 ${nodeId} 已从分组 ${groupId} 移除`);
+                log('info', `设备 ${input.nodeId} 已从分组 ${input.groupId} 移除`);
                 refreshGroupList();
             } else if (response.error) {
                 log('error', `移除失败: ${response.error.message || '未知错误'}`);
@@ -751,6 +753,8 @@ function refreshStrategyList() {
         if (response.result) {
             strategyListCache = response.result.strategies || [];
             renderStrategyList();
+        } else if (response.error) {
+            log('error', `获取策略列表失败: ${response.error.message || '未知错误'}`);
         }
     });
 }
@@ -877,6 +881,10 @@ function readDeviceConfig() {
             content.textContent = JSON.stringify(configInfo, null, 2);
             panel.style.display = 'block';
             log('info', '设备配置读取成功');
+        } else if (response.error) {
+            content.textContent = `读取失败: ${response.error.message || '未知错误'}`;
+            panel.style.display = 'block';
+            log('error', `设备配置读取失败: ${response.error.message || '未知错误'}`);
         } else {
             content.textContent = '无法读取设备配置';
             panel.style.display = 'block';
