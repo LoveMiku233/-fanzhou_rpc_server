@@ -706,56 +706,15 @@ void RpcRegistry::registerDevice()
     dispatcher_->registerMethod(QStringLiteral("device.types"),
                                  [](const QJsonObject &) {
         QJsonArray arr;
-        arr.append(QJsonObject{
-            {QStringLiteral("id"), static_cast<int>(device::DeviceTypeId::RelayGd427)},
-            {QStringLiteral("name"), QStringLiteral("RelayGd427")},
-            {QStringLiteral("category"), QStringLiteral("relay")}
-        });
-        arr.append(QJsonObject{
-            {QStringLiteral("id"), static_cast<int>(device::DeviceTypeId::SensorModbusGeneric)},
-            {QStringLiteral("name"), QStringLiteral("SensorModbusGeneric")},
-            {QStringLiteral("category"), QStringLiteral("sensor")}
-        });
-        arr.append(QJsonObject{
-            {QStringLiteral("id"), static_cast<int>(device::DeviceTypeId::SensorModbusTemp)},
-            {QStringLiteral("name"), QStringLiteral("SensorModbusTemp")},
-            {QStringLiteral("category"), QStringLiteral("sensor")}
-        });
-        arr.append(QJsonObject{
-            {QStringLiteral("id"), static_cast<int>(device::DeviceTypeId::SensorModbusHumidity)},
-            {QStringLiteral("name"), QStringLiteral("SensorModbusHumidity")},
-            {QStringLiteral("category"), QStringLiteral("sensor")}
-        });
-        arr.append(QJsonObject{
-            {QStringLiteral("id"), static_cast<int>(device::DeviceTypeId::SensorModbusSoil)},
-            {QStringLiteral("name"), QStringLiteral("SensorModbusSoil")},
-            {QStringLiteral("category"), QStringLiteral("sensor")}
-        });
-        arr.append(QJsonObject{
-            {QStringLiteral("id"), static_cast<int>(device::DeviceTypeId::SensorModbusCO2)},
-            {QStringLiteral("name"), QStringLiteral("SensorModbusCO2")},
-            {QStringLiteral("category"), QStringLiteral("sensor")}
-        });
-        arr.append(QJsonObject{
-            {QStringLiteral("id"), static_cast<int>(device::DeviceTypeId::SensorModbusLight)},
-            {QStringLiteral("name"), QStringLiteral("SensorModbusLight")},
-            {QStringLiteral("category"), QStringLiteral("sensor")}
-        });
-        arr.append(QJsonObject{
-            {QStringLiteral("id"), static_cast<int>(device::DeviceTypeId::SensorModbusPH)},
-            {QStringLiteral("name"), QStringLiteral("SensorModbusPH")},
-            {QStringLiteral("category"), QStringLiteral("sensor")}
-        });
-        arr.append(QJsonObject{
-            {QStringLiteral("id"), static_cast<int>(device::DeviceTypeId::SensorModbusEC)},
-            {QStringLiteral("name"), QStringLiteral("SensorModbusEC")},
-            {QStringLiteral("category"), QStringLiteral("sensor")}
-        });
-        arr.append(QJsonObject{
-            {QStringLiteral("id"), static_cast<int>(device::DeviceTypeId::SensorCanGeneric)},
-            {QStringLiteral("name"), QStringLiteral("SensorCanGeneric")},
-            {QStringLiteral("category"), QStringLiteral("sensor")}
-        });
+        int count = 0;
+        const auto* types = device::allDeviceTypes(count);
+        for (int i = 0; i < count; ++i) {
+            arr.append(QJsonObject{
+                {QStringLiteral("id"), static_cast<int>(types[i].id)},
+                {QStringLiteral("name"), QString::fromLatin1(types[i].name)},
+                {QStringLiteral("category"), QString::fromLatin1(types[i].category)}
+            });
+        }
         return QJsonObject{{kKeyOk, true}, {QStringLiteral("types"), arr}};
     });
 
@@ -832,7 +791,18 @@ void RpcRegistry::registerDevice()
         config.nodeId = nodeId;
         config.name = name;
         config.deviceType = static_cast<device::DeviceTypeId>(deviceType);
-        config.commType = commType > 0 ? static_cast<device::CommTypeId>(commType) : device::CommTypeId::Can;
+
+        // Determine appropriate comm type based on device type if not specified
+        if (commType > 0) {
+            config.commType = static_cast<device::CommTypeId>(commType);
+        } else {
+            // Default comm type based on device type
+            if (device::isModbusSensorType(config.deviceType)) {
+                config.commType = device::CommTypeId::Serial;
+            } else {
+                config.commType = device::CommTypeId::Can;
+            }
+        }
         config.bus = bus.isEmpty() ? context_->canInterface : bus;
 
         if (params.contains(QStringLiteral("params")) && params[QStringLiteral("params")].isObject()) {

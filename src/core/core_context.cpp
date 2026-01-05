@@ -23,6 +23,7 @@ const char *const kLogSource = "CoreContext";
 const QString kErrUnknownNode = QStringLiteral("unknown node");
 const QString kErrDeviceNotFound = QStringLiteral("device not found");
 const QString kErrDeviceRejected = QStringLiteral("device rejected");
+constexpr int kMaxChannelId = 3;  ///< Maximum channel ID (0-3 for 4 channels)
 }  // namespace
 
 CoreContext::CoreContext(QObject *parent)
@@ -595,8 +596,8 @@ bool CoreContext::addChannelToGroup(int groupId, quint8 node, int channel, QStri
         if (error) *error = QStringLiteral("device not found");
         return false;
     }
-    if (channel < 0 || channel > 3) {
-        if (error) *error = QStringLiteral("invalid channel (0-3)");
+    if (channel < 0 || channel > kMaxChannelId) {
+        if (error) *error = QStringLiteral("invalid channel (0-%1)").arg(kMaxChannelId);
         return false;
     }
 

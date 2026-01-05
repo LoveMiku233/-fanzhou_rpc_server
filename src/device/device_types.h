@@ -103,6 +103,38 @@ inline bool isModbusSensorType(DeviceTypeId type)
     return typeValue >= 21 && typeValue <= 50;
 }
 
+/**
+ * @brief 设备类型信息结构
+ */
+struct DeviceTypeInfo {
+    DeviceTypeId id;
+    const char* name;
+    const char* category;
+};
+
+/**
+ * @brief 获取所有支持的设备类型信息
+ * @param count 输出设备类型数量
+ * @return 设备类型信息数组
+ */
+inline const DeviceTypeInfo* allDeviceTypes(int &count)
+{
+    static const DeviceTypeInfo types[] = {
+        {DeviceTypeId::RelayGd427, "RelayGd427", "relay"},
+        {DeviceTypeId::SensorModbusGeneric, "SensorModbusGeneric", "sensor"},
+        {DeviceTypeId::SensorModbusTemp, "SensorModbusTemp", "sensor"},
+        {DeviceTypeId::SensorModbusHumidity, "SensorModbusHumidity", "sensor"},
+        {DeviceTypeId::SensorModbusSoil, "SensorModbusSoil", "sensor"},
+        {DeviceTypeId::SensorModbusCO2, "SensorModbusCO2", "sensor"},
+        {DeviceTypeId::SensorModbusLight, "SensorModbusLight", "sensor"},
+        {DeviceTypeId::SensorModbusPH, "SensorModbusPH", "sensor"},
+        {DeviceTypeId::SensorModbusEC, "SensorModbusEC", "sensor"},
+        {DeviceTypeId::SensorCanGeneric, "SensorCanGeneric", "sensor"},
+    };
+    count = sizeof(types) / sizeof(types[0]);
+    return types;
+}
+
 }  // namespace device
 }  // namespace fanzhou
 
