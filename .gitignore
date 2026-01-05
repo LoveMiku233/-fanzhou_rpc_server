@@ -71,3 +71,4 @@ Thumbs.db
 *.dll
 *.exe
 
+_codeql_detected_source_root

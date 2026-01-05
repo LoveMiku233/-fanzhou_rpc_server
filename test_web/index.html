@@ -129,9 +129,17 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                         <span class="icon">📋</span>
                         列出方法
                     </button>
+                    <button class="quick-action-btn" onclick="callMethod('sys.info', {})">
+                        <span class="icon">ℹ️</span>
+                        系统信息
+                    </button>
                     <button class="quick-action-btn success" onclick="refreshDeviceList()">
                         <span class="icon">🔌</span>
                         刷新设备
+                    </button>
+                    <button class="quick-action-btn success" onclick="callMethod('relay.queryAll', {})">
+                        <span class="icon">🔍</span>
+                        查询全部
                     </button>
                     <button class="quick-action-btn success" onclick="refreshGroupList()">
                         <span class="icon">📂</span>
@@ -287,12 +295,21 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                     <ul>
                         <li><code>rpc.ping</code> - 测试连接 (无参数)</li>
                         <li><code>rpc.list</code> - 列出所有方法 (无参数)</li>
+                        <li><code>sys.info</code> - 获取系统信息 (无参数)</li>
                         <li><code>relay.control</code> - 控制继电器 <code>{"node": 1, "ch": 0, "action": "fwd"}</code></li>
                         <li><code>relay.status</code> - 查询状态 <code>{"node": 1, "ch": 0}</code></li>
-                        <li><code>relay.statusAll</code> - 查询全部 <code>{"node": 1}</code></li>
-                        <li><code>relay.nodes</code> - 设备列表 (无参数)</li>
+                        <li><code>relay.statusAll</code> - 查询单设备全部通道 <code>{"node": 1}</code></li>
+                        <li><code>relay.nodes</code> - 设备列表（含在线状态）(无参数)</li>
+                        <li><code>relay.queryAll</code> - 批量查询所有设备 (无参数)</li>
                         <li><code>group.list</code> - 分组列表 (无参数)</li>
+                        <li><code>group.get</code> - 分组详情 <code>{"groupId": 1}</code></li>
+                        <li><code>group.create</code> - 创建分组 <code>{"groupId": 1, "name": "分组名"}</code></li>
+                        <li><code>group.delete</code> - 删除分组 <code>{"groupId": 1}</code></li>
+                        <li><code>group.addDevice</code> - 添加设备到分组 <code>{"groupId": 1, "node": 1}</code></li>
+                        <li><code>group.removeDevice</code> - 从分组移除设备 <code>{"groupId": 1, "node": 1}</code></li>
                         <li><code>group.control</code> - 分组控制 <code>{"groupId": 1, "ch": 0, "action": "stop"}</code></li>
+                        <li><code>control.queue.status</code> - 控制队列状态 (无参数)</li>
+                        <li><code>auto.strategy.list</code> - 自动策略列表 (无参数)</li>
                     </ul>
                 </div>
             </div>
@@ -358,10 +375,14 @@ Restart=always
 [Install]
 WantedBy=multi-user.target</pre>
                 </div>
-            </div><!-- 结束 .card -->
+            </div><!-- 结束 page-help -->
 
-            <!-- ==================== 通信日志卡片 ==================== -->
-            <div class="card">
+            </div><!-- 结束 .card -->
+        </div><!-- 结束 .content-area -->
+
+        <!-- ==================== 右侧通信日志面板 ==================== -->
+        <div class="log-sidebar">
+            <div class="card log-card">
                 <h2>📝 通信日志</h2>
                 <div style="margin-bottom: 15px;">
                     <button class="secondary" onclick="clearLog()">🗑️ 清空日志</button>
@@ -370,7 +391,7 @@ WantedBy=multi-user.target</pre>
                     <div class="log-placeholder">等待操作...</div>
                 </div>
             </div>
-        </div><!-- 结束 .content-area -->
+        </div><!-- 结束 .log-sidebar -->
     </div><!-- 结束 .main-layout -->
 
     <!-- 引入外部JavaScript -->
