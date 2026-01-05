@@ -4,255 +4,802 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>泛舟RPC服务器调试工具</title>
+    <!-- ========================================================
+         泛舟RPC服务器调试工具
+         
+         功能说明：
+         1. 通过WebSocket连接到RPC服务器（需要websocket代理）
+         2. 提供快捷操作按钮用于常用RPC方法
+         3. 支持继电器控制和分组管理
+         4. 提供设备列表和分组列表的可视化显示
+         
+         使用方法：
+         1. 在设备上启动websocat代理：
+            websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345
+         2. 在浏览器中打开此页面
+         3. 输入设备IP地址和WebSocket端口，点击连接
+         ======================================================== -->
     <style>
+        /* ==================== 基础样式重置 ==================== */
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
         }
+
+        /* ==================== 全局样式 ==================== */
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background-color: #f5f5f5;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
             padding: 20px;
             line-height: 1.6;
         }
+
         .container {
             max-width: 1200px;
             margin: 0 auto;
         }
-        h1 {
+
+        /* ==================== 头部样式 ==================== */
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        /* ==================== 卡片样式 ==================== */
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 50px rgba(0,0,0,0.2);
+        }
+
+        .card h2 {
             color: #333;
             margin-bottom: 20px;
-            text-align: center;
-        }
-        .section {
-            background: white;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .section h2 {
-            color: #444;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #eee;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 600;
-            color: #555;
-        }
-        .form-group input, .form-group select, .form-group textarea {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        .form-group textarea {
-            height: 100px;
-            font-family: monospace;
-        }
-        .form-row {
+            padding-bottom: 15px;
+            border-bottom: 3px solid #667eea;
+            font-size: 1.4em;
             display: flex;
-            gap: 15px;
-        }
-        .form-row .form-group {
-            flex: 1;
-        }
-        button {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background-color 0.3s;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        button.secondary {
-            background-color: #6c757d;
-        }
-        button.secondary:hover {
-            background-color: #545b62;
-        }
-        button.success {
-            background-color: #28a745;
-        }
-        button.success:hover {
-            background-color: #1e7e34;
-        }
-        button.danger {
-            background-color: #dc3545;
-        }
-        button.danger:hover {
-            background-color: #c82333;
-        }
-        .btn-group {
-            display: flex;
+            align-items: center;
             gap: 10px;
-            flex-wrap: wrap;
         }
-        #response {
-            background-color: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-radius: 4px;
-            padding: 15px;
-            font-family: monospace;
-            font-size: 13px;
-            white-space: pre-wrap;
-            word-break: break-all;
-            max-height: 400px;
-            overflow-y: auto;
-        }
-        .status {
-            display: inline-block;
-            padding: 5px 10px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-        .status.connected {
-            background-color: #d4edda;
-            color: #155724;
-        }
-        .status.disconnected {
-            background-color: #f8d7da;
-            color: #721c24;
-        }
-        .connection-bar {
+
+        /* ==================== 连接面板样式 ==================== */
+        .connection-panel {
             display: flex;
+            flex-wrap: wrap;
             align-items: center;
             gap: 15px;
             margin-bottom: 15px;
         }
-        .quick-actions {
+
+        .connection-panel .form-group {
+            margin-bottom: 0;
+        }
+
+        /* ==================== 表单样式 ==================== */
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #444;
+            font-size: 0.95em;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 14px;
+            transition: border-color 0.3s, box-shadow 0.3s;
+            background: #fafafa;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+            background: white;
+        }
+
+        .form-group textarea {
+            height: 120px;
+            font-family: "Fira Code", "Consolas", monospace;
+            resize: vertical;
+        }
+
+        .form-row {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        /* ==================== 按钮样式 ==================== */
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button.secondary {
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+        }
+
+        button.secondary:hover {
+            box-shadow: 0 5px 20px rgba(108, 117, 125, 0.4);
+        }
+
+        button.success {
+            background: linear-gradient(135deg, #28a745 0%, #20894b 100%);
+        }
+
+        button.success:hover {
+            box-shadow: 0 5px 20px rgba(40, 167, 69, 0.4);
+        }
+
+        button.danger {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        }
+
+        button.danger:hover {
+            box-shadow: 0 5px 20px rgba(220, 53, 69, 0.4);
+        }
+
+        button.warning {
+            background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+            color: #333;
+        }
+
+        button.warning:hover {
+            box-shadow: 0 5px 20px rgba(255, 193, 7, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        /* ==================== 导航按钮样式 ==================== */
+        .nav-buttons {
+            display: flex;
+            flex-wrap: wrap;
             gap: 10px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 12px;
         }
+
+        .nav-btn {
+            padding: 14px 24px;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            background: white;
+            color: #666;
+            border: 2px solid #e0e0e0;
+            transition: all 0.3s;
+        }
+
+        .nav-btn:hover {
+            border-color: #667eea;
+            color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+        }
+
+        .nav-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+        }
+
+        /* ==================== 页面内容样式 ==================== */
+        .page-content {
+            display: none;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        .page-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ==================== 状态指示器样式 ==================== */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .status-badge.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-badge.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-badge.connecting {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* ==================== 快捷操作网格样式 ==================== */
+        .quick-actions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 15px;
+        }
+
+        .quick-action-btn {
+            padding: 20px 15px;
+            text-align: center;
+            border-radius: 12px;
+            font-size: 14px;
+        }
+
+        .quick-action-btn .icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        /* ==================== 列表样式 ==================== */
+        .data-list {
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-top: 15px;
+        }
+
+        .data-list-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .data-list-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.2s;
+        }
+
+        .data-list-item:last-child {
+            border-bottom: none;
+        }
+
+        .data-list-item:hover {
+            background: #f8f9fa;
+        }
+
+        .data-list-item .item-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .data-list-item .item-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .data-list-item .item-detail {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .data-list-item .item-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .data-list-item .item-actions button {
+            padding: 8px 12px;
+            font-size: 12px;
+        }
+
+        .data-list-empty {
+            padding: 40px 20px;
+            text-align: center;
+            color: #999;
+        }
+
+        /* ==================== 日志样式 ==================== */
+        .log-container {
+            background: #1e1e1e;
+            border-radius: 12px;
+            padding: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: "Fira Code", "Consolas", monospace;
+            font-size: 13px;
+        }
+
         .log-entry {
-            border-bottom: 1px solid #eee;
-            padding: 5px 0;
+            padding: 10px 0;
+            border-bottom: 1px solid #333;
+            animation: logFadeIn 0.3s ease-in-out;
         }
+
+        @keyframes logFadeIn {
+            from { opacity: 0; transform: translateX(-10px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
         .log-entry:last-child {
             border-bottom: none;
         }
+
+        .log-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
         .log-time {
             color: #888;
             font-size: 11px;
         }
+
         .log-direction {
-            font-weight: bold;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
         }
+
         .log-direction.send {
-            color: #007bff;
+            background: #264f78;
+            color: #6cb6ff;
         }
+
         .log-direction.recv {
-            color: #28a745;
+            background: #224b36;
+            color: #3fb950;
         }
-        .tabs {
-            display: flex;
-            border-bottom: 2px solid #ddd;
-            margin-bottom: 15px;
+
+        .log-direction.error {
+            background: #5a2020;
+            color: #ff6b6b;
         }
-        .tab {
-            padding: 10px 20px;
-            cursor: pointer;
-            border-bottom: 2px solid transparent;
-            margin-bottom: -2px;
+
+        .log-direction.info {
+            background: #4a4a4a;
+            color: #aaa;
+        }
+
+        .log-content {
+            color: #d4d4d4;
+            white-space: pre-wrap;
+            word-break: break-all;
+            padding-left: 10px;
+            border-left: 2px solid #444;
+        }
+
+        .log-placeholder {
+            color: #666;
+            text-align: center;
+            padding: 20px;
+        }
+
+        /* ==================== 帮助面板样式 ==================== */
+        .help-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 15px;
+        }
+
+        .help-section h4 {
+            color: #333;
+            margin-bottom: 12px;
+            font-size: 1em;
+        }
+
+        .help-section pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 13px;
+        }
+
+        .help-section ul {
+            margin-left: 20px;
+            color: #555;
+        }
+
+        .help-section li {
+            margin-bottom: 8px;
+        }
+
+        .help-section code {
+            background: #e0e0e0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #d63384;
+        }
+
+        /* ==================== 响应式布局 ==================== */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            .header h1 {
+                font-size: 1.8em;
+            }
+
+            .card {
+                padding: 16px;
+            }
+
+            .connection-panel {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .nav-buttons {
+                justify-content: center;
+            }
+
+            .nav-btn {
+                flex: 1;
+                min-width: 100px;
+            }
+
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+
+            .quick-actions-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        /* ==================== 设备状态卡片样式 ==================== */
+        .device-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .device-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
             transition: all 0.3s;
         }
-        .tab.active {
-            border-bottom-color: #007bff;
-            color: #007bff;
-            font-weight: bold;
+
+        .device-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.15);
         }
-        .tab-content {
-            display: none;
+
+        .device-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
         }
-        .tab-content.active {
-            display: block;
+
+        .device-card-title {
+            font-weight: 600;
+            font-size: 1.1em;
+            color: #333;
         }
-        .info-text {
+
+        .device-card-status {
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 12px;
+        }
+
+        .device-card-status.online {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .device-card-status.offline {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .channel-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .channel-item {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .channel-item .ch-label {
+            font-size: 12px;
             color: #666;
+            margin-bottom: 5px;
+        }
+
+        .channel-item .ch-status {
+            font-weight: 600;
             font-size: 14px;
-            margin-bottom: 10px;
+        }
+
+        .channel-item .ch-status.stop {
+            color: #6c757d;
+        }
+
+        .channel-item .ch-status.fwd {
+            color: #28a745;
+        }
+
+        .channel-item .ch-status.rev {
+            color: #dc3545;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🚀 泛舟RPC服务器调试工具</h1>
-        <p class="info-text" style="text-align: center; margin-bottom: 20px;">
-            用于调试运行在全志A133平台上的JSON-RPC服务器
-        </p>
-        
-        <!-- 连接设置 -->
-        <div class="section">
-            <h2>📡 连接设置</h2>
-            <div class="connection-bar">
-                <div class="form-group" style="flex: 1; margin-bottom: 0;">
-                    <input type="text" id="serverHost" placeholder="服务器地址" value="localhost">
-                </div>
-                <div class="form-group" style="width: 100px; margin-bottom: 0;">
-                    <input type="number" id="serverPort" placeholder="端口" value="12345">
-                </div>
-                <span class="status disconnected" id="connectionStatus">未连接</span>
-            </div>
-            <p class="info-text">
-                注意：由于浏览器安全限制，此工具使用WebSocket模拟RPC调用。
-                实际调试时需要运行WebSocket代理或直接使用命令行工具。
-            </p>
+        <!-- ==================== 页面头部 ==================== -->
+        <div class="header">
+            <h1>🚀 泛舟RPC服务器调试工具</h1>
+            <p>用于调试运行在全志A133平台上的JSON-RPC服务器</p>
         </div>
 
-        <!-- 标签页导航 -->
-        <div class="section">
-            <div class="tabs">
-                <div class="tab active" onclick="showTab('quick')">快捷操作</div>
-                <div class="tab" onclick="showTab('custom')">自定义调用</div>
-                <div class="tab" onclick="showTab('relay')">继电器控制</div>
-                <div class="tab" onclick="showTab('group')">分组管理</div>
+        <!-- ==================== 连接设置卡片 ==================== -->
+        <div class="card">
+            <h2>📡 连接设置</h2>
+            <div class="connection-panel">
+                <!-- 服务器地址输入 -->
+                <div class="form-group" style="flex: 2; min-width: 200px;">
+                    <label>服务器地址</label>
+                    <input type="text" id="serverHost" placeholder="例如: 192.168.1.100" value="localhost">
+                </div>
+                <!-- WebSocket端口输入 -->
+                <div class="form-group" style="flex: 1; min-width: 120px;">
+                    <label>WebSocket端口</label>
+                    <input type="number" id="serverPort" placeholder="端口" value="12346">
+                </div>
+                <!-- 连接/断开按钮 -->
+                <div class="form-group" style="min-width: 120px;">
+                    <label>&nbsp;</label>
+                    <button id="connectBtn" onclick="toggleConnection()">🔌 连接</button>
+                </div>
+                <!-- 连接状态显示 -->
+                <div class="form-group" style="min-width: 100px;">
+                    <label>状态</label>
+                    <span class="status-badge disconnected" id="connectionStatus">
+                        <span class="status-dot"></span>
+                        <span>未连接</span>
+                    </span>
+                </div>
+            </div>
+            <!-- 连接说明 -->
+            <div class="help-section">
+                <h4>📋 连接说明</h4>
+                <p style="margin-bottom: 10px; color: #666;">由于浏览器安全限制，需要在设备上运行WebSocket代理。请执行以下命令：</p>
+                <pre>
+# 安装websocat（如果尚未安装）
+# 下载地址: https://github.com/vi/websocat/releases
+
+# 启动WebSocket到TCP的代理（文本模式）
+websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
+            </div>
+        </div>
+
+        <!-- ==================== 页面导航按钮 ==================== -->
+        <div class="card">
+            <div class="nav-buttons">
+                <button class="nav-btn active" onclick="showPage('quick')" data-page="quick">
+                    ⚡ 快捷操作
+                </button>
+                <button class="nav-btn" onclick="showPage('devices')" data-page="devices">
+                    🔌 设备列表
+                </button>
+                <button class="nav-btn" onclick="showPage('groups')" data-page="groups">
+                    📂 分组管理
+                </button>
+                <button class="nav-btn" onclick="showPage('relay')" data-page="relay">
+                    🎛️ 继电器控制
+                </button>
+                <button class="nav-btn" onclick="showPage('custom')" data-page="custom">
+                    🛠️ 自定义调用
+                </button>
+                <button class="nav-btn" onclick="showPage('help')" data-page="help">
+                    📖 使用帮助
+                </button>
             </div>
 
-            <!-- 快捷操作 -->
-            <div class="tab-content active" id="tab-quick">
-                <h3 style="margin-bottom: 15px;">常用RPC方法</h3>
-                <div class="quick-actions">
-                    <button onclick="callMethod('rpc.ping', {})">🔔 Ping测试</button>
-                    <button onclick="callMethod('rpc.list', {})">📋 列出方法</button>
-                    <button onclick="callMethod('relay.nodes', {})">🔌 设备列表</button>
-                    <button onclick="callMethod('group.list', {})">📂 分组列表</button>
-                    <button onclick="callMethod('control.queue.status', {})">📊 队列状态</button>
-                    <button onclick="callMethod('auto.strategy.list', {})">⚙️ 策略列表</button>
+            <!-- ==================== 快捷操作页面 ==================== -->
+            <div class="page-content active" id="page-quick">
+                <h3 style="margin-bottom: 20px; color: #333;">常用RPC方法快捷按钮</h3>
+                <div class="quick-actions-grid">
+                    <button class="quick-action-btn" onclick="callMethod('rpc.ping', {})">
+                        <span class="icon">🔔</span>
+                        Ping测试
+                    </button>
+                    <button class="quick-action-btn" onclick="callMethod('rpc.list', {})">
+                        <span class="icon">📋</span>
+                        列出方法
+                    </button>
+                    <button class="quick-action-btn success" onclick="refreshDeviceList()">
+                        <span class="icon">🔌</span>
+                        刷新设备
+                    </button>
+                    <button class="quick-action-btn success" onclick="refreshGroupList()">
+                        <span class="icon">📂</span>
+                        刷新分组
+                    </button>
+                    <button class="quick-action-btn warning" onclick="callMethod('control.queue.status', {})">
+                        <span class="icon">📊</span>
+                        队列状态
+                    </button>
+                    <button class="quick-action-btn" onclick="callMethod('auto.strategy.list', {})">
+                        <span class="icon">⚙️</span>
+                        策略列表
+                    </button>
                 </div>
             </div>
 
-            <!-- 自定义调用 -->
-            <div class="tab-content" id="tab-custom">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>方法名</label>
-                        <input type="text" id="methodName" placeholder="例如: rpc.ping">
+            <!-- ==================== 设备列表页面 ==================== -->
+            <div class="page-content" id="page-devices">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="color: #333;">设备列表</h3>
+                    <button onclick="refreshDeviceList()">🔄 刷新列表</button>
+                </div>
+                <div class="data-list" id="deviceList">
+                    <div class="data-list-header">
+                        <span>设备节点</span>
+                        <span>操作</span>
                     </div>
+                    <div class="data-list-empty" id="deviceListEmpty">
+                        <p>暂无设备数据</p>
+                        <p style="font-size: 12px; margin-top: 10px;">请先连接服务器并点击"刷新列表"</p>
+                    </div>
+                    <div id="deviceListContent"></div>
                 </div>
-                <div class="form-group">
-                    <label>参数 (JSON格式)</label>
-                    <textarea id="methodParams" placeholder='例如: {"node": 1, "ch": 0}'>{}</textarea>
-                </div>
-                <button onclick="callCustomMethod()">🚀 发送请求</button>
+                <!-- 设备状态卡片视图 -->
+                <div class="device-cards" id="deviceCards"></div>
             </div>
 
-            <!-- 继电器控制 -->
-            <div class="tab-content" id="tab-relay">
+            <!-- ==================== 分组管理页面 ==================== -->
+            <div class="page-content" id="page-groups">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="color: #333;">分组管理</h3>
+                    <button onclick="refreshGroupList()">🔄 刷新列表</button>
+                </div>
+                
+                <!-- 创建分组表单 -->
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                    <h4 style="margin-bottom: 15px; color: #333;">➕ 创建新分组</h4>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>分组ID</label>
+                            <input type="number" id="newGroupId" value="1" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label>分组名称</label>
+                            <input type="text" id="newGroupName" placeholder="例如: main-group">
+                        </div>
+                    </div>
+                    <button class="success" onclick="createGroup()">➕ 创建分组</button>
+                </div>
+
+                <!-- 分组列表 -->
+                <div class="data-list" id="groupList">
+                    <div class="data-list-header">
+                        <span>分组信息</span>
+                        <span>操作</span>
+                    </div>
+                    <div class="data-list-empty" id="groupListEmpty">
+                        <p>暂无分组数据</p>
+                        <p style="font-size: 12px; margin-top: 10px;">请先连接服务器并点击"刷新列表"</p>
+                    </div>
+                    <div id="groupListContent"></div>
+                </div>
+            </div>
+
+            <!-- ==================== 继电器控制页面 ==================== -->
+            <div class="page-content" id="page-relay">
+                <h3 style="margin-bottom: 20px; color: #333;">继电器控制面板</h3>
                 <div class="form-row">
                     <div class="form-group">
                         <label>节点ID</label>
@@ -270,147 +817,322 @@
                     <div class="form-group">
                         <label>动作</label>
                         <select id="relayAction">
-                            <option value="stop">停止 (Stop)</option>
-                            <option value="fwd">正转 (Forward)</option>
-                            <option value="rev">反转 (Reverse)</option>
+                            <option value="stop">⏹️ 停止 (Stop)</option>
+                            <option value="fwd">▶️ 正转 (Forward)</option>
+                            <option value="rev">◀️ 反转 (Reverse)</option>
                         </select>
                     </div>
                 </div>
                 <div class="btn-group">
-                    <button class="success" onclick="controlRelay()">⚡ 控制继电器</button>
+                    <button class="success" onclick="controlRelay()">⚡ 执行控制</button>
                     <button onclick="queryRelay()">🔍 查询状态</button>
                     <button onclick="queryRelayAll()">📊 查询全部通道</button>
                 </div>
-            </div>
 
-            <!-- 分组管理 -->
-            <div class="tab-content" id="tab-group">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>分组ID</label>
-                        <input type="number" id="groupId" value="1" min="1">
+                <!-- 分组控制 -->
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #eee;">
+                    <h4 style="margin-bottom: 15px; color: #333;">�� 分组控制</h4>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>分组ID</label>
+                            <input type="number" id="groupControlId" value="1" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label>通道</label>
+                            <select id="groupControlChannel">
+                                <option value="0">通道 0</option>
+                                <option value="1">通道 1</option>
+                                <option value="2">通道 2</option>
+                                <option value="3">通道 3</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>动作</label>
+                            <select id="groupControlAction">
+                                <option value="stop">⏹️ 停止 (Stop)</option>
+                                <option value="fwd">▶️ 正转 (Forward)</option>
+                                <option value="rev">◀️ 反转 (Reverse)</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>分组名称</label>
-                        <input type="text" id="groupName" placeholder="例如: main-group">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>通道</label>
-                        <select id="groupChannel">
-                            <option value="0">通道 0</option>
-                            <option value="1">通道 1</option>
-                            <option value="2">通道 2</option>
-                            <option value="3">通道 3</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>动作</label>
-                        <select id="groupAction">
-                            <option value="stop">停止 (Stop)</option>
-                            <option value="fwd">正转 (Forward)</option>
-                            <option value="rev">反转 (Reverse)</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="btn-group">
-                    <button class="success" onclick="controlGroup()">⚡ 分组控制</button>
-                    <button onclick="createGroup()">➕ 创建分组</button>
-                    <button class="danger" onclick="deleteGroup()">🗑️ 删除分组</button>
+                    <button class="success" onclick="controlGroup()">⚡ 执行分组控制</button>
                 </div>
             </div>
-        </div>
 
-        <!-- 响应结果 -->
-        <div class="section">
-            <h2>📝 通信日志</h2>
-            <button class="secondary" onclick="clearLog()" style="margin-bottom: 10px;">清空日志</button>
-            <div id="response">等待操作...</div>
-        </div>
+            <!-- ==================== 自定义调用页面 ==================== -->
+            <div class="page-content" id="page-custom">
+                <h3 style="margin-bottom: 20px; color: #333;">自定义RPC调用</h3>
+                <div class="form-group">
+                    <label>方法名</label>
+                    <input type="text" id="methodName" placeholder="例如: rpc.ping, relay.control">
+                </div>
+                <div class="form-group">
+                    <label>参数 (JSON格式)</label>
+                    <textarea id="methodParams" placeholder='例如: {"node": 1, "ch": 0, "action": "fwd"}'>{}</textarea>
+                </div>
+                <button onclick="callCustomMethod()">🚀 发送请求</button>
+                
+                <!-- 方法参考 -->
+                <div class="help-section" style="margin-top: 20px;">
+                    <h4>📚 常用方法参考</h4>
+                    <ul>
+                        <li><code>rpc.ping</code> - 测试连接 (无参数)</li>
+                        <li><code>rpc.list</code> - 列出所有方法 (无参数)</li>
+                        <li><code>relay.control</code> - 控制继电器 <code>{"node": 1, "ch": 0, "action": "fwd"}</code></li>
+                        <li><code>relay.status</code> - 查询状态 <code>{"node": 1, "ch": 0}</code></li>
+                        <li><code>relay.statusAll</code> - 查询全部 <code>{"node": 1}</code></li>
+                        <li><code>relay.nodes</code> - 设备列表 (无参数)</li>
+                        <li><code>group.list</code> - 分组列表 (无参数)</li>
+                        <li><code>group.control</code> - 分组控制 <code>{"groupId": 1, "ch": 0, "action": "stop"}</code></li>
+                    </ul>
+                </div>
+            </div>
 
-        <!-- 使用说明 -->
-        <div class="section">
-            <h2>📖 使用说明</h2>
-            <div style="color: #666; font-size: 14px;">
-                <p><strong>1. 命令行调试方式：</strong></p>
-                <pre style="background: #f5f5f5; padding: 10px; border-radius: 4px; margin: 10px 0;">
+            <!-- ==================== 使用帮助页面 ==================== -->
+            <div class="page-content" id="page-help">
+                <h3 style="margin-bottom: 20px; color: #333;">使用帮助</h3>
+                
+                <div class="help-section">
+                    <h4>1. 命令行调试方式</h4>
+                    <pre>
 # 使用 netcat 发送 JSON-RPC 请求
 echo '{"jsonrpc":"2.0","id":1,"method":"rpc.ping","params":{}}' | nc localhost 12345
 
-# 使用 curl + socat 测试
-echo '{"jsonrpc":"2.0","id":1,"method":"relay.nodes","params":{}}' | socat - TCP:localhost:12345
-                </pre>
-                
-                <p><strong>2. A133平台部署：</strong></p>
-                <ul style="margin-left: 20px;">
-                    <li>确保CAN接口已正确配置 (can0)</li>
-                    <li>服务默认监听端口 12345</li>
-                    <li>配置文件位于 /var/lib/fanzhou_core/core.json</li>
-                    <li>日志文件位于 /var/log/fanzhou_core/core.log</li>
-                </ul>
-                
-                <p style="margin-top: 10px;"><strong>3. 常用RPC方法：</strong></p>
-                <ul style="margin-left: 20px;">
-                    <li><code>rpc.ping</code> - 测试连接</li>
-                    <li><code>rpc.list</code> - 列出所有RPC方法</li>
-                    <li><code>relay.control</code> - 控制继电器</li>
-                    <li><code>relay.nodes</code> - 获取设备列表</li>
-                    <li><code>group.list</code> - 获取分组列表</li>
-                    <li><code>group.control</code> - 分组控制</li>
-                </ul>
+# 使用 socat 测试
+echo '{"jsonrpc":"2.0","id":1,"method":"relay.nodes","params":{}}' | socat - TCP:localhost:12345</pre>
+                </div>
+
+                <div class="help-section">
+                    <h4>2. A133平台部署信息</h4>
+                    <ul>
+                        <li>确保CAN接口已正确配置 (can0)</li>
+                        <li>RPC服务默认监听端口: <code>12345</code></li>
+                        <li>WebSocket代理建议端口: <code>12346</code></li>
+                        <li>配置文件位于: <code>/var/lib/fanzhou_core/core.json</code></li>
+                        <li>日志文件位于: <code>/var/log/fanzhou_core/core.log</code></li>
+                    </ul>
+                </div>
+
+                <div class="help-section">
+                    <h4>3. 错误码说明</h4>
+                    <ul>
+                        <li><code>-32700</code> - JSON解析错误</li>
+                        <li><code>-32600</code> - 无效请求</li>
+                        <li><code>-32601</code> - 方法不存在</li>
+                        <li><code>-32602</code> - 无效参数</li>
+                        <li><code>-60010</code> - 缺少必需参数</li>
+                        <li><code>-60011</code> - 参数类型错误</li>
+                        <li><code>-60120</code> - CAN未打开</li>
+                        <li><code>-60122</code> - CAN写入失败</li>
+                    </ul>
+                </div>
+
+                <div class="help-section">
+                    <h4>4. WebSocket代理配置</h4>
+                    <pre>
+# 方法一: 使用 websocat（文本模式）
+websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345
+
+# 方法二: 使用 websocketd (需要脚本)
+websocketd --port=12346 socat - TCP:127.0.0.1:12345
+
+# 开机自启动 (systemd服务)
+# /etc/systemd/system/ws-proxy.service
+[Unit]
+Description=WebSocket to TCP Proxy
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345
+Restart=always
+
+[Install]
+WantedBy=multi-user.target</pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== 通信日志卡片 ==================== -->
+        <div class="card">
+            <h2>📝 通信日志</h2>
+            <div style="margin-bottom: 15px;">
+                <button class="secondary" onclick="clearLog()">🗑️ 清空日志</button>
+            </div>
+            <div class="log-container" id="logContainer">
+                <div class="log-placeholder">等待操作...</div>
             </div>
         </div>
     </div>
 
+    <!-- ==================== JavaScript代码 ==================== -->
     <script>
+        /* ========================================================
+         * 全局变量定义
+         * ======================================================== */
+        
+        // WebSocket连接对象
+        let ws = null;
+        
+        // RPC请求ID计数器
         let requestId = 1;
         
-        function showTab(tabName) {
-            // 隐藏所有标签页内容
-            document.querySelectorAll('.tab-content').forEach(el => {
-                el.classList.remove('active');
-            });
-            document.querySelectorAll('.tab').forEach(el => {
-                el.classList.remove('active');
-            });
-            
-            // 显示选中的标签页
-            document.getElementById('tab-' + tabName).classList.add('active');
-            event.target.classList.add('active');
-        }
+        // 待处理的RPC请求回调映射
+        const pendingRequests = new Map();
         
-        function log(direction, message) {
-            const responseEl = document.getElementById('response');
-            const time = new Date().toLocaleTimeString();
-            const dirClass = direction === '>>>' ? 'send' : 'recv';
-            const dirLabel = direction === '>>>' ? '发送' : '接收';
+        // 设备列表缓存
+        let deviceListCache = [];
+        
+        // 分组列表缓存
+        let groupListCache = [];
+        
+        // 日志条目数量限制
+        const MAX_LOG_ENTRIES = 100;
+        
+        // 默认通道数量（GD427继电器默认4通道）
+        const DEFAULT_CHANNEL_COUNT = 4;
+
+        /* ========================================================
+         * 页面导航功能
+         * ======================================================== */
+        
+        /**
+         * 显示指定页面
+         * @param {string} pageName - 页面名称
+         */
+        function showPage(pageName) {
+            // 隐藏所有页面内容
+            document.querySelectorAll('.page-content').forEach(el => {
+                el.classList.remove('active');
+            });
             
-            let formattedMessage = message;
-            try {
-                if (typeof message === 'object') {
-                    formattedMessage = JSON.stringify(message, null, 2);
-                } else if (typeof message === 'string') {
-                    const parsed = JSON.parse(message);
-                    formattedMessage = JSON.stringify(parsed, null, 2);
-                }
-            } catch (e) {
-                // 保持原样
+            // 移除所有导航按钮的激活状态
+            document.querySelectorAll('.nav-btn').forEach(el => {
+                el.classList.remove('active');
+            });
+            
+            // 显示选中的页面
+            const targetPage = document.getElementById('page-' + pageName);
+            if (targetPage) {
+                targetPage.classList.add('active');
             }
             
-            const entry = `<div class="log-entry">
-                <span class="log-time">[${time}]</span>
-                <span class="log-direction ${dirClass}">[${dirLabel}]</span>
-                <pre style="margin: 5px 0 0 0; white-space: pre-wrap;">${formattedMessage}</pre>
-            </div>`;
+            // 激活对应的导航按钮
+            const targetBtn = document.querySelector(`.nav-btn[data-page="${pageName}"]`);
+            if (targetBtn) {
+                targetBtn.classList.add('active');
+            }
+        }
+
+        /* ========================================================
+         * WebSocket连接管理
+         * ======================================================== */
+        
+        /**
+         * 切换WebSocket连接状态
+         */
+        function toggleConnection() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                // 断开连接
+                ws.close();
+            } else {
+                // 建立连接
+                connect();
+            }
+        }
+        
+        /**
+         * 建立WebSocket连接
+         */
+        function connect() {
+            const host = document.getElementById('serverHost').value.trim();
+            const port = parseInt(document.getElementById('serverPort').value) || 12346;
             
-            responseEl.innerHTML = entry + responseEl.innerHTML;
+            if (!host) {
+                log('error', '请输入服务器地址');
+                return;
+            }
+            
+            // 更新连接状态为"连接中"
+            updateConnectionStatus('connecting');
+            
+            // 构建WebSocket URL
+            const wsUrl = `ws://${host}:${port}`;
+            log('info', `正在连接到 ${wsUrl}...`);
+            
+            try {
+                ws = new WebSocket(wsUrl);
+                
+                // 连接成功回调
+                ws.onopen = function() {
+                    log('info', '✅ WebSocket连接成功');
+                    updateConnectionStatus('connected');
+                    
+                    // 连接成功后自动发送ping测试
+                    callMethod('rpc.ping', {});
+                };
+                
+                // 接收消息回调
+                ws.onmessage = function(event) {
+                    handleResponse(event.data);
+                };
+                
+                // 连接关闭回调
+                ws.onclose = function(event) {
+                    log('info', `❌ WebSocket连接已关闭 (code: ${event.code})`);
+                    updateConnectionStatus('disconnected');
+                    ws = null;
+                };
+                
+                // 连接错误回调
+                ws.onerror = function(error) {
+                    log('error', '⚠️ WebSocket连接错误，请检查：\n1. 服务器地址是否正确\n2. WebSocket代理是否运行\n3. 防火墙是否允许连接');
+                    updateConnectionStatus('disconnected');
+                };
+                
+            } catch (e) {
+                log('error', `连接失败: ${e.message}`);
+                updateConnectionStatus('disconnected');
+            }
         }
         
-        function clearLog() {
-            document.getElementById('response').innerHTML = '日志已清空';
+        /**
+         * 更新连接状态显示
+         * @param {string} status - 状态类型: 'connected' | 'disconnected' | 'connecting'
+         */
+        function updateConnectionStatus(status) {
+            const statusEl = document.getElementById('connectionStatus');
+            const connectBtn = document.getElementById('connectBtn');
+            
+            statusEl.className = 'status-badge ' + status;
+            
+            const statusTexts = {
+                'connected': '已连接',
+                'disconnected': '未连接',
+                'connecting': '连接中...'
+            };
+            
+            statusEl.innerHTML = `<span class="status-dot"></span><span>${statusTexts[status]}</span>`;
+            
+            // 更新按钮文字
+            if (status === 'connected') {
+                connectBtn.textContent = '🔌 断开';
+                connectBtn.classList.add('danger');
+            } else {
+                connectBtn.textContent = '🔌 连接';
+                connectBtn.classList.remove('danger');
+            }
         }
+
+        /* ========================================================
+         * RPC请求发送
+         * ======================================================== */
         
+        /**
+         * 构建JSON-RPC请求对象
+         * @param {string} method - 方法名
+         * @param {object} params - 参数对象
+         * @returns {object} JSON-RPC请求对象
+         */
         function buildRequest(method, params) {
             return {
                 jsonrpc: "2.0",
@@ -420,25 +1142,448 @@ echo '{"jsonrpc":"2.0","id":1,"method":"relay.nodes","params":{}}' | socat - TCP
             };
         }
         
-        function callMethod(method, params) {
+        /**
+         * 发送RPC方法调用
+         * @param {string} method - 方法名
+         * @param {object} params - 参数对象
+         * @param {function} callback - 可选的回调函数
+         */
+        function callMethod(method, params, callback) {
             const request = buildRequest(method, params);
-            log('>>>', request);
             
-            // 模拟响应（实际使用时需要WebSocket代理）
-            const host = document.getElementById('serverHost').value.replace(/[^a-zA-Z0-9.-]/g, '');
-            const port = parseInt(document.getElementById('serverPort').value) || 12345;
+            // 记录发送日志
+            log('send', request);
             
-            // 安全地转义JSON字符串用于shell命令
-            const jsonStr = JSON.stringify(request).replace(/'/g, "'\\''");
+            // 检查WebSocket连接状态
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                // 未连接时显示命令行方式
+                const host = document.getElementById('serverHost').value.trim() || 'localhost';
+                const jsonStr = JSON.stringify(request).replace(/'/g, "'\\''");
+                
+                log('info', {
+                    message: '未连接WebSocket，请使用命令行方式：',
+                    command: `echo '${jsonStr}' | nc ${host} 12345`
+                });
+                return;
+            }
             
-            log('<<<', {
-                info: `请使用命令行工具连接到 ${host}:${port}`,
-                command: `echo '${jsonStr}' | nc ${host} ${port}`
+            // 保存回调函数
+            if (callback) {
+                pendingRequests.set(request.id, callback);
+            }
+            
+            // 发送请求（需要添加换行符，因为服务器使用行分隔的JSON协议）
+            ws.send(JSON.stringify(request) + '\n');
+        }
+        
+        /**
+         * 处理RPC响应
+         * @param {string} data - 响应数据
+         */
+        function handleResponse(data) {
+            try {
+                const response = JSON.parse(data);
+                
+                // 记录接收日志
+                log('recv', response);
+                
+                // 检查是否有等待的回调
+                if (response.id && pendingRequests.has(response.id)) {
+                    const callback = pendingRequests.get(response.id);
+                    pendingRequests.delete(response.id);
+                    callback(response);
+                }
+                
+            } catch (e) {
+                log('error', `解析响应失败: ${e.message}`);
+            }
+        }
+
+        /* ========================================================
+         * 日志功能
+         * ======================================================== */
+        
+        /**
+         * 记录日志
+         * @param {string} type - 日志类型: 'send' | 'recv' | 'error' | 'info'
+         * @param {any} message - 日志内容
+         */
+        function log(type, message) {
+            const container = document.getElementById('logContainer');
+            const time = new Date().toLocaleTimeString();
+            
+            // 移除占位符
+            const placeholder = container.querySelector('.log-placeholder');
+            if (placeholder) {
+                placeholder.remove();
+            }
+            
+            // 格式化消息内容
+            let formattedMessage = message;
+            if (typeof message === 'object') {
+                formattedMessage = JSON.stringify(message, null, 2);
+            }
+            
+            // 类型标签配置
+            const typeLabels = {
+                'send': '发送',
+                'recv': '接收',
+                'error': '错误',
+                'info': '信息'
+            };
+            
+            // 创建日志条目
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `
+                <div class="log-header">
+                    <span class="log-time">[${time}]</span>
+                    <span class="log-direction ${type}">${typeLabels[type] || type}</span>
+                </div>
+                <div class="log-content">${escapeHtml(formattedMessage)}</div>
+            `;
+            
+            // 插入到容器顶部
+            container.insertBefore(entry, container.firstChild);
+            
+            // 限制日志条目数量
+            const entries = container.querySelectorAll('.log-entry');
+            if (entries.length > MAX_LOG_ENTRIES) {
+                entries[entries.length - 1].remove();
+            }
+        }
+        
+        /**
+         * 清空日志
+         */
+        function clearLog() {
+            const container = document.getElementById('logContainer');
+            container.innerHTML = '<div class="log-placeholder">日志已清空</div>';
+        }
+        
+        /**
+         * HTML转义
+         * @param {string} text - 原始文本
+         * @returns {string} 转义后的文本
+         */
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        /* ========================================================
+         * 继电器控制功能
+         * ======================================================== */
+        
+        /**
+         * 控制继电器
+         */
+        function controlRelay() {
+            const node = parseInt(document.getElementById('relayNode').value);
+            const ch = parseInt(document.getElementById('relayChannel').value);
+            const action = document.getElementById('relayAction').value;
+            
+            callMethod('relay.control', {
+                node: node,
+                ch: ch,
+                action: action
             });
         }
         
+        /**
+         * 查询继电器状态
+         */
+        function queryRelay() {
+            const node = parseInt(document.getElementById('relayNode').value);
+            const ch = parseInt(document.getElementById('relayChannel').value);
+            
+            callMethod('relay.status', {
+                node: node,
+                ch: ch
+            });
+        }
+        
+        /**
+         * 查询继电器全部通道状态
+         */
+        function queryRelayAll() {
+            const node = parseInt(document.getElementById('relayNode').value);
+            
+            callMethod('relay.statusAll', {
+                node: node
+            });
+        }
+
+        /* ========================================================
+         * 分组管理功能
+         * ======================================================== */
+        
+        /**
+         * 刷新分组列表
+         */
+        function refreshGroupList() {
+            callMethod('group.list', {}, function(response) {
+                if (response.result) {
+                    groupListCache = response.result.groups || response.result || [];
+                    renderGroupList();
+                }
+            });
+        }
+        
+        /**
+         * 渲染分组列表
+         */
+        function renderGroupList() {
+            const contentEl = document.getElementById('groupListContent');
+            const emptyEl = document.getElementById('groupListEmpty');
+            
+            if (!groupListCache || groupListCache.length === 0) {
+                contentEl.innerHTML = '';
+                emptyEl.style.display = 'block';
+                return;
+            }
+            
+            emptyEl.style.display = 'none';
+            
+            let html = '';
+            groupListCache.forEach(group => {
+                const groupId = group.groupId || group.id;
+                const name = group.name || `分组${groupId}`;
+                const deviceCount = group.devices ? group.devices.length : 0;
+                const enabled = group.enabled !== false;
+                
+                html += `
+                    <div class="data-list-item">
+                        <div class="item-info">
+                            <span class="item-name">📂 ${name}</span>
+                            <span class="item-detail">
+                                ID: ${groupId} | 
+                                设备数: ${deviceCount} | 
+                                状态: ${enabled ? '✅ 启用' : '❌ 禁用'}
+                            </span>
+                        </div>
+                        <div class="item-actions">
+                            <button onclick="controlGroupById(${groupId}, 'stop')">⏹️ 停止</button>
+                            <button class="success" onclick="controlGroupById(${groupId}, 'fwd')">▶️ 正转</button>
+                            <button class="warning" onclick="controlGroupById(${groupId}, 'rev')">◀️ 反转</button>
+                            <button class="danger" onclick="deleteGroupById(${groupId})">🗑️</button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            contentEl.innerHTML = html;
+        }
+        
+        /**
+         * 创建分组
+         */
+        function createGroup() {
+            const groupId = parseInt(document.getElementById('newGroupId').value);
+            const name = document.getElementById('newGroupName').value.trim();
+            
+            if (!name) {
+                alert('请输入分组名称');
+                return;
+            }
+            
+            callMethod('group.create', {
+                groupId: groupId,
+                name: name
+            }, function(response) {
+                if (response.result) {
+                    log('info', '分组创建成功');
+                    refreshGroupList();
+                }
+            });
+        }
+        
+        /**
+         * 控制指定分组
+         * @param {number} groupId - 分组ID
+         * @param {string} action - 动作
+         */
+        function controlGroupById(groupId, action) {
+            callMethod('group.control', {
+                groupId: groupId,
+                ch: 0,
+                action: action
+            });
+        }
+        
+        /**
+         * 删除指定分组
+         * @param {number} groupId - 分组ID
+         */
+        function deleteGroupById(groupId) {
+            if (confirm(`确定要删除分组 ${groupId} 吗？`)) {
+                callMethod('group.delete', {
+                    groupId: groupId
+                }, function(response) {
+                    if (response.result) {
+                        log('info', '分组删除成功');
+                        refreshGroupList();
+                    }
+                });
+            }
+        }
+        
+        /**
+         * 控制分组（从控制面板）
+         */
+        function controlGroup() {
+            const groupId = parseInt(document.getElementById('groupControlId').value);
+            const ch = parseInt(document.getElementById('groupControlChannel').value);
+            const action = document.getElementById('groupControlAction').value;
+            
+            callMethod('group.control', {
+                groupId: groupId,
+                ch: ch,
+                action: action
+            });
+        }
+
+        /* ========================================================
+         * 设备管理功能
+         * ======================================================== */
+        
+        /**
+         * 刷新设备列表
+         */
+        function refreshDeviceList() {
+            callMethod('relay.nodes', {}, function(response) {
+                if (response.result) {
+                    deviceListCache = response.result.nodes || response.result || [];
+                    renderDeviceList();
+                    renderDeviceCards();
+                }
+            });
+        }
+        
+        /**
+         * 渲染设备列表
+         */
+        function renderDeviceList() {
+            const contentEl = document.getElementById('deviceListContent');
+            const emptyEl = document.getElementById('deviceListEmpty');
+            
+            if (!deviceListCache || deviceListCache.length === 0) {
+                contentEl.innerHTML = '';
+                emptyEl.style.display = 'block';
+                return;
+            }
+            
+            emptyEl.style.display = 'none';
+            
+            let html = '';
+            deviceListCache.forEach(device => {
+                const nodeId = device.nodeId || device.node || device;
+                const name = device.name || `节点 ${nodeId}`;
+                const type = device.type || 'relay';
+                const online = device.online !== false;
+                
+                html += `
+                    <div class="data-list-item">
+                        <div class="item-info">
+                            <span class="item-name">🔌 ${name}</span>
+                            <span class="item-detail">
+                                节点ID: ${nodeId} | 
+                                类型: ${type} | 
+                                状态: ${online ? '🟢 在线' : '🔴 离线'}
+                            </span>
+                        </div>
+                        <div class="item-actions">
+                            <button onclick="queryDeviceStatus(${nodeId})">🔍 查询状态</button>
+                            <button class="success" onclick="controlDeviceAll(${nodeId}, 'fwd')">▶️ 全部正转</button>
+                            <button class="danger" onclick="controlDeviceAll(${nodeId}, 'stop')">⏹️ 全部停止</button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            contentEl.innerHTML = html;
+        }
+        
+        /**
+         * 渲染设备卡片视图
+         */
+        function renderDeviceCards() {
+            const container = document.getElementById('deviceCards');
+            
+            if (!deviceListCache || deviceListCache.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+            
+            let html = '';
+            deviceListCache.forEach(device => {
+                const nodeId = device.nodeId || device.node || device;
+                const name = device.name || `节点 ${nodeId}`;
+                const online = device.online !== false;
+                const channels = device.channels || 4;
+                
+                let channelHtml = '';
+                for (let i = 0; i < channels; i++) {
+                    channelHtml += `
+                        <div class="channel-item">
+                            <div class="ch-label">通道 ${i}</div>
+                            <div class="ch-status stop" id="ch-status-${nodeId}-${i}">--</div>
+                        </div>
+                    `;
+                }
+                
+                html += `
+                    <div class="device-card">
+                        <div class="device-card-header">
+                            <span class="device-card-title">🔌 ${name} (ID: ${nodeId})</span>
+                            <span class="device-card-status ${online ? 'online' : 'offline'}">
+                                ${online ? '在线' : '离线'}
+                            </span>
+                        </div>
+                        <div class="channel-grid">${channelHtml}</div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        /**
+         * 查询设备状态
+         * @param {number} nodeId - 节点ID
+         */
+        function queryDeviceStatus(nodeId) {
+            callMethod('relay.statusAll', {
+                node: nodeId
+            });
+        }
+        
+        /**
+         * 控制设备所有通道
+         * @param {number} nodeId - 节点ID
+         * @param {string} action - 动作
+         */
+        function controlDeviceAll(nodeId, action) {
+            // 控制所有通道
+            for (let ch = 0; ch < DEFAULT_CHANNEL_COUNT; ch++) {
+                callMethod('relay.control', {
+                    node: nodeId,
+                    ch: ch,
+                    action: action
+                });
+            }
+        }
+
+        /* ========================================================
+         * 自定义调用功能
+         * ======================================================== */
+        
+        /**
+         * 发送自定义RPC调用
+         */
         function callCustomMethod() {
-            const method = document.getElementById('methodName').value;
+            const method = document.getElementById('methodName').value.trim();
             const paramsStr = document.getElementById('methodParams').value;
             
             if (!method) {
@@ -456,73 +1601,16 @@ echo '{"jsonrpc":"2.0","id":1,"method":"relay.nodes","params":{}}' | socat - TCP
             
             callMethod(method, params);
         }
+
+        /* ========================================================
+         * 页面初始化
+         * ======================================================== */
         
-        function controlRelay() {
-            const node = parseInt(document.getElementById('relayNode').value);
-            const ch = parseInt(document.getElementById('relayChannel').value);
-            const action = document.getElementById('relayAction').value;
-            
-            callMethod('relay.control', {
-                node: node,
-                ch: ch,
-                action: action
-            });
-        }
-        
-        function queryRelay() {
-            const node = parseInt(document.getElementById('relayNode').value);
-            const ch = parseInt(document.getElementById('relayChannel').value);
-            
-            callMethod('relay.status', {
-                node: node,
-                ch: ch
-            });
-        }
-        
-        function queryRelayAll() {
-            const node = parseInt(document.getElementById('relayNode').value);
-            
-            callMethod('relay.statusAll', {
-                node: node
-            });
-        }
-        
-        function controlGroup() {
-            const groupId = parseInt(document.getElementById('groupId').value);
-            const ch = parseInt(document.getElementById('groupChannel').value);
-            const action = document.getElementById('groupAction').value;
-            
-            callMethod('group.control', {
-                groupId: groupId,
-                ch: ch,
-                action: action
-            });
-        }
-        
-        function createGroup() {
-            const groupId = parseInt(document.getElementById('groupId').value);
-            const name = document.getElementById('groupName').value;
-            
-            if (!name) {
-                alert('请输入分组名称');
-                return;
-            }
-            
-            callMethod('group.create', {
-                groupId: groupId,
-                name: name
-            });
-        }
-        
-        function deleteGroup() {
-            const groupId = parseInt(document.getElementById('groupId').value);
-            
-            if (confirm(`确定要删除分组 ${groupId} 吗？`)) {
-                callMethod('group.delete', {
-                    groupId: groupId
-                });
-            }
-        }
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            log('info', '🚀 泛舟RPC调试工具已就绪');
+            log('info', '请输入服务器地址并点击"连接"按钮');
+        });
     </script>
 </body>
 </html>
