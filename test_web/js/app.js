@@ -535,10 +535,10 @@ function renderDeviceList() {
         html += `
             <div class="data-list-item">
                 <div class="item-info">
-                    <span class="item-name">🔌 ${escapeHtml(String(name))}</span>
+                    <span class="item-name">🔌 ${escapeHtml(name)}</span>
                     <span class="item-detail">
                         节点ID: ${nodeId} | 
-                        类型: ${escapeHtml(String(type))} | 
+                        类型: ${escapeHtml(type)} | 
                         状态: ${online ? '🟢 在线' : '🔴 离线'}
                     </span>
                 </div>
@@ -585,7 +585,7 @@ function renderDeviceCards() {
         html += `
             <div class="device-card">
                 <div class="device-card-header">
-                    <span class="device-card-title">🔌 ${escapeHtml(String(name))} (ID: ${nodeId})</span>
+                    <span class="device-card-title">🔌 ${escapeHtml(name)} (ID: ${nodeId})</span>
                     <span class="device-card-status ${online ? 'online' : 'offline'}">
                         ${online ? '在线' : '离线'}
                     </span>
