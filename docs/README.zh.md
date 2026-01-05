@@ -266,9 +266,29 @@ journalctl -u fanzhou-rpc -f
 | `group.list` | 无 | 列出所有分组 |
 | `group.create` | `{groupId, name}` | 创建分组 |
 | `group.delete` | `{groupId}` | 删除分组 |
-| `group.addDevice` | `{groupId, node}` | 添加设备 |
+| `group.addDevice` | `{groupId, node}` | 添加设备（所有通道） |
 | `group.removeDevice` | `{groupId, node}` | 移除设备 |
+| `group.addChannel` | `{groupId, node, channel}` | 添加指定通道到分组 |
+| `group.removeChannel` | `{groupId, node, channel}` | 从分组移除通道 |
+| `group.getChannels` | `{groupId}` | 获取分组的通道列表 |
 | `group.control` | `{groupId, ch, action}` | 分组控制 |
+
+### 设备管理
+
+| 方法 | 参数 | 说明 |
+|------|------|------|
+| `device.types` | 无 | 获取支持的设备类型列表 |
+| `device.list` | 无 | 获取已注册设备列表 |
+| `device.get` | `{nodeId}` | 获取设备详细信息 |
+| `device.add` | `{nodeId, type, name, ...}` | 动态添加设备 |
+| `device.remove` | `{nodeId}` | 动态移除设备 |
+
+### 屏幕配置
+
+| 方法 | 参数 | 说明 |
+|------|------|------|
+| `screen.get` | 无 | 获取屏幕配置 |
+| `screen.set` | `{brightness, contrast, ...}` | 设置屏幕参数 |
 
 ### 控制队列
 

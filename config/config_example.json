@@ -14,6 +14,13 @@
     "tripleSampling": true,
     "canFd": false
   },
+  "screen": {
+    "brightness": 100,
+    "contrast": 50,
+    "enabled": true,
+    "sleepTimeoutSec": 300,
+    "orientation": "landscape"
+  },
   "devices": [
     {
       "name": "relay01",
@@ -47,6 +54,18 @@
         "channels": 4,
         "enabled": true
       }
+    },
+    {
+      "name": "temp-sensor01",
+      "type": 22,
+      "commType": 1,
+      "nodeId": 10,
+      "bus": "/dev/ttyS1",
+      "params": {
+        "modbusAddr": 1,
+        "baudRate": 9600,
+        "enabled": true
+      }
     }
   ],
   "groups": [
@@ -54,13 +73,15 @@
       "groupId": 1,
       "name": "main-group",
       "enabled": true,
-      "devices": [1, 2]
+      "devices": [1, 2],
+      "channels": []
     },
     {
       "groupId": 2,
       "name": "backup-group",
       "enabled": true,
-      "devices": [3]
+      "devices": [3],
+      "channels": []
     }
   ],
   "strategies": [

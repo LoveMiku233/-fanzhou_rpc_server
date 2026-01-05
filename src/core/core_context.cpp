@@ -13,6 +13,8 @@
 #include <QDateTime>
 #include <QDebug>
 
+#include <algorithm>
+
 namespace fanzhou {
 namespace core {
 
@@ -579,7 +581,191 @@ QStringList CoreContext::methodGroups() const
 {
     return {QStringLiteral("rpc.*"), QStringLiteral("sys.*"), QStringLiteral("can.*"),
             QStringLiteral("relay.*"), QStringLiteral("group.*"),
-            QStringLiteral("control.*"), QStringLiteral("auto.*")};
+            QStringLiteral("control.*"), QStringLiteral("auto.*"),
+            QStringLiteral("device.*"), QStringLiteral("screen.*")};
+}
+
+bool CoreContext::addChannelToGroup(int groupId, quint8 node, int channel, QString *error)
+{
+    if (!deviceGroups.contains(groupId)) {
+        if (error) *error = QStringLiteral("group not found");
+        return false;
+    }
+    if (!relays.contains(node)) {
+        if (error) *error = QStringLiteral("device not found");
+        return false;
+    }
+    if (channel < 0 || channel > 3) {
+        if (error) *error = QStringLiteral("invalid channel (0-3)");
+        return false;
+    }
+
+    // Add device to group if not already present
+    QList<quint8> &devices = deviceGroups[groupId];
+    if (!devices.contains(node)) {
+        devices.append(node);
+    }
+
+    // Add channel to group channels list
+    if (!groupChannels.contains(groupId)) {
+        groupChannels.insert(groupId, {});
+    }
+
+    // Encode node+channel as unique key: node * 256 + channel
+    const int channelKey = static_cast<int>(node) * 256 + channel;
+    QList<int> &channels = groupChannels[groupId];
+    if (!channels.contains(channelKey)) {
+        channels.append(channelKey);
+    }
+
+    attachStrategiesForGroup(groupId);
+    return true;
+}
+
+bool CoreContext::removeChannelFromGroup(int groupId, quint8 node, int channel, QString *error)
+{
+    if (!deviceGroups.contains(groupId)) {
+        if (error) *error = QStringLiteral("group not found");
+        return false;
+    }
+
+    const int channelKey = static_cast<int>(node) * 256 + channel;
+    if (groupChannels.contains(groupId)) {
+        groupChannels[groupId].removeAll(channelKey);
+    }
+    return true;
+}
+
+QList<int> CoreContext::getGroupChannels(int groupId) const
+{
+    return groupChannels.value(groupId, {});
+}
+
+bool CoreContext::addDevice(const DeviceConfig &config, QString *error)
+{
+    if (config.nodeId < 1 || config.nodeId > 255) {
+        if (error) *error = QStringLiteral("invalid nodeId (1-255)");
+        return false;
+    }
+
+    const quint8 node = static_cast<quint8>(config.nodeId);
+    if (relays.contains(node)) {
+        if (error) *error = QStringLiteral("device already exists");
+        return false;
+    }
+
+    // Currently only support RelayGd427 device type
+    if (config.deviceType == device::DeviceTypeId::RelayGd427 &&
+        config.commType == device::CommTypeId::Can) {
+
+        auto *dev = new device::RelayGd427(node, canBus, this);
+        dev->init();
+        if (canManager) {
+            canManager->addDevice(dev);
+        }
+        relays.insert(node, dev);
+        deviceConfigs.insert(node, config);
+
+        LOG_INFO(kLogSource,
+                 QStringLiteral("Device dynamically added: node=0x%1, name=%2")
+                     .arg(node, 2, 16, QChar('0'))
+                     .arg(config.name));
+        return true;
+    }
+
+    // For sensor types, just register the config (no actual device driver yet)
+    if (device::isSensorType(config.deviceType)) {
+        deviceConfigs.insert(node, config);
+        LOG_INFO(kLogSource,
+                 QStringLiteral("Sensor device registered: node=0x%1, type=%2, name=%3")
+                     .arg(node, 2, 16, QChar('0'))
+                     .arg(device::deviceTypeToString(config.deviceType))
+                     .arg(config.name));
+        return true;
+    }
+
+    if (error) *error = QStringLiteral("unsupported device type");
+    return false;
+}
+
+bool CoreContext::removeDevice(quint8 nodeId, QString *error)
+{
+    if (!relays.contains(nodeId) && !deviceConfigs.contains(nodeId)) {
+        if (error) *error = QStringLiteral("device not found");
+        return false;
+    }
+
+    // Remove from all groups
+    for (auto it = deviceGroups.begin(); it != deviceGroups.end(); ++it) {
+        it.value().removeAll(nodeId);
+    }
+
+    // Remove channel references
+    for (auto it = groupChannels.begin(); it != groupChannels.end(); ++it) {
+        QList<int> &channels = it.value();
+        const int baseKey = static_cast<int>(nodeId) * 256;
+        channels.erase(
+            std::remove_if(channels.begin(), channels.end(),
+                           [baseKey](int key) {
+                               return key >= baseKey && key < baseKey + 256;
+                           }),
+            channels.end());
+    }
+
+    // Remove relay device if present
+    if (relays.contains(nodeId)) {
+        auto *dev = relays.take(nodeId);
+        if (canManager) {
+            canManager->removeDevice(dev);
+        }
+        dev->deleteLater();
+    }
+
+    deviceConfigs.remove(nodeId);
+
+    LOG_INFO(kLogSource,
+             QStringLiteral("Device removed: node=0x%1")
+                 .arg(nodeId, 2, 16, QChar('0')));
+    return true;
+}
+
+QList<DeviceConfig> CoreContext::listDevices() const
+{
+    return deviceConfigs.values();
+}
+
+DeviceConfig CoreContext::getDeviceConfig(quint8 nodeId) const
+{
+    return deviceConfigs.value(nodeId, DeviceConfig{});
+}
+
+ScreenConfig CoreContext::getScreenConfig() const
+{
+    return screenConfig;
+}
+
+bool CoreContext::setScreenConfig(const ScreenConfig &config, QString *error)
+{
+    if (config.brightness < 0 || config.brightness > 100) {
+        if (error) *error = QStringLiteral("brightness must be 0-100");
+        return false;
+    }
+    if (config.contrast < 0 || config.contrast > 100) {
+        if (error) *error = QStringLiteral("contrast must be 0-100");
+        return false;
+    }
+    if (config.sleepTimeoutSec < 0) {
+        if (error) *error = QStringLiteral("sleepTimeoutSec must be >= 0");
+        return false;
+    }
+
+    screenConfig = config;
+    LOG_INFO(kLogSource,
+             QStringLiteral("Screen config updated: brightness=%1, contrast=%2, enabled=%3")
+                 .arg(config.brightness)
+                 .arg(config.contrast)
+                 .arg(config.enabled));
+    return true;
 }
 
 }  // namespace core

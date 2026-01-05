@@ -50,6 +50,8 @@ private:
     void registerRelay();
     void registerGroup();
     void registerAuto();
+    void registerDevice();
+    void registerScreen();
 
     CoreContext *context_;
     rpc::JsonRpcDispatcher *dispatcher_;

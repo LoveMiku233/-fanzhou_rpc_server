@@ -9,6 +9,7 @@
 #include "comm/can_comm.h"
 #include "config/system_settings.h"
 #include "device/can/relay_gd427.h"
+#include "device/device_types.h"
 #include "rpc/json_rpc_dispatcher.h"
 #include "rpc/rpc_error_codes.h"
 #include "rpc/rpc_helpers.h"
@@ -118,6 +119,8 @@ void RpcRegistry::registerAll()
     registerRelay();
     registerGroup();
     registerAuto();
+    registerDevice();
+    registerScreen();
 }
 
 void RpcRegistry::registerBase()
@@ -530,6 +533,76 @@ void RpcRegistry::registerGroup()
             {QStringLiteral("jobIds"), jobs}
         };
     });
+
+    // 添加通道到分组
+    dispatcher_->registerMethod(QStringLiteral("group.addChannel"),
+                                 [this](const QJsonObject &params) {
+        qint32 groupId = 0;
+        quint8 node = 0;
+        qint32 channel = 0;
+
+        if (!rpc::RpcHelpers::getI32(params, "groupId", groupId))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing groupId"));
+        if (!rpc::RpcHelpers::getU8(params, "node", node))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid node"));
+        if (!rpc::RpcHelpers::getI32(params, "channel", channel))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing channel"));
+
+        QString error;
+        if (!context_->addChannelToGroup(groupId, node, channel, &error))
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, error);
+        return QJsonObject{{kKeyOk, true}};
+    });
+
+    // 从分组移除通道
+    dispatcher_->registerMethod(QStringLiteral("group.removeChannel"),
+                                 [this](const QJsonObject &params) {
+        qint32 groupId = 0;
+        quint8 node = 0;
+        qint32 channel = 0;
+
+        if (!rpc::RpcHelpers::getI32(params, "groupId", groupId))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing groupId"));
+        if (!rpc::RpcHelpers::getU8(params, "node", node))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid node"));
+        if (!rpc::RpcHelpers::getI32(params, "channel", channel))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing channel"));
+
+        QString error;
+        if (!context_->removeChannelFromGroup(groupId, node, channel, &error))
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, error);
+        return QJsonObject{{kKeyOk, true}};
+    });
+
+    // 获取分组的通道列表
+    dispatcher_->registerMethod(QStringLiteral("group.getChannels"),
+                                 [this](const QJsonObject &params) {
+        qint32 groupId = 0;
+
+        if (!rpc::RpcHelpers::getI32(params, "groupId", groupId))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing groupId"));
+
+        if (!context_->deviceGroups.contains(groupId))
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("group not found"));
+
+        const auto channelKeys = context_->getGroupChannels(groupId);
+        QJsonArray arr;
+        for (int key : channelKeys) {
+            const int node = key / 256;
+            const int ch = key % 256;
+            arr.append(QJsonObject{
+                {kKeyNode, node},
+                {kKeyChannel, ch}
+            });
+        }
+
+        return QJsonObject{
+            {kKeyOk, true},
+            {kKeyGroupId, groupId},
+            {kKeyChannels, arr},
+            {kKeyTotal, arr.size()}
+        };
+    });
 }
 
 void RpcRegistry::registerAuto()
@@ -624,6 +697,231 @@ void RpcRegistry::registerAuto()
         if (!context_->triggerStrategy(id))
             return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("strategy not found or not attached"));
         return QJsonObject{{QStringLiteral("ok"), true}};
+    });
+}
+
+void RpcRegistry::registerDevice()
+{
+    // 获取设备类型列表
+    dispatcher_->registerMethod(QStringLiteral("device.types"),
+                                 [](const QJsonObject &) {
+        QJsonArray arr;
+        arr.append(QJsonObject{
+            {QStringLiteral("id"), static_cast<int>(device::DeviceTypeId::RelayGd427)},
+            {QStringLiteral("name"), QStringLiteral("RelayGd427")},
+            {QStringLiteral("category"), QStringLiteral("relay")}
+        });
+        arr.append(QJsonObject{
+            {QStringLiteral("id"), static_cast<int>(device::DeviceTypeId::SensorModbusGeneric)},
+            {QStringLiteral("name"), QStringLiteral("SensorModbusGeneric")},
+            {QStringLiteral("category"), QStringLiteral("sensor")}
+        });
+        arr.append(QJsonObject{
+            {QStringLiteral("id"), static_cast<int>(device::DeviceTypeId::SensorModbusTemp)},
+            {QStringLiteral("name"), QStringLiteral("SensorModbusTemp")},
+            {QStringLiteral("category"), QStringLiteral("sensor")}
+        });
+        arr.append(QJsonObject{
+            {QStringLiteral("id"), static_cast<int>(device::DeviceTypeId::SensorModbusHumidity)},
+            {QStringLiteral("name"), QStringLiteral("SensorModbusHumidity")},
+            {QStringLiteral("category"), QStringLiteral("sensor")}
+        });
+        arr.append(QJsonObject{
+            {QStringLiteral("id"), static_cast<int>(device::DeviceTypeId::SensorModbusSoil)},
+            {QStringLiteral("name"), QStringLiteral("SensorModbusSoil")},
+            {QStringLiteral("category"), QStringLiteral("sensor")}
+        });
+        arr.append(QJsonObject{
+            {QStringLiteral("id"), static_cast<int>(device::DeviceTypeId::SensorModbusCO2)},
+            {QStringLiteral("name"), QStringLiteral("SensorModbusCO2")},
+            {QStringLiteral("category"), QStringLiteral("sensor")}
+        });
+        arr.append(QJsonObject{
+            {QStringLiteral("id"), static_cast<int>(device::DeviceTypeId::SensorModbusLight)},
+            {QStringLiteral("name"), QStringLiteral("SensorModbusLight")},
+            {QStringLiteral("category"), QStringLiteral("sensor")}
+        });
+        arr.append(QJsonObject{
+            {QStringLiteral("id"), static_cast<int>(device::DeviceTypeId::SensorModbusPH)},
+            {QStringLiteral("name"), QStringLiteral("SensorModbusPH")},
+            {QStringLiteral("category"), QStringLiteral("sensor")}
+        });
+        arr.append(QJsonObject{
+            {QStringLiteral("id"), static_cast<int>(device::DeviceTypeId::SensorModbusEC)},
+            {QStringLiteral("name"), QStringLiteral("SensorModbusEC")},
+            {QStringLiteral("category"), QStringLiteral("sensor")}
+        });
+        arr.append(QJsonObject{
+            {QStringLiteral("id"), static_cast<int>(device::DeviceTypeId::SensorCanGeneric)},
+            {QStringLiteral("name"), QStringLiteral("SensorCanGeneric")},
+            {QStringLiteral("category"), QStringLiteral("sensor")}
+        });
+        return QJsonObject{{kKeyOk, true}, {QStringLiteral("types"), arr}};
+    });
+
+    // 获取设备列表
+    dispatcher_->registerMethod(QStringLiteral("device.list"),
+                                 [this](const QJsonObject &) {
+        QJsonArray arr;
+        const auto devices = context_->listDevices();
+        for (const auto &dev : devices) {
+            QJsonObject obj;
+            obj[QStringLiteral("nodeId")] = dev.nodeId;
+            obj[QStringLiteral("name")] = dev.name;
+            obj[QStringLiteral("type")] = static_cast<int>(dev.deviceType);
+            obj[QStringLiteral("typeName")] = QString::fromLatin1(device::deviceTypeToString(dev.deviceType));
+            obj[QStringLiteral("commType")] = static_cast<int>(dev.commType);
+            obj[QStringLiteral("commTypeName")] = QString::fromLatin1(device::commTypeToString(dev.commType));
+            obj[QStringLiteral("bus")] = dev.bus;
+            if (!dev.params.isEmpty()) {
+                obj[QStringLiteral("params")] = dev.params;
+            }
+            arr.append(obj);
+        }
+        return QJsonObject{{kKeyOk, true}, {kKeyDevices, arr}, {kKeyTotal, arr.size()}};
+    });
+
+    // 获取单个设备信息
+    dispatcher_->registerMethod(QStringLiteral("device.get"),
+                                 [this](const QJsonObject &params) {
+        quint8 nodeId = 0;
+        if (!rpc::RpcHelpers::getU8(params, "nodeId", nodeId))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing nodeId"));
+
+        const auto dev = context_->getDeviceConfig(nodeId);
+        if (dev.nodeId < 0) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("device not found"));
+        }
+
+        QJsonObject obj;
+        obj[kKeyOk] = true;
+        obj[QStringLiteral("nodeId")] = dev.nodeId;
+        obj[kKeyName] = dev.name;
+        obj[QStringLiteral("type")] = static_cast<int>(dev.deviceType);
+        obj[QStringLiteral("typeName")] = QString::fromLatin1(device::deviceTypeToString(dev.deviceType));
+        obj[QStringLiteral("commType")] = static_cast<int>(dev.commType);
+        obj[QStringLiteral("commTypeName")] = QString::fromLatin1(device::commTypeToString(dev.commType));
+        obj[QStringLiteral("bus")] = dev.bus;
+        if (!dev.params.isEmpty()) {
+            obj[QStringLiteral("params")] = dev.params;
+        }
+        return obj;
+    });
+
+    // 动态添加设备
+    dispatcher_->registerMethod(QStringLiteral("device.add"),
+                                 [this](const QJsonObject &params) {
+        qint32 nodeId = 0;
+        qint32 deviceType = 0;
+        qint32 commType = 0;
+        QString name;
+        QString bus;
+
+        if (!rpc::RpcHelpers::getI32(params, "nodeId", nodeId) || nodeId < 1 || nodeId > 255)
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid nodeId (1-255)"));
+        if (!rpc::RpcHelpers::getI32(params, "type", deviceType))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing type"));
+        if (!rpc::RpcHelpers::getString(params, "name", name))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing name"));
+
+        // Optional parameters
+        rpc::RpcHelpers::getI32(params, "commType", commType);
+        rpc::RpcHelpers::getString(params, "bus", bus);
+
+        DeviceConfig config;
+        config.nodeId = nodeId;
+        config.name = name;
+        config.deviceType = static_cast<device::DeviceTypeId>(deviceType);
+        config.commType = commType > 0 ? static_cast<device::CommTypeId>(commType) : device::CommTypeId::Can;
+        config.bus = bus.isEmpty() ? context_->canInterface : bus;
+
+        if (params.contains(QStringLiteral("params")) && params[QStringLiteral("params")].isObject()) {
+            config.params = params[QStringLiteral("params")].toObject();
+        }
+
+        QString error;
+        if (!context_->addDevice(config, &error)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, error);
+        }
+
+        return QJsonObject{{kKeyOk, true}, {QStringLiteral("nodeId"), nodeId}};
+    });
+
+    // 动态移除设备
+    dispatcher_->registerMethod(QStringLiteral("device.remove"),
+                                 [this](const QJsonObject &params) {
+        quint8 nodeId = 0;
+        if (!rpc::RpcHelpers::getU8(params, "nodeId", nodeId))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing nodeId"));
+
+        QString error;
+        if (!context_->removeDevice(nodeId, &error)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, error);
+        }
+
+        return QJsonObject{{kKeyOk, true}};
+    });
+}
+
+void RpcRegistry::registerScreen()
+{
+    // 获取屏幕配置
+    dispatcher_->registerMethod(QStringLiteral("screen.get"),
+                                 [this](const QJsonObject &) {
+        const auto config = context_->getScreenConfig();
+        return QJsonObject{
+            {kKeyOk, true},
+            {QStringLiteral("brightness"), config.brightness},
+            {QStringLiteral("contrast"), config.contrast},
+            {kKeyEnabled, config.enabled},
+            {QStringLiteral("sleepTimeoutSec"), config.sleepTimeoutSec},
+            {QStringLiteral("orientation"), config.orientation}
+        };
+    });
+
+    // 设置屏幕配置
+    dispatcher_->registerMethod(QStringLiteral("screen.set"),
+                                 [this](const QJsonObject &params) {
+        ScreenConfig config = context_->getScreenConfig();
+
+        // Update only provided parameters
+        if (params.contains(QStringLiteral("brightness"))) {
+            qint32 brightness = 0;
+            if (!rpc::RpcHelpers::getI32(params, "brightness", brightness))
+                return rpc::RpcHelpers::err(rpc::RpcError::BadParameterType, QStringLiteral("invalid brightness"));
+            config.brightness = brightness;
+        }
+        if (params.contains(QStringLiteral("contrast"))) {
+            qint32 contrast = 0;
+            if (!rpc::RpcHelpers::getI32(params, "contrast", contrast))
+                return rpc::RpcHelpers::err(rpc::RpcError::BadParameterType, QStringLiteral("invalid contrast"));
+            config.contrast = contrast;
+        }
+        if (params.contains(kKeyEnabled)) {
+            bool enabled = true;
+            if (!rpc::RpcHelpers::getBool(params, "enabled", enabled, true))
+                return rpc::RpcHelpers::err(rpc::RpcError::BadParameterType, QStringLiteral("invalid enabled"));
+            config.enabled = enabled;
+        }
+        if (params.contains(QStringLiteral("sleepTimeoutSec"))) {
+            qint32 timeout = 0;
+            if (!rpc::RpcHelpers::getI32(params, "sleepTimeoutSec", timeout))
+                return rpc::RpcHelpers::err(rpc::RpcError::BadParameterType, QStringLiteral("invalid sleepTimeoutSec"));
+            config.sleepTimeoutSec = timeout;
+        }
+        if (params.contains(QStringLiteral("orientation"))) {
+            QString orientation;
+            if (!rpc::RpcHelpers::getString(params, "orientation", orientation))
+                return rpc::RpcHelpers::err(rpc::RpcError::BadParameterType, QStringLiteral("invalid orientation"));
+            config.orientation = orientation;
+        }
+
+        QString error;
+        if (!context_->setScreenConfig(config, &error)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, error);
+        }
+
+        return QJsonObject{{kKeyOk, true}};
     });
 }
 

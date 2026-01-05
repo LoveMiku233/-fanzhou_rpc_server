@@ -135,6 +135,13 @@ public:
     // 设备分组：分组ID -> 节点ID列表
     QHash<int, QList<quint8>> deviceGroups;
     QHash<int, QString> groupNames;
+    QHash<int, QList<int>> groupChannels;  ///< 分组ID -> 指定通道列表
+
+    // 设备配置记录（用于动态管理）
+    QHash<quint8, DeviceConfig> deviceConfigs;
+
+    // 屏幕配置
+    ScreenConfig screenConfig;
 
     // CAN配置
     QString canInterface = QStringLiteral("can0");
@@ -149,6 +156,21 @@ public:
     bool deleteGroup(int groupId, QString *error = nullptr);
     bool addDeviceToGroup(int groupId, quint8 node, QString *error = nullptr);
     bool removeDeviceFromGroup(int groupId, quint8 node, QString *error = nullptr);
+
+    // 分组通道管理
+    bool addChannelToGroup(int groupId, quint8 node, int channel, QString *error = nullptr);
+    bool removeChannelFromGroup(int groupId, quint8 node, int channel, QString *error = nullptr);
+    QList<int> getGroupChannels(int groupId) const;
+
+    // 动态设备管理
+    bool addDevice(const DeviceConfig &config, QString *error = nullptr);
+    bool removeDevice(quint8 nodeId, QString *error = nullptr);
+    QList<DeviceConfig> listDevices() const;
+    DeviceConfig getDeviceConfig(quint8 nodeId) const;
+
+    // 屏幕配置管理
+    ScreenConfig getScreenConfig() const;
+    bool setScreenConfig(const ScreenConfig &config, QString *error = nullptr);
 
     // 控制队列
     EnqueueResult enqueueControl(quint8 node, quint8 channel,

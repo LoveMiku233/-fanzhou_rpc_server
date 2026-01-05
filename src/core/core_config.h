@@ -74,7 +74,27 @@ struct DeviceGroupConfig {
     int groupId = 0;
     QString name;
     QList<int> deviceNodes;
+    QList<int> channels;  ///< 指定的通道列表，空表示所有通道
     bool enabled = true;
+};
+
+/**
+ * @brief 设备通道配置（用于分组）
+ */
+struct DeviceChannelRef {
+    int nodeId = 0;    ///< 设备节点ID
+    int channel = -1;  ///< 通道号，-1表示所有通道
+};
+
+/**
+ * @brief 屏幕参数配置
+ */
+struct ScreenConfig {
+    int brightness = 100;      ///< 亮度 (0-100)
+    int contrast = 50;         ///< 对比度 (0-100)
+    bool enabled = true;       ///< 屏幕开关
+    int sleepTimeoutSec = 300; ///< 休眠超时（秒），0表示不休眠
+    QString orientation = QStringLiteral("landscape");  ///< 屏幕方向
 };
 
 /**
@@ -102,6 +122,7 @@ public:
     MainConfig main;
     CanConfig can;
     LogConfig log;
+    ScreenConfig screen;  ///< 屏幕配置
     QList<DeviceConfig> devices;
     QList<DeviceGroupConfig> groups;
     QList<AutoStrategyConfig> strategies;

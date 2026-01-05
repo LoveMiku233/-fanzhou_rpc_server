@@ -22,7 +22,19 @@ namespace device {
  */
 enum class DeviceTypeId : int {
     RelayGd427 = 1,  ///< GD427 CAN继电器设备
-    // 未来可在此添加其他设备类型
+
+    // 串口Modbus传感器 (21-50)
+    SensorModbusGeneric = 21,   ///< 通用Modbus传感器
+    SensorModbusTemp = 22,      ///< 温度传感器 (Modbus)
+    SensorModbusHumidity = 23,  ///< 湿度传感器 (Modbus)
+    SensorModbusSoil = 24,      ///< 土壤传感器 (Modbus)
+    SensorModbusCO2 = 25,       ///< CO2传感器 (Modbus)
+    SensorModbusLight = 26,     ///< 光照传感器 (Modbus)
+    SensorModbusPH = 27,        ///< pH传感器 (Modbus)
+    SensorModbusEC = 28,        ///< EC传感器 (Modbus)
+
+    // CAN传感器 (51-80)
+    SensorCanGeneric = 51,      ///< 通用CAN传感器
 };
 
 /**
@@ -32,6 +44,64 @@ enum class CommTypeId : int {
     Serial = 1,  ///< 串口通信
     Can = 2      ///< CAN总线通信
 };
+
+/**
+ * @brief 将设备类型转换为字符串
+ * @param type 设备类型
+ * @return 设备类型名称
+ */
+inline const char* deviceTypeToString(DeviceTypeId type)
+{
+    switch (type) {
+    case DeviceTypeId::RelayGd427: return "RelayGd427";
+    case DeviceTypeId::SensorModbusGeneric: return "SensorModbusGeneric";
+    case DeviceTypeId::SensorModbusTemp: return "SensorModbusTemp";
+    case DeviceTypeId::SensorModbusHumidity: return "SensorModbusHumidity";
+    case DeviceTypeId::SensorModbusSoil: return "SensorModbusSoil";
+    case DeviceTypeId::SensorModbusCO2: return "SensorModbusCO2";
+    case DeviceTypeId::SensorModbusLight: return "SensorModbusLight";
+    case DeviceTypeId::SensorModbusPH: return "SensorModbusPH";
+    case DeviceTypeId::SensorModbusEC: return "SensorModbusEC";
+    case DeviceTypeId::SensorCanGeneric: return "SensorCanGeneric";
+    default: return "Unknown";
+    }
+}
+
+/**
+ * @brief 将通信类型转换为字符串
+ * @param type 通信类型
+ * @return 通信类型名称
+ */
+inline const char* commTypeToString(CommTypeId type)
+{
+    switch (type) {
+    case CommTypeId::Serial: return "Serial";
+    case CommTypeId::Can: return "CAN";
+    default: return "Unknown";
+    }
+}
+
+/**
+ * @brief 判断设备类型是否为传感器
+ * @param type 设备类型
+ * @return 是传感器返回true
+ */
+inline bool isSensorType(DeviceTypeId type)
+{
+    const int typeValue = static_cast<int>(type);
+    return (typeValue >= 21 && typeValue <= 50) || (typeValue >= 51 && typeValue <= 80);
+}
+
+/**
+ * @brief 判断设备类型是否为Modbus传感器
+ * @param type 设备类型
+ * @return 是Modbus传感器返回true
+ */
+inline bool isModbusSensorType(DeviceTypeId type)
+{
+    const int typeValue = static_cast<int>(type);
+    return typeValue >= 21 && typeValue <= 50;
+}
 
 }  // namespace device
 }  // namespace fanzhou
