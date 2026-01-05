@@ -22,6 +22,47 @@
 namespace fanzhou {
 namespace core {
 
+namespace {
+// Common JSON keys - avoid repeated QStringLiteral allocations
+const QString kKeyOk = QStringLiteral("ok");
+const QString kKeyCh = QStringLiteral("ch");
+const QString kKeyChannel = QStringLiteral("channel");
+const QString kKeyStatusByte = QStringLiteral("statusByte");
+const QString kKeyCurrentA = QStringLiteral("currentA");
+const QString kKeyMode = QStringLiteral("mode");
+const QString kKeyPhaseLost = QStringLiteral("phaseLost");
+const QString kKeyNode = QStringLiteral("node");
+const QString kKeyOnline = QStringLiteral("online");
+const QString kKeyAgeMs = QStringLiteral("ageMs");
+const QString kKeyChannels = QStringLiteral("channels");
+const QString kKeyNodes = QStringLiteral("nodes");
+const QString kKeyJobId = QStringLiteral("jobId");
+const QString kKeyQueued = QStringLiteral("queued");
+const QString kKeySuccess = QStringLiteral("success");
+const QString kKeyGroupId = QStringLiteral("groupId");
+const QString kKeyName = QStringLiteral("name");
+const QString kKeyDevices = QStringLiteral("devices");
+const QString kKeyDeviceCount = QStringLiteral("deviceCount");
+const QString kKeyGroups = QStringLiteral("groups");
+const QString kKeyTotal = QStringLiteral("total");
+const QString kKeyAccepted = QStringLiteral("accepted");
+const QString kKeyMissing = QStringLiteral("missing");
+const QString kKeyJobIds = QStringLiteral("jobIds");
+const QString kKeyPending = QStringLiteral("pending");
+const QString kKeyActive = QStringLiteral("active");
+const QString kKeyLastJobId = QStringLiteral("lastJobId");
+const QString kKeyMessage = QStringLiteral("message");
+const QString kKeyFinishedMs = QStringLiteral("finishedMs");
+const QString kKeyId = QStringLiteral("id");
+const QString kKeyAction = QStringLiteral("action");
+const QString kKeyIntervalSec = QStringLiteral("intervalSec");
+const QString kKeyEnabled = QStringLiteral("enabled");
+const QString kKeyAutoStart = QStringLiteral("autoStart");
+const QString kKeyAttached = QStringLiteral("attached");
+const QString kKeyRunning = QStringLiteral("running");
+const QString kKeyStrategies = QStringLiteral("strategies");
+}  // namespace
+
 RpcRegistry::RpcRegistry(CoreContext *context, rpc::JsonRpcDispatcher *dispatcher,
                          QObject *parent)
     : QObject(parent)
@@ -215,12 +256,12 @@ void RpcRegistry::registerRelay()
         for (quint8 ch = 0; ch < 4; ++ch) {
             const auto status = dev->lastStatus(ch);
             QJsonObject obj;
-            obj[QStringLiteral("ch")] = static_cast<int>(ch);
-            obj[QStringLiteral("channel")] = static_cast<int>(status.channel);
-            obj[QStringLiteral("statusByte")] = static_cast<int>(status.statusByte);
-            obj[QStringLiteral("currentA")] = static_cast<double>(status.currentA);
-            obj[QStringLiteral("mode")] = static_cast<int>(device::RelayProtocol::modeBits(status.statusByte));
-            obj[QStringLiteral("phaseLost")] = device::RelayProtocol::phaseLost(status.statusByte);
+            obj[kKeyCh] = static_cast<int>(ch);
+            obj[kKeyChannel] = static_cast<int>(status.channel);
+            obj[kKeyStatusByte] = static_cast<int>(status.statusByte);
+            obj[kKeyCurrentA] = static_cast<double>(status.currentA);
+            obj[kKeyMode] = static_cast<int>(device::RelayProtocol::modeBits(status.statusByte));
+            obj[kKeyPhaseLost] = device::RelayProtocol::phaseLost(status.statusByte);
             channels.append(obj);
         }
 
@@ -230,11 +271,11 @@ void RpcRegistry::registerRelay()
         const bool online = (ageMs <= 30000);
 
         return QJsonObject{
-            {QStringLiteral("ok"), true},
-            {QStringLiteral("node"), static_cast<int>(node)},
-            {QStringLiteral("online"), online},
-            {QStringLiteral("ageMs"), static_cast<double>(ageMs)},
-            {QStringLiteral("channels"), channels}
+            {kKeyOk, true},
+            {kKeyNode, static_cast<int>(node)},
+            {kKeyOnline, online},
+            {kKeyAgeMs, static_cast<double>(ageMs)},
+            {kKeyChannels, channels}
         };
     });
 
@@ -244,7 +285,7 @@ void RpcRegistry::registerRelay()
         for (auto it = context_->relays.begin(); it != context_->relays.end(); ++it) {
             arr.append(static_cast<int>(it.key()));
         }
-        return QJsonObject{{QStringLiteral("ok"), true}, {QStringLiteral("nodes"), arr}};
+        return QJsonObject{{kKeyOk, true}, {kKeyNodes, arr}};
     });
 }
 

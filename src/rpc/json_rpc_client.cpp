@@ -258,11 +258,11 @@ QJsonValue JsonRpcClient::call(const QString &method, const QJsonObject &params,
     }
 
     if (!outError.isEmpty()) {
+        const QString errorMsg = outError.value(QStringLiteral("message")).toString();
         LOG_WARNING(kLogSource,
                     QStringLiteral("Sync RPC error [id=%1]: %2")
                         .arg(id)
-                        .arg(QString::fromUtf8(
-                            QJsonDocument(outError).toJson(QJsonDocument::Compact))));
+                        .arg(errorMsg));
         return QJsonObject{
             {QStringLiteral("ok"), false},
             {QStringLiteral("rpcError"), outError}

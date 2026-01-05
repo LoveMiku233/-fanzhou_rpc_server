@@ -223,8 +223,9 @@ bool SerialComm::setupTermios()
         tio.c_cflag &= ~CSTOPB;
     }
 
-    // Parity
-    char parityChar = static_cast<char>(std::toupper(static_cast<unsigned char>(config_.parity)));
+    // Parity - convert to uppercase safely
+    const unsigned char parityAsUnsigned = static_cast<unsigned char>(config_.parity);
+    const char parityChar = static_cast<char>(std::toupper(parityAsUnsigned));
     if (parityChar == 'N') {
         tio.c_cflag &= ~PARENB;
         tio.c_iflag &= ~INPCK;
