@@ -73,3 +73,5 @@ Thumbs.db
 
 _codeql_detected_source_root
 build/
+fanzhou_rpc_server
+moc_predefs.h
