@@ -1,0 +1,785 @@
+/**
+ * 泛舟RPC服务器调试工具样式表
+ * 
+ * 功能说明：
+ * 1. 基础样式重置和全局样式定义
+ * 2. 左右布局样式 - 导航栏在左侧，内容在右侧
+ * 3. 卡片、表单、按钮等组件样式
+ * 4. 动态背景动画效果
+ * 5. 响应式布局支持
+ */
+
+/* ==================== 基础样式重置 ==================== */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+/* ==================== 动态背景动画 ==================== */
+@keyframes gradientAnimation {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+@keyframes floatAnimation {
+    0%, 100% {
+        transform: translateY(0px) rotate(0deg);
+        opacity: 0.3;
+    }
+    50% {
+        transform: translateY(-20px) rotate(180deg);
+        opacity: 0.6;
+    }
+}
+
+/* 动态背景容器 */
+.animated-background {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(-45deg, #667eea, #764ba2, #6B8DD6, #8E37D7);
+    background-size: 400% 400%;
+    animation: gradientAnimation 15s ease infinite;
+    z-index: -2;
+}
+
+/* 浮动装饰元素容器 */
+.floating-shapes {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    z-index: -1;
+    pointer-events: none;
+}
+
+/* 浮动形状基础样式 */
+.floating-shape {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    animation: floatAnimation 6s ease-in-out infinite;
+}
+
+/* 不同大小和位置的浮动形状 */
+.floating-shape:nth-child(1) {
+    width: 80px;
+    height: 80px;
+    top: 10%;
+    left: 10%;
+    animation-delay: 0s;
+    animation-duration: 8s;
+}
+
+.floating-shape:nth-child(2) {
+    width: 120px;
+    height: 120px;
+    top: 20%;
+    right: 15%;
+    animation-delay: 1s;
+    animation-duration: 10s;
+}
+
+.floating-shape:nth-child(3) {
+    width: 60px;
+    height: 60px;
+    bottom: 30%;
+    left: 5%;
+    animation-delay: 2s;
+    animation-duration: 7s;
+}
+
+.floating-shape:nth-child(4) {
+    width: 100px;
+    height: 100px;
+    bottom: 15%;
+    right: 10%;
+    animation-delay: 3s;
+    animation-duration: 9s;
+}
+
+.floating-shape:nth-child(5) {
+    width: 50px;
+    height: 50px;
+    top: 50%;
+    left: 50%;
+    animation-delay: 4s;
+    animation-duration: 6s;
+}
+
+.floating-shape:nth-child(6) {
+    width: 90px;
+    height: 90px;
+    top: 60%;
+    left: 20%;
+    animation-delay: 2.5s;
+    animation-duration: 11s;
+}
+
+/* ==================== 全局样式 ==================== */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+    min-height: 100vh;
+    padding: 20px;
+    line-height: 1.6;
+    position: relative;
+}
+
+/* ==================== 主布局容器 - 左右布局 ==================== */
+.main-layout {
+    display: flex;
+    max-width: 1600px;
+    margin: 0 auto;
+    gap: 20px;
+    min-height: calc(100vh - 140px);
+}
+
+/* 左侧导航栏 */
+.sidebar {
+    width: 200px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 20px;
+    height: fit-content;
+}
+
+/* 右侧内容区 */
+.content-area {
+    flex: 1;
+    min-width: 0;
+}
+
+/* ==================== 头部样式 ==================== */
+.header {
+    text-align: center;
+    color: white;
+    margin-bottom: 30px;
+}
+
+.header h1 {
+    font-size: 2.5em;
+    margin-bottom: 10px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+}
+
+.header p {
+    opacity: 0.9;
+    font-size: 1.1em;
+}
+
+/* ==================== 卡片样式 ==================== */
+.card {
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 15px 50px rgba(0,0,0,0.2);
+}
+
+.card h2 {
+    color: #333;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 3px solid #667eea;
+    font-size: 1.4em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* ==================== 连接面板样式 ==================== */
+.connection-panel {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.connection-panel .form-group {
+    margin-bottom: 0;
+}
+
+/* ==================== 表单样式 ==================== */
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #444;
+    font-size: 0.95em;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e0e0e0;
+    border-radius: 10px;
+    font-size: 14px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    background: #fafafa;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+    background: white;
+}
+
+.form-group textarea {
+    height: 120px;
+    font-family: "Fira Code", "Consolas", monospace;
+    resize: vertical;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+}
+
+/* ==================== 按钮样式 ==================== */
+button {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.3s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+}
+
+button:active {
+    transform: translateY(0);
+}
+
+button.secondary {
+    background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+}
+
+button.secondary:hover {
+    box-shadow: 0 5px 20px rgba(108, 117, 125, 0.4);
+}
+
+button.success {
+    background: linear-gradient(135deg, #28a745 0%, #20894b 100%);
+}
+
+button.success:hover {
+    box-shadow: 0 5px 20px rgba(40, 167, 69, 0.4);
+}
+
+button.danger {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+}
+
+button.danger:hover {
+    box-shadow: 0 5px 20px rgba(220, 53, 69, 0.4);
+}
+
+button.warning {
+    background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+    color: #333;
+}
+
+button.warning:hover {
+    box-shadow: 0 5px 20px rgba(255, 193, 7, 0.4);
+}
+
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-group {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+/* ==================== 侧边栏导航按钮样式 ==================== */
+.sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 16px;
+    padding: 15px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+}
+
+.nav-btn {
+    padding: 14px 16px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    background: white;
+    color: #666;
+    border: 2px solid #e0e0e0;
+    transition: all 0.3s;
+    text-align: left;
+    width: 100%;
+}
+
+.nav-btn:hover {
+    border-color: #667eea;
+    color: #667eea;
+    transform: translateX(5px);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+}
+
+.nav-btn.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-color: transparent;
+}
+
+/* ==================== 页面内容样式 ==================== */
+.page-content {
+    display: none;
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+.page-content.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ==================== 状态指示器样式 ==================== */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.status-badge.connected {
+    background: #d4edda;
+    color: #155724;
+}
+
+.status-badge.disconnected {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.status-badge.connecting {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* ==================== 快捷操作网格样式 ==================== */
+.quick-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 15px;
+}
+
+.quick-action-btn {
+    padding: 20px 15px;
+    text-align: center;
+    border-radius: 12px;
+    font-size: 14px;
+}
+
+.quick-action-btn .icon {
+    font-size: 24px;
+    margin-bottom: 8px;
+    display: block;
+}
+
+/* ==================== 列表样式 ==================== */
+.data-list {
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-top: 15px;
+}
+
+.data-list-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 15px 20px;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.data-list-item {
+    padding: 15px 20px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background 0.2s;
+}
+
+.data-list-item:last-child {
+    border-bottom: none;
+}
+
+.data-list-item:hover {
+    background: #f8f9fa;
+}
+
+.data-list-item .item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.data-list-item .item-name {
+    font-weight: 600;
+    color: #333;
+}
+
+.data-list-item .item-detail {
+    font-size: 13px;
+    color: #666;
+}
+
+.data-list-item .item-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.data-list-item .item-actions button {
+    padding: 8px 12px;
+    font-size: 12px;
+}
+
+.data-list-empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: #999;
+}
+
+/* ==================== 日志样式 ==================== */
+.log-container {
+    background: #1e1e1e;
+    border-radius: 12px;
+    padding: 20px;
+    max-height: 400px;
+    overflow-y: auto;
+    font-family: "Fira Code", "Consolas", monospace;
+    font-size: 13px;
+}
+
+.log-entry {
+    padding: 10px 0;
+    border-bottom: 1px solid #333;
+    animation: logFadeIn 0.3s ease-in-out;
+}
+
+@keyframes logFadeIn {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.log-entry:last-child {
+    border-bottom: none;
+}
+
+.log-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.log-time {
+    color: #888;
+    font-size: 11px;
+}
+
+.log-direction {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.log-direction.send {
+    background: #264f78;
+    color: #6cb6ff;
+}
+
+.log-direction.recv {
+    background: #224b36;
+    color: #3fb950;
+}
+
+.log-direction.error {
+    background: #5a2020;
+    color: #ff6b6b;
+}
+
+.log-direction.info {
+    background: #4a4a4a;
+    color: #aaa;
+}
+
+.log-content {
+    color: #d4d4d4;
+    white-space: pre-wrap;
+    word-break: break-all;
+    padding-left: 10px;
+    border-left: 2px solid #444;
+}
+
+.log-placeholder {
+    color: #666;
+    text-align: center;
+    padding: 20px;
+}
+
+/* ==================== 帮助面板样式 ==================== */
+.help-section {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 20px;
+    margin-top: 15px;
+}
+
+.help-section h4 {
+    color: #333;
+    margin-bottom: 12px;
+    font-size: 1em;
+}
+
+.help-section pre {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    padding: 15px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 13px;
+}
+
+.help-section ul {
+    margin-left: 20px;
+    color: #555;
+}
+
+.help-section li {
+    margin-bottom: 8px;
+}
+
+.help-section code {
+    background: #e0e0e0;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #d63384;
+}
+
+/* ==================== 设备状态卡片样式 ==================== */
+.device-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.device-card {
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.3s;
+}
+
+.device-card:hover {
+    border-color: #667eea;
+    box-shadow: 0 5px 20px rgba(102, 126, 234, 0.15);
+}
+
+.device-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.device-card-title {
+    font-weight: 600;
+    font-size: 1.1em;
+    color: #333;
+}
+
+.device-card-status {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 12px;
+}
+
+.device-card-status.online {
+    background: #d4edda;
+    color: #155724;
+}
+
+.device-card-status.offline {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.channel-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.channel-item {
+    background: #f8f9fa;
+    padding: 12px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.channel-item .ch-label {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 5px;
+}
+
+.channel-item .ch-status {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.channel-item .ch-status.stop {
+    color: #6c757d;
+}
+
+.channel-item .ch-status.fwd {
+    color: #28a745;
+}
+
+.channel-item .ch-status.rev {
+    color: #dc3545;
+}
+
+/* ==================== 响应式布局 ==================== */
+@media (max-width: 992px) {
+    .main-layout {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        width: 100%;
+        position: static;
+    }
+
+    .sidebar-nav {
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .nav-btn {
+        width: auto;
+        flex: 1;
+        min-width: 120px;
+        text-align: center;
+    }
+
+    .nav-btn:hover {
+        transform: translateY(-2px);
+    }
+}
+
+@media (max-width: 768px) {
+    body {
+        padding: 10px;
+    }
+
+    .header h1 {
+        font-size: 1.8em;
+    }
+
+    .card {
+        padding: 16px;
+    }
+
+    .connection-panel {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+
+    .quick-actions-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .sidebar-nav {
+        flex-direction: column;
+    }
+
+    .nav-btn {
+        width: 100%;
+    }
+}
