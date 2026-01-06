@@ -19,8 +19,9 @@
  * 
  * 策略类型说明：
  * - timer: 定时策略，绑定到分组，按间隔时间触发分组控制
- * - timer-relay: 定时策略，直接控制单个继电器（需要服务端支持或创建临时分组）
+ * - timer-relay: 定时策略，直接控制单个继电器
  * - sensor: 传感器触发策略，根据传感器数值条件触发分组控制
+ * - sensor-relay: 传感器触发策略，直接控制单个继电器
  * 
  * 依赖说明：
  * 此模块依赖于 app.js 中定义的以下函数：
@@ -1099,6 +1100,22 @@ function buildStrategyFromNodes(id, trigger, action) {
                 cooldownSec: trigger.config.cooldownSec,
                 enabled: true
             };
+        } else if (action.type === 'action-relay') {
+            // 传感器触发直接控制单个继电器
+            return {
+                type: 'sensor-relay',
+                id: id,
+                name: `蓝图传感器策略_${id}`,
+                sensorType: trigger.config.sensorType,
+                sensorNode: trigger.config.sensorNode,
+                condition: trigger.config.condition,
+                threshold: trigger.config.threshold,
+                nodeId: action.config.nodeId,
+                channel: action.config.channel,
+                action: action.config.action,
+                cooldownSec: trigger.config.cooldownSec,
+                enabled: true
+            };
         }
     }
     
@@ -1139,6 +1156,24 @@ function deployBlueprintStrategies() {
                     logBlueprint('error', `✗ 策略 "${strategy.name}" 部署失败: ${response.error.message}`);
                 }
             });
+        } else if (strategy.type === 'timer-relay') {
+            // 部署定时继电器策略（直接控制单个继电器）
+            callMethod('auto.relay.create', {
+                id: strategy.id,
+                name: strategy.name,
+                nodeId: strategy.nodeId,
+                channel: strategy.channel,
+                action: strategy.action,
+                intervalSec: strategy.intervalSec,
+                enabled: strategy.enabled,
+                autoStart: strategy.autoStart
+            }, function(response) {
+                if (response.result && response.result.ok) {
+                    logBlueprint('info', `✓ 定时继电器策略 "${strategy.name}" 部署成功`);
+                } else if (response.error) {
+                    logBlueprint('error', `✗ 策略 "${strategy.name}" 部署失败: ${response.error.message}`);
+                }
+            });
         } else if (strategy.type === 'sensor') {
             // 部署传感器策略
             callMethod('auto.sensor.create', {
@@ -1156,6 +1191,27 @@ function deployBlueprintStrategies() {
             }, function(response) {
                 if (response.result && response.result.ok) {
                     logBlueprint('info', `✓ 传感器策略 "${strategy.name}" 部署成功`);
+                } else if (response.error) {
+                    logBlueprint('error', `✗ 策略 "${strategy.name}" 部署失败: ${response.error.message}`);
+                }
+            });
+        } else if (strategy.type === 'sensor-relay') {
+            // 部署传感器继电器策略（传感器触发直接控制单个继电器）
+            callMethod('auto.sensorRelay.create', {
+                id: strategy.id,
+                name: strategy.name,
+                sensorType: strategy.sensorType,
+                sensorNode: strategy.sensorNode,
+                condition: strategy.condition,
+                threshold: strategy.threshold,
+                nodeId: strategy.nodeId,
+                channel: strategy.channel,
+                action: strategy.action,
+                cooldownSec: strategy.cooldownSec,
+                enabled: strategy.enabled
+            }, function(response) {
+                if (response.result && response.result.ok) {
+                    logBlueprint('info', `✓ 传感器继电器策略 "${strategy.name}" 部署成功`);
                 } else if (response.error) {
                     logBlueprint('error', `✗ 策略 "${strategy.name}" 部署失败: ${response.error.message}`);
                 }
