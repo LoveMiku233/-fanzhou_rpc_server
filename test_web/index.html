@@ -27,6 +27,7 @@
          ======================================================== -->
     <!-- 引入外部样式表 -->
     <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/blueprint.css">
 </head>
 <body>
     <!-- ==================== 动态背景动画 ==================== -->
@@ -103,6 +104,9 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                 </button>
                 <button class="nav-btn" onclick="showPage('strategy')" data-page="strategy">
                     ⚙️ 策略管理
+                </button>
+                <button class="nav-btn" onclick="showPage('blueprint')" data-page="blueprint">
+                    🎨 蓝图编辑器
                 </button>
                 <button class="nav-btn" onclick="showPage('relay')" data-page="relay">
                     🎛️ 继电器控制
@@ -558,6 +562,109 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                 </div>
             </div>
 
+            <!-- ==================== 蓝图编辑器页面 ==================== -->
+            <div class="page-content" id="page-blueprint">
+                <h3 style="margin-bottom: 15px; color: #333;">🎨 可视化蓝图编辑器</h3>
+                <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                    通过拖放方式创建自动化策略。将左侧的触发器和动作节点拖到画布上，然后连接它们来创建策略流程。
+                </p>
+                
+                <!-- 蓝图编辑器主容器 -->
+                <div class="blueprint-editor">
+                    <!-- 左侧节点面板 -->
+                    <div class="node-palette">
+                        <div class="palette-title">📦 节点工具箱</div>
+                        
+                        <!-- 触发器类型 -->
+                        <div class="palette-category">
+                            <div class="palette-category-title">🔔 触发器</div>
+                            <div class="palette-item" draggable="true" data-node-type="trigger-time">
+                                <span class="item-icon">⏰</span>
+                                <span class="item-name">定时触发器</span>
+                            </div>
+                            <div class="palette-item" draggable="true" data-node-type="trigger-sensor">
+                                <span class="item-icon">📡</span>
+                                <span class="item-name">传感器触发</span>
+                            </div>
+                        </div>
+                        
+                        <!-- 动作类型 -->
+                        <div class="palette-category">
+                            <div class="palette-category-title">⚡ 动作</div>
+                            <div class="palette-item" draggable="true" data-node-type="action-relay">
+                                <span class="item-icon">🎛️</span>
+                                <span class="item-name">继电器控制</span>
+                            </div>
+                            <div class="palette-item" draggable="true" data-node-type="action-group">
+                                <span class="item-icon">📦</span>
+                                <span class="item-name">分组控制</span>
+                            </div>
+                        </div>
+                        
+                        <!-- 显示类型 -->
+                        <div class="palette-category">
+                            <div class="palette-category-title">📊 展示</div>
+                            <div class="palette-item" draggable="true" data-node-type="device">
+                                <span class="item-icon">🔌</span>
+                                <span class="item-name">设备节点</span>
+                            </div>
+                            <div class="palette-item" draggable="true" data-node-type="group">
+                                <span class="item-icon">📂</span>
+                                <span class="item-name">分组节点</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 中间画布区域 -->
+                    <div class="blueprint-canvas-container">
+                        <!-- 工具栏 -->
+                        <div class="canvas-toolbar">
+                            <button onclick="clearBlueprint()">🗑️ 清空</button>
+                            <button class="success" onclick="deployBlueprintStrategies()">🚀 部署策略</button>
+                            <button class="secondary" onclick="generateSystemDiagram()">📊 生成系统框图</button>
+                            <button onclick="downloadBlueprint()">💾 导出</button>
+                            <button onclick="uploadBlueprint()">📂 导入</button>
+                        </div>
+                        
+                        <!-- 蓝图画布 -->
+                        <div class="blueprint-canvas" id="blueprintCanvas">
+                            <!-- 空状态提示 -->
+                            <div class="canvas-empty-hint" id="canvasEmptyHint">
+                                <div class="hint-icon">🎨</div>
+                                <div class="hint-text">
+                                    从左侧拖放节点到此处<br>
+                                    创建您的自动化策略
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 右侧属性面板 -->
+                    <div class="node-properties-panel" id="nodePropertiesPanel">
+                        <div class="properties-header">
+                            <span class="prop-icon">⚙️</span>
+                            <span class="prop-title">节点属性</span>
+                        </div>
+                        <div class="properties-content">
+                            <p class="prop-description">选择一个节点查看和编辑其属性</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 使用说明 -->
+                <div class="help-section" style="margin-top: 20px;">
+                    <h4>📖 蓝图编辑器使用说明</h4>
+                    <ul>
+                        <li><strong>添加节点：</strong>从左侧工具箱拖放节点到画布上</li>
+                        <li><strong>连接节点：</strong>从触发器的输出端口（右侧橙色圆点）拖到动作的输入端口（左侧绿色圆点）</li>
+                        <li><strong>配置节点：</strong>点击节点查看右侧属性面板，双击快速编辑</li>
+                        <li><strong>删除节点：</strong>点击节点右上角的×按钮，或点击连线后确认删除</li>
+                        <li><strong>部署策略：</strong>完成连线后点击"部署策略"将蓝图转换为实际的RPC策略</li>
+                        <li><strong>系统框图：</strong>点击"生成系统框图"可自动从服务器读取设备和分组信息</li>
+                    </ul>
+                </div>
+            </div>
+
             <!-- ==================== 使用帮助页面 ==================== -->
             <div class="page-content" id="page-help">
                 <h3 style="margin-bottom: 20px; color: #333;">使用帮助</h3>
@@ -640,5 +747,6 @@ WantedBy=multi-user.target</pre>
 
     <!-- 引入外部JavaScript -->
     <script src="js/app.js"></script>
+    <script src="js/blueprint.js"></script>
 </body>
 </html>
