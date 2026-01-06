@@ -222,7 +222,37 @@ bool CoreConfig::loadFromFile(const QString &path, QString *error)
                 }
             }
 
+            // 加载通道列表
+            if (obj.contains(QStringLiteral("channels")) &&
+                obj[QStringLiteral("channels")].isArray()) {
+                const auto chArr = obj[QStringLiteral("channels")].toArray();
+                for (const auto &chValue : chArr) {
+                    grp.channels.append(chValue.toInt());
+                }
+            }
+
             groups.append(grp);
+        }
+    }
+
+    // 屏幕配置
+    if (root.contains(QStringLiteral("screen")) &&
+        root[QStringLiteral("screen")].isObject()) {
+        const auto screenObj = root[QStringLiteral("screen")].toObject();
+        if (screenObj.contains(QStringLiteral("brightness"))) {
+            screen.brightness = screenObj[QStringLiteral("brightness")].toInt(screen.brightness);
+        }
+        if (screenObj.contains(QStringLiteral("contrast"))) {
+            screen.contrast = screenObj[QStringLiteral("contrast")].toInt(screen.contrast);
+        }
+        if (screenObj.contains(QStringLiteral("enabled"))) {
+            screen.enabled = screenObj[QStringLiteral("enabled")].toBool(screen.enabled);
+        }
+        if (screenObj.contains(QStringLiteral("sleepTimeoutSec"))) {
+            screen.sleepTimeoutSec = screenObj[QStringLiteral("sleepTimeoutSec")].toInt(screen.sleepTimeoutSec);
+        }
+        if (screenObj.contains(QStringLiteral("orientation"))) {
+            screen.orientation = screenObj[QStringLiteral("orientation")].toString(screen.orientation);
         }
     }
 
@@ -311,9 +341,27 @@ bool CoreConfig::saveToFile(const QString &path, QString *error) const
         }
         obj[QStringLiteral("devices")] = devNodes;
 
+        // 保存通道列表
+        if (!grp.channels.isEmpty()) {
+            QJsonArray chArr;
+            for (int ch : grp.channels) {
+                chArr.append(ch);
+            }
+            obj[QStringLiteral("channels")] = chArr;
+        }
+
         groupArr.append(obj);
     }
     root[QStringLiteral("groups")] = groupArr;
+
+    // 屏幕配置
+    QJsonObject screenObj;
+    screenObj[QStringLiteral("brightness")] = screen.brightness;
+    screenObj[QStringLiteral("contrast")] = screen.contrast;
+    screenObj[QStringLiteral("enabled")] = screen.enabled;
+    screenObj[QStringLiteral("sleepTimeoutSec")] = screen.sleepTimeoutSec;
+    screenObj[QStringLiteral("orientation")] = screen.orientation;
+    root[QStringLiteral("screen")] = screenObj;
 
     // 控制策略
     QJsonArray stratArr;

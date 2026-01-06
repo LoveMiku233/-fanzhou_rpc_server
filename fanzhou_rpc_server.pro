@@ -12,6 +12,7 @@ TARGET = fanzhou_rpc_server
 
 # Source directory
 INCLUDEPATH += $$PWD
+INCLUDEPATH += $$PWD/src
 
 SOURCES += \
     main.cpp \
