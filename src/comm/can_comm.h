@@ -90,6 +90,7 @@ private:
     QTimer *txTimer_ = nullptr;
     int txBackoffMs_ = 0;
     int txBackoffMultiplier_ = 0;  ///< 用于指数退避的乘数
+    bool txDiagLogged_ = false;    ///< 是否已输出TX诊断信息（避免重复输出）
 
     static constexpr int kMaxTxQueueSize = 512;
     static constexpr int kTxIntervalMs = 2;
