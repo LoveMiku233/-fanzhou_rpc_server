@@ -66,6 +66,9 @@ const QString kKeyStrategies = QStringLiteral("strategies");
 // 设备在线超时阈值（毫秒）：30秒内收到过响应认为在线
 constexpr qint64 kOnlineTimeoutMs = 30000;
 
+// 最大通道ID（0-3表示4个通道）
+constexpr int kMaxChannelId = 3;
+
 /**
  * @brief 计算设备在线状态信息
  * @param lastSeenMs 设备最后响应时间戳（毫秒）
@@ -717,8 +720,8 @@ void RpcRegistry::registerAuto()
             return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing name"));
         if (!rpc::RpcHelpers::getI32(params, "groupId", groupId) || groupId <= 0)
             return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid groupId"));
-        if (!rpc::RpcHelpers::getI32(params, "channel", channel) || channel < 0 || channel > 3)
-            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("invalid channel (0-3)"));
+        if (!rpc::RpcHelpers::getI32(params, "channel", channel) || channel < 0 || channel > kMaxChannelId)
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("invalid channel (0-%1)").arg(kMaxChannelId));
         if (!rpc::RpcHelpers::getString(params, "action", action))
             return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing action"));
 

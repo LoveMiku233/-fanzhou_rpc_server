@@ -23,7 +23,8 @@ const char *const kLogSource = "CoreContext";
 const QString kErrUnknownNode = QStringLiteral("unknown node");
 const QString kErrDeviceNotFound = QStringLiteral("device not found");
 const QString kErrDeviceRejected = QStringLiteral("device rejected");
-constexpr int kMaxChannelId = 3;  ///< Maximum channel ID (0-3 for 4 channels)
+constexpr int kMaxChannelId = 3;  ///< 最大通道ID（0-3表示4个通道）
+constexpr double kFloatCompareEpsilon = 0.001;  ///< 浮点数比较精度
 }  // namespace
 
 CoreContext::CoreContext(QObject *parent)
@@ -706,7 +707,7 @@ bool CoreContext::evaluateSensorCondition(const QString &condition, double value
 {
     if (condition == QStringLiteral("gt")) return value > threshold;
     if (condition == QStringLiteral("lt")) return value < threshold;
-    if (condition == QStringLiteral("eq")) return qAbs(value - threshold) < 0.001;
+    if (condition == QStringLiteral("eq")) return qAbs(value - threshold) < kFloatCompareEpsilon;
     if (condition == QStringLiteral("gte")) return value >= threshold;
     if (condition == QStringLiteral("lte")) return value <= threshold;
     return false;
