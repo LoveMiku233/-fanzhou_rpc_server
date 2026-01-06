@@ -23,10 +23,13 @@ namespace RpcHelpers {
 
 /**
  * @brief 从JSON对象提取无符号8位整数
+ *
+ * 支持数字类型和字符串类型的值，字符串会尝试转换为整数。
+ *
  * @param params JSON参数对象
  * @param key 参数键
  * @param out 输出值
- * @return 成功返回true
+ * @return 成功返回true，失败（缺少键、类型不支持或超出范围）返回false
  */
 bool getU8(const QJsonObject &params, const char *key, quint8 &out);
 
@@ -43,10 +46,13 @@ bool getBool(const QJsonObject &params, const char *key, bool &out,
 
 /**
  * @brief 从JSON对象提取32位整数
+ *
+ * 支持数字类型和字符串类型的值，字符串会尝试转换为整数。
+ *
  * @param params JSON参数对象
  * @param key 参数键
  * @param out 输出值
- * @return 成功返回true
+ * @return 成功返回true，失败（缺少键或类型不支持）返回false
  */
 bool getI32(const QJsonObject &params, const char *key, qint32 &out);
 
