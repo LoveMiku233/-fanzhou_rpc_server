@@ -1036,6 +1036,8 @@ void RpcRegistry::registerAuto()
 
         // 可选参数
         rpc::RpcHelpers::getI32(params, "channel", channel);
+        if (channel < 0 || channel > kMaxChannelId)
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("invalid channel (0-%1)").arg(kMaxChannelId));
         rpc::RpcHelpers::getI32(params, "cooldownSec", cooldownSec);
         rpc::RpcHelpers::getBool(params, "enabled", enabled, true);
 
