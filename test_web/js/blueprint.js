@@ -19,9 +19,9 @@
  * 
  * 策略类型说明：
  * - timer: 定时策略，绑定到分组，按间隔时间触发分组控制
- * - timer-relay: 定时策略，直接控制单个继电器
+ * - timer-relay: 定时策略，直接控制单个继电器（使用独立的RPC接口）
  * - sensor: 传感器触发策略，根据传感器数值条件触发分组控制
- * - sensor-relay: 传感器触发策略，直接控制单个继电器
+ * - sensor-relay: 传感器触发策略，直接控制单个继电器（使用独立的RPC接口）
  * 
  * 依赖说明：
  * 此模块依赖于 app.js 中定义的以下函数：
@@ -1158,6 +1158,7 @@ function deployBlueprintStrategies() {
             });
         } else if (strategy.type === 'timer-relay') {
             // 部署定时继电器策略（直接控制单个继电器）
+            // 使用 auto.relay.create 而非 auto.strategy.create，因为后者需要分组ID
             callMethod('auto.relay.create', {
                 id: strategy.id,
                 name: strategy.name,
