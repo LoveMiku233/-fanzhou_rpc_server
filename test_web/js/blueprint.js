@@ -81,11 +81,21 @@ const NODE_TYPES = {
         icon: '⏰',
         color: '#3498db',
         category: 'trigger',
-        description: '按照设定的时间间隔周期性触发',
+        description: '按照设定的时间间隔或每日固定时间触发',
         inputs: [],  // 触发器没有输入
         outputs: ['trigger'],  // 输出触发信号
         config: {
+            triggerMode: {
+                type: 'select',
+                label: '触发模式',
+                default: 'interval',
+                options: [
+                    { value: 'interval', label: '⏱️ 间隔执行' },
+                    { value: 'daily', label: '📅 每日定时' }
+                ]
+            },
             intervalSec: { type: 'number', label: '间隔(秒)', default: 60, min: 1 },
+            dailyTime: { type: 'text', label: '每日时间(HH:MM)', default: '08:00' },
             autoStart: { type: 'boolean', label: '自动启动', default: true }
         }
     },
@@ -360,6 +370,9 @@ function createNode(type, x, y) {
     // 选中新创建的节点
     selectNode(node);
     
+    // 隐藏空状态提示
+    updateEmptyHint();
+    
     return node;
 }
 
@@ -469,7 +482,12 @@ function updateNodeContent(node, contentEl) {
     // 根据节点类型显示不同的摘要信息
     switch (node.type) {
         case 'trigger-time':
-            html = `<div class="config-summary">每 <strong>${node.config.intervalSec || 60}</strong> 秒触发</div>`;
+            const triggerMode = node.config.triggerMode || 'interval';
+            if (triggerMode === 'daily') {
+                html = `<div class="config-summary">📅 每天 <strong>${node.config.dailyTime || '08:00'}</strong> 执行</div>`;
+            } else {
+                html = `<div class="config-summary">⏱️ 每 <strong>${node.config.intervalSec || 60}</strong> 秒触发</div>`;
+            }
             break;
         case 'trigger-sensor':
             const conditionLabels = { 'gt': '>', 'lt': '<', 'eq': '=', 'gte': '>=', 'lte': '<=' };
@@ -502,6 +520,26 @@ function updateNodeContent(node, contentEl) {
  * @param {string} nodeId - 节点ID
  */
 function deleteNode(nodeId) {
+    // 获取节点信息用于确认提示
+    const node = blueprintNodes.find(n => n.id === nodeId);
+    const nodeType = node ? NODE_TYPES[node.type] : null;
+    const nodeName = nodeType ? nodeType.name : '节点';
+    
+    // 检查是否有连线
+    const hasConnections = blueprintConnections.some(conn => 
+        conn.sourceId === nodeId || conn.targetId === nodeId
+    );
+    
+    // 构建确认消息
+    let confirmMsg = `确定要删除 "${nodeName}" 吗？`;
+    if (hasConnections) {
+        confirmMsg += '\n\n⚠️ 此节点有连接的连线，删除后连线也会被移除。';
+    }
+    
+    if (!confirm(confirmMsg)) {
+        return;
+    }
+    
     // 从数组中移除
     const index = blueprintNodes.findIndex(n => n.id === nodeId);
     if (index !== -1) {
@@ -531,7 +569,21 @@ function deleteNode(nodeId) {
         hideNodeProperties();
     }
     
-    logBlueprint('info', `节点 ${nodeId} 已删除`);
+    logBlueprint('info', `节点 "${nodeName}" 已删除`);
+    
+    // 更新空状态提示
+    updateEmptyHint();
+}
+
+/**
+ * 更新空状态提示的显示
+ * 当画布上没有节点时显示提示
+ */
+function updateEmptyHint() {
+    const hint = document.getElementById('canvasEmptyHint');
+    if (hint) {
+        hint.style.display = blueprintNodes.length === 0 ? 'block' : 'none';
+    }
 }
 
 /**
@@ -876,6 +928,9 @@ function showNodeProperties(node) {
         </div>
         <div class="properties-content">
             <p class="prop-description">${nodeType.description}</p>
+            <div class="prop-node-id" style="font-size: 11px; color: #999; margin-bottom: 10px;">
+                节点ID: ${node.id}
+            </div>
     `;
     
     // 生成配置表单
@@ -889,14 +944,40 @@ function showNodeProperties(node) {
     
     html += `
         </div>
-        <div class="properties-actions">
-            <button class="success" onclick="applyNodeConfig('${node.id}')">✓ 应用</button>
-            <button class="danger" onclick="deleteNode('${node.id}')">🗑️ 删除</button>
+        <div class="properties-actions" style="flex-direction: column; gap: 8px;">
+            <div style="display: flex; gap: 8px;">
+                <button class="success" onclick="applyNodeConfig('${node.id}')" title="保存修改到节点">✓ 应用</button>
+                <button class="secondary" onclick="copyNode('${node.id}')" title="复制此节点">📋 复制</button>
+            </div>
+            <button class="danger" onclick="deleteNode('${node.id}')" title="删除此节点" style="width: 100%;">🗑️ 删除节点</button>
         </div>
     `;
     
     panel.innerHTML = html;
     panel.style.display = 'block';
+}
+
+/**
+ * 复制节点
+ * 在原节点附近创建一个相同配置的新节点
+ * @param {string} nodeId - 要复制的节点ID
+ */
+function copyNode(nodeId) {
+    const sourceNode = blueprintNodes.find(n => n.id === nodeId);
+    if (!sourceNode) {
+        logBlueprint('error', '未找到要复制的节点');
+        return;
+    }
+    
+    // 创建新节点，位置偏移一些
+    const newNode = createNode(sourceNode.type, sourceNode.x + 30, sourceNode.y + 30);
+    if (newNode) {
+        // 复制配置
+        newNode.config = JSON.parse(JSON.stringify(sourceNode.config));
+        updateNodeContent(newNode);
+        
+        logBlueprint('info', `节点已复制: ${NODE_TYPES[sourceNode.type].name}`);
+    }
 }
 
 /**
@@ -1049,6 +1130,7 @@ function generateStrategiesFromBlueprint() {
 
 /**
  * 从节点构建策略配置
+ * 支持间隔执行和每日定时两种触发模式
  * @param {number} id - 策略ID
  * @param {object} trigger - 触发器节点
  * @param {object} action - 动作节点
@@ -1057,31 +1139,51 @@ function generateStrategiesFromBlueprint() {
 function buildStrategyFromNodes(id, trigger, action) {
     if (trigger.type === 'trigger-time') {
         // 定时策略
+        const triggerMode = trigger.config.triggerMode || 'interval';
+        
         if (action.type === 'action-group') {
-            return {
+            const strategy = {
                 type: 'timer',
                 id: id,
                 name: `蓝图策略_${id}`,
                 groupId: action.config.groupId,
                 channel: action.config.channel,
                 action: action.config.action,
-                intervalSec: trigger.config.intervalSec,
                 enabled: true,
-                autoStart: trigger.config.autoStart
+                autoStart: trigger.config.autoStart,
+                triggerType: triggerMode
             };
+            
+            // 根据触发模式设置时间参数
+            if (triggerMode === 'daily') {
+                strategy.dailyTime = trigger.config.dailyTime || '08:00';
+            } else {
+                strategy.intervalSec = trigger.config.intervalSec;
+            }
+            
+            return strategy;
         } else if (action.type === 'action-relay') {
             // 继电器控制需要先找到或创建分组
-            return {
+            const strategy = {
                 type: 'timer-relay',
                 id: id,
                 name: `蓝图策略_${id}`,
                 nodeId: action.config.nodeId,
                 channel: action.config.channel,
                 action: action.config.action,
-                intervalSec: trigger.config.intervalSec,
                 enabled: true,
-                autoStart: trigger.config.autoStart
+                autoStart: trigger.config.autoStart,
+                triggerType: triggerMode
             };
+            
+            // 根据触发模式设置时间参数
+            if (triggerMode === 'daily') {
+                strategy.dailyTime = trigger.config.dailyTime || '08:00';
+            } else {
+                strategy.intervalSec = trigger.config.intervalSec;
+            }
+            
+            return strategy;
         }
     } else if (trigger.type === 'trigger-sensor') {
         // 传感器策略
@@ -1125,6 +1227,7 @@ function buildStrategyFromNodes(id, trigger, action) {
 /**
  * 部署蓝图策略到服务器
  * 将生成的策略通过RPC调用发送到服务器
+ * 支持间隔执行和每日定时两种触发模式
  */
 function deployBlueprintStrategies() {
     const strategies = generateStrategiesFromBlueprint();
@@ -1139,38 +1242,61 @@ function deployBlueprintStrategies() {
     
     strategies.forEach(strategy => {
         if (strategy.type === 'timer') {
-            // 部署定时策略
-            callMethod('auto.strategy.create', {
+            // 部署定时策略（分组控制）
+            const params = {
                 id: strategy.id,
                 name: strategy.name,
                 groupId: strategy.groupId,
                 channel: strategy.channel,
                 action: strategy.action,
-                intervalSec: strategy.intervalSec,
                 enabled: strategy.enabled,
-                autoStart: strategy.autoStart
-            }, function(response) {
+                autoStart: strategy.autoStart,
+                triggerType: strategy.triggerType || 'interval'
+            };
+            
+            // 根据触发类型设置时间参数
+            if (strategy.triggerType === 'daily' && strategy.dailyTime) {
+                params.dailyTime = strategy.dailyTime;
+            } else if (strategy.intervalSec) {
+                params.intervalSec = strategy.intervalSec;
+            }
+            
+            callMethod('auto.strategy.create', params, function(response) {
                 if (response.result && response.result.ok) {
-                    logBlueprint('info', `✓ 定时策略 "${strategy.name}" 部署成功`);
+                    const triggerDesc = strategy.triggerType === 'daily' ? 
+                        `每日 ${strategy.dailyTime}` : 
+                        `每 ${strategy.intervalSec}秒`;
+                    logBlueprint('info', `✓ 定时策略 "${strategy.name}" 部署成功（${triggerDesc}）`);
                 } else if (response.error) {
                     logBlueprint('error', `✗ 策略 "${strategy.name}" 部署失败: ${response.error.message}`);
                 }
             });
         } else if (strategy.type === 'timer-relay') {
             // 部署定时继电器策略（直接控制单个继电器）
-            // 使用 auto.relay.create 而非 auto.strategy.create，因为后者需要分组ID
-            callMethod('auto.relay.create', {
+            const params = {
                 id: strategy.id,
                 name: strategy.name,
                 nodeId: strategy.nodeId,
                 channel: strategy.channel,
                 action: strategy.action,
-                intervalSec: strategy.intervalSec,
                 enabled: strategy.enabled,
-                autoStart: strategy.autoStart
-            }, function(response) {
+                autoStart: strategy.autoStart,
+                triggerType: strategy.triggerType || 'interval'
+            };
+            
+            // 根据触发类型设置时间参数
+            if (strategy.triggerType === 'daily' && strategy.dailyTime) {
+                params.dailyTime = strategy.dailyTime;
+            } else if (strategy.intervalSec) {
+                params.intervalSec = strategy.intervalSec;
+            }
+            
+            callMethod('auto.relay.create', params, function(response) {
                 if (response.result && response.result.ok) {
-                    logBlueprint('info', `✓ 定时继电器策略 "${strategy.name}" 部署成功`);
+                    const triggerDesc = strategy.triggerType === 'daily' ? 
+                        `每日 ${strategy.dailyTime}` : 
+                        `每 ${strategy.intervalSec}秒`;
+                    logBlueprint('info', `✓ 定时继电器策略 "${strategy.name}" 部署成功（${triggerDesc}）`);
                 } else if (response.error) {
                     logBlueprint('error', `✗ 策略 "${strategy.name}" 部署失败: ${response.error.message}`);
                 }
@@ -1284,8 +1410,16 @@ function generateSystemDiagram() {
 
 /**
  * 清空蓝图
+ * 删除画布上的所有节点和连线
  */
 function clearBlueprint() {
+    // 如果有节点，先确认
+    if (blueprintNodes.length > 0) {
+        if (!confirm(`确定要清空蓝图吗？\n\n将删除 ${blueprintNodes.length} 个节点和 ${blueprintConnections.length} 条连线。`)) {
+            return;
+        }
+    }
+    
     // 移除所有节点DOM
     document.querySelectorAll('.blueprint-node').forEach(el => el.remove());
     
@@ -1302,6 +1436,7 @@ function clearBlueprint() {
     nodeIdCounter = 1;
     
     hideNodeProperties();
+    updateEmptyHint();
     
     logBlueprint('info', '蓝图已清空');
 }

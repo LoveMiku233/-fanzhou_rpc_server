@@ -774,7 +774,7 @@ function refreshStrategyList() {
 
 /**
  * 渲染策略列表
- * 显示所有定时策略及其状态
+ * 显示所有定时策略及其状态，使用更清晰的布局
  */
 function renderStrategyList() {
     const contentEl = document.getElementById('strategyListContent');
@@ -795,39 +795,79 @@ function renderStrategyList() {
         'rev': '◀️ 反转'
     };
     
+    // 触发类型名称映射
+    const triggerTypeNames = {
+        'interval': '⏱️ 间隔执行',
+        'daily': '📅 每日定时'
+    };
+    
     let html = '';
     strategyListCache.forEach(strategy => {
         const id = strategy.id;
         const name = strategy.name || `策略${id}`;
         const groupId = strategy.groupId;
-        const channel = strategy.channel;
+        const channel = strategy.channel === -1 ? '全部' : strategy.channel;
         const action = actionNames[strategy.action] || strategy.action;
         const intervalSec = strategy.intervalSec;
+        const dailyTime = strategy.dailyTime;
+        const triggerType = strategy.triggerType || (dailyTime ? 'daily' : 'interval');
         const enabled = strategy.enabled !== false;
         const running = strategy.running === true;
         const attached = strategy.attached === true;
         
+        // 构建触发时间描述
+        let triggerDesc = '';
+        if (triggerType === 'daily' && dailyTime) {
+            triggerDesc = `📅 每天 ${dailyTime}`;
+        } else if (intervalSec) {
+            // 将秒数转换为更易读的格式
+            if (intervalSec >= 3600) {
+                const hours = Math.floor(intervalSec / 3600);
+                const mins = Math.floor((intervalSec % 3600) / 60);
+                triggerDesc = `⏱️ 每 ${hours}小时${mins > 0 ? mins + '分钟' : ''}`;
+            } else if (intervalSec >= 60) {
+                const mins = Math.floor(intervalSec / 60);
+                const secs = intervalSec % 60;
+                triggerDesc = `⏱️ 每 ${mins}分钟${secs > 0 ? secs + '秒' : ''}`;
+            } else {
+                triggerDesc = `⏱️ 每 ${intervalSec}秒`;
+            }
+        }
+        
+        // 状态图标
+        const statusIcon = enabled ? (running ? '🟢' : '🟡') : '🔴';
+        const statusText = enabled ? (running ? '运行中' : '已启用') : '已禁用';
+        
         html += `
-            <div class="data-list-item">
-                <div class="item-info">
+            <div class="data-list-item" style="flex-wrap: wrap; gap: 10px;">
+                <div class="item-info" style="min-width: 200px;">
                     <span class="item-name">⏱️ ${escapeHtml(name)}</span>
                     <span class="item-detail">
-                        ID: ${id} | 
-                        分组: ${groupId} | 
-                        通道: ${channel} | 
-                        动作: ${action} | 
-                        间隔: ${intervalSec}秒
+                        <strong>ID:</strong> ${id} | 
+                        <strong>分组:</strong> ${groupId} | 
+                        <strong>通道:</strong> ${channel}
                     </span>
                     <span class="item-detail">
-                        状态: ${enabled ? '✅ 启用' : '❌ 禁用'} | 
-                        ${attached ? '🔗 已挂载' : '⭕ 未挂载'} | 
-                        ${running ? '🏃 运行中' : '⏸️ 暂停'}
+                        <strong>动作:</strong> ${action} | 
+                        <strong>触发:</strong> ${triggerDesc}
+                    </span>
+                    <span class="item-detail">
+                        ${statusIcon} ${statusText}
+                        ${attached ? ' | 🔗 已挂载' : ''}
                     </span>
                 </div>
-                <div class="item-actions">
-                    <button onclick="toggleStrategyEnabled(${id}, ${!enabled})">${enabled ? '❌ 禁用' : '✅ 启用'}</button>
-                    <button class="success" onclick="triggerStrategy(${id})">🎯 触发</button>
-                    <button class="danger" onclick="deleteStrategy(${id})">🗑️ 删除</button>
+                <div class="item-actions" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                    <button onclick="toggleStrategyEnabled(${id}, ${!enabled})" 
+                            class="${enabled ? 'warning' : 'success'}" 
+                            title="${enabled ? '点击禁用此策略' : '点击启用此策略'}">
+                        ${enabled ? '⏸️ 禁用' : '▶️ 启用'}
+                    </button>
+                    <button class="secondary" onclick="triggerStrategy(${id})" title="立即执行一次此策略">
+                        🎯 触发
+                    </button>
+                    <button class="danger" onclick="deleteStrategy(${id})" title="永久删除此策略">
+                        🗑️ 删除
+                    </button>
                 </div>
             </div>
         `;
@@ -838,7 +878,7 @@ function renderStrategyList() {
 
 /**
  * 渲染传感器策略列表
- * 显示所有传感器触发策略
+ * 显示所有传感器触发策略，使用更清晰的布局
  */
 function renderSensorStrategyList() {
     const contentEl = document.getElementById('sensorStrategyListContent');
@@ -871,6 +911,15 @@ function renderSensorStrategyList() {
         'lte': '<='
     };
     
+    // 条件描述映射（更易理解）
+    const conditionDescriptions = {
+        'gt': '大于',
+        'lt': '小于',
+        'eq': '等于',
+        'gte': '大于等于',
+        'lte': '小于等于'
+    };
+    
     // 动作名称映射
     const actionNames = {
         'stop': '⏹️ 停止',
@@ -885,35 +934,46 @@ function renderSensorStrategyList() {
         const sensorType = sensorTypeNames[strategy.sensorType] || strategy.sensorType;
         const sensorNode = strategy.sensorNode;
         const condition = conditionNames[strategy.condition] || strategy.condition;
+        const conditionDesc = conditionDescriptions[strategy.condition] || strategy.condition;
         const threshold = strategy.threshold;
         const groupId = strategy.groupId;
-        const channel = strategy.channel;
+        const channel = strategy.channel >= 0 ? strategy.channel : '全部';
         const action = actionNames[strategy.action] || strategy.action;
         const enabled = strategy.enabled !== false;
         const cooldown = strategy.cooldownSec || 0;
         
+        // 状态图标
+        const statusIcon = enabled ? '🟢' : '🔴';
+        const statusText = enabled ? '已启用' : '已禁用';
+        
         html += `
-            <div class="data-list-item">
-                <div class="item-info">
+            <div class="data-list-item" style="flex-wrap: wrap; gap: 10px;">
+                <div class="item-info" style="min-width: 200px;">
                     <span class="item-name">📡 ${escapeHtml(name)}</span>
                     <span class="item-detail">
-                        ID: ${id} | 
-                        传感器: ${sensorType} (节点${sensorNode}) | 
-                        条件: ${condition} ${threshold}
+                        <strong>ID:</strong> ${id} | 
+                        <strong>传感器:</strong> ${sensorType} (节点 ${sensorNode})
                     </span>
                     <span class="item-detail">
-                        分组: ${groupId} | 
-                        通道: ${channel >= 0 ? channel : '全部'} | 
-                        动作: ${action} | 
-                        冷却: ${cooldown}秒
+                        <strong>触发条件:</strong> 当数值 ${conditionDesc} ${threshold} 时
                     </span>
                     <span class="item-detail">
-                        状态: ${enabled ? '✅ 启用' : '❌ 禁用'}
+                        <strong>执行:</strong> 分组 ${groupId} 通道 ${channel} → ${action}
+                        ${cooldown > 0 ? ` | <strong>冷却:</strong> ${cooldown}秒` : ''}
+                    </span>
+                    <span class="item-detail">
+                        ${statusIcon} ${statusText}
                     </span>
                 </div>
-                <div class="item-actions">
-                    <button onclick="toggleSensorStrategyEnabled(${id}, ${!enabled})">${enabled ? '❌ 禁用' : '✅ 启用'}</button>
-                    <button class="danger" onclick="deleteSensorStrategy(${id})">🗑️ 删除</button>
+                <div class="item-actions" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                    <button onclick="toggleSensorStrategyEnabled(${id}, ${!enabled})" 
+                            class="${enabled ? 'warning' : 'success'}"
+                            title="${enabled ? '点击禁用此策略' : '点击启用此策略'}">
+                        ${enabled ? '⏸️ 禁用' : '▶️ 启用'}
+                    </button>
+                    <button class="danger" onclick="deleteSensorStrategy(${id})" title="永久删除此策略">
+                        🗑️ 删除
+                    </button>
                 </div>
             </div>
         `;
@@ -977,7 +1037,40 @@ function deleteStrategy(id) {
 }
 
 /**
+ * 切换定时策略触发类型的输入框显示
+ * 根据选择的触发方式（间隔/每日定时）显示相应的配置选项
+ */
+function toggleTimerTypeInputs() {
+    const triggerType = document.getElementById('newStrategyTriggerType').value;
+    const intervalGroup = document.getElementById('intervalInputGroup');
+    const dailyTimeGroup = document.getElementById('dailyTimeInputGroup');
+    
+    if (triggerType === 'interval') {
+        // 间隔执行模式
+        intervalGroup.style.display = 'block';
+        dailyTimeGroup.style.display = 'none';
+    } else if (triggerType === 'daily') {
+        // 每日定时模式
+        intervalGroup.style.display = 'none';
+        dailyTimeGroup.style.display = 'block';
+    }
+}
+
+/**
+ * 将时间字符串转换为当天的秒数
+ * @param {string} timeStr - 格式为 "HH:MM" 的时间字符串
+ * @returns {number} 从午夜开始的秒数
+ */
+function timeToSeconds(timeStr) {
+    const parts = timeStr.split(':');
+    const hours = parseInt(parts[0]) || 0;
+    const minutes = parseInt(parts[1]) || 0;
+    return hours * 3600 + minutes * 60;
+}
+
+/**
  * 创建定时策略
+ * 支持两种触发方式：间隔执行和每日定时执行
  * 从表单获取参数并调用RPC创建策略
  */
 function createTimerStrategy() {
@@ -986,26 +1079,55 @@ function createTimerStrategy() {
     const groupId = parseInt(document.getElementById('newStrategyGroupId').value);
     const channel = parseInt(document.getElementById('newStrategyChannel').value);
     const action = document.getElementById('newStrategyAction').value;
-    const intervalSec = parseInt(document.getElementById('newStrategyInterval').value);
     const autoStart = document.getElementById('newStrategyAutoStart').value === 'true';
+    
+    // 获取触发方式
+    const triggerType = document.getElementById('newStrategyTriggerType').value;
     
     if (!name) {
         alert('请输入策略名称');
         return;
     }
     
-    callMethod('auto.strategy.create', {
+    // 构建策略参数
+    const params = {
         id: id,
         name: name,
         groupId: groupId,
         channel: channel,
         action: action,
-        intervalSec: intervalSec,
         enabled: true,
         autoStart: autoStart
-    }, function(response) {
+    };
+    
+    // 根据触发方式设置不同的时间参数
+    if (triggerType === 'interval') {
+        // 间隔执行模式
+        const intervalSec = parseInt(document.getElementById('newStrategyInterval').value);
+        if (!intervalSec || intervalSec < 1) {
+            alert('请输入有效的执行间隔（至少1秒）');
+            return;
+        }
+        params.intervalSec = intervalSec;
+        params.triggerType = 'interval';
+    } else if (triggerType === 'daily') {
+        // 每日定时模式
+        const dailyTime = document.getElementById('newStrategyDailyTime').value;
+        if (!dailyTime) {
+            alert('请选择每日执行时间');
+            return;
+        }
+        params.dailyTime = dailyTime;
+        params.dailyTimeSec = timeToSeconds(dailyTime);
+        params.triggerType = 'daily';
+    }
+    
+    callMethod('auto.strategy.create', params, function(response) {
         if (response.result && response.result.ok) {
-            log('info', `定时策略 "${name}" 创建成功`);
+            const triggerDesc = triggerType === 'daily' ? 
+                `每日 ${params.dailyTime} 执行` : 
+                `每 ${params.intervalSec} 秒执行`;
+            log('info', `定时策略 "${name}" 创建成功（${triggerDesc}）`);
             refreshStrategyList();
         } else if (response.error) {
             log('error', `创建失败: ${response.error.message || '未知错误'}`);

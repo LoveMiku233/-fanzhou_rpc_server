@@ -253,57 +253,95 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
             <!-- ==================== 策略管理页面 ==================== -->
             <div class="page-content" id="page-strategy">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="color: #333;">策略管理</h3>
+                    <h3 style="color: #333;">📋 策略管理</h3>
                     <button onclick="refreshStrategyList()">🔄 刷新列表</button>
                 </div>
 
-                <!-- 创建定时策略 -->
+                <!-- 策略管理说明 -->
+                <div style="background: #fff8e1; padding: 15px 20px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
+                    <h4 style="margin-bottom: 10px; color: #333;">💡 策略管理使用说明</h4>
+                    <ul style="color: #666; font-size: 13px; margin-left: 20px; line-height: 1.8;">
+                        <li><strong>定时策略：</strong>可以选择"间隔执行"（每隔多少秒执行一次）或"每日定时"（每天固定时间执行）</li>
+                        <li><strong>传感器策略：</strong>当传感器数值满足条件时自动触发（如温度超过30度时启动风扇）</li>
+                        <li><strong>分组程序：</strong>将设备的指定通道绑定到分组，实现批量控制</li>
+                        <li><strong>操作按钮：</strong>启用/禁用控制策略是否生效，触发可立即执行一次策略，删除将永久移除策略</li>
+                    </ul>
+                </div>
+
+                <!-- 创建定时策略 - 重新设计 -->
                 <div style="background: #e3f2fd; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
                     <h4 style="margin-bottom: 15px; color: #333;">⏱️ 创建定时策略</h4>
+                    <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                        定时策略可以按间隔时间周期执行，也可以在每天指定时间执行。选择适合您需求的触发方式。
+                    </p>
+                    
+                    <!-- 基本配置 -->
                     <div class="form-row">
                         <div class="form-group">
                             <label>策略ID</label>
-                            <input type="number" id="newStrategyId" value="1" min="1">
+                            <input type="number" id="newStrategyId" value="1" min="1" title="策略的唯一标识符">
                         </div>
                         <div class="form-group">
                             <label>策略名称</label>
-                            <input type="text" id="newStrategyName" placeholder="例如: 定时通风">
+                            <input type="text" id="newStrategyName" placeholder="例如: 定时通风" title="给策略起一个易于识别的名称">
                         </div>
                         <div class="form-group">
                             <label>绑定分组ID</label>
-                            <input type="number" id="newStrategyGroupId" value="1" min="1">
+                            <input type="number" id="newStrategyGroupId" value="1" min="1" title="要控制的设备分组">
                         </div>
                     </div>
+                    
+                    <!-- 控制配置 -->
                     <div class="form-row">
                         <div class="form-group">
                             <label>控制通道</label>
-                            <select id="newStrategyChannel">
+                            <select id="newStrategyChannel" title="选择要控制的通道">
                                 <option value="0">通道 0</option>
                                 <option value="1">通道 1</option>
                                 <option value="2">通道 2</option>
                                 <option value="3">通道 3</option>
+                                <option value="-1">全部通道</option>
                             </select>
                         </div>
                         <div class="form-group">
                             <label>执行动作</label>
-                            <select id="newStrategyAction">
+                            <select id="newStrategyAction" title="选择触发时执行的操作">
                                 <option value="stop">⏹️ 停止</option>
                                 <option value="fwd">▶️ 正转</option>
                                 <option value="rev">◀️ 反转</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>执行间隔（秒）</label>
-                            <input type="number" id="newStrategyInterval" value="60" min="1">
-                        </div>
-                        <div class="form-group">
                             <label>自动启动</label>
-                            <select id="newStrategyAutoStart">
-                                <option value="true">是</option>
-                                <option value="false">否</option>
+                            <select id="newStrategyAutoStart" title="创建后是否自动启用">
+                                <option value="true">✅ 是</option>
+                                <option value="false">❌ 否</option>
                             </select>
                         </div>
                     </div>
+                    
+                    <!-- 时间触发配置 - 新增每日定时选项 -->
+                    <div style="background: #bbdefb; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                        <h5 style="margin-bottom: 12px; color: #1565c0;">🕐 触发时间设置</h5>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>触发方式</label>
+                                <select id="newStrategyTriggerType" onchange="toggleTimerTypeInputs()" title="选择定时触发的方式">
+                                    <option value="interval">⏱️ 间隔执行（每隔N秒执行一次）</option>
+                                    <option value="daily">📅 每日定时（每天固定时间执行）</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="intervalInputGroup">
+                                <label>执行间隔（秒）</label>
+                                <input type="number" id="newStrategyInterval" value="60" min="1" title="每隔多少秒执行一次">
+                            </div>
+                            <div class="form-group" id="dailyTimeInputGroup" style="display: none;">
+                                <label>每日执行时间</label>
+                                <input type="time" id="newStrategyDailyTime" value="08:00" title="每天在这个时间执行">
+                            </div>
+                        </div>
+                    </div>
+                    
                     <button class="success" onclick="createTimerStrategy()">➕ 创建定时策略</button>
                 </div>
                 
@@ -429,12 +467,12 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                 <!-- 策略列表 -->
                 <div class="data-list" id="strategyList">
                     <div class="data-list-header">
-                        <span>策略信息</span>
+                        <span>⏱️ 定时策略列表</span>
                         <span>操作</span>
                     </div>
                     <div class="data-list-empty" id="strategyListEmpty">
-                        <p>暂无策略数据</p>
-                        <p style="font-size: 12px; margin-top: 10px;">请先连接服务器并点击"刷新列表"</p>
+                        <p>📭 暂无定时策略</p>
+                        <p style="font-size: 12px; margin-top: 10px;">请先连接服务器并点击"刷新列表"，或在上方创建新策略</p>
                     </div>
                     <div id="strategyListContent"></div>
                 </div>
@@ -442,11 +480,12 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                 <!-- 传感器策略列表 -->
                 <div class="data-list" id="sensorStrategyList" style="margin-top: 20px;">
                     <div class="data-list-header">
-                        <span>传感器策略</span>
+                        <span>📡 传感器策略列表</span>
                         <span>操作</span>
                     </div>
                     <div class="data-list-empty" id="sensorStrategyListEmpty">
-                        <p>暂无传感器策略</p>
+                        <p>📭 暂无传感器策略</p>
+                        <p style="font-size: 12px; margin-top: 10px;">传感器策略可在上方"传感器触发策略"区域创建</p>
                     </div>
                     <div id="sensorStrategyListContent"></div>
                 </div>
@@ -619,11 +658,11 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                     <div class="blueprint-canvas-container">
                         <!-- 工具栏 -->
                         <div class="canvas-toolbar">
-                            <button onclick="clearBlueprint()">🗑️ 清空</button>
-                            <button class="success" onclick="deployBlueprintStrategies()">🚀 部署策略</button>
-                            <button class="secondary" onclick="generateSystemDiagram()">📊 生成系统框图</button>
-                            <button onclick="downloadBlueprint()">💾 导出</button>
-                            <button onclick="uploadBlueprint()">📂 导入</button>
+                            <button onclick="clearBlueprint()" title="删除所有节点和连线">🗑️ 清空画布</button>
+                            <button class="success" onclick="deployBlueprintStrategies()" title="将蓝图转换为实际的RPC策略">🚀 部署策略</button>
+                            <button class="secondary" onclick="generateSystemDiagram()" title="从服务器读取设备和分组信息">📊 生成系统框图</button>
+                            <button onclick="downloadBlueprint()" title="将蓝图保存为JSON文件">💾 导出蓝图</button>
+                            <button onclick="uploadBlueprint()" title="从JSON文件导入蓝图">📂 导入蓝图</button>
                         </div>
                         
                         <!-- 蓝图画布 -->
@@ -657,10 +696,14 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                     <ul>
                         <li><strong>添加节点：</strong>从左侧工具箱拖放节点到画布上</li>
                         <li><strong>连接节点：</strong>从触发器的输出端口（右侧橙色圆点）拖到动作的输入端口（左侧绿色圆点）</li>
-                        <li><strong>配置节点：</strong>点击节点查看右侧属性面板，双击快速编辑</li>
-                        <li><strong>删除节点：</strong>点击节点右上角的×按钮，或点击连线后确认删除</li>
+                        <li><strong>配置节点：</strong>点击节点查看右侧属性面板，可修改参数后点击"应用"保存</li>
+                        <li><strong>复制节点：</strong>在属性面板中点击"复制"按钮，会在原节点附近创建相同配置的新节点</li>
+                        <li><strong>删除节点：</strong>点击节点右上角的×按钮，或在属性面板中点击"删除节点"；会提示确认并自动删除相关连线</li>
+                        <li><strong>删除连线：</strong>点击连线（会变成红色）后确认删除</li>
+                        <li><strong>清空画布：</strong>点击工具栏"清空画布"按钮可删除所有节点和连线</li>
                         <li><strong>部署策略：</strong>完成连线后点击"部署策略"将蓝图转换为实际的RPC策略</li>
                         <li><strong>系统框图：</strong>点击"生成系统框图"可自动从服务器读取设备和分组信息</li>
+                        <li><strong>导入/导出：</strong>可将蓝图保存为JSON文件，方便备份和分享</li>
                     </ul>
                 </div>
             </div>
