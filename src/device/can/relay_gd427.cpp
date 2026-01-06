@@ -88,6 +88,10 @@ void RelayGd427::onStatusFrame(quint32 canId, const QByteArray &payload)
 {
     Q_UNUSED(canId);
 
+    // 收到任何来自该节点的CAN帧都更新lastSeenMs，表示节点在线
+    markSeen();
+    lastRxTimer_.restart();
+
     RelayProtocol::Status status;
     if (!RelayProtocol::decodeStatus(payload, status)) {
         return;
@@ -98,8 +102,6 @@ void RelayGd427::onStatusFrame(quint32 canId, const QByteArray &payload)
     }
 
     status_[status.channel] = status;
-    markSeen();
-    lastRxTimer_.restart();
 
     emit statusUpdated(status.channel, status);
     emit updated();
