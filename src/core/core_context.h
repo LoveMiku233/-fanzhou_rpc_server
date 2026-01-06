@@ -86,11 +86,21 @@ struct QueueSnapshot {
 
 /**
  * @brief 自动策略状态
+ * 定时策略的运行时状态
  */
 struct AutoStrategyState {
     AutoStrategyConfig config;
     bool attached = false;
     bool running = false;
+};
+
+/**
+ * @brief 传感器策略状态
+ * 传感器触发策略的运行时状态
+ */
+struct SensorStrategyState {
+    SensorStrategyConfig config;
+    bool active = false;  ///< 是否处于活动状态
 };
 
 /**
@@ -187,6 +197,15 @@ public:
     QList<AutoStrategyState> strategyStates() const;
     bool setStrategyEnabled(int strategyId, bool enabled);
     bool triggerStrategy(int strategyId);
+    bool createStrategy(const AutoStrategyConfig &config, QString *error = nullptr);
+    bool deleteStrategy(int strategyId, QString *error = nullptr);
+
+    // 传感器策略管理
+    QList<SensorStrategyState> sensorStrategyStates() const;
+    bool createSensorStrategy(const SensorStrategyConfig &config, QString *error = nullptr);
+    bool deleteSensorStrategy(int strategyId, QString *error = nullptr);
+    bool setSensorStrategyEnabled(int strategyId, bool enabled);
+    void checkSensorTriggers(const QString &sensorType, int sensorNode, double value);
 
 private:
     bool initSystemSettings();
@@ -200,11 +219,14 @@ private:
     ControlJobResult executeJob(const ControlJob &job);
 
     void bindStrategies(const QList<AutoStrategyConfig> &strategies);
+    void bindSensorStrategies(const QList<SensorStrategyConfig> &strategies);
     void attachStrategiesForGroup(int groupId);
     void detachStrategiesForGroup(int groupId);
     int strategyIntervalMs(const AutoStrategyConfig &config) const;
+    bool evaluateSensorCondition(const QString &condition, double value, double threshold) const;
 
     QList<AutoStrategyConfig> strategyConfigs_;
+    QList<SensorStrategyConfig> sensorStrategyConfigs_;  ///< 传感器策略配置列表
     QHash<int, QTimer *> strategyTimers_;
 
     QQueue<ControlJob> controlQueue_;

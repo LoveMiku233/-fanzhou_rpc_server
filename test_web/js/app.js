@@ -745,10 +745,15 @@ function callCustomMethod() {
 // 策略列表缓存
 let strategyListCache = [];
 
+// 传感器策略列表缓存
+let sensorStrategyListCache = [];
+
 /**
  * 刷新策略列表
+ * 同时获取定时策略和传感器策略
  */
 function refreshStrategyList() {
+    // 获取定时策略列表
     callMethod('auto.strategy.list', {}, function(response) {
         if (response.result) {
             strategyListCache = response.result.strategies || [];
@@ -757,10 +762,19 @@ function refreshStrategyList() {
             log('error', `获取策略列表失败: ${response.error.message || '未知错误'}`);
         }
     });
+    
+    // 获取传感器策略列表
+    callMethod('auto.sensor.list', {}, function(response) {
+        if (response.result) {
+            sensorStrategyListCache = response.result.strategies || [];
+            renderSensorStrategyList();
+        }
+    });
 }
 
 /**
  * 渲染策略列表
+ * 显示所有定时策略及其状态
  */
 function renderStrategyList() {
     const contentEl = document.getElementById('strategyListContent');
@@ -796,7 +810,7 @@ function renderStrategyList() {
         html += `
             <div class="data-list-item">
                 <div class="item-info">
-                    <span class="item-name">⚙️ ${escapeHtml(name)}</span>
+                    <span class="item-name">⏱️ ${escapeHtml(name)}</span>
                     <span class="item-detail">
                         ID: ${id} | 
                         分组: ${groupId} | 
@@ -813,12 +827,99 @@ function renderStrategyList() {
                 <div class="item-actions">
                     <button onclick="toggleStrategyEnabled(${id}, ${!enabled})">${enabled ? '❌ 禁用' : '✅ 启用'}</button>
                     <button class="success" onclick="triggerStrategy(${id})">🎯 触发</button>
+                    <button class="danger" onclick="deleteStrategy(${id})">🗑️ 删除</button>
                 </div>
             </div>
         `;
     });
     
     contentEl.innerHTML = html;
+}
+
+/**
+ * 渲染传感器策略列表
+ * 显示所有传感器触发策略
+ */
+function renderSensorStrategyList() {
+    const contentEl = document.getElementById('sensorStrategyListContent');
+    const emptyEl = document.getElementById('sensorStrategyListEmpty');
+    
+    if (!sensorStrategyListCache || sensorStrategyListCache.length === 0) {
+        if (contentEl) contentEl.innerHTML = '';
+        if (emptyEl) emptyEl.style.display = 'block';
+        return;
+    }
+    
+    if (emptyEl) emptyEl.style.display = 'none';
+    
+    // 传感器类型名称映射
+    const sensorTypeNames = {
+        'temperature': '🌡️ 温度',
+        'humidity': '💧 湿度',
+        'light': '💡 光照',
+        'pressure': '📊 压力',
+        'soil_moisture': '🌱 土壤湿度',
+        'co2': '🌫️ CO2'
+    };
+    
+    // 条件名称映射
+    const conditionNames = {
+        'gt': '>',
+        'lt': '<',
+        'eq': '=',
+        'gte': '>=',
+        'lte': '<='
+    };
+    
+    // 动作名称映射
+    const actionNames = {
+        'stop': '⏹️ 停止',
+        'fwd': '▶️ 正转',
+        'rev': '◀️ 反转'
+    };
+    
+    let html = '';
+    sensorStrategyListCache.forEach(strategy => {
+        const id = strategy.id;
+        const name = strategy.name || `传感器策略${id}`;
+        const sensorType = sensorTypeNames[strategy.sensorType] || strategy.sensorType;
+        const sensorNode = strategy.sensorNode;
+        const condition = conditionNames[strategy.condition] || strategy.condition;
+        const threshold = strategy.threshold;
+        const groupId = strategy.groupId;
+        const channel = strategy.channel;
+        const action = actionNames[strategy.action] || strategy.action;
+        const enabled = strategy.enabled !== false;
+        const cooldown = strategy.cooldownSec || 0;
+        
+        html += `
+            <div class="data-list-item">
+                <div class="item-info">
+                    <span class="item-name">📡 ${escapeHtml(name)}</span>
+                    <span class="item-detail">
+                        ID: ${id} | 
+                        传感器: ${sensorType} (节点${sensorNode}) | 
+                        条件: ${condition} ${threshold}
+                    </span>
+                    <span class="item-detail">
+                        分组: ${groupId} | 
+                        通道: ${channel >= 0 ? channel : '全部'} | 
+                        动作: ${action} | 
+                        冷却: ${cooldown}秒
+                    </span>
+                    <span class="item-detail">
+                        状态: ${enabled ? '✅ 启用' : '❌ 禁用'}
+                    </span>
+                </div>
+                <div class="item-actions">
+                    <button onclick="toggleSensorStrategyEnabled(${id}, ${!enabled})">${enabled ? '❌ 禁用' : '✅ 启用'}</button>
+                    <button class="danger" onclick="deleteSensorStrategy(${id})">🗑️ 删除</button>
+                </div>
+            </div>
+        `;
+    });
+    
+    if (contentEl) contentEl.innerHTML = html;
 }
 
 /**
@@ -856,12 +957,245 @@ function triggerStrategy(id) {
     });
 }
 
+/**
+ * 删除定时策略
+ * @param {number} id - 策略ID
+ */
+function deleteStrategy(id) {
+    if (!confirm(`确定要删除策略 ${id} 吗？`)) return;
+    
+    callMethod('auto.strategy.delete', {
+        id: id
+    }, function(response) {
+        if (response.result && response.result.ok) {
+            log('info', `策略 ${id} 已删除`);
+            refreshStrategyList();
+        } else if (response.error) {
+            log('error', `删除失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 创建定时策略
+ * 从表单获取参数并调用RPC创建策略
+ */
+function createTimerStrategy() {
+    const id = parseInt(document.getElementById('newStrategyId').value);
+    const name = document.getElementById('newStrategyName').value.trim();
+    const groupId = parseInt(document.getElementById('newStrategyGroupId').value);
+    const channel = parseInt(document.getElementById('newStrategyChannel').value);
+    const action = document.getElementById('newStrategyAction').value;
+    const intervalSec = parseInt(document.getElementById('newStrategyInterval').value);
+    const autoStart = document.getElementById('newStrategyAutoStart').value === 'true';
+    
+    if (!name) {
+        alert('请输入策略名称');
+        return;
+    }
+    
+    callMethod('auto.strategy.create', {
+        id: id,
+        name: name,
+        groupId: groupId,
+        channel: channel,
+        action: action,
+        intervalSec: intervalSec,
+        enabled: true,
+        autoStart: autoStart
+    }, function(response) {
+        if (response.result && response.result.ok) {
+            log('info', `定时策略 "${name}" 创建成功`);
+            refreshStrategyList();
+        } else if (response.error) {
+            log('error', `创建失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 创建传感器触发策略
+ * 当传感器数值满足条件时自动触发分组控制
+ */
+function createSensorStrategy() {
+    const id = parseInt(document.getElementById('sensorStrategyId').value);
+    const name = document.getElementById('sensorStrategyName').value.trim();
+    const sensorType = document.getElementById('sensorType').value;
+    const sensorNode = parseInt(document.getElementById('sensorNodeId').value);
+    const condition = document.getElementById('sensorCondition').value;
+    const threshold = parseFloat(document.getElementById('sensorThreshold').value);
+    const groupId = parseInt(document.getElementById('sensorGroupId').value);
+    const channel = parseInt(document.getElementById('sensorChannel').value);
+    const action = document.getElementById('sensorAction').value;
+    const cooldownSec = parseInt(document.getElementById('sensorCooldown').value);
+    const enabled = document.getElementById('sensorEnabled').value === 'true';
+    
+    if (!name) {
+        alert('请输入策略名称');
+        return;
+    }
+    
+    callMethod('auto.sensor.create', {
+        id: id,
+        name: name,
+        sensorType: sensorType,
+        sensorNode: sensorNode,
+        condition: condition,
+        threshold: threshold,
+        groupId: groupId,
+        channel: channel,
+        action: action,
+        cooldownSec: cooldownSec,
+        enabled: enabled
+    }, function(response) {
+        if (response.result && response.result.ok) {
+            log('info', `传感器策略 "${name}" 创建成功`);
+            refreshStrategyList();
+        } else if (response.error) {
+            log('error', `创建失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 切换传感器策略启用状态
+ * @param {number} id - 策略ID
+ * @param {boolean} enabled - 是否启用
+ */
+function toggleSensorStrategyEnabled(id, enabled) {
+    callMethod('auto.sensor.enable', {
+        id: id,
+        enabled: enabled
+    }, function(response) {
+        if (response.result && response.result.ok) {
+            log('info', `传感器策略 ${id} 已${enabled ? '启用' : '禁用'}`);
+            refreshStrategyList();
+        } else if (response.error) {
+            log('error', `操作失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 删除传感器策略
+ * @param {number} id - 策略ID
+ */
+function deleteSensorStrategy(id) {
+    if (!confirm(`确定要删除传感器策略 ${id} 吗？`)) return;
+    
+    callMethod('auto.sensor.delete', {
+        id: id
+    }, function(response) {
+        if (response.result && response.result.ok) {
+            log('info', `传感器策略 ${id} 已删除`);
+            refreshStrategyList();
+        } else if (response.error) {
+            log('error', `删除失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/* ========================================================
+ * 分组通道管理功能
+ * ======================================================== */
+
+/**
+ * 添加通道到分组
+ * 将指定设备的指定通道添加到分组的控制列表中
+ */
+function addChannelToGroup() {
+    const groupId = parseInt(document.getElementById('programGroupId').value);
+    const node = parseInt(document.getElementById('programNodeId').value);
+    const channel = parseInt(document.getElementById('programChannel').value);
+    
+    if (!groupId || groupId <= 0) {
+        alert('请输入有效的分组ID');
+        return;
+    }
+    if (!node || node <= 0 || node > 255) {
+        alert('请输入有效的设备节点ID (1-255)');
+        return;
+    }
+    
+    callMethod('group.addChannel', {
+        groupId: groupId,
+        node: node,
+        channel: channel
+    }, function(response) {
+        if (response.result && response.result.ok) {
+            log('info', `通道 ${channel} (节点${node}) 已添加到分组 ${groupId}`);
+        } else if (response.error) {
+            log('error', `添加失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 从分组移除通道
+ */
+function removeChannelFromGroup() {
+    const groupId = parseInt(document.getElementById('programGroupId').value);
+    const node = parseInt(document.getElementById('programNodeId').value);
+    const channel = parseInt(document.getElementById('programChannel').value);
+    
+    if (!groupId || groupId <= 0) {
+        alert('请输入有效的分组ID');
+        return;
+    }
+    
+    if (!confirm(`确定要从分组 ${groupId} 移除节点 ${node} 的通道 ${channel} 吗？`)) return;
+    
+    callMethod('group.removeChannel', {
+        groupId: groupId,
+        node: node,
+        channel: channel
+    }, function(response) {
+        if (response.result && response.result.ok) {
+            log('info', `通道 ${channel} (节点${node}) 已从分组 ${groupId} 移除`);
+        } else if (response.error) {
+            log('error', `移除失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 查看分组通道列表
+ */
+function getGroupChannels() {
+    const groupId = parseInt(document.getElementById('programGroupId').value);
+    
+    if (!groupId || groupId <= 0) {
+        alert('请输入有效的分组ID');
+        return;
+    }
+    
+    callMethod('group.getChannels', {
+        groupId: groupId
+    }, function(response) {
+        if (response.result) {
+            const channels = response.result.channels || [];
+            if (channels.length === 0) {
+                log('info', `分组 ${groupId} 暂无绑定的通道`);
+            } else {
+                let channelInfo = `分组 ${groupId} 的通道列表:\n`;
+                channels.forEach(ch => {
+                    channelInfo += `  - 节点 ${ch.node} 通道 ${ch.channel}\n`;
+                });
+                log('info', channelInfo);
+            }
+        } else if (response.error) {
+            log('error', `查询失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
 /* ========================================================
  * 设备配置功能
  * ======================================================== */
 
 /**
  * 读取设备配置
+ * 获取服务器系统信息并显示
  */
 function readDeviceConfig() {
     callMethod('sys.info', {}, function(response) {

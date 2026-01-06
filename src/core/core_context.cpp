@@ -23,7 +23,8 @@ const char *const kLogSource = "CoreContext";
 const QString kErrUnknownNode = QStringLiteral("unknown node");
 const QString kErrDeviceNotFound = QStringLiteral("device not found");
 const QString kErrDeviceRejected = QStringLiteral("device rejected");
-constexpr int kMaxChannelId = 3;  ///< Maximum channel ID (0-3 for 4 channels)
+constexpr int kMaxChannelId = 3;  ///< 最大通道ID（0-3表示4个通道）
+constexpr double kFloatCompareEpsilon = 0.001;  ///< 浮点数比较精度
 }  // namespace
 
 CoreContext::CoreContext(QObject *parent)
@@ -83,6 +84,7 @@ bool CoreContext::init(const CoreConfig &config)
 
     initQueue();
     bindStrategies(config.strategies);
+    bindSensorStrategies(config.sensorStrategies);
 
     LOG_INFO(kLogSource, QStringLiteral("Core context initialization complete"));
     return true;
@@ -576,6 +578,198 @@ bool CoreContext::triggerStrategy(int strategyId)
         return stats.accepted > 0;
     }
     return false;
+}
+
+bool CoreContext::createStrategy(const AutoStrategyConfig &config, QString *error)
+{
+    // 检查策略ID是否已存在
+    for (const auto &existing : strategyConfigs_) {
+        if (existing.strategyId == config.strategyId) {
+            if (error) *error = QStringLiteral("strategy id already exists");
+            return false;
+        }
+    }
+
+    // 检查分组是否存在
+    if (!deviceGroups.contains(config.groupId)) {
+        if (error) *error = QStringLiteral("group not found");
+        return false;
+    }
+
+    // 添加策略配置
+    strategyConfigs_.append(config);
+    
+    // 挂载策略
+    if (config.enabled) {
+        attachStrategiesForGroup(config.groupId);
+    }
+
+    LOG_INFO(kLogSource,
+             QStringLiteral("Strategy created: id=%1, name=%2, groupId=%3")
+                 .arg(config.strategyId)
+                 .arg(config.name)
+                 .arg(config.groupId));
+    return true;
+}
+
+bool CoreContext::deleteStrategy(int strategyId, QString *error)
+{
+    // 查找并删除策略
+    for (int i = 0; i < strategyConfigs_.size(); ++i) {
+        if (strategyConfigs_[i].strategyId == strategyId) {
+            // 停止定时器
+            if (auto *timer = strategyTimers_.value(strategyId, nullptr)) {
+                timer->stop();
+                timer->deleteLater();
+                strategyTimers_.remove(strategyId);
+            }
+
+            strategyConfigs_.removeAt(i);
+            LOG_INFO(kLogSource, QStringLiteral("Strategy deleted: id=%1").arg(strategyId));
+            return true;
+        }
+    }
+
+    if (error) *error = QStringLiteral("strategy not found");
+    return false;
+}
+
+QList<SensorStrategyState> CoreContext::sensorStrategyStates() const
+{
+    QList<SensorStrategyState> list;
+    for (const auto &config : sensorStrategyConfigs_) {
+        SensorStrategyState state;
+        state.config = config;
+        state.active = config.enabled && deviceGroups.contains(config.groupId);
+        list.append(state);
+    }
+    return list;
+}
+
+bool CoreContext::createSensorStrategy(const SensorStrategyConfig &config, QString *error)
+{
+    // 检查策略ID是否已存在
+    for (const auto &existing : sensorStrategyConfigs_) {
+        if (existing.strategyId == config.strategyId) {
+            if (error) *error = QStringLiteral("sensor strategy id already exists");
+            return false;
+        }
+    }
+
+    // 检查分组是否存在
+    if (!deviceGroups.contains(config.groupId)) {
+        if (error) *error = QStringLiteral("group not found");
+        return false;
+    }
+
+    // 添加传感器策略配置
+    sensorStrategyConfigs_.append(config);
+
+    LOG_INFO(kLogSource,
+             QStringLiteral("Sensor strategy created: id=%1, name=%2, sensor=%3, groupId=%4")
+                 .arg(config.strategyId)
+                 .arg(config.name)
+                 .arg(config.sensorType)
+                 .arg(config.groupId));
+    return true;
+}
+
+bool CoreContext::deleteSensorStrategy(int strategyId, QString *error)
+{
+    for (int i = 0; i < sensorStrategyConfigs_.size(); ++i) {
+        if (sensorStrategyConfigs_[i].strategyId == strategyId) {
+            sensorStrategyConfigs_.removeAt(i);
+            LOG_INFO(kLogSource, QStringLiteral("Sensor strategy deleted: id=%1").arg(strategyId));
+            return true;
+        }
+    }
+
+    if (error) *error = QStringLiteral("sensor strategy not found");
+    return false;
+}
+
+bool CoreContext::setSensorStrategyEnabled(int strategyId, bool enabled)
+{
+    for (auto &config : sensorStrategyConfigs_) {
+        if (config.strategyId == strategyId) {
+            config.enabled = enabled;
+            LOG_INFO(kLogSource,
+                     QStringLiteral("Sensor strategy %1: id=%2")
+                         .arg(enabled ? "enabled" : "disabled")
+                         .arg(strategyId));
+            return true;
+        }
+    }
+    return false;
+}
+
+bool CoreContext::evaluateSensorCondition(const QString &condition, double value, double threshold) const
+{
+    if (condition == QStringLiteral("gt")) return value > threshold;
+    if (condition == QStringLiteral("lt")) return value < threshold;
+    if (condition == QStringLiteral("eq")) return qAbs(value - threshold) < kFloatCompareEpsilon;
+    if (condition == QStringLiteral("gte")) return value >= threshold;
+    if (condition == QStringLiteral("lte")) return value <= threshold;
+    return false;
+}
+
+void CoreContext::checkSensorTriggers(const QString &sensorType, int sensorNode, double value)
+{
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+
+    for (auto &config : sensorStrategyConfigs_) {
+        // 检查是否匹配
+        if (!config.enabled) continue;
+        if (config.sensorType != sensorType) continue;
+        if (config.sensorNode != sensorNode) continue;
+        if (!deviceGroups.contains(config.groupId)) continue;
+
+        // 检查冷却时间
+        if (config.lastTriggerMs > 0) {
+            const qint64 elapsed = now - config.lastTriggerMs;
+            if (elapsed < config.cooldownSec * kMsPerSec) continue;
+        }
+
+        // 评估条件
+        if (!evaluateSensorCondition(config.condition, value, config.threshold)) continue;
+
+        // 触发控制
+        bool okAction = false;
+        const auto action = parseAction(config.action, &okAction);
+        if (!okAction) continue;
+
+        const QString reason = QStringLiteral("sensor:%1(%2)=%3")
+            .arg(config.sensorType)
+            .arg(sensorNode)
+            .arg(value);
+
+        // 控制指定通道或所有通道
+        if (config.channel >= 0 && config.channel <= 3) {
+            queueGroupControl(config.groupId, static_cast<quint8>(config.channel), action, reason);
+        } else {
+            // channel=-1 表示控制所有通道
+            for (quint8 ch = 0; ch < 4; ++ch) {
+                queueGroupControl(config.groupId, ch, action, reason);
+            }
+        }
+
+        // 更新触发时间
+        config.lastTriggerMs = now;
+
+        LOG_INFO(kLogSource,
+                 QStringLiteral("Sensor strategy triggered: id=%1, sensor=%2(%3)=%4, action=%5")
+                     .arg(config.strategyId)
+                     .arg(config.sensorType)
+                     .arg(sensorNode)
+                     .arg(value)
+                     .arg(config.action));
+    }
+}
+
+void CoreContext::bindSensorStrategies(const QList<SensorStrategyConfig> &strategies)
+{
+    sensorStrategyConfigs_ = strategies;
+    LOG_INFO(kLogSource, QStringLiteral("Bound %1 sensor strategies").arg(strategies.size()));
 }
 
 QStringList CoreContext::methodGroups() const

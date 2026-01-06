@@ -99,16 +99,36 @@ struct ScreenConfig {
 
 /**
  * @brief 自动控制策略配置
+ * 定时策略，按间隔时间自动触发分组控制
  */
 struct AutoStrategyConfig {
-    int strategyId = 0;
-    QString name;
-    int groupId = 0;
-    quint8 channel = 0;
-    QString action = QStringLiteral("stop");
-    int intervalSec = 60;
-    bool enabled = true;
-    bool autoStart = true;
+    int strategyId = 0;          ///< 策略ID
+    QString name;                 ///< 策略名称
+    int groupId = 0;             ///< 绑定的分组ID
+    quint8 channel = 0;          ///< 控制通道
+    QString action = QStringLiteral("stop");  ///< 控制动作
+    int intervalSec = 60;        ///< 执行间隔（秒）
+    bool enabled = true;         ///< 是否启用
+    bool autoStart = true;       ///< 是否自动启动
+};
+
+/**
+ * @brief 传感器触发策略配置
+ * 当传感器数值满足阈值条件时，自动触发分组控制
+ */
+struct SensorStrategyConfig {
+    int strategyId = 0;          ///< 策略ID
+    QString name;                 ///< 策略名称
+    QString sensorType;          ///< 传感器类型 (temperature/humidity/light/pressure/soil_moisture/co2)
+    int sensorNode = 0;          ///< 传感器节点ID
+    QString condition;           ///< 阈值条件 (gt/lt/eq/gte/lte)
+    double threshold = 0.0;      ///< 阈值
+    int groupId = 0;             ///< 绑定的分组ID
+    int channel = 0;             ///< 控制通道，-1表示所有通道
+    QString action = QStringLiteral("stop");  ///< 触发动作
+    int cooldownSec = 60;        ///< 冷却时间（秒），防止频繁触发
+    bool enabled = true;         ///< 是否启用
+    qint64 lastTriggerMs = 0;    ///< 上次触发时间（内部使用）
 };
 
 /**
@@ -126,6 +146,7 @@ public:
     QList<DeviceConfig> devices;
     QList<DeviceGroupConfig> groups;
     QList<AutoStrategyConfig> strategies;
+    QList<SensorStrategyConfig> sensorStrategies;  ///< 传感器触发策略列表
 
     /**
      * @brief 从文件加载配置
