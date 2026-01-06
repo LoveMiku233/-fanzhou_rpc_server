@@ -4,6 +4,7 @@
  */
 
 #include "can_comm.h"
+#include "utils/logger.h"
 #include "utils/utils.h"
 
 #include <QDebug>
@@ -21,6 +22,10 @@
 
 namespace fanzhou {
 namespace comm {
+
+namespace {
+const char *const kLogSource = "CAN";
+}  // namespace
 
 CanComm::CanComm(CanConfig config, QObject *parent)
     : CommAdapter(parent)
@@ -129,16 +134,19 @@ void CanComm::close()
 bool CanComm::sendFrame(quint32 canId, const QByteArray &payload, bool extended, bool rtr)
 {
     if (socket_ < 0) {
+        LOG_WARNING(kLogSource, QStringLiteral("sendFrame failed: CAN not opened"));
         emit errorOccurred(QStringLiteral("CAN not opened"));
         return false;
     }
 
     if (payload.size() > 8) {
+        LOG_WARNING(kLogSource, QStringLiteral("sendFrame failed: payload size %1 > 8").arg(payload.size()));
         emit errorOccurred(QStringLiteral("CAN payload must be <= 8 bytes"));
         return false;
     }
 
     if (txQueue_.size() >= kMaxTxQueueSize) {
+        LOG_WARNING(kLogSource, QStringLiteral("sendFrame failed: TX queue overflow (%1)").arg(txQueue_.size()));
         emit errorOccurred(
             QStringLiteral("CAN TX queue overflow (%1), dropping").arg(txQueue_.size()));
         return false;
@@ -159,6 +167,11 @@ bool CanComm::sendFrame(quint32 canId, const QByteArray &payload, bool extended,
     }
 
     txQueue_.enqueue(TxItem{frame});
+    LOG_DEBUG(kLogSource,
+              QStringLiteral("Frame queued: id=0x%1, dlc=%2, queueSize=%3")
+                  .arg(canId, 0, 16)
+                  .arg(payload.size())
+                  .arg(txQueue_.size()));
     return true;
 }
 
@@ -181,15 +194,23 @@ void CanComm::onTxPump()
     const ssize_t n = ::write(socket_, &item.frame, sizeof(item.frame));
 
     if (n == sizeof(item.frame)) {
+        // 去除扩展帧标志位获取实际CAN ID
+        const quint32 canIdWithoutFlags = item.frame.can_id & CAN_SFF_MASK;
+        LOG_DEBUG(kLogSource,
+                  QStringLiteral("Frame sent: id=0x%1, dlc=%2")
+                      .arg(canIdWithoutFlags, 0, 16)
+                      .arg(item.frame.can_dlc));
         txQueue_.dequeue();
         return;
     }
 
     if (errno == ENOBUFS || errno == EAGAIN || errno == EWOULDBLOCK) {
         txBackoffMs_ = kTxBackoffMs;
+        LOG_DEBUG(kLogSource, QStringLiteral("TX buffer full, backing off %1ms").arg(kTxBackoffMs));
         return;
     }
 
+    LOG_ERROR(kLogSource, utils::sysErrorString("CAN write failed"));
     emit errorOccurred(utils::sysErrorString("CAN write failed"));
     txQueue_.dequeue();
 }

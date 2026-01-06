@@ -202,6 +202,7 @@ bool CoreContext::initDevices(const CoreConfig &config)
                 dev->init();
                 canManager->addDevice(dev);
                 relays.insert(node, dev);
+                deviceConfigs.insert(node, devConfig);
 
                 LOG_INFO(kLogSource,
                          QStringLiteral("RelayGd427 added: node=0x%1, name=%2")
