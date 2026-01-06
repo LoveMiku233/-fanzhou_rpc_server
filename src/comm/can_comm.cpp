@@ -99,6 +99,7 @@ bool CanComm::open()
         connect(txTimer_, &QTimer::timeout, this, &CanComm::onTxPump);
     }
     txBackoffMs_ = 0;
+    txBackoffMultiplier_ = 0;
     txTimer_->start();
 
     // Setup read notifier
@@ -127,6 +128,7 @@ void CanComm::close()
     }
     txQueue_.clear();
     txBackoffMs_ = 0;
+    txBackoffMultiplier_ = 0;
 
     emit closed();
 }
@@ -201,12 +203,21 @@ void CanComm::onTxPump()
                       .arg(canIdWithoutFlags, 0, 16)
                       .arg(item.frame.can_dlc));
         txQueue_.dequeue();
+        // 成功发送后重置退避乘数
+        txBackoffMultiplier_ = 0;
         return;
     }
 
     if (errno == ENOBUFS || errno == EAGAIN || errno == EWOULDBLOCK) {
-        txBackoffMs_ = kTxBackoffMs;
-        LOG_DEBUG(kLogSource, QStringLiteral("TX buffer full, backing off %1ms").arg(kTxBackoffMs));
+        // 使用指数退避策略：退避时间 = kTxBackoffMs * 2^multiplier
+        // 安全：multiplier <= kMaxBackoffMultiplier (5)，最大退避 = 10 * 32 = 320ms
+        const int backoff = kTxBackoffMs * (1 << txBackoffMultiplier_);
+        txBackoffMs_ = backoff;
+        // 增加乘数用于下次退避（带上限）
+        if (txBackoffMultiplier_ < kMaxBackoffMultiplier) {
+            ++txBackoffMultiplier_;
+        }
+        LOG_DEBUG(kLogSource, QStringLiteral("TX buffer full, backing off %1ms").arg(backoff));
         return;
     }
 
