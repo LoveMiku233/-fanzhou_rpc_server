@@ -95,7 +95,7 @@ const NODE_TYPES = {
                 ]
             },
             intervalSec: { type: 'number', label: '间隔(秒)', default: 60, min: 1 },
-            dailyTime: { type: 'text', label: '每日时间(HH:MM)', default: '08:00' },
+            dailyTime: { type: 'time', label: '每日时间', default: '08:00' },
             autoStart: { type: 'boolean', label: '自动启动', default: true }
         }
     },
@@ -581,9 +581,14 @@ function deleteNode(nodeId) {
  */
 function updateEmptyHint() {
     const hint = document.getElementById('canvasEmptyHint');
-    if (hint) {
-        hint.style.display = blueprintNodes.length === 0 ? 'block' : 'none';
+    if (!hint) {
+        // 蓝图画布可能尚未初始化，这是正常情况
+        if (blueprintCanvas) {
+            console.warn('updateEmptyHint: 未找到空状态提示元素 canvasEmptyHint');
+        }
+        return;
     }
+    hint.style.display = blueprintNodes.length === 0 ? 'block' : 'none';
 }
 
 /**
@@ -1002,6 +1007,11 @@ function generateConfigField(nodeId, key, cfg, value) {
             
         case 'text':
             inputHtml = `<input type="text" id="${fieldId}" value="${value || ''}">`;
+            break;
+            
+        case 'time':
+            // 时间类型输入框，使用HTML5 time input
+            inputHtml = `<input type="time" id="${fieldId}" value="${value || '08:00'}">`;
             break;
             
         case 'boolean':

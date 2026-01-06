@@ -1059,9 +1059,22 @@ function toggleTimerTypeInputs() {
 /**
  * 将时间字符串转换为当天的秒数
  * @param {string} timeStr - 格式为 "HH:MM" 的时间字符串
- * @returns {number} 从午夜开始的秒数
+ * @returns {number} 从午夜开始的秒数，如果格式无效则返回0
  */
 function timeToSeconds(timeStr) {
+    // 验证输入
+    if (!timeStr || typeof timeStr !== 'string') {
+        console.warn('timeToSeconds: 无效的时间字符串', timeStr);
+        return 0;
+    }
+    
+    // 验证格式 HH:MM
+    const timePattern = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/;
+    if (!timePattern.test(timeStr)) {
+        console.warn('timeToSeconds: 时间格式不正确，应为 HH:MM', timeStr);
+        return 0;
+    }
+    
     const parts = timeStr.split(':');
     const hours = parseInt(parts[0]) || 0;
     const minutes = parseInt(parts[1]) || 0;
