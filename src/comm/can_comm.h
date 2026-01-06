@@ -89,10 +89,12 @@ private:
     QQueue<TxItem> txQueue_;
     QTimer *txTimer_ = nullptr;
     int txBackoffMs_ = 0;
+    int txBackoffMultiplier_ = 0;  ///< 用于指数退避的乘数
 
     static constexpr int kMaxTxQueueSize = 512;
     static constexpr int kTxIntervalMs = 2;
     static constexpr int kTxBackoffMs = 10;
+    static constexpr int kMaxBackoffMultiplier = 5;  ///< 最大退避乘数 (10ms * 2^5 = 320ms)
 };
 
 }  // namespace comm
