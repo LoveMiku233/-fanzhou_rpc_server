@@ -773,6 +773,196 @@ void CoreContext::bindSensorStrategies(const QList<SensorStrategyConfig> &strate
     LOG_INFO(kLogSource, QStringLiteral("Bound %1 sensor strategies").arg(strategies.size()));
 }
 
+// 继电器策略相关实现
+int CoreContext::relayStrategyIntervalMs(const RelayStrategyConfig &config) const
+{
+    return qMax(1, config.intervalSec) * kMsPerSec;
+}
+
+QList<RelayStrategyConfig> CoreContext::relayStrategyStates() const
+{
+    return relayStrategyConfigs_;
+}
+
+void CoreContext::attachRelayStrategy(const RelayStrategyConfig &config)
+{
+    if (!config.enabled) return;
+    if (!relays.contains(static_cast<quint8>(config.nodeId))) return;
+
+    bool okAction = false;
+    const auto action = parseAction(config.action, &okAction);
+    if (!okAction) return;
+
+    QTimer *timer = relayStrategyTimers_.value(config.strategyId, nullptr);
+    if (!timer) {
+        timer = new QTimer(const_cast<CoreContext*>(this));
+        timer->setInterval(relayStrategyIntervalMs(config));
+
+        const int strategyId = config.strategyId;
+        const int targetNodeId = config.nodeId;
+        const quint8 channel = config.channel;
+        const QString strategyName = config.name;
+
+        connect(timer, &QTimer::timeout, this,
+                [this, targetNodeId, channel, strategyId, strategyName, action]() {
+            const QString reason =
+                QStringLiteral("auto-relay:%1")
+                    .arg(strategyName.isEmpty() ? QString::number(strategyId) : strategyName);
+            enqueueControl(static_cast<quint8>(targetNodeId), channel, action, reason);
+        });
+        relayStrategyTimers_.insert(config.strategyId, timer);
+    } else {
+        timer->setInterval(relayStrategyIntervalMs(config));
+    }
+
+    if (!config.autoStart && timer->isActive()) {
+        timer->stop();
+    }
+    if (config.autoStart && !timer->isActive()) {
+        timer->start();
+    }
+}
+
+bool CoreContext::createRelayStrategy(const RelayStrategyConfig &config, QString *error)
+{
+    // 检查策略ID是否已存在
+    for (const auto &existing : relayStrategyConfigs_) {
+        if (existing.strategyId == config.strategyId) {
+            if (error) *error = QStringLiteral("relay strategy id already exists");
+            return false;
+        }
+    }
+
+    // 检查设备是否存在
+    if (!relays.contains(static_cast<quint8>(config.nodeId))) {
+        if (error) *error = QStringLiteral("device not found");
+        return false;
+    }
+
+    // 添加策略配置
+    relayStrategyConfigs_.append(config);
+
+    // 挂载策略
+    if (config.enabled) {
+        attachRelayStrategy(config);
+    }
+
+    LOG_INFO(kLogSource,
+             QStringLiteral("Relay strategy created: id=%1, name=%2, nodeId=%3")
+                 .arg(config.strategyId)
+                 .arg(config.name)
+                 .arg(config.nodeId));
+    return true;
+}
+
+bool CoreContext::deleteRelayStrategy(int strategyId, QString *error)
+{
+    for (int i = 0; i < relayStrategyConfigs_.size(); ++i) {
+        if (relayStrategyConfigs_[i].strategyId == strategyId) {
+            // 停止定时器
+            if (auto *timer = relayStrategyTimers_.value(strategyId, nullptr)) {
+                timer->stop();
+                timer->deleteLater();
+                relayStrategyTimers_.remove(strategyId);
+            }
+
+            relayStrategyConfigs_.removeAt(i);
+            LOG_INFO(kLogSource, QStringLiteral("Relay strategy deleted: id=%1").arg(strategyId));
+            return true;
+        }
+    }
+
+    if (error) *error = QStringLiteral("relay strategy not found");
+    return false;
+}
+
+bool CoreContext::setRelayStrategyEnabled(int strategyId, bool enabled)
+{
+    for (auto &config : relayStrategyConfigs_) {
+        if (config.strategyId == strategyId) {
+            config.enabled = enabled;
+
+            if (enabled) {
+                attachRelayStrategy(config);
+            } else {
+                if (auto *timer = relayStrategyTimers_.value(strategyId, nullptr)) {
+                    timer->stop();
+                }
+            }
+
+            LOG_INFO(kLogSource,
+                     QStringLiteral("Relay strategy %1: id=%2")
+                         .arg(enabled ? "enabled" : "disabled")
+                         .arg(strategyId));
+            return true;
+        }
+    }
+    return false;
+}
+
+// 传感器触发继电器策略相关实现
+QList<SensorRelayStrategyConfig> CoreContext::sensorRelayStrategyStates() const
+{
+    return sensorRelayStrategyConfigs_;
+}
+
+bool CoreContext::createSensorRelayStrategy(const SensorRelayStrategyConfig &config, QString *error)
+{
+    // 检查策略ID是否已存在
+    for (const auto &existing : sensorRelayStrategyConfigs_) {
+        if (existing.strategyId == config.strategyId) {
+            if (error) *error = QStringLiteral("sensor relay strategy id already exists");
+            return false;
+        }
+    }
+
+    // 检查设备是否存在
+    if (!relays.contains(static_cast<quint8>(config.nodeId))) {
+        if (error) *error = QStringLiteral("device not found");
+        return false;
+    }
+
+    // 添加传感器触发继电器策略配置
+    sensorRelayStrategyConfigs_.append(config);
+
+    LOG_INFO(kLogSource,
+             QStringLiteral("Sensor relay strategy created: id=%1, name=%2, sensor=%3, nodeId=%4")
+                 .arg(config.strategyId)
+                 .arg(config.name)
+                 .arg(config.sensorType)
+                 .arg(config.nodeId));
+    return true;
+}
+
+bool CoreContext::deleteSensorRelayStrategy(int strategyId, QString *error)
+{
+    for (int i = 0; i < sensorRelayStrategyConfigs_.size(); ++i) {
+        if (sensorRelayStrategyConfigs_[i].strategyId == strategyId) {
+            sensorRelayStrategyConfigs_.removeAt(i);
+            LOG_INFO(kLogSource, QStringLiteral("Sensor relay strategy deleted: id=%1").arg(strategyId));
+            return true;
+        }
+    }
+
+    if (error) *error = QStringLiteral("sensor relay strategy not found");
+    return false;
+}
+
+bool CoreContext::setSensorRelayStrategyEnabled(int strategyId, bool enabled)
+{
+    for (auto &config : sensorRelayStrategyConfigs_) {
+        if (config.strategyId == strategyId) {
+            config.enabled = enabled;
+            LOG_INFO(kLogSource,
+                     QStringLiteral("Sensor relay strategy %1: id=%2")
+                         .arg(enabled ? "enabled" : "disabled")
+                         .arg(strategyId));
+            return true;
+        }
+    }
+    return false;
+}
+
 QStringList CoreContext::methodGroups() const
 {
     return {QStringLiteral("rpc.*"), QStringLiteral("sys.*"), QStringLiteral("can.*"),

@@ -341,14 +341,18 @@ void RpcRegistry::registerRelay()
         };
     });
 
-    // 获取所有继电器节点列表，包含在线状态
+    // 获取所有继电器节点列表，包含在线状态（按节点ID排序）
     dispatcher_->registerMethod(QStringLiteral("relay.nodes"),
                                  [this](const QJsonObject &) {
         const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        
+        // 获取所有节点ID并排序
+        QList<quint8> nodeIds = context_->relays.keys();
+        std::sort(nodeIds.begin(), nodeIds.end());
+        
         QJsonArray arr;
-        for (auto it = context_->relays.begin(); it != context_->relays.end(); ++it) {
-            const quint8 node = it.key();
-            auto *dev = it.value();
+        for (quint8 node : nodeIds) {
+            auto *dev = context_->relays.value(node, nullptr);
             const qint64 lastSeen = dev ? dev->lastSeenMs() : 0;
             
             qint64 ageMs = 0;
@@ -873,6 +877,216 @@ void RpcRegistry::registerAuto()
 
         if (!context_->setSensorStrategyEnabled(id, enabled))
             return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("sensor strategy not found"));
+        return QJsonObject{{kKeyOk, true}};
+    });
+
+    // 继电器策略列表（直接控制单个继电器，不需要分组）
+    dispatcher_->registerMethod(QStringLiteral("auto.relay.list"),
+                                 [this](const QJsonObject &) {
+        QJsonArray arr;
+        const auto configs = context_->relayStrategyStates();
+        for (const auto &config : configs) {
+            QJsonObject obj;
+            obj[QStringLiteral("id")] = config.strategyId;
+            obj[kKeyName] = config.name;
+            obj[QStringLiteral("nodeId")] = config.nodeId;
+            obj[kKeyChannel] = static_cast<int>(config.channel);
+            obj[kKeyAction] = config.action;
+            obj[kKeyIntervalSec] = config.intervalSec;
+            obj[kKeyEnabled] = config.enabled;
+            obj[kKeyAutoStart] = config.autoStart;
+            arr.append(obj);
+        }
+        return QJsonObject{{kKeyOk, true}, {kKeyStrategies, arr}};
+    });
+
+    // 创建继电器策略（定时直接控制单个继电器）
+    dispatcher_->registerMethod(QStringLiteral("auto.relay.create"),
+                                 [this](const QJsonObject &params) {
+        qint32 id = 0;
+        QString name;
+        qint32 nodeId = 0;
+        qint32 channel = 0;
+        QString action;
+        qint32 intervalSec = 60;
+        bool enabled = true;
+        bool autoStart = true;
+
+        if (!rpc::RpcHelpers::getI32(params, "id", id) || id <= 0)
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid id"));
+        if (!rpc::RpcHelpers::getString(params, "name", name))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing name"));
+        if (!rpc::RpcHelpers::getI32(params, "nodeId", nodeId) || nodeId < 1 || nodeId > 255)
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid nodeId (1-255)"));
+        if (!rpc::RpcHelpers::getI32(params, "channel", channel) || channel < 0 || channel > kMaxChannelId)
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("invalid channel (0-%1)").arg(kMaxChannelId));
+        if (!rpc::RpcHelpers::getString(params, "action", action))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing action"));
+
+        // 可选参数
+        rpc::RpcHelpers::getI32(params, "intervalSec", intervalSec);
+        rpc::RpcHelpers::getBool(params, "enabled", enabled, true);
+        rpc::RpcHelpers::getBool(params, "autoStart", autoStart, true);
+
+        RelayStrategyConfig config;
+        config.strategyId = id;
+        config.name = name;
+        config.nodeId = nodeId;
+        config.channel = static_cast<quint8>(channel);
+        config.action = action;
+        config.intervalSec = qMax(1, intervalSec);
+        config.enabled = enabled;
+        config.autoStart = autoStart;
+
+        QString error;
+        if (!context_->createRelayStrategy(config, &error))
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, error);
+        return QJsonObject{{kKeyOk, true}, {kKeyId, id}};
+    });
+
+    // 删除继电器策略
+    dispatcher_->registerMethod(QStringLiteral("auto.relay.delete"),
+                                 [this](const QJsonObject &params) {
+        qint32 id = 0;
+
+        if (!rpc::RpcHelpers::getI32(params, "id", id))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing id"));
+
+        QString error;
+        if (!context_->deleteRelayStrategy(id, &error))
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, error);
+        return QJsonObject{{kKeyOk, true}};
+    });
+
+    // 启用/禁用继电器策略
+    dispatcher_->registerMethod(QStringLiteral("auto.relay.enable"),
+                                 [this](const QJsonObject &params) {
+        qint32 id = 0;
+        bool enabled = true;
+
+        if (!rpc::RpcHelpers::getI32(params, "id", id))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing id"));
+        if (!params.contains(QStringLiteral("enabled")))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing enabled"));
+        if (!rpc::RpcHelpers::getBool(params, "enabled", enabled, true))
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterType, QStringLiteral("invalid enabled"));
+
+        if (!context_->setRelayStrategyEnabled(id, enabled))
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("relay strategy not found"));
+        return QJsonObject{{kKeyOk, true}};
+    });
+
+    // 传感器触发继电器策略列表
+    dispatcher_->registerMethod(QStringLiteral("auto.sensorRelay.list"),
+                                 [this](const QJsonObject &) {
+        QJsonArray arr;
+        const auto configs = context_->sensorRelayStrategyStates();
+        for (const auto &config : configs) {
+            QJsonObject obj;
+            obj[QStringLiteral("id")] = config.strategyId;
+            obj[kKeyName] = config.name;
+            obj[QStringLiteral("sensorType")] = config.sensorType;
+            obj[QStringLiteral("sensorNode")] = config.sensorNode;
+            obj[QStringLiteral("condition")] = config.condition;
+            obj[QStringLiteral("threshold")] = config.threshold;
+            obj[QStringLiteral("nodeId")] = config.nodeId;
+            obj[kKeyChannel] = config.channel;
+            obj[kKeyAction] = config.action;
+            obj[QStringLiteral("cooldownSec")] = config.cooldownSec;
+            obj[kKeyEnabled] = config.enabled;
+            arr.append(obj);
+        }
+        return QJsonObject{{kKeyOk, true}, {kKeyStrategies, arr}};
+    });
+
+    // 创建传感器触发继电器策略
+    dispatcher_->registerMethod(QStringLiteral("auto.sensorRelay.create"),
+                                 [this](const QJsonObject &params) {
+        qint32 id = 0;
+        QString name;
+        QString sensorType;
+        qint32 sensorNode = 0;
+        QString condition;
+        double threshold = 0.0;
+        qint32 nodeId = 0;
+        qint32 channel = 0;
+        QString action;
+        qint32 cooldownSec = 60;
+        bool enabled = true;
+
+        if (!rpc::RpcHelpers::getI32(params, "id", id) || id <= 0)
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid id"));
+        if (!rpc::RpcHelpers::getString(params, "name", name))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing name"));
+        if (!rpc::RpcHelpers::getString(params, "sensorType", sensorType))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing sensorType"));
+        if (!rpc::RpcHelpers::getI32(params, "sensorNode", sensorNode) || sensorNode <= 0)
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid sensorNode"));
+        if (!rpc::RpcHelpers::getString(params, "condition", condition))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing condition"));
+        if (!rpc::RpcHelpers::getI32(params, "nodeId", nodeId) || nodeId < 1 || nodeId > 255)
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid nodeId (1-255)"));
+        if (!rpc::RpcHelpers::getString(params, "action", action))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing action"));
+
+        // 获取阈值
+        if (params.contains(QStringLiteral("threshold"))) {
+            threshold = params.value(QStringLiteral("threshold")).toDouble();
+        }
+
+        // 可选参数
+        rpc::RpcHelpers::getI32(params, "channel", channel);
+        rpc::RpcHelpers::getI32(params, "cooldownSec", cooldownSec);
+        rpc::RpcHelpers::getBool(params, "enabled", enabled, true);
+
+        SensorRelayStrategyConfig config;
+        config.strategyId = id;
+        config.name = name;
+        config.sensorType = sensorType;
+        config.sensorNode = sensorNode;
+        config.condition = condition;
+        config.threshold = threshold;
+        config.nodeId = nodeId;
+        config.channel = channel;
+        config.action = action;
+        config.cooldownSec = qMax(0, cooldownSec);
+        config.enabled = enabled;
+
+        QString error;
+        if (!context_->createSensorRelayStrategy(config, &error))
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, error);
+        return QJsonObject{{kKeyOk, true}, {kKeyId, id}};
+    });
+
+    // 删除传感器触发继电器策略
+    dispatcher_->registerMethod(QStringLiteral("auto.sensorRelay.delete"),
+                                 [this](const QJsonObject &params) {
+        qint32 id = 0;
+
+        if (!rpc::RpcHelpers::getI32(params, "id", id))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing id"));
+
+        QString error;
+        if (!context_->deleteSensorRelayStrategy(id, &error))
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, error);
+        return QJsonObject{{kKeyOk, true}};
+    });
+
+    // 启用/禁用传感器触发继电器策略
+    dispatcher_->registerMethod(QStringLiteral("auto.sensorRelay.enable"),
+                                 [this](const QJsonObject &params) {
+        qint32 id = 0;
+        bool enabled = true;
+
+        if (!rpc::RpcHelpers::getI32(params, "id", id))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing id"));
+        if (!params.contains(QStringLiteral("enabled")))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing enabled"));
+        if (!rpc::RpcHelpers::getBool(params, "enabled", enabled, true))
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterType, QStringLiteral("invalid enabled"));
+
+        if (!context_->setSensorRelayStrategyEnabled(id, enabled))
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("sensor relay strategy not found"));
         return QJsonObject{{kKeyOk, true}};
     });
 }

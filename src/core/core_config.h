@@ -132,6 +132,40 @@ struct SensorStrategyConfig {
 };
 
 /**
+ * @brief 定时继电器策略配置
+ * 按间隔时间自动触发单个继电器控制（不需要分组）
+ */
+struct RelayStrategyConfig {
+    int strategyId = 0;          ///< 策略ID
+    QString name;                 ///< 策略名称
+    int nodeId = 0;              ///< 目标设备节点ID
+    quint8 channel = 0;          ///< 控制通道
+    QString action = QStringLiteral("stop");  ///< 控制动作
+    int intervalSec = 60;        ///< 执行间隔（秒）
+    bool enabled = true;         ///< 是否启用
+    bool autoStart = true;       ///< 是否自动启动
+};
+
+/**
+ * @brief 传感器触发继电器策略配置
+ * 当传感器数值满足阈值条件时，直接触发单个继电器控制
+ */
+struct SensorRelayStrategyConfig {
+    int strategyId = 0;          ///< 策略ID
+    QString name;                 ///< 策略名称
+    QString sensorType;          ///< 传感器类型
+    int sensorNode = 0;          ///< 传感器节点ID
+    QString condition;           ///< 阈值条件
+    double threshold = 0.0;      ///< 阈值
+    int nodeId = 0;              ///< 目标设备节点ID
+    int channel = 0;             ///< 控制通道
+    QString action = QStringLiteral("stop");  ///< 触发动作
+    int cooldownSec = 60;        ///< 冷却时间（秒）
+    bool enabled = true;         ///< 是否启用
+    qint64 lastTriggerMs = 0;    ///< 上次触发时间（内部使用）
+};
+
+/**
  * @brief 核心系统配置
  *
  * 管理控制系统的所有配置，包括RPC设置、CAN总线参数、设备列表和分组。

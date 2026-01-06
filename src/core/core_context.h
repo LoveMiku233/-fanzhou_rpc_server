@@ -207,6 +207,18 @@ public:
     bool setSensorStrategyEnabled(int strategyId, bool enabled);
     void checkSensorTriggers(const QString &sensorType, int sensorNode, double value);
 
+    // 继电器策略管理（直接控制单个继电器，不需要分组）
+    QList<RelayStrategyConfig> relayStrategyStates() const;
+    bool createRelayStrategy(const RelayStrategyConfig &config, QString *error = nullptr);
+    bool deleteRelayStrategy(int strategyId, QString *error = nullptr);
+    bool setRelayStrategyEnabled(int strategyId, bool enabled);
+
+    // 传感器触发继电器策略管理
+    QList<SensorRelayStrategyConfig> sensorRelayStrategyStates() const;
+    bool createSensorRelayStrategy(const SensorRelayStrategyConfig &config, QString *error = nullptr);
+    bool deleteSensorRelayStrategy(int strategyId, QString *error = nullptr);
+    bool setSensorRelayStrategyEnabled(int strategyId, bool enabled);
+
 private:
     bool initSystemSettings();
     bool initCan();
@@ -222,12 +234,17 @@ private:
     void bindSensorStrategies(const QList<SensorStrategyConfig> &strategies);
     void attachStrategiesForGroup(int groupId);
     void detachStrategiesForGroup(int groupId);
+    void attachRelayStrategy(const RelayStrategyConfig &config);
     int strategyIntervalMs(const AutoStrategyConfig &config) const;
+    int relayStrategyIntervalMs(const RelayStrategyConfig &config) const;
     bool evaluateSensorCondition(const QString &condition, double value, double threshold) const;
 
     QList<AutoStrategyConfig> strategyConfigs_;
     QList<SensorStrategyConfig> sensorStrategyConfigs_;  ///< 传感器策略配置列表
+    QList<RelayStrategyConfig> relayStrategyConfigs_;    ///< 继电器策略配置列表
+    QList<SensorRelayStrategyConfig> sensorRelayStrategyConfigs_;  ///< 传感器触发继电器策略列表
     QHash<int, QTimer *> strategyTimers_;
+    QHash<int, QTimer *> relayStrategyTimers_;  ///< 继电器策略定时器
 
     QQueue<ControlJob> controlQueue_;
     QHash<quint64, ControlJobResult> jobResults_;
