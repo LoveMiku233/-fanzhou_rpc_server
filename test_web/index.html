@@ -252,14 +252,71 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                     <h3 style="color: #333;">策略管理</h3>
                     <button onclick="refreshStrategyList()">🔄 刷新列表</button>
                 </div>
+
+                <!-- 创建定时策略 -->
+                <div style="background: #e3f2fd; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                    <h4 style="margin-bottom: 15px; color: #333;">⏱️ 创建定时策略</h4>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>策略ID</label>
+                            <input type="number" id="newStrategyId" value="1" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label>策略名称</label>
+                            <input type="text" id="newStrategyName" placeholder="例如: 定时通风">
+                        </div>
+                        <div class="form-group">
+                            <label>绑定分组ID</label>
+                            <input type="number" id="newStrategyGroupId" value="1" min="1">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>控制通道</label>
+                            <select id="newStrategyChannel">
+                                <option value="0">通道 0</option>
+                                <option value="1">通道 1</option>
+                                <option value="2">通道 2</option>
+                                <option value="3">通道 3</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>执行动作</label>
+                            <select id="newStrategyAction">
+                                <option value="stop">⏹️ 停止</option>
+                                <option value="fwd">▶️ 正转</option>
+                                <option value="rev">◀️ 反转</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>执行间隔（秒）</label>
+                            <input type="number" id="newStrategyInterval" value="60" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label>自动启动</label>
+                            <select id="newStrategyAutoStart">
+                                <option value="true">是</option>
+                                <option value="false">否</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="success" onclick="createTimerStrategy()">➕ 创建定时策略</button>
+                </div>
                 
-                <!-- 传感器绑定设置 -->
+                <!-- 传感器触发策略 -->
                 <div style="background: #fff3e0; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-                    <h4 style="margin-bottom: 15px; color: #333;">📡 传感器阈值设置</h4>
+                    <h4 style="margin-bottom: 15px; color: #333;">📡 传感器触发策略</h4>
+                    <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                        当传感器数值满足阈值条件时，自动触发分组控制动作。策略可与分组程序联动。
+                    </p>
                     <div class="form-row">
                         <div class="form-group">
                             <label>策略ID</label>
                             <input type="number" id="sensorStrategyId" value="1" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label>策略名称</label>
+                            <input type="text" id="sensorStrategyName" placeholder="例如: 高温报警">
                         </div>
                         <div class="form-group">
                             <label>传感器类型</label>
@@ -268,8 +325,16 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                                 <option value="humidity">💧 湿度传感器</option>
                                 <option value="light">💡 光照传感器</option>
                                 <option value="pressure">📊 压力传感器</option>
+                                <option value="soil_moisture">🌱 土壤湿度传感器</option>
+                                <option value="co2">🌫️ CO2传感器</option>
                             </select>
                         </div>
+                        <div class="form-group">
+                            <label>传感器节点ID</label>
+                            <input type="number" id="sensorNodeId" value="1" min="1" max="255">
+                        </div>
+                    </div>
+                    <div class="form-row">
                         <div class="form-group">
                             <label>阈值条件</label>
                             <select id="sensorCondition">
@@ -284,12 +349,22 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                             <label>阈值</label>
                             <input type="number" id="sensorThreshold" value="25" step="0.1">
                         </div>
-                    </div>
-                    <div class="form-row">
                         <div class="form-group">
                             <label>绑定分组ID</label>
                             <input type="number" id="sensorGroupId" value="1" min="1">
                         </div>
+                        <div class="form-group">
+                            <label>控制通道</label>
+                            <select id="sensorChannel">
+                                <option value="0">通道 0</option>
+                                <option value="1">通道 1</option>
+                                <option value="2">通道 2</option>
+                                <option value="3">通道 3</option>
+                                <option value="-1">所有通道</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
                         <div class="form-group">
                             <label>触发动作</label>
                             <select id="sensorAction">
@@ -298,11 +373,52 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                                 <option value="rev">◀️ 反转</option>
                             </select>
                         </div>
+                        <div class="form-group">
+                            <label>冷却时间（秒）</label>
+                            <input type="number" id="sensorCooldown" value="60" min="0" title="触发后等待时间，防止频繁触发">
+                        </div>
+                        <div class="form-group">
+                            <label>启用状态</label>
+                            <select id="sensorEnabled">
+                                <option value="true">启用</option>
+                                <option value="false">禁用</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="help-section" style="background: #fff; margin-top: 15px; padding: 15px;">
-                        <p style="color: #666; font-size: 13px;">
-                            ⚠️ 传感器阈值设置功能需要RPC服务端支持。当传感器数值满足条件时，将自动触发绑定分组的控制动作。
-                        </p>
+                    <div class="btn-group">
+                        <button class="success" onclick="createSensorStrategy()">➕ 创建传感器策略</button>
+                    </div>
+                </div>
+
+                <!-- 分组程序设置 -->
+                <div style="background: #e8f5e9; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                    <h4 style="margin-bottom: 15px; color: #333;">🔧 分组程序设置</h4>
+                    <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                        分组程序可绑定到特定通道，由传感器策略或定时策略自动触发控制。
+                    </p>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>分组ID</label>
+                            <input type="number" id="programGroupId" value="1" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label>设备节点ID</label>
+                            <input type="number" id="programNodeId" value="1" min="1" max="255">
+                        </div>
+                        <div class="form-group">
+                            <label>控制通道</label>
+                            <select id="programChannel">
+                                <option value="0">通道 0</option>
+                                <option value="1">通道 1</option>
+                                <option value="2">通道 2</option>
+                                <option value="3">通道 3</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="success" onclick="addChannelToGroup()">➕ 添加通道到分组</button>
+                        <button class="danger" onclick="removeChannelFromGroup()">➖ 移除通道</button>
+                        <button onclick="getGroupChannels()">🔍 查看分组通道</button>
                     </div>
                 </div>
 
@@ -317,6 +433,18 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                         <p style="font-size: 12px; margin-top: 10px;">请先连接服务器并点击"刷新列表"</p>
                     </div>
                     <div id="strategyListContent"></div>
+                </div>
+
+                <!-- 传感器策略列表 -->
+                <div class="data-list" id="sensorStrategyList" style="margin-top: 20px;">
+                    <div class="data-list-header">
+                        <span>传感器策略</span>
+                        <span>操作</span>
+                    </div>
+                    <div class="data-list-empty" id="sensorStrategyListEmpty">
+                        <p>暂无传感器策略</p>
+                    </div>
+                    <div id="sensorStrategyListContent"></div>
                 </div>
             </div>
 
@@ -354,7 +482,7 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
 
                 <!-- 分组控制 -->
                 <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #eee;">
-                    <h4 style="margin-bottom: 15px; color: #333;">�� 分组控制</h4>
+                    <h4 style="margin-bottom: 15px; color: #333;">📦 分组控制</h4>
                     <div class="form-row">
                         <div class="form-group">
                             <label>分组ID</label>
@@ -413,9 +541,19 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                         <li><code>group.delete</code> - 删除分组 <code>{"groupId": 1}</code></li>
                         <li><code>group.addDevice</code> - 添加设备到分组 <code>{"groupId": 1, "node": 1}</code></li>
                         <li><code>group.removeDevice</code> - 从分组移除设备 <code>{"groupId": 1, "node": 1}</code></li>
+                        <li><code>group.addChannel</code> - 添加通道到分组 <code>{"groupId": 1, "node": 1, "channel": 0}</code></li>
+                        <li><code>group.removeChannel</code> - 从分组移除通道 <code>{"groupId": 1, "node": 1, "channel": 0}</code></li>
+                        <li><code>group.getChannels</code> - 获取分组通道列表 <code>{"groupId": 1}</code></li>
                         <li><code>group.control</code> - 分组控制 <code>{"groupId": 1, "ch": 0, "action": "stop"}</code></li>
                         <li><code>control.queue.status</code> - 控制队列状态 (无参数)</li>
                         <li><code>auto.strategy.list</code> - 自动策略列表 (无参数)</li>
+                        <li><code>auto.strategy.create</code> - 创建策略 <code>{"id": 1, "name": "定时策略", "groupId": 1, "channel": 0, "action": "fwd", "intervalSec": 60}</code></li>
+                        <li><code>auto.strategy.delete</code> - 删除策略 <code>{"id": 1}</code></li>
+                        <li><code>auto.strategy.enable</code> - 启用/禁用策略 <code>{"id": 1, "enabled": true}</code></li>
+                        <li><code>auto.strategy.trigger</code> - 手动触发策略 <code>{"id": 1}</code></li>
+                        <li><code>auto.sensor.list</code> - 传感器策略列表 (无参数)</li>
+                        <li><code>auto.sensor.create</code> - 创建传感器策略 <code>{"id": 1, "name": "高温报警", "sensorType": "temperature", "sensorNode": 1, "condition": "gt", "threshold": 30, "groupId": 1, "channel": 0, "action": "fwd"}</code></li>
+                        <li><code>auto.sensor.delete</code> - 删除传感器策略 <code>{"id": 1}</code></li>
                     </ul>
                 </div>
             </div>

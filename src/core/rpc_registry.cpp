@@ -698,6 +698,180 @@ void RpcRegistry::registerAuto()
             return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("strategy not found or not attached"));
         return QJsonObject{{QStringLiteral("ok"), true}};
     });
+
+    // 创建定时策略
+    dispatcher_->registerMethod(QStringLiteral("auto.strategy.create"),
+                                 [this](const QJsonObject &params) {
+        qint32 id = 0;
+        QString name;
+        qint32 groupId = 0;
+        qint32 channel = 0;
+        QString action;
+        qint32 intervalSec = 60;
+        bool enabled = true;
+        bool autoStart = true;
+
+        if (!rpc::RpcHelpers::getI32(params, "id", id) || id <= 0)
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid id"));
+        if (!rpc::RpcHelpers::getString(params, "name", name))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing name"));
+        if (!rpc::RpcHelpers::getI32(params, "groupId", groupId) || groupId <= 0)
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid groupId"));
+        if (!rpc::RpcHelpers::getI32(params, "channel", channel) || channel < 0 || channel > 3)
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("invalid channel (0-3)"));
+        if (!rpc::RpcHelpers::getString(params, "action", action))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing action"));
+
+        // 可选参数
+        rpc::RpcHelpers::getI32(params, "intervalSec", intervalSec);
+        rpc::RpcHelpers::getBool(params, "enabled", enabled, true);
+        rpc::RpcHelpers::getBool(params, "autoStart", autoStart, true);
+
+        AutoStrategyConfig config;
+        config.strategyId = id;
+        config.name = name;
+        config.groupId = groupId;
+        config.channel = static_cast<quint8>(channel);
+        config.action = action;
+        config.intervalSec = qMax(1, intervalSec);
+        config.enabled = enabled;
+        config.autoStart = autoStart;
+
+        QString error;
+        if (!context_->createStrategy(config, &error))
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, error);
+        return QJsonObject{{kKeyOk, true}, {kKeyId, id}};
+    });
+
+    // 删除定时策略
+    dispatcher_->registerMethod(QStringLiteral("auto.strategy.delete"),
+                                 [this](const QJsonObject &params) {
+        qint32 id = 0;
+
+        if (!rpc::RpcHelpers::getI32(params, "id", id))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing id"));
+
+        QString error;
+        if (!context_->deleteStrategy(id, &error))
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, error);
+        return QJsonObject{{kKeyOk, true}};
+    });
+
+    // 传感器策略列表
+    dispatcher_->registerMethod(QStringLiteral("auto.sensor.list"),
+                                 [this](const QJsonObject &) {
+        QJsonArray arr;
+        const auto states = context_->sensorStrategyStates();
+        for (const auto &state : states) {
+            QJsonObject obj;
+            obj[QStringLiteral("id")] = state.config.strategyId;
+            obj[QStringLiteral("name")] = state.config.name;
+            obj[QStringLiteral("sensorType")] = state.config.sensorType;
+            obj[QStringLiteral("sensorNode")] = state.config.sensorNode;
+            obj[QStringLiteral("condition")] = state.config.condition;
+            obj[QStringLiteral("threshold")] = state.config.threshold;
+            obj[QStringLiteral("groupId")] = state.config.groupId;
+            obj[QStringLiteral("channel")] = state.config.channel;
+            obj[QStringLiteral("action")] = state.config.action;
+            obj[QStringLiteral("cooldownSec")] = state.config.cooldownSec;
+            obj[QStringLiteral("enabled")] = state.config.enabled;
+            obj[QStringLiteral("active")] = state.active;
+            arr.append(obj);
+        }
+        return QJsonObject{{kKeyOk, true}, {kKeyStrategies, arr}};
+    });
+
+    // 创建传感器策略
+    dispatcher_->registerMethod(QStringLiteral("auto.sensor.create"),
+                                 [this](const QJsonObject &params) {
+        qint32 id = 0;
+        QString name;
+        QString sensorType;
+        qint32 sensorNode = 0;
+        QString condition;
+        double threshold = 0.0;
+        qint32 groupId = 0;
+        qint32 channel = 0;
+        QString action;
+        qint32 cooldownSec = 60;
+        bool enabled = true;
+
+        if (!rpc::RpcHelpers::getI32(params, "id", id) || id <= 0)
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid id"));
+        if (!rpc::RpcHelpers::getString(params, "name", name))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing name"));
+        if (!rpc::RpcHelpers::getString(params, "sensorType", sensorType))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing sensorType"));
+        if (!rpc::RpcHelpers::getI32(params, "sensorNode", sensorNode) || sensorNode <= 0)
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid sensorNode"));
+        if (!rpc::RpcHelpers::getString(params, "condition", condition))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing condition"));
+
+        // 获取阈值
+        if (params.contains(QStringLiteral("threshold"))) {
+            threshold = params.value(QStringLiteral("threshold")).toDouble();
+        }
+
+        if (!rpc::RpcHelpers::getI32(params, "groupId", groupId) || groupId <= 0)
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid groupId"));
+        if (!rpc::RpcHelpers::getString(params, "action", action))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing action"));
+
+        // 可选参数
+        rpc::RpcHelpers::getI32(params, "channel", channel);
+        rpc::RpcHelpers::getI32(params, "cooldownSec", cooldownSec);
+        rpc::RpcHelpers::getBool(params, "enabled", enabled, true);
+
+        SensorStrategyConfig config;
+        config.strategyId = id;
+        config.name = name;
+        config.sensorType = sensorType;
+        config.sensorNode = sensorNode;
+        config.condition = condition;
+        config.threshold = threshold;
+        config.groupId = groupId;
+        config.channel = channel;
+        config.action = action;
+        config.cooldownSec = qMax(0, cooldownSec);
+        config.enabled = enabled;
+
+        QString error;
+        if (!context_->createSensorStrategy(config, &error))
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, error);
+        return QJsonObject{{kKeyOk, true}, {kKeyId, id}};
+    });
+
+    // 删除传感器策略
+    dispatcher_->registerMethod(QStringLiteral("auto.sensor.delete"),
+                                 [this](const QJsonObject &params) {
+        qint32 id = 0;
+
+        if (!rpc::RpcHelpers::getI32(params, "id", id))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing id"));
+
+        QString error;
+        if (!context_->deleteSensorStrategy(id, &error))
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, error);
+        return QJsonObject{{kKeyOk, true}};
+    });
+
+    // 启用/禁用传感器策略
+    dispatcher_->registerMethod(QStringLiteral("auto.sensor.enable"),
+                                 [this](const QJsonObject &params) {
+        qint32 id = 0;
+        bool enabled = true;
+
+        if (!rpc::RpcHelpers::getI32(params, "id", id))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing id"));
+        if (!params.contains(QStringLiteral("enabled")))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing enabled"));
+        if (!rpc::RpcHelpers::getBool(params, "enabled", enabled, true))
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterType, QStringLiteral("invalid enabled"));
+
+        if (!context_->setSensorStrategyEnabled(id, enabled))
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("sensor strategy not found"));
+        return QJsonObject{{kKeyOk, true}};
+    });
 }
 
 void RpcRegistry::registerDevice()
