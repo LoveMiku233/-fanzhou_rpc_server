@@ -235,7 +235,7 @@ void RpcRegistry::registerSystem()
         return QJsonObject{
             {QStringLiteral("ok"), true},
             {QStringLiteral("datetime"), time},
-            {QStringLiteral("timestamp"), QString::number(timestamp)}
+            {QStringLiteral("timestamp"), static_cast<double>(timestamp)}
         };
     });
 

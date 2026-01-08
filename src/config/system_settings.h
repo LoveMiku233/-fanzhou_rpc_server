@@ -43,6 +43,17 @@ public:
                        int timeoutMs = 5000);
 
     /**
+     * @brief 执行系统命令并返回成功状态（阻塞）
+     * @param program 程序名
+     * @param args 命令参数
+     * @param timeoutMs 超时（毫秒）
+     * @return 命令执行成功返回true（退出码为0）
+     */
+    bool runCommandWithStatus(const QString &program,
+                              const QStringList &args,
+                              int timeoutMs = 5000);
+
+    /**
      * @brief 关闭CAN接口
      * @param interface 接口名
      * @return 成功返回true

@@ -57,6 +57,47 @@ QString SystemSettings::runCommand(const QString &program,
     return output;
 }
 
+bool SystemSettings::runCommandWithStatus(const QString &program,
+                                           const QStringList &args,
+                                           int timeoutMs)
+{
+    QProcess process;
+    process.setProgram(program);
+    process.setArguments(args);
+    process.start();
+
+    if (!process.waitForStarted(1000)) {
+        emit errorOccurred(QStringLiteral("Failed to start: %1").arg(program));
+        return false;
+    }
+
+    if (!process.waitForFinished(timeoutMs)) {
+        process.kill();
+        process.waitForFinished(1000);
+        emit errorOccurred(
+            QStringLiteral("Timeout running: %1 %2").arg(program, args.join(' ')));
+        return false;
+    }
+
+    const int exitCode = process.exitCode();
+    if (exitCode != 0) {
+        const QByteArray stdErr = process.readAllStandardError();
+        emit errorOccurred(
+            QStringLiteral("Command failed (%1): %2 %3 | stderr=%4")
+                .arg(exitCode)
+                .arg(program, args.join(' '),
+                     QString::fromLocal8Bit(stdErr)));
+        return false;
+    }
+
+    const QByteArray stdOut = process.readAllStandardOutput();
+    const QString output = QString::fromLocal8Bit(stdOut).trimmed();
+    if (!output.isEmpty()) {
+        emit commandOutput(output);
+    }
+    return true;
+}
+
 bool SystemSettings::canDown(const QString &interface)
 {
     runCommand(QStringLiteral("ip"),
@@ -211,10 +252,8 @@ bool SystemSettings::setSystemTime(const QString &datetime)
 bool SystemSettings::saveHardwareClock()
 {
     // 使用hwclock -w将系统时间写入硬件时钟
-    const QString result = runCommand(QStringLiteral("hwclock"),
-                                       {QStringLiteral("-w")});
-    // hwclock -w 成功时可能没有输出，检查是否有错误
-    return true;
+    return runCommandWithStatus(QStringLiteral("hwclock"),
+                                 {QStringLiteral("-w")});
 }
 
 QString SystemSettings::readHardwareClock()
@@ -247,9 +286,9 @@ bool SystemSettings::pingTest(const QString &host, int count, int timeoutSec)
     args << QStringLiteral("-W") << QString::number(timeoutSec);
     args << host;
 
-    const QString result = runCommand(QStringLiteral("ping"), args,
-                                       (timeoutSec + 2) * 1000);
-    return !result.isEmpty();
+    // 使用 runCommandWithStatus 检查退出码，ping成功返回0，失败返回非0
+    return runCommandWithStatus(QStringLiteral("ping"), args,
+                                 (timeoutSec + 2) * 1000);
 }
 
 bool SystemSettings::setStaticIp(const QString &interface,
@@ -269,19 +308,24 @@ bool SystemSettings::setStaticIp(const QString &interface,
     if (!netmask.isEmpty()) {
         ifArgs << QStringLiteral("netmask") << netmask;
     }
-    runCommand(QStringLiteral("ifconfig"), ifArgs);
+    
+    bool success = runCommandWithStatus(QStringLiteral("ifconfig"), ifArgs);
+    if (!success) {
+        return false;
+    }
 
     // 设置网关（如果提供）
     if (!gateway.isEmpty()) {
         // 先删除默认路由，再添加新的
+        // 删除默认路由可能失败（如果不存在），这不是错误
         runCommand(QStringLiteral("route"),
                    {QStringLiteral("del"), QStringLiteral("default")});
-        runCommand(QStringLiteral("route"),
+        success = runCommandWithStatus(QStringLiteral("route"),
                    {QStringLiteral("add"), QStringLiteral("default"),
                     QStringLiteral("gw"), gateway});
     }
 
-    return true;
+    return success;
 }
 
 }  // namespace config
