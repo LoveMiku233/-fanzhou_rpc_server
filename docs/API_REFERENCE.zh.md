@@ -606,17 +606,24 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 
 | 方法名 | 参数 | 返回值 | 说明 |
 |--------|------|--------|------|
-| `relay.control` | `{node, ch, action}` | `{ok, jobId, queued}` | 控制继电器 |
+| `relay.control` | `{node, ch, action}` | `{ok, jobId, queued, txQueueSize, warning?}` | 控制继电器 |
 | `relay.query` | `{node, ch}` | `{ok}` | 查询状态 |
-| `relay.status` | `{node, ch}` | 通道状态对象 | 获取通道详情 |
-| `relay.statusAll` | `{node}` | 所有通道状态 | 获取节点所有通道 |
+| `relay.status` | `{node, ch}` | 通道状态对象（包含online、ageMs、diagnostic?） | 获取通道详情 |
+| `relay.statusAll` | `{node}` | 所有通道状态（包含online、ageMs、diagnostic?、txQueueSize?） | 获取节点所有通道 |
 | `relay.nodes` | 无 | 节点列表 | 获取所有节点 |
-| `relay.queryAll` | 无 | `{ok, queriedDevices}` | 批量查询所有设备 |
+| `relay.queryAll` | 无 | `{ok, queriedDevices, txQueueSize, warning?}` | 批量查询所有设备 |
 
 **参数说明**：
 - `node`: 节点ID (1-255)，支持数字或字符串
 - `ch`: 通道号 (0-3)，支持数字或字符串
 - `action`: 动作 ("stop" / "fwd" / "rev")
+
+**诊断字段**：
+- `txQueueSize`: CAN发送队列中待发送的帧数，数值过大表示CAN总线拥堵
+- `warning`: 当队列拥堵时返回警告信息
+- `diagnostic`: 当设备离线或从未响应时返回诊断信息，帮助排查问题
+- `online`: 设备是否在线（30秒内有响应）
+- `ageMs`: 设备上次响应距今的毫秒数，-1表示从未响应
 
 ### 分组方法
 
@@ -822,6 +829,7 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 | 1.0.0 | 2024-01 | 初始版本 |
 | 1.0.1 | 2026-01 | 修复：channel参数支持字符串类型 |
 | 1.0.2 | 2026-01 | 新增：can.status方法，sys.info增加canOpened/canTxQueueSize字段，改进CAN诊断 |
+| 1.0.3 | 2026-01 | 改进：relay.control/status/statusAll/queryAll增加txQueueSize和diagnostic字段，帮助诊断CAN总线拥堵和设备离线问题 |
 
 ---
 
