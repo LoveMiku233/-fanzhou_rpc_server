@@ -293,6 +293,18 @@ void RpcRegistry::registerRelay()
         if (result.executedImmediately) {
             obj[QStringLiteral("success")] = result.success;
         }
+
+        // Add CAN TX queue status for diagnostics - helps client detect congestion
+        if (context_->canBus) {
+            const int txQueueSize = context_->canBus->txQueueSize();
+            obj[QStringLiteral("txQueueSize")] = txQueueSize;
+            // Warn if queue is getting full (> 10 frames pending)
+            if (txQueueSize > 10) {
+                obj[QStringLiteral("warning")] = QStringLiteral(
+                    "CAN TX queue congested (%1 pending). Check CAN bus connection.").arg(txQueueSize);
+            }
+        }
+
         return obj;
     });
 
@@ -326,14 +338,30 @@ void RpcRegistry::registerRelay()
             return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("unknown node"));
 
         const auto status = dev->lastStatus(channel);
-        return QJsonObject{
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        const qint64 lastSeen = dev->lastSeenMs();
+        qint64 ageMs = 0;
+        bool online = false;
+        calcDeviceOnlineStatus(lastSeen, now, ageMs, online);
+
+        QJsonObject result{
             {QStringLiteral("ok"), true},
             {QStringLiteral("channel"), static_cast<int>(status.channel)},
             {QStringLiteral("statusByte"), static_cast<int>(status.statusByte)},
             {QStringLiteral("currentA"), static_cast<double>(status.currentA)},
             {QStringLiteral("mode"), static_cast<int>(device::RelayProtocol::modeBits(status.statusByte))},
-            {QStringLiteral("phaseLost"), device::RelayProtocol::phaseLost(status.statusByte)}
+            {QStringLiteral("phaseLost"), device::RelayProtocol::phaseLost(status.statusByte)},
+            {kKeyOnline, online},
+            {kKeyAgeMs, (ageMs >= 0) ? static_cast<double>(ageMs) : QJsonValue()}
         };
+
+        // Add diagnostic info when device is offline
+        if (!online && lastSeen == 0) {
+            result[QStringLiteral("diagnostic")] = QStringLiteral(
+                "Device never responded. Status values are defaults.");
+        }
+
+        return result;
     });
 
     dispatcher_->registerMethod(QStringLiteral("relay.statusAll"),
@@ -365,13 +393,35 @@ void RpcRegistry::registerRelay()
         bool online = false;
         calcDeviceOnlineStatus(lastSeen, now, ageMs, online);
 
-        return QJsonObject{
+        QJsonObject result{
             {kKeyOk, true},
             {kKeyNode, static_cast<int>(node)},
             {kKeyOnline, online},
             {kKeyAgeMs, (ageMs >= 0) ? static_cast<double>(ageMs) : QJsonValue()},
             {kKeyChannels, channels}
         };
+
+        // Add diagnostic info when device is offline or never responded
+        if (!online) {
+            QString diagnostic;
+            if (lastSeen == 0) {
+                diagnostic = QStringLiteral(
+                    "Device never responded. Status values are defaults. "
+                    "Check: 1) CAN bus connection 2) Device power 3) Node ID 4) Bitrate");
+            } else {
+                diagnostic = QStringLiteral(
+                    "Device offline (last seen %1ms ago). Status may be stale. "
+                    "Check CAN bus connection.").arg(ageMs);
+            }
+            result[QStringLiteral("diagnostic")] = diagnostic;
+
+            // Also add CAN TX queue size to help diagnose transmission issues
+            if (context_->canBus) {
+                result[QStringLiteral("txQueueSize")] = context_->canBus->txQueueSize();
+            }
+        }
+
+        return result;
     });
 
     // 获取所有继电器节点列表，包含在线状态（按节点ID排序）
@@ -411,10 +461,25 @@ void RpcRegistry::registerRelay()
                 queriedCount++;
             }
         }
-        return QJsonObject{
+
+        QJsonObject result{
             {kKeyOk, true},
             {QStringLiteral("queriedDevices"), queriedCount}
         };
+
+        // Add CAN TX queue size for diagnostics
+        if (context_->canBus) {
+            const int txQueueSize = context_->canBus->txQueueSize();
+            result[QStringLiteral("txQueueSize")] = txQueueSize;
+            // Warn if queue is congested - queries may not reach devices
+            if (txQueueSize > 10) {
+                result[QStringLiteral("warning")] = QStringLiteral(
+                    "CAN TX queue congested (%1 pending). Queries may be delayed. "
+                    "Check CAN bus connection.").arg(txQueueSize);
+            }
+        }
+
+        return result;
     });
 }
 
