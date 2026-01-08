@@ -103,6 +103,9 @@ int main(int argc, char *argv[])
 
     // 3. 初始化核心上下文
     fanzhou::core::CoreContext context;
+    // 设置配置文件路径，使config.save RPC方法可以正确保存配置
+    context.configFilePath = configPath;
+    
     LOG_INFO(kLogSource, QStringLiteral("Initializing core context..."));
     if (!context.init(config)) {
         LOG_CRITICAL(kLogSource, QStringLiteral("Core context initialization failed"));

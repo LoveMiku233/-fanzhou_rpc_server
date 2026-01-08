@@ -1387,3 +1387,146 @@ document.addEventListener('DOMContentLoaded', function() {
         setTimeout(connect, 500);
     }
 });
+
+/* ========================================================
+ * 配置保存功能
+ * 
+ * 解决"Web页面修改无法保存"的问题
+ * 
+ * 问题原因：
+ * 之前通过Web页面（如创建分组、添加设备等）做的修改只保存在服务器内存中，
+ * 服务重启后会丢失。
+ * 
+ * 解决方案：
+ * 调用config.save RPC方法将配置持久化保存到服务器的配置文件中。
+ * ======================================================== */
+
+/**
+ * 保存配置到服务器
+ * 将当前所有修改（设备、分组、策略等）持久化保存到配置文件
+ * 
+ * 使用方法：
+ * 1. 在Web页面进行修改（创建分组、添加设备等）
+ * 2. 点击"💾 保存配置"按钮
+ * 3. 服务重启后修改依然有效
+ */
+function saveConfig() {
+    callMethod('config.save', {}, function(response) {
+        if (response.result && response.result.ok === true) {
+            log('info', '✅ 配置保存成功！修改已持久化到配置文件。');
+            alert('配置保存成功！\n\n您的修改已保存到服务器配置文件，服务重启后仍然有效。');
+        } else if (response.result && response.result.ok === false) {
+            // 处理result存在但ok为false的情况
+            const msg = response.result.message || '操作未成功';
+            log('error', `❌ 配置保存失败: ${msg}`);
+            alert('配置保存失败！\n\n' + msg);
+        } else if (response.error) {
+            log('error', `❌ 配置保存失败: ${response.error.message || '未知错误'}`);
+            alert('配置保存失败！\n\n' + (response.error.message || '未知错误'));
+        } else {
+            log('error', '❌ 配置保存失败: 未知响应格式');
+            alert('配置保存失败！\n\n未知响应格式');
+        }
+    });
+}
+
+/**
+ * 重新加载配置
+ * 从服务器配置文件重新加载配置，会覆盖当前未保存的修改
+ */
+function reloadConfig() {
+    if (!confirm('确定要重新加载配置吗？\n\n这将会覆盖当前未保存的修改。')) {
+        return;
+    }
+    
+    callMethod('config.reload', {}, function(response) {
+        if (response.result && response.result.ok === true) {
+            log('info', '✅ 配置已重新加载');
+            // 刷新各列表
+            refreshDeviceList();
+            refreshGroupList();
+            refreshStrategyList();
+        } else if (response.result && response.result.ok === false) {
+            // 处理result存在但ok为false的情况
+            const msg = response.result.message || '操作未成功';
+            log('error', `❌ 重新加载失败: ${msg}`);
+        } else if (response.error) {
+            log('error', `❌ 重新加载失败: ${response.error.message || '未知错误'}`);
+        } else {
+            log('error', '❌ 重新加载失败: 未知响应格式');
+        }
+    });
+}
+
+/**
+ * 获取完整配置信息
+ * 显示当前运行时的完整配置
+ */
+function getConfig() {
+    callMethod('config.get', {}, function(response) {
+        if (response.result && response.result.ok !== undefined) {
+            // 验证结果包含有效数据
+            log('info', '当前配置信息:\n' + JSON.stringify(response.result, null, 2));
+        } else if (response.result) {
+            // 结果存在但格式不确定
+            log('info', '当前配置信息:\n' + JSON.stringify(response.result, null, 2));
+        } else if (response.error) {
+            log('error', `获取配置失败: ${response.error.message || '未知错误'}`);
+        } else {
+            log('error', '获取配置失败: 未知响应格式');
+        }
+    });
+}
+
+/**
+ * 检查CAN总线状态
+ * 
+ * 诊断"CAN无法发送"的问题
+ * 
+ * 常见原因：
+ * 1. CAN总线未正确连接
+ * 2. 波特率设置不匹配
+ * 3. 缺少120Ω终端电阻
+ * 4. CAN_H/CAN_L接线问题
+ * 5. CAN接口未启动（需要执行 ip link set can0 up）
+ */
+function checkCanStatus() {
+    callMethod('can.status', {}, function(response) {
+        if (response.result) {
+            const result = response.result;
+            // 安全获取字段值，处理可能不存在的情况
+            const canInterface = result.interface || 'can0';
+            const bitrate = result.bitrate || '未知';
+            const opened = result.opened === true;
+            const txQueueSize = typeof result.txQueueSize === 'number' ? result.txQueueSize : 0;
+            
+            let message = '=== CAN总线状态 ===\n';
+            message += `接口: ${canInterface}\n`;
+            message += `波特率: ${bitrate}\n`;
+            message += `已打开: ${opened ? '✅ 是' : '❌ 否'}\n`;
+            message += `发送队列: ${txQueueSize}个待发送帧\n`;
+            
+            if (result.diagnostic) {
+                message += '\n⚠️ 诊断信息:\n' + result.diagnostic;
+            }
+            
+            if (!opened) {
+                message += '\n\n❗ CAN总线未打开，无法发送控制命令！';
+                message += '\n请检查：';
+                message += '\n1. CAN接口是否存在：ip link show ' + canInterface;
+                message += '\n2. CAN接口是否启动：ip link set ' + canInterface + ' up';
+                message += '\n3. 波特率是否正确：canconfig ' + canInterface + ' bitrate ' + bitrate;
+            } else if (txQueueSize > 10) {
+                message += '\n\n⚠️ 发送队列拥堵，可能原因：';
+                message += '\n1. CAN总线未连接设备（无ACK）';
+                message += '\n2. 波特率不匹配';
+                message += '\n3. 缺少终端电阻（120Ω）';
+                message += '\n4. 接线问题（CAN_H/CAN_L）';
+            }
+            
+            log('info', message);
+        } else if (response.error) {
+            log('error', `获取CAN状态失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}

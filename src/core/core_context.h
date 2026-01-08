@@ -9,6 +9,7 @@
 #define FANZHOU_CORE_CONTEXT_H
 
 #include <QHash>
+#include <QJsonObject>
 #include <QObject>
 #include <QQueue>
 #include <QTimer>
@@ -160,6 +161,43 @@ public:
 
     // 服务器配置
     quint16 rpcPort = 12345;
+
+    // 配置文件路径（用于保存配置）
+    QString configFilePath;
+
+    // 配置管理
+    /**
+     * @brief 将当前运行时配置保存到文件
+     * 
+     * 将当前内存中的设备、分组、策略等配置持久化保存到配置文件。
+     * 这解决了"Web页面修改无法保存"的问题。
+     * 
+     * @param path 配置文件路径（可选，为空时使用configFilePath）
+     * @param error 错误信息输出
+     * @return 成功返回true
+     */
+    bool saveConfig(const QString &path = QString(), QString *error = nullptr);
+
+    /**
+     * @brief 从文件重新加载配置
+     * 
+     * 重新加载配置文件，会覆盖当前运行时配置。
+     * 注意：这会丢失未保存的修改。
+     * 
+     * @param path 配置文件路径（可选，为空时使用configFilePath）
+     * @param error 错误信息输出
+     * @return 成功返回true
+     */
+    bool reloadConfig(const QString &path = QString(), QString *error = nullptr);
+
+    /**
+     * @brief 导出当前配置为JSON对象
+     * 
+     * 用于通过RPC获取当前配置的完整内容。
+     * 
+     * @return 当前配置的JSON对象
+     */
+    QJsonObject exportConfig() const;
 
     // 分组管理
     bool createGroup(int groupId, const QString &name, QString *error = nullptr);

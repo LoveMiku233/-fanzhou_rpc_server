@@ -140,6 +140,7 @@ void RpcRegistry::registerAll()
     registerAuto();
     registerDevice();
     registerScreen();
+    registerConfig();  // 添加配置保存/加载RPC方法
 }
 
 void RpcRegistry::registerBase()
@@ -1531,6 +1532,73 @@ void RpcRegistry::registerScreen()
         }
 
         return QJsonObject{{kKeyOk, true}};
+    });
+}
+
+// ===================== 配置管理RPC方法 =====================
+
+/**
+ * @brief 注册配置保存/加载相关的RPC方法
+ * 
+ * 这组方法解决了"Web页面修改无法保存"的问题：
+ * 
+ * 问题原因：
+ * 之前通过RPC调用（如group.create、device.add等）创建的设备、分组、
+ * 策略等配置只保存在内存中，服务重启后会丢失。
+ * 
+ * 解决方案：
+ * 提供config.save方法，让用户可以将内存中的配置持久化到配置文件。
+ * 
+ * 使用方法：
+ * 1. 通过Web页面或RPC修改配置（创建分组、添加设备等）
+ * 2. 调用config.save将配置保存到文件
+ * 3. 下次服务启动时会自动加载保存的配置
+ */
+void RpcRegistry::registerConfig()
+{
+    // 获取当前配置
+    dispatcher_->registerMethod(QStringLiteral("config.get"),
+                                 [this](const QJsonObject &) {
+        QJsonObject config = context_->exportConfig();
+        config[kKeyOk] = true;
+        return config;
+    });
+
+    // 保存配置到文件
+    // 调用此方法将当前运行时的配置（设备、分组、策略等）保存到配置文件
+    // 这样服务重启后可以保留这些修改
+    dispatcher_->registerMethod(QStringLiteral("config.save"),
+                                 [this](const QJsonObject &params) {
+        QString path;
+        rpc::RpcHelpers::getString(params, "path", path);  // 可选参数
+        
+        QString error;
+        if (!context_->saveConfig(path, &error)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, error);
+        }
+        
+        return QJsonObject{
+            {kKeyOk, true},
+            {kKeyMessage, QStringLiteral("配置已保存")}
+        };
+    });
+
+    // 从文件重新加载配置
+    // 注意：这会覆盖当前未保存的修改
+    dispatcher_->registerMethod(QStringLiteral("config.reload"),
+                                 [this](const QJsonObject &params) {
+        QString path;
+        rpc::RpcHelpers::getString(params, "path", path);  // 可选参数
+        
+        QString error;
+        if (!context_->reloadConfig(path, &error)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, error);
+        }
+        
+        return QJsonObject{
+            {kKeyOk, true},
+            {kKeyMessage, QStringLiteral("配置已重新加载")}
+        };
     });
 }
 

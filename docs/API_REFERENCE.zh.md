@@ -774,6 +774,42 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 | `auto.sensorRelay.delete` | `{id}` | `{ok}` | 删除策略 |
 | `auto.sensorRelay.enable` | `{id, enabled}` | `{ok}` | 启用/禁用策略 |
 
+### 配置管理方法
+
+这组方法解决了"Web页面修改无法保存"的问题。
+
+> **问题原因**：之前通过RPC调用创建的设备、分组、策略等配置只保存在内存中，服务重启后会丢失。
+>
+> **解决方案**：调用 `config.save` 方法将配置持久化到配置文件。
+
+| 方法名 | 参数 | 返回值 | 说明 |
+|--------|------|--------|------|
+| `config.get` | 无 | 完整配置对象 | 获取当前运行时配置 |
+| `config.save` | `{path?}` | `{ok, message}` | **保存配置到文件** |
+| `config.reload` | `{path?}` | `{ok, message}` | 从文件重新加载配置 |
+
+**参数说明**：
+- `path`: 可选，指定配置文件路径。默认使用服务启动时的配置文件路径
+
+**使用示例**：
+
+```bash
+# 1. 创建分组
+{"jsonrpc":"2.0","id":1,"method":"group.create","params":{"groupId":1,"name":"测试分组"}}
+
+# 2. 添加设备到分组
+{"jsonrpc":"2.0","id":2,"method":"group.addDevice","params":{"groupId":1,"node":1}}
+
+# 3. 保存配置（重要！不调用此方法修改会在重启后丢失）
+{"jsonrpc":"2.0","id":3,"method":"config.save","params":{}}
+
+# 4. 查看当前配置
+{"jsonrpc":"2.0","id":4,"method":"config.get","params":{}}
+
+# 5. 重新加载配置（会覆盖未保存的修改）
+{"jsonrpc":"2.0","id":5,"method":"config.reload","params":{}}
+```
+
 ---
 
 ## 错误码参考
@@ -902,6 +938,7 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 | 1.0.2 | 2026-01 | 新增：can.status方法，sys.info增加canOpened/canTxQueueSize字段，改进CAN诊断 |
 | 1.0.3 | 2026-01 | 改进：relay.control/status/statusAll/queryAll增加txQueueSize和diagnostic字段，帮助诊断CAN总线拥堵和设备离线问题 |
 | 1.0.4 | 2026-01 | 新增：RTC时间管理（sys.time.*）和网络配置（sys.network.*）RPC方法 |
+| 1.0.5 | 2026-01 | 新增：配置管理RPC方法（config.get/save/reload），解决"Web页面修改无法保存"问题；改进CAN诊断信息 |
 
 ---
 

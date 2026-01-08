@@ -52,6 +52,7 @@ private:
     void registerAuto();
     void registerDevice();
     void registerScreen();
+    void registerConfig();  ///< 配置保存/加载相关方法
 
     CoreContext *context_;
     rpc::JsonRpcDispatcher *dispatcher_;
