@@ -7,7 +7,9 @@
 #include "utils/logger.h"
 #include "utils/utils.h"
 
+#include <QDateTime>
 #include <QDebug>
+#include <QProcess>
 
 #include <cerrno>
 #include <cstring>
@@ -131,6 +133,8 @@ void CanComm::close()
     txBackoffMultiplier_ = 0;
     txDiagLogged_ = false;
     txConsecutiveMaxBackoffCount_ = 0;
+    // 注意：不重置 droppedFrameCount_、txResetAttemptCount_ 和 lastResetTimeMs_
+    // 以便在重新打开时继续追踪状态
 
     emit closed();
 }
@@ -206,10 +210,11 @@ void CanComm::onTxPump()
                       .arg(canIdWithoutFlags, 0, 16)
                       .arg(item.frame.can_dlc));
         txQueue_.dequeue();
-        // 成功发送后重置退避乘数和诊断标志
+        // 成功发送后重置退避乘数、诊断标志和丢帧计数
         txBackoffMultiplier_ = 0;
         txDiagLogged_ = false;
         txConsecutiveMaxBackoffCount_ = 0;
+        droppedFrameCount_ = 0;  // 成功发送，重置丢帧计数
         return;
     }
 
@@ -261,6 +266,23 @@ void CanComm::onTxPump()
             txBackoffMs_ = 0;
             txConsecutiveMaxBackoffCount_ = 0;
             txDiagLogged_ = false;
+
+            // 增加丢帧计数
+            ++droppedFrameCount_;
+
+            // 如果丢帧次数超过阈值，尝试重置CAN接口
+            // 这可以解决因总线状态异常导致的持续发送失败问题
+            if (droppedFrameCount_ >= kResetThreshold) {
+                LOG_WARNING(kLogSource,
+                            QStringLiteral("连续丢帧%1次，尝试重置CAN接口以恢复通信...")
+                                .arg(droppedFrameCount_));
+                if (tryResetInterface()) {
+                    droppedFrameCount_ = 0;
+                    LOG_INFO(kLogSource, QStringLiteral("CAN接口重置成功，通信已恢复"));
+                } else {
+                    LOG_ERROR(kLogSource, QStringLiteral("CAN接口重置失败，通信可能仍然受阻"));
+                }
+            }
         }
         return;
     }
@@ -314,6 +336,109 @@ void CanComm::onReadable()
 
     if (readNotifier_) {
         readNotifier_->setEnabled(true);
+    }
+}
+
+bool CanComm::tryResetInterface()
+{
+    // 防止重入
+    if (resetInProgress_) {
+        LOG_DEBUG(kLogSource, QStringLiteral("接口重置正在进行中，跳过"));
+        return false;
+    }
+
+    // 检查冷却时间
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (lastResetTimeMs_ > 0 && (now - lastResetTimeMs_) < kResetCooldownMs) {
+        LOG_DEBUG(kLogSource,
+                  QStringLiteral("接口重置冷却中，剩余%1ms")
+                      .arg(kResetCooldownMs - (now - lastResetTimeMs_)));
+        return false;
+    }
+
+    // 检查重置次数限制
+    if (txResetAttemptCount_ >= kMaxResetAttempts) {
+        LOG_ERROR(kLogSource,
+                  QStringLiteral("已达到最大接口重置次数限制(%1次)，停止尝试。"
+                                 "请手动检查CAN总线连接和配置。")
+                      .arg(kMaxResetAttempts));
+        return false;
+    }
+
+    resetInProgress_ = true;
+    ++txResetAttemptCount_;
+    lastResetTimeMs_ = now;
+
+    LOG_INFO(kLogSource,
+             QStringLiteral("开始重置CAN接口 %1 (第%2次尝试)")
+                 .arg(config_.interface)
+                 .arg(txResetAttemptCount_));
+
+    // 1. 关闭当前socket
+    close();
+
+    // 2. 使用 ip link set down 关闭接口
+    {
+        QProcess process;
+        process.setProgram(QStringLiteral("ip"));
+        process.setArguments({QStringLiteral("link"), QStringLiteral("set"),
+                              config_.interface, QStringLiteral("down")});
+        process.start();
+        if (!process.waitForFinished(kProcessTimeoutMs)) {
+            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 down 超时").arg(config_.interface));
+            resetInProgress_ = false;
+            return false;
+        }
+        if (process.exitCode() != 0) {
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("ip link set %1 down 失败: %2")
+                            .arg(config_.interface)
+                            .arg(QString::fromUtf8(process.readAllStandardError())));
+            // 继续尝试，因为接口可能已经是down状态
+        } else {
+            LOG_DEBUG(kLogSource, QStringLiteral("CAN接口 %1 已关闭").arg(config_.interface));
+        }
+    }
+
+    // 3. 使用 ip link set up 重新启动接口
+    {
+        QProcess process;
+        process.setProgram(QStringLiteral("ip"));
+        process.setArguments({QStringLiteral("link"), QStringLiteral("set"),
+                              config_.interface, QStringLiteral("up")});
+        process.start();
+        if (!process.waitForFinished(kProcessTimeoutMs)) {
+            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 up 超时").arg(config_.interface));
+            resetInProgress_ = false;
+            return false;
+        }
+        if (process.exitCode() != 0) {
+            LOG_ERROR(kLogSource,
+                      QStringLiteral("ip link set %1 up 失败: %2")
+                          .arg(config_.interface)
+                          .arg(QString::fromUtf8(process.readAllStandardError())));
+            resetInProgress_ = false;
+            return false;
+        }
+        LOG_DEBUG(kLogSource, QStringLiteral("CAN接口 %1 已重新启动").arg(config_.interface));
+    }
+
+    // 4. 重新打开socket
+    const bool reopened = open();
+    resetInProgress_ = false;
+
+    if (reopened) {
+        LOG_INFO(kLogSource,
+                 QStringLiteral("CAN接口 %1 重置完成，socket已重新打开")
+                     .arg(config_.interface));
+        // 重置成功后，重置重试计数器（允许未来再次重试）
+        txResetAttemptCount_ = 0;
+        return true;
+    } else {
+        LOG_ERROR(kLogSource,
+                  QStringLiteral("CAN接口 %1 重置后无法重新打开socket")
+                      .arg(config_.interface));
+        return false;
     }
 }
 

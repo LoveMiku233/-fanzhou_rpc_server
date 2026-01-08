@@ -104,12 +104,31 @@ private:
     int txBackoffMultiplier_ = 0;  ///< 用于指数退避的乘数
     bool txDiagLogged_ = false;    ///< 是否已输出TX诊断信息（避免重复输出）
     int txConsecutiveMaxBackoffCount_ = 0;  ///< 连续达到最大退避的次数
+    int txResetAttemptCount_ = 0;  ///< 接口重置尝试次数
+    bool resetInProgress_ = false; ///< 接口重置是否正在进行中
+    int droppedFrameCount_ = 0;    ///< 连续丢帧计数
+    qint64 lastResetTimeMs_ = 0;   ///< 最后一次接口重置的时间戳
 
     static constexpr int kMaxTxQueueSize = 512;
     static constexpr int kTxIntervalMs = 2;
     static constexpr int kTxBackoffMs = 10;
     static constexpr int kMaxBackoffMultiplier = 5;  ///< 最大退避乘数 (10ms * 2^5 = 320ms)
-    static constexpr int kMaxConsecutiveMaxBackoffRetries = 10;  ///< 最大连续重试次数，超过后丢弃帧
+    static constexpr int kMaxConsecutiveMaxBackoffRetries = 10;  ///< 最大连续重试次数，超过后尝试重置接口
+    static constexpr int kResetThreshold = 3;  ///< 丢弃帧次数阈值，超过后触发接口重置
+    static constexpr int kMaxResetAttempts = 3;  ///< 最大接口重置尝试次数
+    static constexpr int kResetCooldownMs = 30000;  ///< 接口重置冷却时间（毫秒）
+    static constexpr int kProcessTimeoutMs = 5000;  ///< 外部进程执行超时（毫秒）
+
+    /**
+     * @brief 尝试重置CAN接口以恢复通信
+     * 
+     * 当TX buffer持续满载时，通过 ip link set down/up 命令刷新接口，
+     * 然后重新打开socket。这可以解决因目标设备断开连接或总线问题
+     * 导致的发送卡死问题。
+     * 
+     * @return 重置成功返回true
+     */
+    bool tryResetInterface();
 };
 
 }  // namespace comm
