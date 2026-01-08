@@ -384,7 +384,7 @@ bool CanComm::tryResetInterface()
         process.setArguments({QStringLiteral("link"), QStringLiteral("set"),
                               config_.interface, QStringLiteral("down")});
         process.start();
-        if (!process.waitForFinished(5000)) {
+        if (!process.waitForFinished(kProcessTimeoutMs)) {
             LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 down 超时").arg(config_.interface));
             resetInProgress_ = false;
             return false;
@@ -393,7 +393,7 @@ bool CanComm::tryResetInterface()
             LOG_WARNING(kLogSource,
                         QStringLiteral("ip link set %1 down 失败: %2")
                             .arg(config_.interface)
-                            .arg(QString::fromLocal8Bit(process.readAllStandardError())));
+                            .arg(QString::fromUtf8(process.readAllStandardError())));
             // 继续尝试，因为接口可能已经是down状态
         } else {
             LOG_DEBUG(kLogSource, QStringLiteral("CAN接口 %1 已关闭").arg(config_.interface));
@@ -407,7 +407,7 @@ bool CanComm::tryResetInterface()
         process.setArguments({QStringLiteral("link"), QStringLiteral("set"),
                               config_.interface, QStringLiteral("up")});
         process.start();
-        if (!process.waitForFinished(5000)) {
+        if (!process.waitForFinished(kProcessTimeoutMs)) {
             LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 up 超时").arg(config_.interface));
             resetInProgress_ = false;
             return false;
@@ -416,7 +416,7 @@ bool CanComm::tryResetInterface()
             LOG_ERROR(kLogSource,
                       QStringLiteral("ip link set %1 up 失败: %2")
                           .arg(config_.interface)
-                          .arg(QString::fromLocal8Bit(process.readAllStandardError())));
+                          .arg(QString::fromUtf8(process.readAllStandardError())));
             resetInProgress_ = false;
             return false;
         }

@@ -117,6 +117,7 @@ private:
     static constexpr int kResetThreshold = 3;  ///< 丢弃帧次数阈值，超过后触发接口重置
     static constexpr int kMaxResetAttempts = 3;  ///< 最大接口重置尝试次数
     static constexpr int kResetCooldownMs = 30000;  ///< 接口重置冷却时间（毫秒）
+    static constexpr int kProcessTimeoutMs = 5000;  ///< 外部进程执行超时（毫秒）
 
     /**
      * @brief 尝试重置CAN接口以恢复通信
