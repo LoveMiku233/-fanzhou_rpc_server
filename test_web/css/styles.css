@@ -956,4 +956,21 @@ button:disabled {
     .log-sidebar .log-container {
         max-height: 300px;
     }
+
+    /* 小屏幕设备卡片响应式调整 */
+    .device-cards {
+        grid-template-columns: 1fr;
+    }
+
+    .channel-control-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .device-card-actions {
+        flex-direction: column;
+    }
+
+    .device-card-actions button {
+        min-width: auto;
+    }
 }

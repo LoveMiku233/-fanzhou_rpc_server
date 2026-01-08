@@ -588,7 +588,7 @@ function removeDeviceFromGroup() {
  * 
  * 关于"无法控制设备"的问题：
  * 如果控制命令发送后设备没有响应，可能的原因：
- * 1. CAN总线未打开 - 检查 sys.info 返回的 canOpened 字段
+ * 1. CAN总线未打开 - 检查 can.status 返回的 opened 字段
  * 2. 设备未正确连接 - 检查CAN线路和终端电阻
  * 3. 波特率不匹配 - 检查CAN配置
  * 可以点击"CAN诊断"按钮查看详细信息
@@ -830,8 +830,16 @@ function updateDeviceOnlineStatus(nodeId, online) {
 function controlDeviceAll(nodeId, action) {
     log('info', `控制设备 ${nodeId} 全部通道: ${action}`);
     
+    // 从缓存中获取设备的通道数量
+    // 如果缓存中没有，使用默认值 DEFAULT_CHANNEL_COUNT
+    let channelCount = DEFAULT_CHANNEL_COUNT;
+    const device = deviceListCache.find(d => (d.nodeId || d.node || d) === nodeId);
+    if (device && device.channels) {
+        channelCount = device.channels;
+    }
+    
     // 逐个通道发送控制命令
-    for (let ch = 0; ch < DEFAULT_CHANNEL_COUNT; ch++) {
+    for (let ch = 0; ch < channelCount; ch++) {
         callMethod('relay.control', {
             node: nodeId,
             ch: ch,
