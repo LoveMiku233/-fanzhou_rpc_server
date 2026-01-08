@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
 
     // 设置应用程序字体
     QFont defaultFont = app.font();
-    defaultFont.setFamily(QStringLiteral("Microsoft YaHei,SimHei,Sans"));
+    defaultFont.setFamily(QStringLiteral("Ubuntu,DejaVu Sans,Noto Sans CJK SC,Sans-serif"));
     defaultFont.setPointSize(10);
     app.setFont(defaultFont);
 

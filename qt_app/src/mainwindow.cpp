@@ -8,7 +8,6 @@
 #include "device_widget.h"
 #include "group_widget.h"
 #include "relay_control_widget.h"
-#include "connection_dialog.h"
 
 #include <QMenuBar>
 #include <QToolBar>

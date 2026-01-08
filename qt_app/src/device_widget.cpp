@@ -270,6 +270,9 @@ void DeviceWidget::updateDeviceStatus(int nodeId, const QJsonObject &status)
             // 更新通道状态
             QJsonObject channels = status.value(QStringLiteral("channels")).toObject();
             
+            // First, collect all channel modes for channels 2 and 3
+            QString ch2Text, ch3Text;
+            
             for (int ch = 0; ch < 4; ++ch) {
                 QString chKey = QString::number(ch);
                 if (channels.contains(chKey)) {
@@ -284,22 +287,34 @@ void DeviceWidget::updateDeviceStatus(int nodeId, const QJsonObject &status)
                         default: modeText = QStringLiteral("? 未知"); break;
                     }
 
-                    int colIndex = (ch < 2) ? (4 + ch) : 6;
-                    QTableWidgetItem *chItem = deviceTable_->item(row, colIndex);
-                    if (chItem) {
-                        if (ch >= 2) {
-                            // 合并显示通道2和3
-                            QString existing = chItem->text();
-                            if (ch == 2) {
-                                chItem->setText(QStringLiteral("CH2:%1").arg(modeText));
-                            } else {
-                                chItem->setText(QStringLiteral("%1 | CH3:%2").arg(existing, modeText));
-                            }
-                        } else {
+                    if (ch < 2) {
+                        // Update columns 4 and 5 for channels 0 and 1
+                        QTableWidgetItem *chItem = deviceTable_->item(row, 4 + ch);
+                        if (chItem) {
                             chItem->setText(modeText);
                         }
+                    } else if (ch == 2) {
+                        ch2Text = modeText;
+                    } else {
+                        ch3Text = modeText;
                     }
                 }
+            }
+            
+            // Update column 6 for channels 2 and 3 combined
+            QTableWidgetItem *ch23Item = deviceTable_->item(row, 6);
+            if (ch23Item) {
+                QString combinedText;
+                if (!ch2Text.isEmpty() && !ch3Text.isEmpty()) {
+                    combinedText = QStringLiteral("CH2:%1 | CH3:%2").arg(ch2Text, ch3Text);
+                } else if (!ch2Text.isEmpty()) {
+                    combinedText = QStringLiteral("CH2:%1").arg(ch2Text);
+                } else if (!ch3Text.isEmpty()) {
+                    combinedText = QStringLiteral("CH3:%1").arg(ch3Text);
+                } else {
+                    combinedText = QStringLiteral("-");
+                }
+                ch23Item->setText(combinedText);
             }
             
             break;
