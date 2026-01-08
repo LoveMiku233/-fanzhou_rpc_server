@@ -947,6 +947,11 @@ function showNodeProperties(node) {
         html += '</div>';
     }
     
+    // 如果是从服务器加载的策略节点，添加策略管理按钮
+    if (node.strategyId) {
+        html += getStrategyManagementButtons(node);
+    }
+    
     html += `
         </div>
         <div class="properties-actions" style="flex-direction: column; gap: 8px;">
@@ -1110,10 +1115,10 @@ function editNodeConfig(node) {
 /**
  * 从蓝图生成策略
  * 遍历所有触发器节点及其连接，生成对应的RPC策略
+ * 修改：使用getNextStrategyId自动生成唯一ID，解决"每个分组只能添加一个策略"的问题
  */
 function generateStrategiesFromBlueprint() {
     const strategies = [];
-    let strategyId = 1;
     
     // 找出所有触发器节点
     const triggerNodes = blueprintNodes.filter(n => 
@@ -1128,9 +1133,20 @@ function generateStrategiesFromBlueprint() {
             .filter(n => n && (n.type === 'action-relay' || n.type === 'action-group'));
         
         connectedActions.forEach(action => {
-            const strategy = buildStrategyFromNodes(strategyId++, trigger, action);
+            // 根据触发器类型获取下一个可用的策略ID
+            const strategyType = trigger.type === 'trigger-sensor' ? 'sensor' : 'timer';
+            const strategyId = getNextStrategyId(strategyType);
+            
+            const strategy = buildStrategyFromNodes(strategyId, trigger, action);
             if (strategy) {
                 strategies.push(strategy);
+                
+                // 更新已使用的策略ID到缓存，防止重复
+                if (strategyType === 'timer') {
+                    loadedTimerStrategies.push({ id: strategyId });
+                } else {
+                    loadedSensorStrategies.push({ id: strategyId });
+                }
             }
         });
     });
@@ -1238,8 +1254,44 @@ function buildStrategyFromNodes(id, trigger, action) {
  * 部署蓝图策略到服务器
  * 将生成的策略通过RPC调用发送到服务器
  * 支持间隔执行和每日定时两种触发模式
+ * 修改：先获取服务器现有策略，确保ID不冲突
  */
 function deployBlueprintStrategies() {
+    logBlueprint('info', '正在检查服务器现有策略...');
+    
+    // 先获取服务器现有的策略，确保ID不冲突
+    let loadedCount = 0;
+    const totalCalls = 2;
+    
+    function onLoaded() {
+        loadedCount++;
+        if (loadedCount >= totalCalls) {
+            // 所有策略都已加载，现在生成和部署
+            doDeployStrategies();
+        }
+    }
+    
+    // 获取定时策略
+    callMethod('auto.strategy.list', {}, function(response) {
+        if (response.result && response.result.strategies) {
+            loadedTimerStrategies = response.result.strategies;
+        }
+        onLoaded();
+    });
+    
+    // 获取传感器策略
+    callMethod('auto.sensor.list', {}, function(response) {
+        if (response.result && response.result.strategies) {
+            loadedSensorStrategies = response.result.strategies;
+        }
+        onLoaded();
+    });
+}
+
+/**
+ * 实际执行策略部署
+ */
+function doDeployStrategies() {
     const strategies = generateStrategiesFromBlueprint();
     
     if (strategies.length === 0) {
@@ -1248,7 +1300,7 @@ function deployBlueprintStrategies() {
         return;
     }
     
-    logBlueprint('info', `准备部署 ${strategies.length} 个策略...`);
+    logBlueprint('info', `准备部署 ${strategies.length} 个策略（同一分组可添加多个策略）...`);
     
     strategies.forEach(strategy => {
         if (strategy.type === 'timer') {
@@ -1276,7 +1328,7 @@ function deployBlueprintStrategies() {
                     const triggerDesc = strategy.triggerType === 'daily' ? 
                         `每日 ${strategy.dailyTime}` : 
                         `每 ${strategy.intervalSec}秒`;
-                    logBlueprint('info', `✓ 定时策略 "${strategy.name}" 部署成功（${triggerDesc}）`);
+                    logBlueprint('info', `✓ 定时策略 "${strategy.name}" (ID:${strategy.id}) 部署成功（${triggerDesc}）`);
                 } else if (response.error) {
                     logBlueprint('error', `✗ 策略 "${strategy.name}" 部署失败: ${response.error.message}`);
                 }
@@ -1552,8 +1604,436 @@ function uploadBlueprint() {
 }
 
 /* ========================================================
- * 日志功能
+ * 策略管理功能 - 读取和管理服务器上的策略
  * ======================================================== */
+
+// 已加载的策略缓存
+let loadedTimerStrategies = [];
+let loadedSensorStrategies = [];
+
+/**
+ * 从服务器读取现有策略并在画布上显示
+ * 这解决了"策略管理太复杂"的问题，允许用户在蓝图编辑器中统一管理策略
+ */
+function loadExistingStrategies() {
+    // 清空当前画布（需要用户确认）
+    if (blueprintNodes.length > 0) {
+        if (!confirm('读取策略将清空当前画布。继续？')) {
+            return;
+        }
+    }
+    
+    // 强制清空（不再询问）
+    clearBlueprintSilent();
+    
+    logBlueprint('info', '正在从服务器读取策略...');
+    
+    let loadedCount = 0;
+    let totalCalls = 2;  // 定时策略和传感器策略
+    
+    function checkAllLoaded() {
+        loadedCount++;
+        if (loadedCount >= totalCalls) {
+            logBlueprint('info', `策略读取完成：${loadedTimerStrategies.length} 个定时策略，${loadedSensorStrategies.length} 个传感器策略`);
+            layoutStrategyNodes();
+        }
+    }
+    
+    // 读取定时策略
+    callMethod('auto.strategy.list', {}, function(response) {
+        if (response.result && response.result.strategies) {
+            loadedTimerStrategies = response.result.strategies;
+            loadedTimerStrategies.forEach((strategy, index) => {
+                createStrategyNode('timer', strategy, index);
+            });
+        }
+        checkAllLoaded();
+    });
+    
+    // 读取传感器策略
+    callMethod('auto.sensor.list', {}, function(response) {
+        if (response.result && response.result.strategies) {
+            loadedSensorStrategies = response.result.strategies;
+            loadedSensorStrategies.forEach((strategy, index) => {
+                createStrategyNode('sensor', strategy, index);
+            });
+        }
+        checkAllLoaded();
+    });
+}
+
+/**
+ * 静默清空蓝图（不询问用户）
+ */
+function clearBlueprintSilent() {
+    // 移除所有节点DOM
+    document.querySelectorAll('.blueprint-node').forEach(el => el.remove());
+    
+    // 移除所有连线
+    const svg = blueprintCanvas ? blueprintCanvas.querySelector('.connection-layer') : null;
+    if (svg) {
+        svg.innerHTML = '';
+    }
+    
+    // 清空数据
+    blueprintNodes = [];
+    blueprintConnections = [];
+    selectedNode = null;
+    nodeIdCounter = 1;
+    loadedTimerStrategies = [];
+    loadedSensorStrategies = [];
+    
+    hideNodeProperties();
+    updateEmptyHint();
+}
+
+/**
+ * 根据服务器策略数据创建策略节点
+ * @param {string} strategyType - 策略类型: 'timer' 或 'sensor'
+ * @param {object} strategyData - 服务器返回的策略数据
+ * @param {number} index - 策略在列表中的索引（用于布局）
+ */
+function createStrategyNode(strategyType, strategyData, index) {
+    const row = Math.floor(index / 2);
+    const col = index % 2;
+    
+    if (strategyType === 'timer') {
+        // 创建定时触发器节点
+        const triggerX = 50 + col * 450;
+        const triggerY = 50 + row * 200;
+        
+        const triggerNode = createNodeSilent('trigger-time', triggerX, triggerY);
+        if (triggerNode) {
+            triggerNode.config.intervalSec = strategyData.intervalSec || 60;
+            triggerNode.config.autoStart = strategyData.autoStart !== false;
+            triggerNode.config.triggerMode = strategyData.dailyTime ? 'daily' : 'interval';
+            if (strategyData.dailyTime) {
+                triggerNode.config.dailyTime = strategyData.dailyTime;
+            }
+            // 存储策略ID用于后续操作
+            triggerNode.strategyId = strategyData.id;
+            triggerNode.strategyType = 'timer';
+            triggerNode.strategyEnabled = strategyData.enabled !== false;
+            triggerNode.strategyName = strategyData.name;
+            updateNodeContent(triggerNode);
+        }
+        
+        // 创建分组控制动作节点
+        const actionX = triggerX + 200;
+        const actionY = triggerY;
+        
+        const actionNode = createNodeSilent('action-group', actionX, actionY);
+        if (actionNode) {
+            actionNode.config.groupId = strategyData.groupId;
+            actionNode.config.channel = strategyData.channel;
+            actionNode.config.action = strategyData.action || 'stop';
+            updateNodeContent(actionNode);
+        }
+        
+        // 创建连线
+        if (triggerNode && actionNode) {
+            createConnectionSilent(triggerNode.id, actionNode.id);
+        }
+    } else if (strategyType === 'sensor') {
+        // 创建传感器触发器节点
+        const triggerX = 50 + col * 450;
+        const triggerY = 300 + row * 200;  // 传感器策略在定时策略下方
+        
+        const triggerNode = createNodeSilent('trigger-sensor', triggerX, triggerY);
+        if (triggerNode) {
+            triggerNode.config.sensorType = strategyData.sensorType || 'temperature';
+            triggerNode.config.sensorNode = strategyData.sensorNode || 1;
+            triggerNode.config.condition = strategyData.condition || 'gt';
+            triggerNode.config.threshold = strategyData.threshold || 25;
+            triggerNode.config.cooldownSec = strategyData.cooldownSec || 60;
+            // 存储策略ID用于后续操作
+            triggerNode.strategyId = strategyData.id;
+            triggerNode.strategyType = 'sensor';
+            triggerNode.strategyEnabled = strategyData.enabled !== false;
+            triggerNode.strategyName = strategyData.name;
+            updateNodeContent(triggerNode);
+        }
+        
+        // 创建分组控制动作节点
+        const actionX = triggerX + 200;
+        const actionY = triggerY;
+        
+        const actionNode = createNodeSilent('action-group', actionX, actionY);
+        if (actionNode) {
+            actionNode.config.groupId = strategyData.groupId;
+            actionNode.config.channel = strategyData.channel;
+            actionNode.config.action = strategyData.action || 'stop';
+            updateNodeContent(actionNode);
+        }
+        
+        // 创建连线
+        if (triggerNode && actionNode) {
+            createConnectionSilent(triggerNode.id, actionNode.id);
+        }
+    }
+}
+
+/**
+ * 静默创建节点（不选中）
+ */
+function createNodeSilent(type, x, y) {
+    const nodeType = NODE_TYPES[type];
+    if (!nodeType) {
+        console.error('未知节点类型:', type);
+        return null;
+    }
+    
+    // 创建节点数据对象
+    const node = {
+        id: 'node_' + (nodeIdCounter++),
+        type: type,
+        x: x,
+        y: y,
+        config: {}
+    };
+    
+    // 初始化默认配置值
+    if (nodeType.config) {
+        for (const [key, cfg] of Object.entries(nodeType.config)) {
+            node.config[key] = cfg.default;
+        }
+    }
+    
+    // 添加到节点列表
+    blueprintNodes.push(node);
+    
+    // 渲染节点DOM元素
+    renderNode(node);
+    
+    // 隐藏空状态提示
+    updateEmptyHint();
+    
+    return node;
+}
+
+/**
+ * 静默创建连线（不提示）
+ */
+function createConnectionSilent(sourceNodeId, targetNodeId) {
+    const connection = {
+        id: 'conn_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+        sourceId: sourceNodeId,
+        sourcePort: 'trigger',
+        targetId: targetNodeId,
+        targetPort: 'trigger'
+    };
+    
+    blueprintConnections.push(connection);
+    
+    // 延迟渲染连线，确保节点已渲染完成
+    setTimeout(() => {
+        renderConnection(connection);
+    }, 50);
+}
+
+/**
+ * 布局策略节点
+ * 读取策略后重新整理节点布局
+ */
+function layoutStrategyNodes() {
+    // 布局已在 createStrategyNode 中完成
+    updateEmptyHint();
+}
+
+/**
+ * 获取下一个可用的策略ID
+ * 解决"每个分组只能添加一个策略"的问题 - 实际上是因为策略ID冲突
+ * @param {string} strategyType - 策略类型: 'timer' 或 'sensor'
+ * @returns {number} 下一个可用的策略ID
+ */
+function getNextStrategyId(strategyType) {
+    let maxId = 0;
+    
+    if (strategyType === 'timer') {
+        // 检查已加载的定时策略
+        loadedTimerStrategies.forEach(s => {
+            if (s.id > maxId) maxId = s.id;
+        });
+        // 也检查画布上的节点
+        blueprintNodes.forEach(n => {
+            if (n.strategyType === 'timer' && n.strategyId > maxId) {
+                maxId = n.strategyId;
+            }
+        });
+    } else if (strategyType === 'sensor') {
+        // 检查已加载的传感器策略
+        loadedSensorStrategies.forEach(s => {
+            if (s.id > maxId) maxId = s.id;
+        });
+        // 也检查画布上的节点
+        blueprintNodes.forEach(n => {
+            if (n.strategyType === 'sensor' && n.strategyId > maxId) {
+                maxId = n.strategyId;
+            }
+        });
+    }
+    
+    return maxId + 1;
+}
+
+/**
+ * 扩展节点属性面板，显示策略管理选项
+ * 当节点是从服务器加载的策略时，显示启用/禁用/删除按钮
+ */
+function getStrategyManagementButtons(node) {
+    if (!node.strategyId) return '';
+    
+    const enableBtn = node.strategyEnabled ?
+        `<button class="warning" onclick="toggleStrategyFromBlueprint('${node.id}')" title="禁用此策略">⏸️ 禁用</button>` :
+        `<button class="success" onclick="toggleStrategyFromBlueprint('${node.id}')" title="启用此策略">▶️ 启用</button>`;
+    
+    // 转义策略名称以防止XSS攻击
+    const safeStrategyName = node.strategyName ? escapeHtmlBlueprint(node.strategyName) : '';
+    
+    return `
+        <div class="strategy-management" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
+            <h5 style="margin-bottom: 10px; color: #666;">📋 服务器策略管理</h5>
+            <p style="font-size: 12px; color: #999; margin-bottom: 10px;">
+                策略ID: ${node.strategyId} | ${node.strategyEnabled ? '✅ 已启用' : '❌ 已禁用'}
+                ${safeStrategyName ? '<br>名称: ' + safeStrategyName : ''}
+            </p>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                ${enableBtn}
+                <button class="secondary" onclick="triggerStrategyFromBlueprint('${node.id}')" title="立即执行一次">🎯 触发</button>
+                <button class="danger" onclick="deleteStrategyFromBlueprint('${node.id}')" title="从服务器删除">🗑️ 删除</button>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * 切换策略启用状态
+ */
+function toggleStrategyFromBlueprint(nodeId) {
+    const node = blueprintNodes.find(n => n.id === nodeId);
+    if (!node || !node.strategyId) return;
+    
+    const newEnabled = !node.strategyEnabled;
+    const method = node.strategyType === 'sensor' ? 'auto.sensor.enable' : 'auto.strategy.enable';
+    
+    callMethod(method, {
+        id: node.strategyId,
+        enabled: newEnabled
+    }, function(response) {
+        if (response.result && response.result.ok) {
+            node.strategyEnabled = newEnabled;
+            logBlueprint('info', `策略 ${node.strategyId} 已${newEnabled ? '启用' : '禁用'}`);
+            // 刷新属性面板
+            if (selectedNode && selectedNode.id === nodeId) {
+                showNodeProperties(node);
+            }
+        } else if (response.error) {
+            logBlueprint('error', `操作失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 触发策略
+ */
+function triggerStrategyFromBlueprint(nodeId) {
+    const node = blueprintNodes.find(n => n.id === nodeId);
+    if (!node || !node.strategyId) return;
+    
+    // 只有定时策略支持手动触发
+    if (node.strategyType !== 'timer') {
+        logBlueprint('warning', '传感器策略不支持手动触发');
+        return;
+    }
+    
+    callMethod('auto.strategy.trigger', {
+        id: node.strategyId
+    }, function(response) {
+        if (response.result && response.result.ok) {
+            logBlueprint('info', `策略 ${node.strategyId} 已触发`);
+        } else if (response.error) {
+            logBlueprint('error', `触发失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 删除策略
+ */
+function deleteStrategyFromBlueprint(nodeId) {
+    const node = blueprintNodes.find(n => n.id === nodeId);
+    if (!node || !node.strategyId) return;
+    
+    const strategyName = node.strategyName || `策略${node.strategyId}`;
+    if (!confirm(`确定要从服务器删除 "${strategyName}" 吗？\n\n此操作不可撤销！`)) {
+        return;
+    }
+    
+    const method = node.strategyType === 'sensor' ? 'auto.sensor.delete' : 'auto.strategy.delete';
+    
+    callMethod(method, {
+        id: node.strategyId
+    }, function(response) {
+        if (response.result && response.result.ok) {
+            logBlueprint('info', `策略 ${node.strategyId} 已从服务器删除`);
+            // 从画布删除节点（静默，不再确认）
+            deleteNodeSilent(nodeId);
+        } else if (response.error) {
+            logBlueprint('error', `删除失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 静默删除节点（不询问用户）
+ */
+function deleteNodeSilent(nodeId) {
+    // 从数组中移除
+    const index = blueprintNodes.findIndex(n => n.id === nodeId);
+    if (index !== -1) {
+        blueprintNodes.splice(index, 1);
+    }
+    
+    // 移除相关连线
+    blueprintConnections = blueprintConnections.filter(conn => {
+        if (conn.sourceId === nodeId || conn.targetId === nodeId) {
+            const lineEl = document.getElementById(conn.id);
+            if (lineEl) lineEl.remove();
+            return false;
+        }
+        return true;
+    });
+    
+    // 移除DOM元素
+    const nodeEl = document.getElementById(nodeId);
+    if (nodeEl) {
+        nodeEl.remove();
+    }
+    
+    // 如果是选中的节点，清除选择
+    if (selectedNode && selectedNode.id === nodeId) {
+        selectedNode = null;
+        hideNodeProperties();
+    }
+    
+    updateEmptyHint();
+}
+
+/* ========================================================
+ * 日志和工具函数
+ * ======================================================== */
+
+/**
+ * HTML转义 - 防止XSS攻击
+ * @param {string} text - 原始文本
+ * @returns {string} 转义后的文本
+ */
+function escapeHtmlBlueprint(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
 
 /**
  * 蓝图编辑器日志

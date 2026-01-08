@@ -1222,6 +1222,42 @@ function timeToSeconds(timeStr) {
 }
 
 /**
+ * 自动填充策略ID
+ * 从服务器获取现有策略列表，找到下一个可用的ID
+ * 解决"每个分组只能添加一个策略"的问题 - 实际上是因为策略ID冲突
+ */
+function autoFillStrategyId() {
+    callMethod('auto.strategy.list', {}, function(response) {
+        let maxId = 0;
+        if (response.result && response.result.strategies) {
+            response.result.strategies.forEach(s => {
+                if (s.id > maxId) maxId = s.id;
+            });
+        }
+        const nextId = maxId + 1;
+        document.getElementById('newStrategyId').value = nextId;
+        log('info', `下一个可用策略ID: ${nextId}`);
+    });
+}
+
+/**
+ * 自动填充传感器策略ID
+ */
+function autoFillSensorStrategyId() {
+    callMethod('auto.sensor.list', {}, function(response) {
+        let maxId = 0;
+        if (response.result && response.result.strategies) {
+            response.result.strategies.forEach(s => {
+                if (s.id > maxId) maxId = s.id;
+            });
+        }
+        const nextId = maxId + 1;
+        document.getElementById('sensorStrategyId').value = nextId;
+        log('info', `下一个可用传感器策略ID: ${nextId}`);
+    });
+}
+
+/**
  * 创建定时策略
  * 支持两种触发方式：间隔执行和每日定时执行
  * 从表单获取参数并调用RPC创建策略
