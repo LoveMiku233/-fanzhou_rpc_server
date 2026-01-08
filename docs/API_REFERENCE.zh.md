@@ -556,7 +556,8 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 
 | 方法 | 参数 | 返回值 | 说明 |
 |------|------|--------|------|
-| `runCommand()` | `program, args, timeoutMs` | `QString` | 执行系统命令 |
+| `runCommand()` | `program, args, timeoutMs` | `QString` | 执行系统命令，返回输出 |
+| `runCommandWithStatus()` | `program, args, timeoutMs` | `bool` | 执行系统命令，返回成功状态 |
 | `canDown()` | `interface` | `bool` | 关闭CAN接口 |
 | `canUp()` | `interface` | `bool` | 启动CAN接口 |
 | `setCanBitrate()` | `interface, bitrate, tripleSampling` | `bool` | 设置CAN波特率 |
