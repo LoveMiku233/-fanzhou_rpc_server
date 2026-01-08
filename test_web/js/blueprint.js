@@ -288,9 +288,11 @@ function setupKeyboardShortcuts() {
         }
         
         // Ctrl+D 复制选中的节点
-        if ((e.ctrlKey || e.metaKey) && e.key === 'd' && selectedNode) {
-            e.preventDefault();
-            duplicateSelectedNode();
+        if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
+            if (selectedNode) {
+                e.preventDefault();
+                duplicateSelectedNode();
+            }
         }
         
         // Escape 取消选择
@@ -313,9 +315,15 @@ function duplicateSelectedNode() {
         selectedNode.y + 30
     );
     
-    // 复制配置
+    // 复制配置（使用安全的深拷贝方式）
     if (newNode && selectedNode.config) {
-        newNode.config = JSON.parse(JSON.stringify(selectedNode.config));
+        // 遍历配置对象进行拷贝，避免 JSON.parse/stringify 的问题
+        newNode.config = {};
+        for (const key in selectedNode.config) {
+            if (Object.prototype.hasOwnProperty.call(selectedNode.config, key)) {
+                newNode.config[key] = selectedNode.config[key];
+            }
+        }
         updateNodeContent(newNode);
     }
     
@@ -689,6 +697,10 @@ function deselectAllNodes() {
 // 网格对齐大小（像素）
 const GRID_SIZE = 20;
 
+// 节点默认尺寸（用于边界计算）
+const NODE_MIN_WIDTH = 150;
+const NODE_MIN_HEIGHT = 80;
+
 /**
  * 将坐标对齐到网格
  * @param {number} value - 原始坐标值
@@ -732,9 +744,9 @@ function handleCanvasMouseMove(e) {
         let x = e.clientX - canvasRect.left - dragState.offsetX;
         let y = e.clientY - canvasRect.top - dragState.offsetY;
         
-        // 保持在画布边界内
-        x = Math.max(0, Math.min(x, canvasRect.width - 100));
-        y = Math.max(0, Math.min(y, canvasRect.height - 50));
+        // 保持在画布边界内，使用定义的常量
+        x = Math.max(0, Math.min(x, canvasRect.width - NODE_MIN_WIDTH));
+        y = Math.max(0, Math.min(y, canvasRect.height - NODE_MIN_HEIGHT));
         
         // 对齐到网格（按住Shift键禁用对齐）
         const enableSnap = !e.shiftKey;
