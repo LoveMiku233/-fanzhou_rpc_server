@@ -1816,7 +1816,7 @@ function createNodeSilent(type, x, y) {
  */
 function createConnectionSilent(sourceNodeId, targetNodeId) {
     const connection = {
-        id: 'conn_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+        id: 'conn_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
         sourceId: sourceNodeId,
         sourcePort: 'trigger',
         targetId: targetNodeId,
@@ -1887,12 +1887,15 @@ function getStrategyManagementButtons(node) {
         `<button class="warning" onclick="toggleStrategyFromBlueprint('${node.id}')" title="禁用此策略">⏸️ 禁用</button>` :
         `<button class="success" onclick="toggleStrategyFromBlueprint('${node.id}')" title="启用此策略">▶️ 启用</button>`;
     
+    // 转义策略名称以防止XSS攻击
+    const safeStrategyName = node.strategyName ? escapeHtmlBlueprint(node.strategyName) : '';
+    
     return `
         <div class="strategy-management" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
             <h5 style="margin-bottom: 10px; color: #666;">📋 服务器策略管理</h5>
             <p style="font-size: 12px; color: #999; margin-bottom: 10px;">
                 策略ID: ${node.strategyId} | ${node.strategyEnabled ? '✅ 已启用' : '❌ 已禁用'}
-                ${node.strategyName ? '<br>名称: ' + node.strategyName : ''}
+                ${safeStrategyName ? '<br>名称: ' + safeStrategyName : ''}
             </p>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 ${enableBtn}
@@ -2017,8 +2020,20 @@ function deleteNodeSilent(nodeId) {
 }
 
 /* ========================================================
- * 日志功能
+ * 日志和工具函数
  * ======================================================== */
+
+/**
+ * HTML转义 - 防止XSS攻击
+ * @param {string} text - 原始文本
+ * @returns {string} 转义后的文本
+ */
+function escapeHtmlBlueprint(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
 
 /**
  * 蓝图编辑器日志
