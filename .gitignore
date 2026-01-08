@@ -75,3 +75,8 @@ _codeql_detected_source_root
 build/
 fanzhou_rpc_server
 moc_predefs.h
+
+# qt_app build artifacts
+qt_app/build/
+qt_app/bin/
+qt_app/*.pro.user*
