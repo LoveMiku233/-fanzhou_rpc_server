@@ -574,36 +574,70 @@ function removeDeviceFromGroup() {
 
 /* ========================================================
  * 设备管理功能
+ * 
+ * 说明：
+ * - 设备列表和卡片视图已整合为统一的卡片视图
+ * - 每个设备卡片既显示状态信息，也提供控制按钮
+ * - 支持单通道控制和全部通道控制
+ * - 设备在线状态由服务端判断（30秒内有CAN响应认为在线）
  * ======================================================== */
 
 /**
  * 刷新设备列表
+ * 调用 relay.nodes RPC 获取所有设备节点信息，然后渲染设备卡片
+ * 
+ * 关于"无法控制设备"的问题：
+ * 如果控制命令发送后设备没有响应，可能的原因：
+ * 1. CAN总线未打开 - 检查 can.status 返回的 opened 字段
+ * 2. 设备未正确连接 - 检查CAN线路和终端电阻
+ * 3. 波特率不匹配 - 检查CAN配置
+ * 可以点击"CAN诊断"按钮查看详细信息
  */
 function refreshDeviceList() {
+    // 同时获取CAN状态用于诊断
+    callMethod('can.status', {}, function(response) {
+        if (response.result) {
+            // 如果CAN未打开，显示警告
+            const canOpened = response.result.opened === true;
+            const warningPanel = document.getElementById('canWarningPanel');
+            if (warningPanel) {
+                warningPanel.style.display = canOpened ? 'none' : 'block';
+            }
+        }
+    });
+    
+    // 获取设备列表
     callMethod('relay.nodes', {}, function(response) {
         if (response.result) {
             deviceListCache = response.result.nodes || response.result || [];
-            renderDeviceList();
             renderDeviceCards();
         }
     });
 }
 
 /**
- * 渲染设备列表
- * 设备在线状态由服务端根据最后通信时间判断（30秒内有响应认为在线）
+ * 渲染设备卡片视图（整合了列表和卡片功能）
+ * 
+ * 功能说明：
+ * - 显示设备基本信息（节点ID、名称、在线状态）
+ * - 显示每个通道的状态
+ * - 提供每个通道的控制按钮（停止/正转/反转）
+ * - 提供全部通道的批量控制按钮
+ * - 设备在线状态由服务端根据最后通信时间判断
  */
-function renderDeviceList() {
-    const contentEl = document.getElementById('deviceListContent');
+function renderDeviceCards() {
+    const container = document.getElementById('deviceCards');
     const emptyEl = document.getElementById('deviceListEmpty');
     
+    // 如果没有设备数据，显示空状态提示
     if (!deviceListCache || deviceListCache.length === 0) {
-        contentEl.innerHTML = '';
-        emptyEl.style.display = 'block';
+        container.innerHTML = '';
+        if (emptyEl) emptyEl.style.display = 'block';
         return;
     }
     
-    emptyEl.style.display = 'none';
+    // 隐藏空状态提示
+    if (emptyEl) emptyEl.style.display = 'none';
     
     let html = '';
     deviceListCache.forEach(device => {
@@ -612,71 +646,52 @@ function renderDeviceList() {
         const type = device.type || 'relay';
         // 在线状态必须由服务端明确返回true才认为在线
         const online = device.online === true;
+        const channels = device.channels || DEFAULT_CHANNEL_COUNT;
         // 显示上次响应时间（如果有）
         const ageMs = device.ageMs;
         const ageText = (typeof ageMs === 'number') ? formatAge(ageMs) : '';
         
-        html += `
-            <div class="data-list-item">
-                <div class="item-info">
-                    <span class="item-name">🔌 ${escapeHtml(name)}</span>
-                    <span class="item-detail">
-                        节点ID: ${nodeId} | 
-                        类型: ${escapeHtml(type)} | 
-                        状态: ${online ? '🟢 在线' : '🔴 离线'}${ageText ? ' | 响应: ' + ageText : ''}
-                    </span>
-                </div>
-                <div class="item-actions">
-                    <button onclick="queryDeviceStatus(${nodeId})">🔍 查询状态</button>
-                    <button class="success" onclick="controlDeviceAll(${nodeId}, 'fwd')">▶️ 全部正转</button>
-                    <button class="danger" onclick="controlDeviceAll(${nodeId}, 'stop')">⏹️ 全部停止</button>
-                </div>
-            </div>
-        `;
-    });
-    
-    contentEl.innerHTML = html;
-}
-
-/**
- * 渲染设备卡片视图
- * 设备在线状态由服务端根据最后通信时间判断
- */
-function renderDeviceCards() {
-    const container = document.getElementById('deviceCards');
-    
-    if (!deviceListCache || deviceListCache.length === 0) {
-        container.innerHTML = '';
-        return;
-    }
-    
-    let html = '';
-    deviceListCache.forEach(device => {
-        const nodeId = device.nodeId || device.node || device;
-        const name = device.name || `节点 ${nodeId}`;
-        // 在线状态必须由服务端明确返回true才认为在线
-        const online = device.online === true;
-        const channels = device.channels || 4;
-        
+        // 构建通道控制HTML
+        // 每个通道显示状态和三个控制按钮（停止/正转/反转）
         let channelHtml = '';
         for (let i = 0; i < channels; i++) {
             channelHtml += `
-                <div class="channel-item">
-                    <div class="ch-label">通道 ${i}</div>
-                    <div class="ch-status stop" id="ch-status-${nodeId}-${i}">--</div>
+                <div class="channel-control-item">
+                    <div class="ch-info">
+                        <span class="ch-label">通道 ${i}</span>
+                        <span class="ch-status stop" id="ch-status-${nodeId}-${i}">--</span>
+                    </div>
+                    <div class="ch-buttons">
+                        <button class="ch-btn stop" onclick="controlSingleChannel(${nodeId}, ${i}, 'stop')" title="停止">⏹️</button>
+                        <button class="ch-btn fwd" onclick="controlSingleChannel(${nodeId}, ${i}, 'fwd')" title="正转">▶️</button>
+                        <button class="ch-btn rev" onclick="controlSingleChannel(${nodeId}, ${i}, 'rev')" title="反转">◀️</button>
+                    </div>
                 </div>
             `;
         }
         
         html += `
-            <div class="device-card">
+            <div class="device-card" data-node-id="${nodeId}">
                 <div class="device-card-header">
-                    <span class="device-card-title">🔌 ${escapeHtml(name)} (ID: ${nodeId})</span>
+                    <div class="device-card-title-group">
+                        <span class="device-card-title">🔌 ${escapeHtml(name)}</span>
+                        <span class="device-card-subtitle">节点ID: ${nodeId} | 类型: ${escapeHtml(type)}${ageText ? ' | ' + ageText : ''}</span>
+                    </div>
                     <span class="device-card-status ${online ? 'online' : 'offline'}">
-                        ${online ? '在线' : '离线'}
+                        ${online ? '🟢 在线' : '🔴 离线'}
                     </span>
                 </div>
-                <div class="channel-grid">${channelHtml}</div>
+                
+                <!-- 通道控制区域 -->
+                <div class="channel-control-grid">${channelHtml}</div>
+                
+                <!-- 批量操作按钮 -->
+                <div class="device-card-actions">
+                    <button onclick="queryDeviceStatus(${nodeId})" title="查询所有通道状态">🔍 查询状态</button>
+                    <button class="success" onclick="controlDeviceAll(${nodeId}, 'fwd')" title="所有通道正转">▶️ 全部正转</button>
+                    <button class="warning" onclick="controlDeviceAll(${nodeId}, 'rev')" title="所有通道反转">◀️ 全部反转</button>
+                    <button class="danger" onclick="controlDeviceAll(${nodeId}, 'stop')" title="所有通道停止">⏹️ 全部停止</button>
+                </div>
             </div>
         `;
     });
@@ -685,30 +700,155 @@ function renderDeviceCards() {
 }
 
 /**
- * 查询单个设备状态
- * @param {number} nodeId - 节点ID
+ * 控制单个通道
+ * 向指定设备的指定通道发送控制命令
+ * 
+ * @param {number} nodeId - 设备节点ID
+ * @param {number} channel - 通道号 (0-3)
+ * @param {string} action - 动作 (stop/fwd/rev)
+ * 
+ * 说明：
+ * 这个函数通过 relay.control RPC 方法发送控制命令
+ * RPC调用会将命令入队，然后通过CAN总线发送给设备
+ * 如果设备无响应，请检查CAN总线状态
  */
-function queryDeviceStatus(nodeId) {
-    callMethod('relay.statusAll', {
-        node: nodeId
+function controlSingleChannel(nodeId, channel, action) {
+    log('info', `控制设备 ${nodeId} 通道 ${channel}: ${action}`);
+    callMethod('relay.control', {
+        node: nodeId,
+        ch: channel,
+        action: action
+    }, function(response) {
+        // 检查响应中是否有警告信息（如CAN队列拥堵）
+        if (response.result && response.result.warning) {
+            log('error', `⚠️ ${response.result.warning}`);
+        }
+        // 控制成功后刷新状态
+        if (response.result && response.result.ok) {
+            // 延迟200ms后查询状态，给设备响应时间
+            setTimeout(() => queryDeviceStatus(nodeId), 200);
+        }
     });
 }
 
 /**
+ * 查询单个设备状态
+ * 向设备发送状态查询命令，获取所有通道的当前状态
+ * 
+ * @param {number} nodeId - 设备节点ID
+ */
+function queryDeviceStatus(nodeId) {
+    callMethod('relay.statusAll', {
+        node: nodeId
+    }, function(response) {
+        if (response.result && response.result.ok) {
+            // 更新通道状态显示
+            const channels = response.result.channels || [];
+            channels.forEach(ch => {
+                updateChannelStatusDisplay(nodeId, ch.ch, ch.statusByte, ch.mode);
+            });
+            
+            // 更新设备在线状态
+            const online = response.result.online === true;
+            updateDeviceOnlineStatus(nodeId, online);
+            
+            // 如果设备离线，显示诊断信息
+            if (!online && response.result.diagnostic) {
+                log('info', `设备 ${nodeId} 诊断: ${response.result.diagnostic}`);
+            }
+        }
+    });
+}
+
+/**
+ * 更新通道状态显示
+ * 根据服务端返回的状态更新界面上的通道状态
+ * 
+ * @param {number} nodeId - 设备节点ID
+ * @param {number} channel - 通道号
+ * @param {number} statusByte - 状态字节
+ * @param {number} mode - 模式 (0=停止, 1=正转, 2=反转)
+ */
+function updateChannelStatusDisplay(nodeId, channel, statusByte, mode) {
+    const statusEl = document.getElementById(`ch-status-${nodeId}-${channel}`);
+    if (!statusEl) return;
+    
+    // 根据模式设置状态文本和样式
+    let statusText = '--';
+    let statusClass = 'stop';
+    
+    switch (mode) {
+        case 0:
+            statusText = '停止';
+            statusClass = 'stop';
+            break;
+        case 1:
+            statusText = '正转';
+            statusClass = 'fwd';
+            break;
+        case 2:
+            statusText = '反转';
+            statusClass = 'rev';
+            break;
+    }
+    
+    statusEl.textContent = statusText;
+    statusEl.className = 'ch-status ' + statusClass;
+}
+
+/**
+ * 更新设备在线状态显示
+ * 
+ * @param {number} nodeId - 设备节点ID
+ * @param {boolean} online - 是否在线
+ */
+function updateDeviceOnlineStatus(nodeId, online) {
+    const card = document.querySelector(`.device-card[data-node-id="${nodeId}"]`);
+    if (!card) return;
+    
+    const statusEl = card.querySelector('.device-card-status');
+    if (statusEl) {
+        statusEl.className = 'device-card-status ' + (online ? 'online' : 'offline');
+        statusEl.textContent = online ? '🟢 在线' : '🔴 离线';
+    }
+}
+
+/**
  * 控制设备所有通道
- * 这会向指定节点的所有通道发送控制命令
- * @param {number} nodeId - 节点ID
+ * 向指定设备的所有通道发送相同的控制命令
+ * 
+ * @param {number} nodeId - 设备节点ID
  * @param {string} action - 动作 (stop/fwd/rev)
+ * 
+ * 说明：
+ * 这个函数会逐个向每个通道发送控制命令
+ * 如果控制无效，请检查：
+ * 1. CAN总线是否已打开（点击"CAN诊断"按钮）
+ * 2. 设备是否正确连接
+ * 3. 节点ID是否正确
  */
 function controlDeviceAll(nodeId, action) {
-    // 控制所有通道（逐个发送控制命令）
-    for (let ch = 0; ch < DEFAULT_CHANNEL_COUNT; ch++) {
+    log('info', `控制设备 ${nodeId} 全部通道: ${action}`);
+    
+    // 从缓存中获取设备的通道数量
+    // 如果缓存中没有，使用默认值 DEFAULT_CHANNEL_COUNT
+    let channelCount = DEFAULT_CHANNEL_COUNT;
+    const device = deviceListCache.find(d => (d.nodeId || d.node || d) === nodeId);
+    if (device && device.channels) {
+        channelCount = device.channels;
+    }
+    
+    // 逐个通道发送控制命令
+    for (let ch = 0; ch < channelCount; ch++) {
         callMethod('relay.control', {
             node: nodeId,
             ch: ch,
             action: action
         });
     }
+    
+    // 延迟后查询状态
+    setTimeout(() => queryDeviceStatus(nodeId), 300);
 }
 
 /* ========================================================
