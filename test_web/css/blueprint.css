@@ -139,6 +139,7 @@
     cursor: move;
     z-index: 10;
     transition: box-shadow 0.2s, transform 0.1s;
+    user-select: none;
 }
 
 .blueprint-node:hover {
@@ -151,9 +152,11 @@
 }
 
 .blueprint-node.dragging {
-    opacity: 0.85;
+    opacity: 0.9;
     z-index: 100;
     transform: scale(1.02);
+    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+    cursor: grabbing;
 }
 
 /* 节点头部 */

@@ -261,7 +261,70 @@ function initBlueprintEditor() {
     // 初始化SVG连线层
     initConnectionLayer();
     
+    // 设置键盘快捷键
+    setupKeyboardShortcuts();
+    
     console.log('蓝图编辑器初始化完成');
+}
+
+/**
+ * 设置键盘快捷键
+ * Delete: 删除选中的节点
+ * Ctrl+D: 复制选中的节点
+ * Escape: 取消选择
+ */
+function setupKeyboardShortcuts() {
+    document.addEventListener('keydown', function(e) {
+        // 如果正在编辑表单，忽略快捷键
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+            return;
+        }
+        
+        // Delete 键删除选中的节点
+        if (e.key === 'Delete' && selectedNode) {
+            if (confirm('确定要删除选中的节点吗？')) {
+                deleteNode(selectedNode.id);
+            }
+        }
+        
+        // Ctrl+D 复制选中的节点
+        if ((e.ctrlKey || e.metaKey) && e.key === 'd' && selectedNode) {
+            e.preventDefault();
+            duplicateSelectedNode();
+        }
+        
+        // Escape 取消选择
+        if (e.key === 'Escape') {
+            deselectAllNodes();
+        }
+    });
+}
+
+/**
+ * 复制选中的节点
+ */
+function duplicateSelectedNode() {
+    if (!selectedNode) return;
+    
+    // 创建新节点，位置略微偏移
+    const newNode = createNode(
+        selectedNode.type,
+        selectedNode.x + 30,
+        selectedNode.y + 30
+    );
+    
+    // 复制配置
+    if (newNode && selectedNode.config) {
+        newNode.config = JSON.parse(JSON.stringify(selectedNode.config));
+        updateNodeContent(newNode);
+    }
+    
+    // 选中新节点
+    selectNode(newNode);
+    
+    if (typeof log === 'function') {
+        log('info', `节点已复制: ${newNode.id}`);
+    }
 }
 
 /**
@@ -623,6 +686,20 @@ function deselectAllNodes() {
  * 节点拖动功能
  * ======================================================== */
 
+// 网格对齐大小（像素）
+const GRID_SIZE = 20;
+
+/**
+ * 将坐标对齐到网格
+ * @param {number} value - 原始坐标值
+ * @param {boolean} snapToGrid - 是否对齐到网格
+ * @returns {number} 对齐后的坐标
+ */
+function snapToGrid(value, enableSnap = true) {
+    if (!enableSnap) return value;
+    return Math.round(value / GRID_SIZE) * GRID_SIZE;
+}
+
 /**
  * 开始拖动节点
  * @param {MouseEvent} e - 鼠标事件
@@ -640,6 +717,9 @@ function startDragNode(e, node) {
     dragState.offsetY = e.clientY - rect.top;
     
     nodeEl.classList.add('dragging');
+    
+    // 将节点提升到最上层
+    nodeEl.style.zIndex = 100;
 }
 
 /**
@@ -649,12 +729,17 @@ function startDragNode(e, node) {
 function handleCanvasMouseMove(e) {
     if (dragState.isDragging && dragState.node) {
         const canvasRect = blueprintCanvas.getBoundingClientRect();
-        const x = e.clientX - canvasRect.left - dragState.offsetX;
-        const y = e.clientY - canvasRect.top - dragState.offsetY;
+        let x = e.clientX - canvasRect.left - dragState.offsetX;
+        let y = e.clientY - canvasRect.top - dragState.offsetY;
         
-        // 更新节点位置
-        dragState.node.x = Math.max(0, x);
-        dragState.node.y = Math.max(0, y);
+        // 保持在画布边界内
+        x = Math.max(0, Math.min(x, canvasRect.width - 100));
+        y = Math.max(0, Math.min(y, canvasRect.height - 50));
+        
+        // 对齐到网格（按住Shift键禁用对齐）
+        const enableSnap = !e.shiftKey;
+        dragState.node.x = snapToGrid(x, enableSnap);
+        dragState.node.y = snapToGrid(y, enableSnap);
         
         const nodeEl = document.getElementById(dragState.node.id);
         if (nodeEl) {
@@ -681,6 +766,8 @@ function handleCanvasMouseUp(e) {
         const nodeEl = document.getElementById(dragState.node.id);
         if (nodeEl) {
             nodeEl.classList.remove('dragging');
+            // 恢复正常 z-index
+            nodeEl.style.zIndex = '';
         }
     }
     
@@ -711,10 +798,14 @@ function handleCanvasDrop(e) {
     if (!nodeType) return;
     
     const canvasRect = blueprintCanvas.getBoundingClientRect();
-    const x = e.clientX - canvasRect.left - 75;  // 居中调整
-    const y = e.clientY - canvasRect.top - 30;
+    let x = e.clientX - canvasRect.left - 75;  // 居中调整
+    let y = e.clientY - canvasRect.top - 30;
     
-    createNode(nodeType, Math.max(0, x), Math.max(0, y));
+    // 对齐到网格
+    x = snapToGrid(Math.max(0, x));
+    y = snapToGrid(Math.max(0, y));
+    
+    createNode(nodeType, x, y);
 }
 
 /* ========================================================
