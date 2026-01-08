@@ -154,6 +154,8 @@ void RpcRegistry::registerSystem()
     dispatcher_->registerMethod(QStringLiteral("sys.info"),
                                  [this](const QJsonObject &) {
         const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        const bool canOpened = context_->canBus && context_->canBus->isOpened();
+        const int canTxQueueSize = context_->canBus ? context_->canBus->txQueueSize() : 0;
         return QJsonObject{
             {QStringLiteral("ok"), true},
             {QStringLiteral("serverVersion"), QStringLiteral("1.0.0")},
@@ -161,6 +163,8 @@ void RpcRegistry::registerSystem()
             {QStringLiteral("rpcPort"), context_->rpcPort},
             {QStringLiteral("canInterface"), context_->canInterface},
             {QStringLiteral("canBitrate"), context_->canBitrate},
+            {QStringLiteral("canOpened"), canOpened},
+            {QStringLiteral("canTxQueueSize"), canTxQueueSize},
             {QStringLiteral("deviceCount"), context_->relays.size()},
             {QStringLiteral("groupCount"), context_->deviceGroups.size()}
         };
@@ -205,6 +209,35 @@ void RpcRegistry::registerSystem()
 
 void RpcRegistry::registerCan()
 {
+    // 获取CAN总线状态
+    dispatcher_->registerMethod(QStringLiteral("can.status"),
+                                 [this](const QJsonObject &) {
+        const bool hasCanBus = context_->canBus != nullptr;
+        const bool canOpened = hasCanBus && context_->canBus->isOpened();
+        const int txQueueSize = hasCanBus ? context_->canBus->txQueueSize() : 0;
+
+        QJsonObject result{
+            {kKeyOk, true},
+            {QStringLiteral("interface"), context_->canInterface},
+            {QStringLiteral("bitrate"), context_->canBitrate},
+            {QStringLiteral("opened"), canOpened},
+            {QStringLiteral("txQueueSize"), txQueueSize}
+        };
+
+        // 如果CAN未打开，提供诊断信息
+        if (!canOpened) {
+            result[QStringLiteral("diagnostic")] = QStringLiteral(
+                "CAN bus not opened. Please check:\n"
+                "  1. CAN interface exists: ip link show %1\n"
+                "  2. CAN interface is up: ip link set %1 up\n"
+                "  3. Bitrate is set: canconfig %1 bitrate %2")
+                .arg(context_->canInterface)
+                .arg(context_->canBitrate);
+        }
+
+        return result;
+    });
+
     dispatcher_->registerMethod(QStringLiteral("can.send"),
                                  [this](const QJsonObject &params) {
         if (!context_->canBus)

@@ -588,7 +588,7 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 
 | 方法名 | 参数 | 返回值 | 说明 |
 |--------|------|--------|------|
-| `sys.info` | 无 | 系统信息对象 | 获取服务器信息 |
+| `sys.info` | 无 | 系统信息对象（包含canOpened、canTxQueueSize） | 获取服务器信息 |
 | `sys.can.setBitrate` | `{ifname, bitrate, tripleSampling?}` | `{ok}` | 设置CAN波特率 |
 | `sys.can.dump.start` | `{ifname}` | `{ok}` | 启动CAN抓包 |
 | `sys.can.dump.stop` | 无 | `{ok}` | 停止CAN抓包 |
@@ -597,7 +597,10 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 
 | 方法名 | 参数 | 返回值 | 说明 |
 |--------|------|--------|------|
+| `can.status` | 无 | `{ok, interface, bitrate, opened, txQueueSize, diagnostic?}` | 获取CAN总线状态 |
 | `can.send` | `{id, dataHex, extended?}` | `{ok}` | 发送原始CAN帧 |
+
+**注意**：当继电器控制不生效时，首先调用 `can.status` 检查CAN总线状态。如果 `opened` 为 `false`，表示CAN接口未正确打开，`diagnostic` 字段会提供诊断建议。
 
 ### 继电器方法
 
@@ -818,6 +821,7 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 |------|------|------|
 | 1.0.0 | 2024-01 | 初始版本 |
 | 1.0.1 | 2026-01 | 修复：channel参数支持字符串类型 |
+| 1.0.2 | 2026-01 | 新增：can.status方法，sys.info增加canOpened/canTxQueueSize字段，改进CAN诊断 |
 
 ---
 
