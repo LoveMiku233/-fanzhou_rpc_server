@@ -12,6 +12,7 @@
 
 #include <QDateTime>
 #include <QDebug>
+#include <QJsonArray>
 
 #include <algorithm>
 
@@ -1152,6 +1153,245 @@ bool CoreContext::setScreenConfig(const ScreenConfig &config, QString *error)
                  .arg(config.contrast)
                  .arg(config.enabled));
     return true;
+}
+
+// ===================== 配置保存/加载实现 =====================
+
+/**
+ * @brief 将当前运行时配置保存到文件
+ * 
+ * 这是解决"Web页面修改无法保存"问题的核心方法。
+ * 
+ * 为什么之前Web页面修改无法保存？
+ * 原因：之前的实现中，通过RPC调用（如group.create、device.add等）
+ * 创建的设备、分组、策略等只保存在内存中（存储在deviceGroups、
+ * deviceConfigs、strategyConfigs_等成员变量中），服务重启后会丢失。
+ * 
+ * 解决方案：调用此方法将当前内存中的配置持久化到JSON配置文件。
+ * 
+ * @param path 配置文件路径，为空则使用configFilePath
+ * @param error 错误信息输出
+ * @return 成功返回true
+ */
+bool CoreContext::saveConfig(const QString &path, QString *error)
+{
+    const QString targetPath = path.isEmpty() ? configFilePath : path;
+    
+    if (targetPath.isEmpty()) {
+        if (error) {
+            *error = QStringLiteral("配置文件路径未设置，请先指定configFilePath或提供path参数");
+        }
+        LOG_WARNING(kLogSource, QStringLiteral("saveConfig failed: config file path not set"));
+        return false;
+    }
+
+    // 构建配置对象
+    CoreConfig config;
+    
+    // 主配置
+    config.main.rpcPort = rpcPort;
+    
+    // CAN配置
+    config.can.interface = canInterface;
+    config.can.bitrate = canBitrate;
+    config.can.tripleSampling = tripleSampling;
+    
+    // 屏幕配置
+    config.screen = screenConfig;
+    
+    // 设备列表
+    config.devices = deviceConfigs.values();
+    
+    // 设备分组
+    config.groups.clear();
+    for (auto it = deviceGroups.begin(); it != deviceGroups.end(); ++it) {
+        DeviceGroupConfig grp;
+        grp.groupId = it.key();
+        grp.name = groupNames.value(it.key(), QString());
+        grp.enabled = true;
+        // 转换设备节点ID列表
+        for (quint8 node : it.value()) {
+            grp.deviceNodes.append(static_cast<int>(node));
+        }
+        // 保存分组通道
+        grp.channels = groupChannels.value(it.key(), {});
+        config.groups.append(grp);
+    }
+    
+    // 定时策略
+    config.strategies = strategyConfigs_;
+    
+    // 传感器策略
+    config.sensorStrategies = sensorStrategyConfigs_;
+    
+    // 保存到文件
+    QString saveError;
+    if (!config.saveToFile(targetPath, &saveError)) {
+        if (error) {
+            *error = QStringLiteral("保存配置失败: %1").arg(saveError);
+        }
+        LOG_ERROR(kLogSource, QStringLiteral("saveConfig failed: %1").arg(saveError));
+        return false;
+    }
+    
+    LOG_INFO(kLogSource, QStringLiteral("配置已保存到: %1").arg(targetPath));
+    return true;
+}
+
+/**
+ * @brief 从文件重新加载配置
+ * 
+ * 注意：此操作会覆盖当前运行时配置，未保存的修改会丢失。
+ * 
+ * @param path 配置文件路径，为空则使用configFilePath
+ * @param error 错误信息输出
+ * @return 成功返回true
+ */
+bool CoreContext::reloadConfig(const QString &path, QString *error)
+{
+    const QString targetPath = path.isEmpty() ? configFilePath : path;
+    
+    if (targetPath.isEmpty()) {
+        if (error) {
+            *error = QStringLiteral("配置文件路径未设置");
+        }
+        return false;
+    }
+
+    CoreConfig config;
+    QString loadError;
+    if (!config.loadFromFile(targetPath, &loadError)) {
+        if (error) {
+            *error = QStringLiteral("加载配置失败: %1").arg(loadError);
+        }
+        LOG_ERROR(kLogSource, QStringLiteral("reloadConfig failed: %1").arg(loadError));
+        return false;
+    }
+    
+    // 注意：这里只更新部分配置，不重新初始化整个系统
+    // 完整的重新初始化需要重启服务
+    
+    // 更新分组配置
+    deviceGroups.clear();
+    groupNames.clear();
+    groupChannels.clear();
+    
+    for (const auto &grpConfig : config.groups) {
+        if (!grpConfig.enabled) continue;
+        
+        QList<quint8> nodes;
+        for (int nodeId : grpConfig.deviceNodes) {
+            if (nodeId >= 1 && nodeId <= 255) {
+                nodes.append(static_cast<quint8>(nodeId));
+            }
+        }
+        deviceGroups.insert(grpConfig.groupId, nodes);
+        groupNames.insert(grpConfig.groupId, grpConfig.name);
+        groupChannels.insert(grpConfig.groupId, grpConfig.channels);
+    }
+    
+    // 更新策略配置
+    bindStrategies(config.strategies);
+    bindSensorStrategies(config.sensorStrategies);
+    
+    // 更新屏幕配置
+    screenConfig = config.screen;
+    
+    LOG_INFO(kLogSource, QStringLiteral("配置已重新加载: %1").arg(targetPath));
+    return true;
+}
+
+/**
+ * @brief 导出当前配置为JSON对象
+ * 
+ * 用于通过RPC获取当前运行时配置的完整内容。
+ * 
+ * @return 当前配置的JSON对象
+ */
+QJsonObject CoreContext::exportConfig() const
+{
+    QJsonObject root;
+    
+    // 主配置
+    QJsonObject mainObj;
+    mainObj[QStringLiteral("rpcPort")] = static_cast<int>(rpcPort);
+    root[QStringLiteral("main")] = mainObj;
+    
+    // CAN配置
+    QJsonObject canObj;
+    canObj[QStringLiteral("interface")] = canInterface;
+    canObj[QStringLiteral("bitrate")] = canBitrate;
+    canObj[QStringLiteral("tripleSampling")] = tripleSampling;
+    
+    // CAN状态诊断信息（帮助诊断"CAN无法发送"的问题）
+    if (canBus) {
+        canObj[QStringLiteral("opened")] = canBus->isOpened();
+        canObj[QStringLiteral("txQueueSize")] = canBus->txQueueSize();
+    }
+    root[QStringLiteral("can")] = canObj;
+    
+    // 设备列表
+    QJsonArray devArr;
+    for (const auto &dev : deviceConfigs) {
+        QJsonObject obj;
+        obj[QStringLiteral("nodeId")] = dev.nodeId;
+        obj[QStringLiteral("name")] = dev.name;
+        obj[QStringLiteral("type")] = static_cast<int>(dev.deviceType);
+        obj[QStringLiteral("commType")] = static_cast<int>(dev.commType);
+        obj[QStringLiteral("bus")] = dev.bus;
+        if (!dev.params.isEmpty()) {
+            obj[QStringLiteral("params")] = dev.params;
+        }
+        devArr.append(obj);
+    }
+    root[QStringLiteral("devices")] = devArr;
+    
+    // 设备分组
+    QJsonArray groupArr;
+    for (auto it = deviceGroups.begin(); it != deviceGroups.end(); ++it) {
+        QJsonObject obj;
+        obj[QStringLiteral("groupId")] = it.key();
+        obj[QStringLiteral("name")] = groupNames.value(it.key(), QString());
+        
+        QJsonArray devNodes;
+        for (quint8 node : it.value()) {
+            devNodes.append(static_cast<int>(node));
+        }
+        obj[QStringLiteral("devices")] = devNodes;
+        obj[QStringLiteral("deviceCount")] = it.value().size();
+        
+        // 导出分组通道
+        const auto channels = groupChannels.value(it.key(), {});
+        if (!channels.isEmpty()) {
+            QJsonArray chArr;
+            for (int ch : channels) {
+                chArr.append(ch);
+            }
+            obj[QStringLiteral("channels")] = chArr;
+        }
+        
+        groupArr.append(obj);
+    }
+    root[QStringLiteral("groups")] = groupArr;
+    
+    // 策略数量统计
+    root[QStringLiteral("strategyCount")] = strategyConfigs_.size();
+    root[QStringLiteral("sensorStrategyCount")] = sensorStrategyConfigs_.size();
+    root[QStringLiteral("relayStrategyCount")] = relayStrategyConfigs_.size();
+    
+    // 屏幕配置
+    QJsonObject screenObj;
+    screenObj[QStringLiteral("brightness")] = screenConfig.brightness;
+    screenObj[QStringLiteral("contrast")] = screenConfig.contrast;
+    screenObj[QStringLiteral("enabled")] = screenConfig.enabled;
+    screenObj[QStringLiteral("sleepTimeoutSec")] = screenConfig.sleepTimeoutSec;
+    screenObj[QStringLiteral("orientation")] = screenConfig.orientation;
+    root[QStringLiteral("screen")] = screenObj;
+    
+    // 配置文件路径
+    root[QStringLiteral("configFilePath")] = configFilePath;
+    
+    return root;
 }
 
 }  // namespace core

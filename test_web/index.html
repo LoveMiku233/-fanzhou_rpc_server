@@ -127,6 +127,21 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
             <!-- ==================== 快捷操作页面 ==================== -->
             <div class="page-content active" id="page-quick">
                 <h3 style="margin-bottom: 20px; color: #333;">常用RPC方法快捷按钮</h3>
+                
+                <!-- 重要提示：配置保存 -->
+                <div style="background: #fff3e0; padding: 15px 20px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #ff9800;">
+                    <h4 style="margin-bottom: 10px; color: #e65100;">💡 重要提示</h4>
+                    <p style="color: #666; font-size: 13px; margin-bottom: 10px;">
+                        通过Web页面创建的分组、策略等修改默认<strong>只保存在内存中</strong>，服务重启后会丢失。
+                        <br>如需持久保存，请在修改完成后点击"<strong>💾 保存配置</strong>"按钮。
+                    </p>
+                    <div class="btn-group">
+                        <button class="success" onclick="saveConfig()">💾 保存配置</button>
+                        <button class="secondary" onclick="getConfig()">📋 查看配置</button>
+                        <button class="warning" onclick="reloadConfig()">🔄 重载配置</button>
+                    </div>
+                </div>
+                
                 <div class="quick-actions-grid">
                     <button class="quick-action-btn" onclick="callMethod('rpc.ping', {})">
                         <span class="icon">🔔</span>
@@ -140,9 +155,9 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                         <span class="icon">ℹ️</span>
                         系统信息
                     </button>
-                    <button class="quick-action-btn warning" onclick="callMethod('can.status', {})">
+                    <button class="quick-action-btn warning" onclick="checkCanStatus()">
                         <span class="icon">🔧</span>
-                        CAN状态
+                        CAN诊断
                     </button>
                     <button class="quick-action-btn success" onclick="refreshDeviceList()">
                         <span class="icon">🔌</span>
@@ -602,6 +617,9 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                         <li><code>auto.sensor.list</code> - 传感器策略列表 (无参数)</li>
                         <li><code>auto.sensor.create</code> - 创建传感器策略 <code>{"id": 1, "name": "高温报警", "sensorType": "temperature", "sensorNode": 1, "condition": "gt", "threshold": 30, "groupId": 1, "channel": 0, "action": "fwd"}</code></li>
                         <li><code>auto.sensor.delete</code> - 删除传感器策略 <code>{"id": 1}</code></li>
+                        <li style="color: #e65100;"><code>config.get</code> - <strong>获取当前配置</strong> (无参数) - 查看运行时配置</li>
+                        <li style="color: #e65100;"><code>config.save</code> - <strong>保存配置</strong> (无参数) - 将修改持久化到配置文件</li>
+                        <li style="color: #e65100;"><code>config.reload</code> - <strong>重新加载配置</strong> (无参数) - 从文件重新加载配置</li>
                     </ul>
                 </div>
             </div>
@@ -725,6 +743,54 @@ echo '{"jsonrpc":"2.0","id":1,"method":"rpc.ping","params":{}}' | nc localhost 1
 
 # 使用 socat 测试
 echo '{"jsonrpc":"2.0","id":1,"method":"relay.nodes","params":{}}' | socat - TCP:localhost:12345</pre>
+                </div>
+
+                <!-- 常见问题解答 -->
+                <div class="help-section" style="background: #fff3e0; border-left: 4px solid #ff9800;">
+                    <h4>🔧 常见问题解答 (FAQ)</h4>
+                    
+                    <h5 style="color: #e65100; margin-top: 15px;">Q1: 为什么无法控制设备，CAN无法发送？</h5>
+                    <p style="margin-left: 20px;">
+                        <strong>原因：</strong>CAN总线可能未正确连接或配置。<br>
+                        <strong>诊断方法：</strong>点击"🔧 CAN诊断"按钮查看详细状态。<br>
+                        <strong>常见原因和解决方案：</strong>
+                    </p>
+                    <ul style="margin-left: 30px;">
+                        <li><strong>CAN接口未启动：</strong>执行 <code>ip link set can0 up</code></li>
+                        <li><strong>波特率不匹配：</strong>确保设备和主机使用相同波特率（默认125000）</li>
+                        <li><strong>缺少终端电阻：</strong>CAN总线两端需要各有一个120Ω终端电阻</li>
+                        <li><strong>接线问题：</strong>检查CAN_H和CAN_L是否正确连接</li>
+                        <li><strong>无ACK响应：</strong>总线上至少需要两个节点才能正常通信</li>
+                    </ul>
+                    <pre style="font-size: 12px;">
+# 检查CAN接口状态
+ip -details link show can0
+
+# 配置并启动CAN接口
+canconfig can0 bitrate 125000
+ifconfig can0 up
+
+# 测试CAN发送
+cansend can0 123#DEADBEEF</pre>
+                    
+                    <h5 style="color: #e65100; margin-top: 15px;">Q2: 为什么Web页面修改的内容无法保存？</h5>
+                    <p style="margin-left: 20px;">
+                        <strong>原因：</strong>通过Web页面创建的分组、策略等修改默认只保存在服务器内存中，服务重启后会丢失。<br>
+                        <strong>解决方案：</strong>修改完成后，点击"💾 保存配置"按钮将配置持久化到配置文件。<br>
+                        <strong>操作步骤：</strong>
+                    </p>
+                    <ol style="margin-left: 30px;">
+                        <li>在Web页面进行修改（创建分组、添加设备等）</li>
+                        <li>点击快捷操作页面的"💾 保存配置"按钮</li>
+                        <li>确认保存成功提示</li>
+                        <li>服务重启后修改仍然有效</li>
+                    </ol>
+                    <pre style="font-size: 12px;">
+# 也可以通过RPC命令保存配置
+echo '{"jsonrpc":"2.0","id":1,"method":"config.save","params":{}}' | nc localhost 12345
+
+# 查看当前配置
+echo '{"jsonrpc":"2.0","id":1,"method":"config.get","params":{}}' | nc localhost 12345</pre>
                 </div>
 
                 <div class="help-section">
