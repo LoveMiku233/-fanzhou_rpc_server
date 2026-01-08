@@ -69,6 +69,22 @@ constexpr qint64 kOnlineTimeoutMs = 30000;
 // 最大通道ID（0-3表示4个通道）
 constexpr int kMaxChannelId = 3;
 
+// CAN TX队列拥堵阈值：超过此数量认为拥堵
+constexpr int kTxQueueCongestionThreshold = 10;
+
+/**
+ * @brief 格式化队列拥堵警告信息
+ * @param queueSize 当前队列大小
+ * @param context 上下文描述（如 "Queries may be delayed"）
+ * @return 格式化的警告字符串
+ */
+QString formatQueueCongestionWarning(int queueSize, const QString &context)
+{
+    return QStringLiteral("CAN TX queue congested (%1 pending). %2 Check CAN bus connection.")
+        .arg(queueSize)
+        .arg(context);
+}
+
 /**
  * @brief 计算设备在线状态信息
  * @param lastSeenMs 设备最后响应时间戳（毫秒）
@@ -298,10 +314,8 @@ void RpcRegistry::registerRelay()
         if (context_->canBus) {
             const int txQueueSize = context_->canBus->txQueueSize();
             obj[QStringLiteral("txQueueSize")] = txQueueSize;
-            // Warn if queue is getting full (> 10 frames pending)
-            if (txQueueSize > 10) {
-                obj[QStringLiteral("warning")] = QStringLiteral(
-                    "CAN TX queue congested (%1 pending). Check CAN bus connection.").arg(txQueueSize);
+            if (txQueueSize > kTxQueueCongestionThreshold) {
+                obj[QStringLiteral("warning")] = formatQueueCongestionWarning(txQueueSize, QString());
             }
         }
 
@@ -355,10 +369,15 @@ void RpcRegistry::registerRelay()
             {kKeyAgeMs, (ageMs >= 0) ? static_cast<double>(ageMs) : QJsonValue()}
         };
 
-        // Add diagnostic info when device is offline
-        if (!online && lastSeen == 0) {
-            result[QStringLiteral("diagnostic")] = QStringLiteral(
-                "Device never responded. Status values are defaults.");
+        // Add diagnostic info when device is offline (consistent with relay.statusAll)
+        if (!online) {
+            if (lastSeen == 0) {
+                result[QStringLiteral("diagnostic")] = QStringLiteral(
+                    "Device never responded. Status values are defaults.");
+            } else {
+                result[QStringLiteral("diagnostic")] = QStringLiteral(
+                    "Device offline (last seen %1ms ago). Status may be stale.").arg(ageMs);
+            }
         }
 
         return result;
@@ -471,11 +490,9 @@ void RpcRegistry::registerRelay()
         if (context_->canBus) {
             const int txQueueSize = context_->canBus->txQueueSize();
             result[QStringLiteral("txQueueSize")] = txQueueSize;
-            // Warn if queue is congested - queries may not reach devices
-            if (txQueueSize > 10) {
-                result[QStringLiteral("warning")] = QStringLiteral(
-                    "CAN TX queue congested (%1 pending). Queries may be delayed. "
-                    "Check CAN bus connection.").arg(txQueueSize);
+            if (txQueueSize > kTxQueueCongestionThreshold) {
+                result[QStringLiteral("warning")] = formatQueueCongestionWarning(
+                    txQueueSize, QStringLiteral("Queries may be delayed."));
             }
         }
 
