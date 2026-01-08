@@ -1412,12 +1412,20 @@ document.addEventListener('DOMContentLoaded', function() {
  */
 function saveConfig() {
     callMethod('config.save', {}, function(response) {
-        if (response.result && response.result.ok) {
+        if (response.result && response.result.ok === true) {
             log('info', '✅ 配置保存成功！修改已持久化到配置文件。');
             alert('配置保存成功！\n\n您的修改已保存到服务器配置文件，服务重启后仍然有效。');
+        } else if (response.result && response.result.ok === false) {
+            // 处理result存在但ok为false的情况
+            const msg = response.result.message || '操作未成功';
+            log('error', `❌ 配置保存失败: ${msg}`);
+            alert('配置保存失败！\n\n' + msg);
         } else if (response.error) {
             log('error', `❌ 配置保存失败: ${response.error.message || '未知错误'}`);
             alert('配置保存失败！\n\n' + (response.error.message || '未知错误'));
+        } else {
+            log('error', '❌ 配置保存失败: 未知响应格式');
+            alert('配置保存失败！\n\n未知响应格式');
         }
     });
 }
@@ -1432,14 +1440,20 @@ function reloadConfig() {
     }
     
     callMethod('config.reload', {}, function(response) {
-        if (response.result && response.result.ok) {
+        if (response.result && response.result.ok === true) {
             log('info', '✅ 配置已重新加载');
             // 刷新各列表
             refreshDeviceList();
             refreshGroupList();
             refreshStrategyList();
+        } else if (response.result && response.result.ok === false) {
+            // 处理result存在但ok为false的情况
+            const msg = response.result.message || '操作未成功';
+            log('error', `❌ 重新加载失败: ${msg}`);
         } else if (response.error) {
             log('error', `❌ 重新加载失败: ${response.error.message || '未知错误'}`);
+        } else {
+            log('error', '❌ 重新加载失败: 未知响应格式');
         }
     });
 }
@@ -1450,10 +1464,16 @@ function reloadConfig() {
  */
 function getConfig() {
     callMethod('config.get', {}, function(response) {
-        if (response.result) {
+        if (response.result && response.result.ok !== undefined) {
+            // 验证结果包含有效数据
+            log('info', '当前配置信息:\n' + JSON.stringify(response.result, null, 2));
+        } else if (response.result) {
+            // 结果存在但格式不确定
             log('info', '当前配置信息:\n' + JSON.stringify(response.result, null, 2));
         } else if (response.error) {
             log('error', `获取配置失败: ${response.error.message || '未知错误'}`);
+        } else {
+            log('error', '获取配置失败: 未知响应格式');
         }
     });
 }
@@ -1474,23 +1494,29 @@ function checkCanStatus() {
     callMethod('can.status', {}, function(response) {
         if (response.result) {
             const result = response.result;
+            // 安全获取字段值，处理可能不存在的情况
+            const canInterface = result.interface || 'can0';
+            const bitrate = result.bitrate || '未知';
+            const opened = result.opened === true;
+            const txQueueSize = typeof result.txQueueSize === 'number' ? result.txQueueSize : 0;
+            
             let message = '=== CAN总线状态 ===\n';
-            message += `接口: ${result.interface}\n`;
-            message += `波特率: ${result.bitrate}\n`;
-            message += `已打开: ${result.opened ? '✅ 是' : '❌ 否'}\n`;
-            message += `发送队列: ${result.txQueueSize}个待发送帧\n`;
+            message += `接口: ${canInterface}\n`;
+            message += `波特率: ${bitrate}\n`;
+            message += `已打开: ${opened ? '✅ 是' : '❌ 否'}\n`;
+            message += `发送队列: ${txQueueSize}个待发送帧\n`;
             
             if (result.diagnostic) {
                 message += '\n⚠️ 诊断信息:\n' + result.diagnostic;
             }
             
-            if (!result.opened) {
+            if (!opened) {
                 message += '\n\n❗ CAN总线未打开，无法发送控制命令！';
                 message += '\n请检查：';
-                message += '\n1. CAN接口是否存在：ip link show ' + result.interface;
-                message += '\n2. CAN接口是否启动：ip link set ' + result.interface + ' up';
-                message += '\n3. 波特率是否正确：canconfig ' + result.interface + ' bitrate ' + result.bitrate;
-            } else if (result.txQueueSize > 10) {
+                message += '\n1. CAN接口是否存在：ip link show ' + canInterface;
+                message += '\n2. CAN接口是否启动：ip link set ' + canInterface + ' up';
+                message += '\n3. 波特率是否正确：canconfig ' + canInterface + ' bitrate ' + bitrate;
+            } else if (txQueueSize > 10) {
                 message += '\n\n⚠️ 发送队列拥堵，可能原因：';
                 message += '\n1. CAN总线未连接设备（无ACK）';
                 message += '\n2. 波特率不匹配';
