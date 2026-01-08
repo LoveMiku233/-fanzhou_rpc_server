@@ -917,6 +917,10 @@ void RpcRegistry::registerAuto()
             obj[QStringLiteral("intervalSec")] = state.config.intervalSec;
             obj[QStringLiteral("enabled")] = state.config.enabled;
             obj[QStringLiteral("autoStart")] = state.config.autoStart;
+            obj[QStringLiteral("triggerType")] = state.config.triggerType;
+            if (!state.config.dailyTime.isEmpty()) {
+                obj[QStringLiteral("dailyTime")] = state.config.dailyTime;
+            }
             obj[QStringLiteral("attached")] = state.attached;
             obj[QStringLiteral("running")] = state.running;
             arr.append(obj);
@@ -964,6 +968,8 @@ void RpcRegistry::registerAuto()
         qint32 intervalSec = 60;
         bool enabled = true;
         bool autoStart = true;
+        QString triggerType = QStringLiteral("interval");
+        QString dailyTime;
 
         if (!rpc::RpcHelpers::getI32(params, "id", id) || id <= 0)
             return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid id"));
@@ -981,6 +987,8 @@ void RpcRegistry::registerAuto()
         rpc::RpcHelpers::getI32(params, "intervalSec", intervalSec);
         rpc::RpcHelpers::getBool(params, "enabled", enabled, true);
         rpc::RpcHelpers::getBool(params, "autoStart", autoStart, true);
+        rpc::RpcHelpers::getString(params, "triggerType", triggerType);
+        rpc::RpcHelpers::getString(params, "dailyTime", dailyTime);
 
         AutoStrategyConfig config;
         config.strategyId = id;
@@ -991,6 +999,8 @@ void RpcRegistry::registerAuto()
         config.intervalSec = qMax(1, intervalSec);
         config.enabled = enabled;
         config.autoStart = autoStart;
+        config.triggerType = triggerType;
+        config.dailyTime = dailyTime;
 
         QString error;
         if (!context_->createStrategy(config, &error))

@@ -274,6 +274,8 @@ bool CoreConfig::loadFromFile(const QString &path, QString *error)
             strat.intervalSec = obj.value(QStringLiteral("intervalSec")).toInt(60);
             strat.enabled = obj.value(QStringLiteral("enabled")).toBool(true);
             strat.autoStart = obj.value(QStringLiteral("autoStart")).toBool(true);
+            strat.triggerType = obj.value(QStringLiteral("triggerType")).toString(QStringLiteral("interval"));
+            strat.dailyTime = obj.value(QStringLiteral("dailyTime")).toString();
 
             strategies.append(strat);
         }
@@ -375,6 +377,10 @@ bool CoreConfig::saveToFile(const QString &path, QString *error) const
         obj[QStringLiteral("intervalSec")] = strat.intervalSec;
         obj[QStringLiteral("enabled")] = strat.enabled;
         obj[QStringLiteral("autoStart")] = strat.autoStart;
+        obj[QStringLiteral("triggerType")] = strat.triggerType;
+        if (!strat.dailyTime.isEmpty()) {
+            obj[QStringLiteral("dailyTime")] = strat.dailyTime;
+        }
         stratArr.append(obj);
     }
     root[QStringLiteral("strategies")] = stratArr;

@@ -99,7 +99,7 @@ struct ScreenConfig {
 
 /**
  * @brief 自动控制策略配置
- * 定时策略，按间隔时间自动触发分组控制
+ * 定时策略，按间隔时间或每日固定时间自动触发分组控制
  */
 struct AutoStrategyConfig {
     int strategyId = 0;          ///< 策略ID
@@ -107,9 +107,11 @@ struct AutoStrategyConfig {
     int groupId = 0;             ///< 绑定的分组ID
     qint8 channel = 0;           ///< 控制通道，-1表示所有通道
     QString action = QStringLiteral("stop");  ///< 控制动作
-    int intervalSec = 60;        ///< 执行间隔（秒）
+    int intervalSec = 60;        ///< 执行间隔（秒），仅当triggerType为interval时使用
     bool enabled = true;         ///< 是否启用
     bool autoStart = true;       ///< 是否自动启动
+    QString triggerType = QStringLiteral("interval");  ///< 触发类型: "interval"(间隔执行) 或 "daily"(每日定时)
+    QString dailyTime;           ///< 每日执行时间（格式: "HH:MM"），仅当triggerType为daily时使用
 };
 
 /**
