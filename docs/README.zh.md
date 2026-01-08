@@ -353,6 +353,78 @@ python3 -m http.server 8080
 
 ## 故障排除
 
+### CAN TX buffer full（发送缓冲区满）
+
+当日志中出现类似以下信息时：
+
+```
+[DEBUG] [CAN] TX buffer full, backing off 10ms
+[DEBUG] [CAN] TX buffer full, backing off 20ms
+[DEBUG] [CAN] TX buffer full, backing off 40ms
+...
+[DEBUG] [CAN] TX buffer full, backing off 320ms
+```
+
+**问题原因**：
+
+这表明CAN帧无法成功发送出去。服务器启动时会自动查询所有继电器设备的状态，如果CAN总线无法正常工作，发送队列会持续积压，系统进入指数退避模式。
+
+**常见原因**：
+
+1. **CAN总线未连接设备**：CAN协议要求至少有一个接收设备发送ACK信号，否则发送方会认为发送失败
+2. **波特率不匹配**：发送设备和接收设备的波特率必须一致（默认125000bps）
+3. **缺少终端电阻**：CAN总线两端各需要一个120Ω的终端电阻
+4. **接线问题**：CAN_H和CAN_L接线错误或接触不良
+5. **CAN接口未正确配置**：接口未启动或配置错误
+
+**诊断步骤**：
+
+1. 检查CAN接口详细状态：
+   ```bash
+   ip -details link show can0
+   ```
+   关注 `state` 字段，正常应该是 `UP`，以及 `can_state`（应该是 `ERROR-ACTIVE`）。
+
+2. 查看CAN统计信息：
+   ```bash
+   ip -s link show can0
+   ```
+   如果 `TX errors` 持续增加，说明发送有问题。
+
+3. 检查内核CAN错误计数：
+   ```bash
+   cat /sys/class/net/can0/device/net/can0/statistics/*
+   ```
+
+4. 确认CAN接口配置：
+   ```bash
+   canconfig can0
+   ```
+
+**解决方案**：
+
+1. **确保CAN总线上至少有一个其他设备**（如继电器模块）已正确连接并通电
+
+2. **重新配置CAN接口**：
+   ```bash
+   ip link set can0 down
+   canconfig can0 bitrate 125000 ctrlmode triple-sampling on
+   ip link set can0 up
+   ```
+
+3. **检查硬件连接**：
+   - 确认CAN_H、CAN_L正确连接
+   - 确认终端电阻（120Ω）已安装在总线两端
+   - 使用万用表测量CAN_H和CAN_L之间的电阻，应约为60Ω（两个120Ω并联）
+
+4. **如果只是测试环境**，可以使用虚拟CAN：
+   ```bash
+   modprobe vcan
+   ip link add dev vcan0 type vcan
+   ip link set vcan0 up
+   ```
+   然后修改配置文件中的 `can.ifname` 为 `vcan0`。
+
 ### CAN通信失败
 
 1. 检查CAN接口状态：

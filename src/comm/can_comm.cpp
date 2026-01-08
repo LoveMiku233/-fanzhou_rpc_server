@@ -129,6 +129,7 @@ void CanComm::close()
     txQueue_.clear();
     txBackoffMs_ = 0;
     txBackoffMultiplier_ = 0;
+    txDiagLogged_ = false;
 
     emit closed();
 }
@@ -203,8 +204,9 @@ void CanComm::onTxPump()
                       .arg(canIdWithoutFlags, 0, 16)
                       .arg(item.frame.can_dlc));
         txQueue_.dequeue();
-        // 成功发送后重置退避乘数
+        // 成功发送后重置退避乘数和诊断标志
         txBackoffMultiplier_ = 0;
+        txDiagLogged_ = false;
         return;
     }
 
@@ -218,6 +220,20 @@ void CanComm::onTxPump()
             ++txBackoffMultiplier_;
         }
         LOG_DEBUG(kLogSource, QStringLiteral("TX buffer full, backing off %1ms").arg(backoff));
+
+        // 当达到最大退避时，输出一次详细的诊断信息
+        // 这通常表示CAN总线未正确连接或配置
+        if (txBackoffMultiplier_ == kMaxBackoffMultiplier && !txDiagLogged_) {
+            txDiagLogged_ = true;
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("CAN TX buffer 持续满载。可能原因：\n"
+                                       "  1. CAN总线未连接设备（无ACK）\n"
+                                       "  2. CAN接口未正确配置（波特率不匹配）\n"
+                                       "  3. 缺少终端电阻（120Ω）\n"
+                                       "  4. 接线问题（CAN_H/CAN_L）\n"
+                                       "请检查 'ip -details link show %1' 查看接口状态")
+                            .arg(config_.interface));
+        }
         return;
     }
 
