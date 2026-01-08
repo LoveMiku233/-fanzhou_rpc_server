@@ -94,28 +94,22 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
         <div class="sidebar">
             <div class="sidebar-nav">
                 <button class="nav-btn active" onclick="showPage('quick')" data-page="quick">
-                    ⚡ 快捷操作
+                    🏠 主页
                 </button>
                 <button class="nav-btn" onclick="showPage('devices')" data-page="devices">
-                    🔌 设备列表
+                    🔌 设备
                 </button>
                 <button class="nav-btn" onclick="showPage('groups')" data-page="groups">
-                    📂 分组管理
+                    📂 分组
                 </button>
                 <button class="nav-btn" onclick="showPage('strategy')" data-page="strategy">
-                    ⚙️ 策略管理
+                    ⏱️ 策略
                 </button>
                 <button class="nav-btn" onclick="showPage('blueprint')" data-page="blueprint">
-                    🎨 蓝图编辑器
-                </button>
-                <button class="nav-btn" onclick="showPage('relay')" data-page="relay">
-                    🎛️ 继电器控制
+                    🎨 蓝图
                 </button>
                 <button class="nav-btn" onclick="showPage('custom')" data-page="custom">
-                    🛠️ 自定义调用
-                </button>
-                <button class="nav-btn" onclick="showPage('help')" data-page="help">
-                    📖 使用帮助
+                    🛠️ 高级
                 </button>
             </div>
         </div>
@@ -128,28 +122,47 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
             <div class="page-content active" id="page-quick">
                 <h3 style="margin-bottom: 20px; color: #333;">常用RPC方法快捷按钮</h3>
                 
-                <!-- 重要提示：配置保存 -->
-                <div style="background: #fff3e0; padding: 15px 20px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #ff9800;">
-                    <h4 style="margin-bottom: 10px; color: #e65100;">💡 重要提示</h4>
-                    <p style="color: #666; font-size: 13px; margin-bottom: 10px;">
-                        通过Web页面创建的分组、策略等修改默认<strong>只保存在内存中</strong>，服务重启后会丢失。
-                        <br>如需持久保存，请在修改完成后点击"<strong>💾 保存配置</strong>"按钮。
-                    </p>
-                    <div class="btn-group">
-                        <button class="success" onclick="saveConfig()">💾 保存配置</button>
-                        <button class="secondary" onclick="getConfig()">📋 查看配置</button>
-                        <button class="warning" onclick="reloadConfig()">🔄 重载配置</button>
+                <!-- 快速状态卡片 -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px;">
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 12px; color: white;">
+                        <div style="font-size: 24px; margin-bottom: 8px;">🔌</div>
+                        <div style="font-size: 13px; opacity: 0.9;">设备管理</div>
+                        <button onclick="showPage('devices'); refreshDeviceList()" style="margin-top: 10px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); width: 100%;">打开</button>
+                    </div>
+                    <div style="background: linear-gradient(135deg, #27ae60 0%, #1e8449 100%); padding: 20px; border-radius: 12px; color: white;">
+                        <div style="font-size: 24px; margin-bottom: 8px;">📂</div>
+                        <div style="font-size: 13px; opacity: 0.9;">分组控制</div>
+                        <button onclick="showPage('groups'); refreshGroupList()" style="margin-top: 10px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); width: 100%;">打开</button>
+                    </div>
+                    <div style="background: linear-gradient(135deg, #e67e22 0%, #d35400 100%); padding: 20px; border-radius: 12px; color: white;">
+                        <div style="font-size: 24px; margin-bottom: 8px;">⏱️</div>
+                        <div style="font-size: 13px; opacity: 0.9;">自动策略</div>
+                        <button onclick="showPage('strategy'); refreshStrategyList()" style="margin-top: 10px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); width: 100%;">打开</button>
+                    </div>
+                    <div style="background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); padding: 20px; border-radius: 12px; color: white;">
+                        <div style="font-size: 24px; margin-bottom: 8px;">🎨</div>
+                        <div style="font-size: 13px; opacity: 0.9;">可视化蓝图</div>
+                        <button onclick="showPage('blueprint')" style="margin-top: 10px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); width: 100%;">打开</button>
+                    </div>
+                </div>
+
+                <!-- 配置保存提示 -->
+                <div style="background: #e8f5e9; padding: 15px 20px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #4caf50;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                        <div>
+                            <strong style="color: #2e7d32;">💡 修改后别忘了保存配置！</strong>
+                            <span style="color: #666; font-size: 13px; margin-left: 10px;">否则重启后会丢失</span>
+                        </div>
+                        <button class="success" onclick="saveConfig()" style="min-width: 120px;">💾 保存配置</button>
                     </div>
                 </div>
                 
+                <!-- 快捷操作按钮 -->
+                <h4 style="margin-bottom: 15px; color: #333;">🚀 快捷操作</h4>
                 <div class="quick-actions-grid">
                     <button class="quick-action-btn" onclick="callMethod('rpc.ping', {})">
                         <span class="icon">🔔</span>
                         Ping测试
-                    </button>
-                    <button class="quick-action-btn" onclick="callMethod('rpc.list', {})">
-                        <span class="icon">📋</span>
-                        列出方法
                     </button>
                     <button class="quick-action-btn" onclick="callMethod('sys.info', {})">
                         <span class="icon">ℹ️</span>
@@ -159,25 +172,9 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                         <span class="icon">🔧</span>
                         CAN诊断
                     </button>
-                    <button class="quick-action-btn success" onclick="refreshDeviceList()">
-                        <span class="icon">🔌</span>
-                        刷新设备
-                    </button>
                     <button class="quick-action-btn success" onclick="callMethod('relay.queryAll', {})">
                         <span class="icon">🔍</span>
-                        查询全部
-                    </button>
-                    <button class="quick-action-btn success" onclick="refreshGroupList()">
-                        <span class="icon">📂</span>
-                        刷新分组
-                    </button>
-                    <button class="quick-action-btn warning" onclick="callMethod('control.queue.status', {})">
-                        <span class="icon">📊</span>
-                        队列状态
-                    </button>
-                    <button class="quick-action-btn" onclick="refreshStrategyList()">
-                        <span class="icon">⚙️</span>
-                        策略列表
+                        查询全部设备
                     </button>
                 </div>
             </div>
@@ -287,51 +284,48 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
             <!-- ==================== 策略管理页面 ==================== -->
             <div class="page-content" id="page-strategy">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="color: #333;">📋 策略管理</h3>
-                    <button onclick="refreshStrategyList()">🔄 刷新列表</button>
+                    <h3 style="color: #333;">⏱️ 策略管理</h3>
+                    <div class="btn-group">
+                        <button onclick="refreshStrategyList()">🔄 刷新</button>
+                        <button class="secondary" onclick="showPage('blueprint')">🎨 可视化编辑器</button>
+                    </div>
                 </div>
 
-                <!-- 策略管理说明 -->
-                <div style="background: #fff8e1; padding: 15px 20px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
-                    <h4 style="margin-bottom: 10px; color: #333;">💡 策略管理使用说明</h4>
-                    <ul style="color: #666; font-size: 13px; margin-left: 20px; line-height: 1.8;">
-                        <li><strong>定时策略：</strong>可以选择"间隔执行"（每隔多少秒执行一次）或"每日定时"（每天固定时间执行）</li>
-                        <li><strong>传感器策略：</strong>当传感器数值满足条件时自动触发（如温度超过30度时启动风扇）</li>
-                        <li><strong>分组程序：</strong>将设备的指定通道绑定到分组，实现批量控制</li>
-                        <li><strong>操作按钮：</strong>启用/禁用控制策略是否生效，触发可立即执行一次策略，删除将永久移除策略</li>
-                        <li><strong>多策略支持：</strong>每个分组可以添加多个策略，只要策略ID不同即可。<br>
-                            💡 <em>推荐使用"蓝图编辑器"可视化管理策略，系统会自动生成唯一ID</em></li>
-                    </ul>
+                <!-- 简化提示 -->
+                <div style="background: #e3f2fd; padding: 15px 20px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
+                    <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                        <span style="font-size: 24px;">💡</span>
+                        <div>
+                            <strong style="color: #1565c0;">推荐使用蓝图编辑器</strong>
+                            <p style="color: #666; font-size: 13px; margin: 5px 0 0;">通过拖放方式可视化创建策略，更加直观易用！</p>
+                        </div>
+                        <button class="success" onclick="showPage('blueprint')" style="margin-left: auto;">🎨 打开蓝图编辑器</button>
+                    </div>
                 </div>
 
-                <!-- 创建定时策略 - 重新设计 -->
-                <div style="background: #e3f2fd; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-                    <h4 style="margin-bottom: 15px; color: #333;">⏱️ 创建定时策略</h4>
-                    <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
-                        定时策略可以按间隔时间周期执行，也可以在每天指定时间执行。选择适合您需求的触发方式。
-                    </p>
+                <!-- 快速创建定时策略 - 简化版 -->
+                <details style="background: #f5f5f5; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                    <summary style="cursor: pointer; font-weight: 600; color: #333; margin-bottom: 15px;">➕ 手动创建定时策略（点击展开）</summary>
                     
-                    <!-- 基本配置 -->
-                    <div class="form-row">
+                    <div class="form-row" style="margin-top: 15px;">
                         <div class="form-group">
-                            <label>策略ID <button type="button" class="btn-small" onclick="autoFillStrategyId()" title="自动获取下一个可用ID" style="font-size: 10px; padding: 2px 6px; margin-left: 5px;">🔄 自动</button></label>
-                            <input type="number" id="newStrategyId" value="1" min="1" title="策略的唯一标识符，每个策略必须有不同的ID">
+                            <label>策略ID <button type="button" onclick="autoFillStrategyId()" style="font-size: 10px; padding: 2px 6px; margin-left: 5px;">🔄 自动</button></label>
+                            <input type="number" id="newStrategyId" value="1" min="1">
                         </div>
                         <div class="form-group">
                             <label>策略名称</label>
-                            <input type="text" id="newStrategyName" placeholder="例如: 定时通风" title="给策略起一个易于识别的名称">
+                            <input type="text" id="newStrategyName" placeholder="例如: 定时通风">
                         </div>
                         <div class="form-group">
                             <label>绑定分组ID</label>
-                            <input type="number" id="newStrategyGroupId" value="1" min="1" title="要控制的设备分组（同一分组可添加多个策略）">
+                            <input type="number" id="newStrategyGroupId" value="1" min="1">
                         </div>
                     </div>
                     
-                    <!-- 控制配置 -->
                     <div class="form-row">
                         <div class="form-group">
                             <label>控制通道</label>
-                            <select id="newStrategyChannel" title="选择要控制的通道">
+                            <select id="newStrategyChannel">
                                 <option value="0">通道 0</option>
                                 <option value="1">通道 1</option>
                                 <option value="2">通道 2</option>
@@ -341,7 +335,7 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                         </div>
                         <div class="form-group">
                             <label>执行动作</label>
-                            <select id="newStrategyAction" title="选择触发时执行的操作">
+                            <select id="newStrategyAction">
                                 <option value="stop">⏹️ 停止</option>
                                 <option value="fwd">▶️ 正转</option>
                                 <option value="rev">◀️ 反转</option>
@@ -349,48 +343,45 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                         </div>
                         <div class="form-group">
                             <label>自动启动</label>
-                            <select id="newStrategyAutoStart" title="创建后是否自动启用">
+                            <select id="newStrategyAutoStart">
                                 <option value="true">✅ 是</option>
                                 <option value="false">❌ 否</option>
                             </select>
                         </div>
                     </div>
                     
-                    <!-- 时间触发配置 - 新增每日定时选项 -->
-                    <div style="background: #bbdefb; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                        <h5 style="margin-bottom: 12px; color: #1565c0;">🕐 触发时间设置</h5>
+                    <!-- 时间触发配置 -->
+                    <div style="background: #fff; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #e0e0e0;">
                         <div class="form-row">
                             <div class="form-group">
                                 <label>触发方式</label>
-                                <select id="newStrategyTriggerType" onchange="toggleTimerTypeInputs()" title="选择定时触发的方式">
-                                    <option value="interval">⏱️ 间隔执行（每隔N秒执行一次）</option>
-                                    <option value="daily">📅 每日定时（每天固定时间执行）</option>
+                                <select id="newStrategyTriggerType" onchange="toggleTimerTypeInputs()">
+                                    <option value="interval">⏱️ 间隔执行</option>
+                                    <option value="daily">📅 每日定时</option>
                                 </select>
                             </div>
                             <div class="form-group" id="intervalInputGroup">
                                 <label>执行间隔（秒）</label>
-                                <input type="number" id="newStrategyInterval" value="60" min="1" title="每隔多少秒执行一次">
+                                <input type="number" id="newStrategyInterval" value="60" min="1">
                             </div>
                             <div class="form-group" id="dailyTimeInputGroup" style="display: none;">
                                 <label>每日执行时间</label>
-                                <input type="time" id="newStrategyDailyTime" value="08:00" title="每天在这个时间执行">
+                                <input type="time" id="newStrategyDailyTime" value="08:00">
                             </div>
                         </div>
                     </div>
                     
-                    <button class="success" onclick="createTimerStrategy()">➕ 创建定时策略</button>
-                </div>
+                    <button class="success" onclick="createTimerStrategy()">➕ 创建策略</button>
+                </details>
                 
-                <!-- 传感器触发策略 -->
-                <div style="background: #fff3e0; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-                    <h4 style="margin-bottom: 15px; color: #333;">📡 传感器触发策略</h4>
-                    <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
-                        当传感器数值满足阈值条件时，自动触发分组控制动作。策略可与分组程序联动。
-                    </p>
-                    <div class="form-row">
+                <!-- 传感器触发策略 - 简化为可折叠 -->
+                <details style="background: #fff3e0; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                    <summary style="cursor: pointer; font-weight: 600; color: #333;">📡 创建传感器触发策略（点击展开）</summary>
+                    
+                    <div class="form-row" style="margin-top: 15px;">
                         <div class="form-group">
-                            <label>策略ID <button type="button" class="btn-small" onclick="autoFillSensorStrategyId()" title="自动获取下一个可用ID" style="font-size: 10px; padding: 2px 6px; margin-left: 5px;">🔄 自动</button></label>
-                            <input type="number" id="sensorStrategyId" value="1" min="1" title="策略的唯一标识符，每个策略必须有不同的ID">
+                            <label>策略ID <button type="button" onclick="autoFillSensorStrategyId()" style="font-size: 10px; padding: 2px 6px; margin-left: 5px;">🔄 自动</button></label>
+                            <input type="number" id="sensorStrategyId" value="1" min="1">
                         </div>
                         <div class="form-group">
                             <label>策略名称</label>
@@ -399,28 +390,25 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                         <div class="form-group">
                             <label>传感器类型</label>
                             <select id="sensorType">
-                                <option value="temperature">🌡️ 温度传感器</option>
-                                <option value="humidity">💧 湿度传感器</option>
-                                <option value="light">💡 光照传感器</option>
-                                <option value="pressure">📊 压力传感器</option>
-                                <option value="soil_moisture">🌱 土壤湿度传感器</option>
-                                <option value="co2">🌫️ CO2传感器</option>
+                                <option value="temperature">🌡️ 温度</option>
+                                <option value="humidity">💧 湿度</option>
+                                <option value="light">💡 光照</option>
+                                <option value="soil_moisture">🌱 土壤湿度</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>传感器节点ID</label>
+                            <label>传感器节点</label>
                             <input type="number" id="sensorNodeId" value="1" min="1" max="255">
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>阈值条件</label>
+                            <label>触发条件</label>
                             <select id="sensorCondition">
                                 <option value="gt">大于 (>)</option>
                                 <option value="lt">小于 (<)</option>
-                                <option value="eq">等于 (=)</option>
-                                <option value="gte">大于等于 (>=)</option>
-                                <option value="lte">小于等于 (<=)</option>
+                                <option value="gte">≥</option>
+                                <option value="lte">≤</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -428,77 +416,73 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                             <input type="number" id="sensorThreshold" value="25" step="0.1">
                         </div>
                         <div class="form-group">
-                            <label>绑定分组ID</label>
+                            <label>分组ID</label>
                             <input type="number" id="sensorGroupId" value="1" min="1">
                         </div>
                         <div class="form-group">
-                            <label>控制通道</label>
+                            <label>通道</label>
                             <select id="sensorChannel">
-                                <option value="0">通道 0</option>
-                                <option value="1">通道 1</option>
-                                <option value="2">通道 2</option>
-                                <option value="3">通道 3</option>
-                                <option value="-1">所有通道</option>
+                                <option value="0">CH0</option>
+                                <option value="1">CH1</option>
+                                <option value="2">CH2</option>
+                                <option value="3">CH3</option>
+                                <option value="-1">全部</option>
                             </select>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>触发动作</label>
+                            <label>执行动作</label>
                             <select id="sensorAction">
-                                <option value="stop">⏹️ 停止</option>
                                 <option value="fwd">▶️ 正转</option>
+                                <option value="stop">⏹️ 停止</option>
                                 <option value="rev">◀️ 反转</option>
                             </select>
                         </div>
                         <div class="form-group">
                             <label>冷却时间（秒）</label>
-                            <input type="number" id="sensorCooldown" value="60" min="0" title="触发后等待时间，防止频繁触发">
+                            <input type="number" id="sensorCooldown" value="60" min="0">
                         </div>
                         <div class="form-group">
-                            <label>启用状态</label>
+                            <label>启用</label>
                             <select id="sensorEnabled">
-                                <option value="true">启用</option>
-                                <option value="false">禁用</option>
+                                <option value="true">✅ 是</option>
+                                <option value="false">❌ 否</option>
                             </select>
                         </div>
                     </div>
-                    <div class="btn-group">
-                        <button class="success" onclick="createSensorStrategy()">➕ 创建传感器策略</button>
-                    </div>
-                </div>
+                    <button class="success" onclick="createSensorStrategy()">➕ 创建</button>
+                </details>
 
-                <!-- 分组程序设置 -->
-                <div style="background: #e8f5e9; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-                    <h4 style="margin-bottom: 15px; color: #333;">🔧 分组程序设置</h4>
-                    <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
-                        分组程序可绑定到特定通道，由传感器策略或定时策略自动触发控制。
-                    </p>
-                    <div class="form-row">
+                <!-- 分组程序设置 - 简化为可折叠 -->
+                <details style="background: #e8f5e9; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                    <summary style="cursor: pointer; font-weight: 600; color: #333;">🔧 分组通道管理（点击展开）</summary>
+                    
+                    <div class="form-row" style="margin-top: 15px;">
                         <div class="form-group">
                             <label>分组ID</label>
                             <input type="number" id="programGroupId" value="1" min="1">
                         </div>
                         <div class="form-group">
-                            <label>设备节点ID</label>
+                            <label>设备节点</label>
                             <input type="number" id="programNodeId" value="1" min="1" max="255">
                         </div>
                         <div class="form-group">
-                            <label>控制通道</label>
+                            <label>通道</label>
                             <select id="programChannel">
-                                <option value="0">通道 0</option>
-                                <option value="1">通道 1</option>
-                                <option value="2">通道 2</option>
-                                <option value="3">通道 3</option>
+                                <option value="0">CH0</option>
+                                <option value="1">CH1</option>
+                                <option value="2">CH2</option>
+                                <option value="3">CH3</option>
                             </select>
                         </div>
                     </div>
                     <div class="btn-group">
-                        <button class="success" onclick="addChannelToGroup()">➕ 添加通道到分组</button>
-                        <button class="danger" onclick="removeChannelFromGroup()">➖ 移除通道</button>
-                        <button onclick="getGroupChannels()">🔍 查看分组通道</button>
+                        <button class="success" onclick="addChannelToGroup()">➕ 添加</button>
+                        <button class="danger" onclick="removeChannelFromGroup()">➖ 移除</button>
+                        <button onclick="getGroupChannels()">🔍 查看</button>
                     </div>
-                </div>
+                </details>
 
                 <!-- 策略列表 -->
                 <div class="data-list" id="strategyList">
@@ -508,7 +492,7 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                     </div>
                     <div class="data-list-empty" id="strategyListEmpty">
                         <p>📭 暂无定时策略</p>
-                        <p style="font-size: 12px; margin-top: 10px;">请先连接服务器并点击"刷新列表"，或在上方创建新策略</p>
+                        <p style="font-size: 12px; margin-top: 10px;">点击上方"刷新"按钮获取策略列表</p>
                     </div>
                     <div id="strategyListContent"></div>
                 </div>
@@ -527,118 +511,114 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                 </div>
             </div>
 
-            <!-- ==================== 继电器控制页面 ==================== -->
-            <div class="page-content" id="page-relay">
-                <h3 style="margin-bottom: 20px; color: #333;">继电器控制面板</h3>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>节点ID</label>
-                        <input type="number" id="relayNode" value="1" min="1" max="255">
-                    </div>
-                    <div class="form-group">
-                        <label>通道</label>
-                        <select id="relayChannel">
-                            <option value="0">通道 0</option>
-                            <option value="1">通道 1</option>
-                            <option value="2">通道 2</option>
-                            <option value="3">通道 3</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>动作</label>
-                        <select id="relayAction">
-                            <option value="stop">⏹️ 停止 (Stop)</option>
-                            <option value="fwd">▶️ 正转 (Forward)</option>
-                            <option value="rev">◀️ 反转 (Reverse)</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="btn-group">
-                    <button class="success" onclick="controlRelay()">⚡ 执行控制</button>
-                    <button onclick="queryRelay()">🔍 查询状态</button>
-                    <button onclick="queryRelayAll()">📊 查询全部通道</button>
-                </div>
-
-                <!-- 分组控制 -->
-                <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #eee;">
-                    <h4 style="margin-bottom: 15px; color: #333;">📦 分组控制</h4>
-                    <div class="form-row">
+            <!-- ==================== 高级功能页面（合并继电器控制、自定义调用、帮助） ==================== -->
+            <div class="page-content" id="page-custom">
+                <h3 style="margin-bottom: 20px; color: #333;">🛠️ 高级功能</h3>
+                
+                <!-- 继电器直接控制 -->
+                <details open style="background: #f5f5f5; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                    <summary style="cursor: pointer; font-weight: 600; color: #333;">🎛️ 继电器直接控制</summary>
+                    <div class="form-row" style="margin-top: 15px;">
                         <div class="form-group">
-                            <label>分组ID</label>
-                            <input type="number" id="groupControlId" value="1" min="1">
+                            <label>节点ID</label>
+                            <input type="number" id="relayNode" value="1" min="1" max="255">
                         </div>
                         <div class="form-group">
                             <label>通道</label>
-                            <select id="groupControlChannel">
-                                <option value="0">通道 0</option>
-                                <option value="1">通道 1</option>
-                                <option value="2">通道 2</option>
-                                <option value="3">通道 3</option>
+                            <select id="relayChannel">
+                                <option value="0">CH0</option>
+                                <option value="1">CH1</option>
+                                <option value="2">CH2</option>
+                                <option value="3">CH3</option>
                             </select>
                         </div>
                         <div class="form-group">
                             <label>动作</label>
-                            <select id="groupControlAction">
-                                <option value="stop">⏹️ 停止 (Stop)</option>
-                                <option value="fwd">▶️ 正转 (Forward)</option>
-                                <option value="rev">◀️ 反转 (Reverse)</option>
+                            <select id="relayAction">
+                                <option value="stop">⏹️ 停止</option>
+                                <option value="fwd">▶️ 正转</option>
+                                <option value="rev">◀️ 反转</option>
                             </select>
                         </div>
                     </div>
-                    <button class="success" onclick="controlGroup()">⚡ 执行分组控制</button>
-                </div>
-            </div>
+                    <div class="btn-group">
+                        <button class="success" onclick="controlRelay()">⚡ 执行</button>
+                        <button onclick="queryRelay()">🔍 查询</button>
+                        <button onclick="queryRelayAll()">📊 全部</button>
+                    </div>
+                    
+                    <!-- 分组控制 -->
+                    <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">
+                        <strong style="display: block; margin-bottom: 10px;">📦 分组控制</strong>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>分组ID</label>
+                                <input type="number" id="groupControlId" value="1" min="1">
+                            </div>
+                            <div class="form-group">
+                                <label>通道</label>
+                                <select id="groupControlChannel">
+                                    <option value="0">CH0</option>
+                                    <option value="1">CH1</option>
+                                    <option value="2">CH2</option>
+                                    <option value="3">CH3</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>动作</label>
+                                <select id="groupControlAction">
+                                    <option value="stop">⏹️ 停止</option>
+                                    <option value="fwd">▶️ 正转</option>
+                                    <option value="rev">◀️ 反转</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button class="success" onclick="controlGroup()">⚡ 执行分组控制</button>
+                    </div>
+                </details>
 
-            <!-- ==================== 自定义调用页面 ==================== -->
-            <div class="page-content" id="page-custom">
-                <h3 style="margin-bottom: 20px; color: #333;">自定义RPC调用</h3>
-                <div class="form-group">
-                    <label>方法名</label>
-                    <input type="text" id="methodName" placeholder="例如: rpc.ping, relay.control">
-                </div>
-                <div class="form-group">
-                    <label>参数 (JSON格式)</label>
-                    <textarea id="methodParams" placeholder='例如: {"node": 1, "ch": 0, "action": "fwd"}'>{}</textarea>
-                </div>
-                <button onclick="callCustomMethod()">🚀 发送请求</button>
-                
-                <!-- 方法参考 -->
-                <div class="help-section" style="margin-top: 20px;">
-                    <h4>📚 常用方法参考</h4>
-                    <ul>
-                        <li><code>rpc.ping</code> - 测试连接 (无参数)</li>
-                        <li><code>rpc.list</code> - 列出所有方法 (无参数)</li>
-                        <li><code>sys.info</code> - 获取系统信息（包含canOpened、canTxQueueSize）(无参数)</li>
-                        <li><code>can.status</code> - <strong>获取CAN总线状态和诊断信息</strong> (无参数) - 控制不生效时请先检查此项</li>
+                <!-- 自定义RPC调用 -->
+                <details style="background: #e3f2fd; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                    <summary style="cursor: pointer; font-weight: 600; color: #333;">🛠️ 自定义RPC调用</summary>
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label>方法名</label>
+                        <input type="text" id="methodName" placeholder="例如: rpc.ping, relay.control">
+                    </div>
+                    <div class="form-group">
+                        <label>参数 (JSON格式)</label>
+                        <textarea id="methodParams" placeholder='例如: {"node": 1, "ch": 0, "action": "fwd"}'>{}</textarea>
+                    </div>
+                    <button onclick="callCustomMethod()">🚀 发送请求</button>
+                </details>
+
+                <!-- 配置管理 -->
+                <details style="background: #fff3e0; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                    <summary style="cursor: pointer; font-weight: 600; color: #333;">💾 配置管理</summary>
+                    <p style="color: #666; font-size: 13px; margin: 15px 0;">
+                        通过Web页面创建的修改默认只保存在内存中，重启后会丢失。
+                    </p>
+                    <div class="btn-group">
+                        <button class="success" onclick="saveConfig()">💾 保存配置</button>
+                        <button onclick="getConfig()">📋 查看配置</button>
+                        <button class="warning" onclick="reloadConfig()">🔄 重载配置</button>
+                    </div>
+                </details>
+
+                <!-- 常用RPC方法参考 -->
+                <details style="background: #f5f5f5; padding: 20px; border-radius: 12px;">
+                    <summary style="cursor: pointer; font-weight: 600; color: #333;">📚 常用RPC方法参考</summary>
+                    <ul style="margin-top: 15px; color: #666; font-size: 13px; line-height: 1.8;">
+                        <li><code>rpc.ping</code> - 测试连接</li>
+                        <li><code>sys.info</code> - 系统信息</li>
+                        <li><code>can.status</code> - CAN总线状态</li>
                         <li><code>relay.control</code> - 控制继电器 <code>{"node": 1, "ch": 0, "action": "fwd"}</code></li>
-                        <li><code>relay.status</code> - 查询状态 <code>{"node": 1, "ch": 0}</code></li>
-                        <li><code>relay.statusAll</code> - 查询单设备全部通道 <code>{"node": 1}</code></li>
-                        <li><code>relay.nodes</code> - 设备列表（含在线状态）(无参数)</li>
-                        <li><code>relay.queryAll</code> - 批量查询所有设备 (无参数)</li>
-                        <li><code>group.list</code> - 分组列表 (无参数)</li>
-                        <li><code>group.get</code> - 分组详情 <code>{"groupId": 1}</code></li>
-                        <li><code>group.create</code> - 创建分组 <code>{"groupId": 1, "name": "分组名"}</code></li>
-                        <li><code>group.delete</code> - 删除分组 <code>{"groupId": 1}</code></li>
-                        <li><code>group.addDevice</code> - 添加设备到分组 <code>{"groupId": 1, "node": 1}</code></li>
-                        <li><code>group.removeDevice</code> - 从分组移除设备 <code>{"groupId": 1, "node": 1}</code></li>
-                        <li><code>group.addChannel</code> - 添加通道到分组 <code>{"groupId": 1, "node": 1, "channel": 0}</code></li>
-                        <li><code>group.removeChannel</code> - 从分组移除通道 <code>{"groupId": 1, "node": 1, "channel": 0}</code></li>
-                        <li><code>group.getChannels</code> - 获取分组通道列表 <code>{"groupId": 1}</code></li>
+                        <li><code>relay.statusAll</code> - 查询设备状态 <code>{"node": 1}</code></li>
+                        <li><code>group.list</code> - 分组列表</li>
                         <li><code>group.control</code> - 分组控制 <code>{"groupId": 1, "ch": 0, "action": "stop"}</code></li>
-                        <li><code>control.queue.status</code> - 控制队列状态 (无参数)</li>
-                        <li><code>auto.strategy.list</code> - 自动策略列表 (无参数)</li>
-                        <li><code>auto.strategy.create</code> - 创建策略 <code>{"id": 1, "name": "定时策略", "groupId": 1, "channel": 0, "action": "fwd", "intervalSec": 60}</code></li>
-                        <li><code>auto.strategy.delete</code> - 删除策略 <code>{"id": 1}</code></li>
-                        <li><code>auto.strategy.enable</code> - 启用/禁用策略 <code>{"id": 1, "enabled": true}</code></li>
-                        <li><code>auto.strategy.trigger</code> - 手动触发策略 <code>{"id": 1}</code></li>
-                        <li><code>auto.sensor.list</code> - 传感器策略列表 (无参数)</li>
-                        <li><code>auto.sensor.create</code> - 创建传感器策略 <code>{"id": 1, "name": "高温报警", "sensorType": "temperature", "sensorNode": 1, "condition": "gt", "threshold": 30, "groupId": 1, "channel": 0, "action": "fwd"}</code></li>
-                        <li><code>auto.sensor.delete</code> - 删除传感器策略 <code>{"id": 1}</code></li>
-                        <li style="color: #e65100;"><code>config.get</code> - <strong>获取当前配置</strong> (无参数) - 查看运行时配置</li>
-                        <li style="color: #e65100;"><code>config.save</code> - <strong>保存配置</strong> (无参数) - 将修改持久化到配置文件</li>
-                        <li style="color: #e65100;"><code>config.reload</code> - <strong>重新加载配置</strong> (无参数) - 从文件重新加载配置</li>
+                        <li><code>auto.strategy.list</code> - 策略列表</li>
+                        <li><code>config.save</code> - 保存配置</li>
                     </ul>
-                </div>
+                </details>
             </div>
 
             <!-- ==================== 蓝图编辑器页面 ==================== -->
@@ -731,136 +711,22 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                     </div>
                 </div>
                 
-                <!-- 使用说明 -->
-                <div class="help-section" style="margin-top: 20px;">
-                    <h4>📖 蓝图编辑器使用说明</h4>
-                    <ul>
-                        <li><strong>添加节点：</strong>从左侧工具箱拖放节点到画布上</li>
-                        <li><strong>连接节点：</strong>从触发器的输出端口（右侧橙色圆点）拖到动作的输入端口（左侧绿色圆点）</li>
-                        <li><strong>配置节点：</strong>点击节点查看右侧属性面板，可修改参数后点击"应用"保存</li>
-                        <li><strong>复制节点：</strong>在属性面板中点击"复制"按钮，会在原节点附近创建相同配置的新节点</li>
-                        <li><strong>删除节点：</strong>点击节点右上角的×按钮，或在属性面板中点击"删除节点"；会提示确认并自动删除相关连线</li>
-                        <li><strong>删除连线：</strong>点击连线（会变成红色）后确认删除</li>
-                        <li><strong>清空画布：</strong>点击工具栏"清空画布"按钮可删除所有节点和连线</li>
-                        <li><strong>部署策略：</strong>完成连线后点击"部署策略"将蓝图转换为实际的RPC策略</li>
-                        <li><strong>读取策略：</strong>点击"读取策略"从服务器读取已创建的策略，以节点形式显示在画布上，可直接管理</li>
-                        <li><strong>系统框图：</strong>点击"生成系统框图"可自动从服务器读取设备和分组信息</li>
-                        <li><strong>导入/导出：</strong>可将蓝图保存为JSON文件，方便备份和分享</li>
-                        <li><strong>多策略支持：</strong>每个分组可以添加多个策略，只要策略ID不同即可（系统自动生成唯一ID）</li>
+                <!-- 简化使用说明 -->
+                <details style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin-top: 15px;">
+                    <summary style="cursor: pointer; font-weight: 600; color: #666;">📖 使用说明（点击展开）</summary>
+                    <ul style="margin-top: 10px; color: #666; font-size: 13px; line-height: 1.8;">
+                        <li><strong>添加节点：</strong>从左侧工具箱拖放到画布</li>
+                        <li><strong>连接：</strong>拖动输出端口（橙色）到输入端口（绿色）</li>
+                        <li><strong>配置：</strong>点击节点在右侧面板编辑属性</li>
+                        <li><strong>部署：</strong>点击"部署策略"将蓝图转换为实际策略</li>
+                        <li><strong>读取：</strong>点击"读取策略"从服务器加载现有策略</li>
                     </ul>
-                </div>
+                    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd;">
+                        <strong style="color: #333;">⌨️ 键盘快捷键：</strong>
+                        <span style="margin-left: 10px;">Delete=删除 | Ctrl+D=复制 | Shift+拖拽=精确定位 | Esc=取消选择</span>
+                    </div>
+                </details>
             </div>
-
-            <!-- ==================== 使用帮助页面 ==================== -->
-            <div class="page-content" id="page-help">
-                <h3 style="margin-bottom: 20px; color: #333;">使用帮助</h3>
-                
-                <div class="help-section">
-                    <h4>1. 命令行调试方式</h4>
-                    <pre>
-# 使用 netcat 发送 JSON-RPC 请求
-echo '{"jsonrpc":"2.0","id":1,"method":"rpc.ping","params":{}}' | nc localhost 12345
-
-# 使用 socat 测试
-echo '{"jsonrpc":"2.0","id":1,"method":"relay.nodes","params":{}}' | socat - TCP:localhost:12345</pre>
-                </div>
-
-                <!-- 常见问题解答 -->
-                <div class="help-section" style="background: #fff3e0; border-left: 4px solid #ff9800;">
-                    <h4>🔧 常见问题解答 (FAQ)</h4>
-                    
-                    <h5 style="color: #e65100; margin-top: 15px;">Q1: 为什么无法控制设备，CAN无法发送？</h5>
-                    <p style="margin-left: 20px;">
-                        <strong>原因：</strong>CAN总线可能未正确连接或配置。<br>
-                        <strong>诊断方法：</strong>点击"🔧 CAN诊断"按钮查看详细状态。<br>
-                        <strong>常见原因和解决方案：</strong>
-                    </p>
-                    <ul style="margin-left: 30px;">
-                        <li><strong>CAN接口未启动：</strong>执行 <code>ip link set can0 up</code></li>
-                        <li><strong>波特率不匹配：</strong>确保设备和主机使用相同波特率（默认125000）</li>
-                        <li><strong>缺少终端电阻：</strong>CAN总线两端需要各有一个120Ω终端电阻</li>
-                        <li><strong>接线问题：</strong>检查CAN_H和CAN_L是否正确连接</li>
-                        <li><strong>无ACK响应：</strong>总线上至少需要两个节点才能正常通信</li>
-                    </ul>
-                    <pre style="font-size: 12px;">
-# 检查CAN接口状态
-ip -details link show can0
-
-# 配置并启动CAN接口
-canconfig can0 bitrate 125000
-ifconfig can0 up
-
-# 测试CAN发送
-cansend can0 123#DEADBEEF</pre>
-                    
-                    <h5 style="color: #e65100; margin-top: 15px;">Q2: 为什么Web页面修改的内容无法保存？</h5>
-                    <p style="margin-left: 20px;">
-                        <strong>原因：</strong>通过Web页面创建的分组、策略等修改默认只保存在服务器内存中，服务重启后会丢失。<br>
-                        <strong>解决方案：</strong>修改完成后，点击"💾 保存配置"按钮将配置持久化到配置文件。<br>
-                        <strong>操作步骤：</strong>
-                    </p>
-                    <ol style="margin-left: 30px;">
-                        <li>在Web页面进行修改（创建分组、添加设备等）</li>
-                        <li>点击快捷操作页面的"💾 保存配置"按钮</li>
-                        <li>确认保存成功提示</li>
-                        <li>服务重启后修改仍然有效</li>
-                    </ol>
-                    <pre style="font-size: 12px;">
-# 也可以通过RPC命令保存配置
-echo '{"jsonrpc":"2.0","id":1,"method":"config.save","params":{}}' | nc localhost 12345
-
-# 查看当前配置
-echo '{"jsonrpc":"2.0","id":1,"method":"config.get","params":{}}' | nc localhost 12345</pre>
-                </div>
-
-                <div class="help-section">
-                    <h4>2. A133平台部署信息</h4>
-                    <ul>
-                        <li>确保CAN接口已正确配置 (can0)</li>
-                        <li>RPC服务默认监听端口: <code>12345</code></li>
-                        <li>WebSocket代理建议端口: <code>12346</code></li>
-                        <li>配置文件位于: <code>/var/lib/fanzhou_core/core.json</code></li>
-                        <li>日志文件位于: <code>/var/log/fanzhou_core/core.log</code></li>
-                    </ul>
-                </div>
-
-                <div class="help-section">
-                    <h4>3. 错误码说明</h4>
-                    <ul>
-                        <li><code>-32700</code> - JSON解析错误</li>
-                        <li><code>-32600</code> - 无效请求</li>
-                        <li><code>-32601</code> - 方法不存在</li>
-                        <li><code>-32602</code> - 无效参数</li>
-                        <li><code>-60010</code> - 缺少必需参数</li>
-                        <li><code>-60011</code> - 参数类型错误</li>
-                        <li><code>-60120</code> - CAN未打开</li>
-                        <li><code>-60122</code> - CAN写入失败</li>
-                    </ul>
-                </div>
-
-                <div class="help-section">
-                    <h4>4. WebSocket代理配置</h4>
-                    <pre>
-# 方法一: 使用 websocat（文本模式）
-websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345
-
-# 方法二: 使用 websocketd (需要脚本)
-websocketd --port=12346 socat - TCP:127.0.0.1:12345
-
-# 开机自启动 (systemd服务)
-# /etc/systemd/system/ws-proxy.service
-[Unit]
-Description=WebSocket to TCP Proxy
-After=network.target
-
-[Service]
-ExecStart=/usr/bin/websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345
-Restart=always
-
-[Install]
-WantedBy=multi-user.target</pre>
-                </div>
-            </div><!-- 结束 page-help -->
 
             </div><!-- 结束 .card -->
         </div><!-- 结束 .content-area -->
