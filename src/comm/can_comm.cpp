@@ -260,6 +260,7 @@ void CanComm::onTxPump()
             txBackoffMultiplier_ = 0;
             txBackoffMs_ = 0;
             txConsecutiveMaxBackoffCount_ = 0;
+            txDiagLogged_ = false;
         }
         return;
     }
