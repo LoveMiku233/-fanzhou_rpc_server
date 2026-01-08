@@ -130,6 +130,7 @@ void CanComm::close()
     txBackoffMs_ = 0;
     txBackoffMultiplier_ = 0;
     txDiagLogged_ = false;
+    txConsecutiveMaxBackoffCount_ = 0;
 
     emit closed();
 }
@@ -207,6 +208,7 @@ void CanComm::onTxPump()
         // 成功发送后重置退避乘数和诊断标志
         txBackoffMultiplier_ = 0;
         txDiagLogged_ = false;
+        txConsecutiveMaxBackoffCount_ = 0;
         return;
     }
 
@@ -218,6 +220,10 @@ void CanComm::onTxPump()
         // 增加乘数用于下次退避（带上限）
         if (txBackoffMultiplier_ < kMaxBackoffMultiplier) {
             ++txBackoffMultiplier_;
+            txConsecutiveMaxBackoffCount_ = 0;  // 未达到最大退避，重置计数器
+        } else {
+            // 已达到最大退避，增加连续计数
+            ++txConsecutiveMaxBackoffCount_;
         }
         LOG_DEBUG(kLogSource, QStringLiteral("TX buffer full, backing off %1ms").arg(backoff));
 
@@ -233,6 +239,25 @@ void CanComm::onTxPump()
                                        "  4. 接线问题（CAN_H/CAN_L）\n"
                                        "请检查 'ip -details link show %1' 查看接口状态")
                             .arg(config_.interface));
+        }
+
+        // 如果连续达到最大退避次数超过限制，丢弃当前帧并重置退避
+        // 这防止系统因持续的总线问题而永久卡死
+        if (txConsecutiveMaxBackoffCount_ >= kMaxConsecutiveMaxBackoffRetries) {
+            const quint32 droppedCanId = item.frame.can_id & CAN_SFF_MASK;
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("TX持续失败，丢弃帧: id=0x%1, dlc=%2, 已重试%3次")
+                            .arg(droppedCanId, 0, 16)
+                            .arg(item.frame.can_dlc)
+                            .arg(txConsecutiveMaxBackoffCount_));
+            emit errorOccurred(
+                QStringLiteral("CAN TX持续失败，帧被丢弃 (id=0x%1)")
+                    .arg(droppedCanId, 0, 16));
+            txQueue_.dequeue();
+            // 重置退避状态，允许系统尝试恢复
+            txBackoffMultiplier_ = 0;
+            txBackoffMs_ = 0;
+            txConsecutiveMaxBackoffCount_ = 0;
         }
         return;
     }

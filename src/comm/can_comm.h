@@ -103,11 +103,13 @@ private:
     int txBackoffMs_ = 0;
     int txBackoffMultiplier_ = 0;  ///< 用于指数退避的乘数
     bool txDiagLogged_ = false;    ///< 是否已输出TX诊断信息（避免重复输出）
+    int txConsecutiveMaxBackoffCount_ = 0;  ///< 连续达到最大退避的次数
 
     static constexpr int kMaxTxQueueSize = 512;
     static constexpr int kTxIntervalMs = 2;
     static constexpr int kTxBackoffMs = 10;
     static constexpr int kMaxBackoffMultiplier = 5;  ///< 最大退避乘数 (10ms * 2^5 = 320ms)
+    static constexpr int kMaxConsecutiveMaxBackoffRetries = 10;  ///< 最大连续重试次数，超过后丢弃帧
 };
 
 }  // namespace comm
