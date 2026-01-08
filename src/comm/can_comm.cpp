@@ -1,6 +1,21 @@
 /**
  * @file can_comm.cpp
  * @brief CAN总线通信适配器实现
+ * 
+ * CAN通信核心模块说明：
+ * 
+ * 功能：
+ * - 通过SocketCAN接口与CAN总线通信
+ * - 发送和接收CAN帧
+ * - 自动处理发送失败和重试
+ * 
+ * 如果无法控制设备（CAN发送失败），请检查：
+ * 1. CAN接口是否存在：ip link show can0
+ * 2. CAN接口是否启动：ip link set can0 up
+ * 3. 波特率是否正确：canconfig can0 bitrate 125000
+ * 4. 终端电阻是否正确：CAN总线两端需要120Ω终端电阻
+ * 5. 接线是否正确：CAN_H和CAN_L不能接反
+ * 6. 是否有其他节点：CAN总线至少需要两个节点才能正常通信（需要ACK）
  */
 
 #include "can_comm.h"
@@ -40,12 +55,24 @@ CanComm::~CanComm()
     close();
 }
 
+/**
+ * @brief 打开CAN总线连接
+ * 
+ * 创建SocketCAN套接字并绑定到指定的CAN接口。
+ * 如果打开失败，请检查：
+ * 1. CAN接口是否存在（ip link show can0）
+ * 2. CAN接口是否启动（ip link set can0 up）
+ * 3. 进程是否有足够权限（可能需要root）
+ * 
+ * @return 成功返回true，失败返回false
+ */
 bool CanComm::open()
 {
     if (socket_ >= 0) {
         return true;
     }
 
+    // 创建SocketCAN原始套接字
     // Create SocketCAN raw socket
     socket_ = ::socket(PF_CAN, SOCK_RAW, CAN_RAW);
     if (socket_ < 0) {
@@ -53,6 +80,7 @@ bool CanComm::open()
         return false;
     }
 
+    // 如果需要，启用CAN FD模式
     // Enable CAN FD if requested
     if (config_.canFd) {
         int enable = 1;
@@ -139,20 +167,45 @@ void CanComm::close()
     emit closed();
 }
 
+/**
+ * @brief 发送CAN帧
+ * 
+ * 将CAN帧加入发送队列。帧会在下一个发送周期通过CAN总线发送。
+ * 
+ * 发送失败的可能原因：
+ * 1. CAN总线未打开（socket_ < 0）
+ * 2. 数据长度超过8字节
+ * 3. 发送队列已满（通常是因为CAN总线没有正常连接，导致帧无法发出）
+ * 
+ * 如果控制命令无法发送，请检查：
+ * 1. CAN接口是否启动：ip link set can0 up
+ * 2. 是否有终端电阻：CAN总线两端需要120Ω
+ * 3. 是否有其他节点响应ACK
+ * 
+ * @param canId CAN ID
+ * @param payload 数据（最大8字节）
+ * @param extended 是否使用扩展帧格式
+ * @param rtr 是否为远程帧
+ * @return 帧是否成功加入发送队列
+ */
 bool CanComm::sendFrame(quint32 canId, const QByteArray &payload, bool extended, bool rtr)
 {
+    // 检查CAN是否已打开
     if (socket_ < 0) {
         LOG_WARNING(kLogSource, QStringLiteral("sendFrame failed: CAN not opened"));
         emit errorOccurred(QStringLiteral("CAN not opened"));
         return false;
     }
 
+    // 检查数据长度
     if (payload.size() > 8) {
         LOG_WARNING(kLogSource, QStringLiteral("sendFrame failed: payload size %1 > 8").arg(payload.size()));
         emit errorOccurred(QStringLiteral("CAN payload must be <= 8 bytes"));
         return false;
     }
 
+    // 检查发送队列是否已满
+    // 如果队列满，通常是因为CAN总线没有正常连接
     if (txQueue_.size() >= kMaxTxQueueSize) {
         LOG_WARNING(kLogSource, QStringLiteral("sendFrame failed: TX queue overflow (%1)").arg(txQueue_.size()));
         emit errorOccurred(
@@ -160,6 +213,7 @@ bool CanComm::sendFrame(quint32 canId, const QByteArray &payload, bool extended,
         return false;
     }
 
+    // 构建CAN帧
     struct can_frame frame {};
     frame.can_id = canId;
     if (extended) {

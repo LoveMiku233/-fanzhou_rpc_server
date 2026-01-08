@@ -183,12 +183,31 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
             </div>
 
             <!-- ==================== 设备列表页面 ==================== -->
+            <!-- 
+                设备列表页面说明：
+                - 显示所有已配置的CAN继电器设备
+                - 每个设备以卡片形式展示，包含状态和控制按钮
+                - 支持单通道控制和全部通道控制
+                - 设备在线状态由服务端根据最后响应时间判断（30秒内有响应认为在线）
+            -->
             <div class="page-content" id="page-devices">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="color: #333;">设备列表</h3>
+                    <h3 style="color: #333;">🔌 设备列表</h3>
                     <div class="btn-group">
                         <button onclick="refreshDeviceList()">🔄 刷新列表</button>
                         <button class="secondary" onclick="readDeviceConfig()">📋 读取配置</button>
+                        <button class="warning" onclick="checkCanStatus()">🔧 CAN诊断</button>
+                    </div>
+                </div>
+                
+                <!-- CAN状态警告提示（当CAN未打开时显示） -->
+                <div id="canWarningPanel" style="display: none; background: #fff3e0; padding: 15px 20px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #ff9800;">
+                    <h4 style="margin-bottom: 10px; color: #e65100;">⚠️ CAN总线未打开</h4>
+                    <p style="color: #666; font-size: 13px; margin-bottom: 10px;">
+                        控制命令无法发送！CAN总线未正确连接或配置。
+                    </p>
+                    <div class="btn-group">
+                        <button class="warning" onclick="checkCanStatus()">🔧 查看诊断信息</button>
                     </div>
                 </div>
                 
@@ -198,19 +217,15 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                     <pre id="deviceConfigContent" style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 13px;"></pre>
                 </div>
                 
-                <div class="data-list" id="deviceList">
-                    <div class="data-list-header">
-                        <span>设备节点</span>
-                        <span>操作</span>
-                    </div>
-                    <div class="data-list-empty" id="deviceListEmpty">
-                        <p>暂无设备数据</p>
-                        <p style="font-size: 12px; margin-top: 10px;">请先连接服务器并点击"刷新列表"</p>
-                    </div>
-                    <div id="deviceListContent"></div>
+                <!-- 设备卡片网格视图 - 整合了列表和卡片功能 -->
+                <!-- 每个卡片既显示设备状态，也提供控制按钮 -->
+                <div id="deviceListEmpty" class="data-list-empty" style="display: none; background: #f8f9fa; border-radius: 12px; padding: 40px 20px;">
+                    <p>📭 暂无设备数据</p>
+                    <p style="font-size: 12px; margin-top: 10px;">请先连接服务器并点击"刷新列表"</p>
                 </div>
-                <!-- 设备状态卡片视图 -->
-                <div class="device-cards" id="deviceCards"></div>
+                <div class="device-cards" id="deviceCards">
+                    <!-- 设备卡片将由JavaScript动态生成 -->
+                </div>
             </div>
 
             <!-- ==================== 分组管理页面 ==================== -->
