@@ -563,6 +563,13 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 | `sendCanFrame()` | `interface, canId, data, extended` | `bool` | 发送CAN帧 |
 | `startCanDump()` | `interface, extraArgs` | `bool` | 启动candump捕获 |
 | `stopCanDump()` | 无 | `void` | 停止candump |
+| `getSystemTime()` | 无 | `QString` | 获取系统时间 |
+| `setSystemTime()` | `datetime` | `bool` | 设置系统时间 |
+| `saveHardwareClock()` | 无 | `bool` | 保存到硬件时钟 |
+| `readHardwareClock()` | 无 | `QString` | 读取硬件时钟 |
+| `getNetworkInfo()` | `interface` | `QString` | 获取网络信息 |
+| `pingTest()` | `host, count, timeoutSec` | `bool` | 测试网络连通性 |
+| `setStaticIp()` | `interface, address, netmask, gateway` | `bool` | 设置静态IP |
 
 **信号**：
 
@@ -592,6 +599,69 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 | `sys.can.setBitrate` | `{ifname, bitrate, tripleSampling?}` | `{ok}` | 设置CAN波特率 |
 | `sys.can.dump.start` | `{ifname}` | `{ok}` | 启动CAN抓包 |
 | `sys.can.dump.stop` | 无 | `{ok}` | 停止CAN抓包 |
+
+### RTC时间方法
+
+| 方法名 | 参数 | 返回值 | 说明 |
+|--------|------|--------|------|
+| `sys.time.get` | 无 | `{ok, datetime, timestamp}` | 获取系统时间 |
+| `sys.time.set` | `{datetime}` | `{ok, datetime}` | 设置系统时间，格式：YYYY-MM-DD HH:mm:ss |
+| `sys.time.saveHwclock` | 无 | `{ok}` | 保存系统时间到硬件时钟 (hwclock -w) |
+| `sys.time.readHwclock` | 无 | `{ok, hwclock}` | 从硬件时钟读取时间 (hwclock -r) |
+
+**使用示例**：
+
+```bash
+# 1. 查看当前时间
+{"jsonrpc":"2.0","id":1,"method":"sys.time.get","params":{}}
+
+# 2. 设置时间为2023年11月27日17时23分03秒
+{"jsonrpc":"2.0","id":2,"method":"sys.time.set","params":{"datetime":"2023-11-27 17:23:03"}}
+
+# 3. 保存时间到硬件时钟
+{"jsonrpc":"2.0","id":3,"method":"sys.time.saveHwclock","params":{}}
+
+# 4. 从硬件时钟读取时间
+{"jsonrpc":"2.0","id":4,"method":"sys.time.readHwclock","params":{}}
+```
+
+### 网络配置方法
+
+| 方法名 | 参数 | 返回值 | 说明 |
+|--------|------|--------|------|
+| `sys.network.info` | `{interface?}` | `{ok, info}` | 获取网络接口信息 |
+| `sys.network.ping` | `{host, count?, timeout?}` | `{ok, host, reachable}` | 测试网络连通性 |
+| `sys.network.setStaticIp` | `{interface, address, netmask?, gateway?}` | `{ok, interface, address}` | 设置静态IP地址 |
+
+**参数说明**：
+- `interface`: 网络接口名（如 eth0）
+- `address`: IP地址（如 192.168.2.22）
+- `netmask`: 子网掩码（如 255.255.255.0）
+- `gateway`: 网关地址（如 192.168.2.1）
+- `host`: 测试连通性的主机地址或域名
+- `count`: ping次数（默认4次）
+- `timeout`: 超时秒数（默认10秒）
+
+**使用示例**：
+
+```bash
+# 1. 查看所有网络接口信息
+{"jsonrpc":"2.0","id":1,"method":"sys.network.info","params":{}}
+
+# 2. 查看eth0接口信息
+{"jsonrpc":"2.0","id":2,"method":"sys.network.info","params":{"interface":"eth0"}}
+
+# 3. 测试网络连通性
+{"jsonrpc":"2.0","id":3,"method":"sys.network.ping","params":{"host":"www.baidu.com"}}
+
+# 4. 设置静态IP
+{"jsonrpc":"2.0","id":4,"method":"sys.network.setStaticIp","params":{
+  "interface":"eth0",
+  "address":"192.168.2.22",
+  "netmask":"255.255.255.0",
+  "gateway":"192.168.2.1"
+}}
+```
 
 ### CAN方法
 
@@ -830,6 +900,7 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 | 1.0.1 | 2026-01 | 修复：channel参数支持字符串类型 |
 | 1.0.2 | 2026-01 | 新增：can.status方法，sys.info增加canOpened/canTxQueueSize字段，改进CAN诊断 |
 | 1.0.3 | 2026-01 | 改进：relay.control/status/statusAll/queryAll增加txQueueSize和diagnostic字段，帮助诊断CAN总线拥堵和设备离线问题 |
+| 1.0.4 | 2026-01 | 新增：RTC时间管理（sys.time.*）和网络配置（sys.network.*）RPC方法 |
 
 ---
 

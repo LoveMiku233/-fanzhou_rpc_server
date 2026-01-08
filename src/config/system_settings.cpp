@@ -186,5 +186,103 @@ void SystemSettings::stopCanDump()
     dumpProcess_ = nullptr;
 }
 
+// ===================== RTC时间管理实现 =====================
+
+QString SystemSettings::getSystemTime()
+{
+    // 使用date命令获取ISO格式时间
+    return runCommand(QStringLiteral("date"),
+                      {QStringLiteral("+%Y-%m-%d %H:%M:%S")});
+}
+
+bool SystemSettings::setSystemTime(const QString &datetime)
+{
+    if (datetime.isEmpty()) {
+        emit errorOccurred(QStringLiteral("setSystemTime: datetime is empty"));
+        return false;
+    }
+
+    // 使用date -s命令设置系统时间
+    const QString result = runCommand(QStringLiteral("date"),
+                                       {QStringLiteral("-s"), datetime});
+    return !result.isEmpty();
+}
+
+bool SystemSettings::saveHardwareClock()
+{
+    // 使用hwclock -w将系统时间写入硬件时钟
+    const QString result = runCommand(QStringLiteral("hwclock"),
+                                       {QStringLiteral("-w")});
+    // hwclock -w 成功时可能没有输出，检查是否有错误
+    return true;
+}
+
+QString SystemSettings::readHardwareClock()
+{
+    // 使用hwclock -r读取硬件时钟
+    return runCommand(QStringLiteral("hwclock"), {QStringLiteral("-r")});
+}
+
+// ===================== 网络配置管理实现 =====================
+
+QString SystemSettings::getNetworkInfo(const QString &interface)
+{
+    QStringList args;
+    if (!interface.isEmpty()) {
+        args << interface;
+    }
+    return runCommand(QStringLiteral("ifconfig"), args);
+}
+
+bool SystemSettings::pingTest(const QString &host, int count, int timeoutSec)
+{
+    if (host.isEmpty()) {
+        emit errorOccurred(QStringLiteral("pingTest: host is empty"));
+        return false;
+    }
+
+    // ping -c count -W timeout host
+    QStringList args;
+    args << QStringLiteral("-c") << QString::number(count);
+    args << QStringLiteral("-W") << QString::number(timeoutSec);
+    args << host;
+
+    const QString result = runCommand(QStringLiteral("ping"), args,
+                                       (timeoutSec + 2) * 1000);
+    return !result.isEmpty();
+}
+
+bool SystemSettings::setStaticIp(const QString &interface,
+                                  const QString &address,
+                                  const QString &netmask,
+                                  const QString &gateway)
+{
+    if (interface.isEmpty() || address.isEmpty()) {
+        emit errorOccurred(
+            QStringLiteral("setStaticIp: interface or address is empty"));
+        return false;
+    }
+
+    // 使用ifconfig设置IP地址和子网掩码
+    QStringList ifArgs;
+    ifArgs << interface << address;
+    if (!netmask.isEmpty()) {
+        ifArgs << QStringLiteral("netmask") << netmask;
+    }
+    runCommand(QStringLiteral("ifconfig"), ifArgs);
+
+    // 设置网关（如果提供）
+    if (!gateway.isEmpty()) {
+        // 先删除默认路由，再添加新的
+        runCommand(QStringLiteral("route"),
+                   {QStringLiteral("del"), QStringLiteral("default")});
+        runCommand(QStringLiteral("route"),
+                   {QStringLiteral("add"), QStringLiteral("default"),
+                    QStringLiteral("gw"), gateway});
+    }
+
+    return true;
+}
+
 }  // namespace config
 }  // namespace fanzhou
