@@ -43,6 +43,17 @@ public:
                        int timeoutMs = 5000);
 
     /**
+     * @brief 执行系统命令并返回成功状态（阻塞）
+     * @param program 程序名
+     * @param args 命令参数
+     * @param timeoutMs 超时（毫秒）
+     * @return 命令执行成功返回true（退出码为0）
+     */
+    bool runCommandWithStatus(const QString &program,
+                              const QStringList &args,
+                              int timeoutMs = 5000);
+
+    /**
      * @brief 关闭CAN接口
      * @param interface 接口名
      * @return 成功返回true
@@ -90,6 +101,64 @@ public:
      * @brief 停止candump捕获
      */
     void stopCanDump();
+
+    // ===================== RTC时间管理 =====================
+
+    /**
+     * @brief 获取系统时间
+     * @return 当前系统时间字符串（ISO格式）
+     */
+    QString getSystemTime();
+
+    /**
+     * @brief 设置系统时间
+     * @param datetime 日期时间字符串（格式：YYYY-MM-DD HH:mm:ss）
+     * @return 成功返回true
+     */
+    bool setSystemTime(const QString &datetime);
+
+    /**
+     * @brief 保存系统时间到硬件时钟
+     * @return 成功返回true
+     */
+    bool saveHardwareClock();
+
+    /**
+     * @brief 从硬件时钟读取时间
+     * @return 硬件时钟时间字符串
+     */
+    QString readHardwareClock();
+
+    // ===================== 网络配置管理 =====================
+
+    /**
+     * @brief 获取网络接口信息
+     * @param interface 接口名（如eth0），空则获取所有接口
+     * @return 网络信息字符串
+     */
+    QString getNetworkInfo(const QString &interface = QString());
+
+    /**
+     * @brief 测试网络连通性
+     * @param host 主机地址或域名
+     * @param count ping次数
+     * @param timeoutSec 超时秒数
+     * @return 成功返回true
+     */
+    bool pingTest(const QString &host, int count = 4, int timeoutSec = 10);
+
+    /**
+     * @brief 设置静态IP地址
+     * @param interface 接口名
+     * @param address IP地址
+     * @param netmask 子网掩码
+     * @param gateway 网关地址
+     * @return 成功返回true
+     */
+    bool setStaticIp(const QString &interface,
+                     const QString &address,
+                     const QString &netmask,
+                     const QString &gateway);
 
 signals:
     /**

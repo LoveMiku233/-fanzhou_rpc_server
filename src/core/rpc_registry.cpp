@@ -221,6 +221,137 @@ void RpcRegistry::registerSystem()
             context_->systemSettings->stopCanDump();
         return rpc::RpcHelpers::ok(true);
     });
+
+    // ===================== RTC时间管理RPC方法 =====================
+
+    // 获取系统时间
+    dispatcher_->registerMethod(QStringLiteral("sys.time.get"),
+                                 [this](const QJsonObject &) {
+        if (!context_->systemSettings)
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, QStringLiteral("SystemSettings not ready"));
+
+        const QString time = context_->systemSettings->getSystemTime();
+        const qint64 timestamp = QDateTime::currentMSecsSinceEpoch();
+        return QJsonObject{
+            {QStringLiteral("ok"), true},
+            {QStringLiteral("datetime"), time},
+            {QStringLiteral("timestamp"), static_cast<double>(timestamp)}
+        };
+    });
+
+    // 设置系统时间
+    dispatcher_->registerMethod(QStringLiteral("sys.time.set"),
+                                 [this](const QJsonObject &params) {
+        QString datetime;
+        if (!rpc::RpcHelpers::getString(params, "datetime", datetime))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing datetime"));
+
+        if (!context_->systemSettings)
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, QStringLiteral("SystemSettings not ready"));
+
+        const bool ok = context_->systemSettings->setSystemTime(datetime);
+        if (!ok)
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("failed to set time"));
+
+        return QJsonObject{
+            {QStringLiteral("ok"), true},
+            {QStringLiteral("datetime"), context_->systemSettings->getSystemTime()}
+        };
+    });
+
+    // 保存系统时间到硬件时钟
+    dispatcher_->registerMethod(QStringLiteral("sys.time.saveHwclock"),
+                                 [this](const QJsonObject &) {
+        if (!context_->systemSettings)
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, QStringLiteral("SystemSettings not ready"));
+
+        const bool ok = context_->systemSettings->saveHardwareClock();
+        return QJsonObject{{QStringLiteral("ok"), ok}};
+    });
+
+    // 从硬件时钟读取时间
+    dispatcher_->registerMethod(QStringLiteral("sys.time.readHwclock"),
+                                 [this](const QJsonObject &) {
+        if (!context_->systemSettings)
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, QStringLiteral("SystemSettings not ready"));
+
+        const QString hwTime = context_->systemSettings->readHardwareClock();
+        return QJsonObject{
+            {QStringLiteral("ok"), true},
+            {QStringLiteral("hwclock"), hwTime}
+        };
+    });
+
+    // ===================== 网络配置RPC方法 =====================
+
+    // 获取网络接口信息
+    dispatcher_->registerMethod(QStringLiteral("sys.network.info"),
+                                 [this](const QJsonObject &params) {
+        QString interface;
+        rpc::RpcHelpers::getString(params, "interface", interface);  // 可选参数
+
+        if (!context_->systemSettings)
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, QStringLiteral("SystemSettings not ready"));
+
+        const QString info = context_->systemSettings->getNetworkInfo(interface);
+        return QJsonObject{
+            {QStringLiteral("ok"), true},
+            {QStringLiteral("info"), info}
+        };
+    });
+
+    // 测试网络连通性
+    dispatcher_->registerMethod(QStringLiteral("sys.network.ping"),
+                                 [this](const QJsonObject &params) {
+        QString host;
+        qint32 count = 4;
+        qint32 timeoutSec = 10;
+
+        if (!rpc::RpcHelpers::getString(params, "host", host))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing host"));
+
+        // 可选参数
+        rpc::RpcHelpers::getI32(params, "count", count);
+        rpc::RpcHelpers::getI32(params, "timeout", timeoutSec);
+
+        if (!context_->systemSettings)
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, QStringLiteral("SystemSettings not ready"));
+
+        const bool ok = context_->systemSettings->pingTest(host, count, timeoutSec);
+        return QJsonObject{
+            {QStringLiteral("ok"), ok},
+            {QStringLiteral("host"), host},
+            {QStringLiteral("reachable"), ok}
+        };
+    });
+
+    // 设置静态IP地址
+    dispatcher_->registerMethod(QStringLiteral("sys.network.setStaticIp"),
+                                 [this](const QJsonObject &params) {
+        QString interface;
+        QString address;
+        QString netmask;
+        QString gateway;
+
+        if (!rpc::RpcHelpers::getString(params, "interface", interface))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing interface"));
+        if (!rpc::RpcHelpers::getString(params, "address", address))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing address"));
+
+        // 可选参数
+        rpc::RpcHelpers::getString(params, "netmask", netmask);
+        rpc::RpcHelpers::getString(params, "gateway", gateway);
+
+        if (!context_->systemSettings)
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, QStringLiteral("SystemSettings not ready"));
+
+        const bool ok = context_->systemSettings->setStaticIp(interface, address, netmask, gateway);
+        return QJsonObject{
+            {QStringLiteral("ok"), ok},
+            {QStringLiteral("interface"), interface},
+            {QStringLiteral("address"), address}
+        };
+    });
 }
 
 void RpcRegistry::registerCan()
