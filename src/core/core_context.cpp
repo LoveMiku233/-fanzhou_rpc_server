@@ -491,7 +491,7 @@ void CoreContext::attachStrategiesForGroup(int groupId)
 
             const int strategyId = config.strategyId;
             const int targetGroupId = config.groupId;
-            const quint8 channel = config.channel;
+            const qint8 channel = config.channel;
             const QString strategyName = config.name;
 
             connect(timer, &QTimer::timeout, this,
@@ -499,7 +499,15 @@ void CoreContext::attachStrategiesForGroup(int groupId)
                 const QString reason =
                     QStringLiteral("auto:%1")
                         .arg(strategyName.isEmpty() ? QString::number(strategyId) : strategyName);
-                queueGroupControl(targetGroupId, channel, action, reason);
+                // channel=-1 表示控制所有通道，0-kMaxChannelId 表示单个通道
+                if (channel >= 0 && channel <= kMaxChannelId) {
+                    queueGroupControl(targetGroupId, static_cast<quint8>(channel), action, reason);
+                } else {
+                    // channel=-1 表示控制所有通道
+                    for (quint8 ch = 0; ch <= kMaxChannelId; ++ch) {
+                        queueGroupControl(targetGroupId, ch, action, reason);
+                    }
+                }
             });
             strategyTimers_.insert(config.strategyId, timer);
         } else {
@@ -573,11 +581,23 @@ bool CoreContext::triggerStrategy(int strategyId)
         if (!okAction) return false;
         if (!deviceGroups.contains(config.groupId)) return false;
 
-        const auto stats = queueGroupControl(
-            config.groupId, config.channel, action,
-            QStringLiteral("manual-strategy:%1")
-                .arg(config.name.isEmpty() ? QString::number(config.strategyId) : config.name));
-        return stats.accepted > 0;
+        const QString reason = QStringLiteral("manual-strategy:%1")
+            .arg(config.name.isEmpty() ? QString::number(config.strategyId) : config.name);
+        
+        // channel=-1 表示控制所有通道，0-kMaxChannelId 表示单个通道
+        if (config.channel >= 0 && config.channel <= kMaxChannelId) {
+            const auto stats = queueGroupControl(
+                config.groupId, static_cast<quint8>(config.channel), action, reason);
+            return stats.accepted > 0;
+        } else {
+            // channel=-1 表示控制所有通道
+            int totalAccepted = 0;
+            for (quint8 ch = 0; ch <= kMaxChannelId; ++ch) {
+                const auto stats = queueGroupControl(config.groupId, ch, action, reason);
+                totalAccepted += stats.accepted;
+            }
+            return totalAccepted > 0;
+        }
     }
     return false;
 }
@@ -746,11 +766,11 @@ void CoreContext::checkSensorTriggers(const QString &sensorType, int sensorNode,
             .arg(value);
 
         // 控制指定通道或所有通道
-        if (config.channel >= 0 && config.channel <= 3) {
+        if (config.channel >= 0 && config.channel <= kMaxChannelId) {
             queueGroupControl(config.groupId, static_cast<quint8>(config.channel), action, reason);
         } else {
             // channel=-1 表示控制所有通道
-            for (quint8 ch = 0; ch < 4; ++ch) {
+            for (quint8 ch = 0; ch <= kMaxChannelId; ++ch) {
                 queueGroupControl(config.groupId, ch, action, reason);
             }
         }
@@ -801,7 +821,7 @@ void CoreContext::attachRelayStrategy(const RelayStrategyConfig &config)
 
         const int strategyId = config.strategyId;
         const int targetNodeId = config.nodeId;
-        const quint8 channel = config.channel;
+        const qint8 channel = config.channel;
         const QString strategyName = config.name;
 
         connect(timer, &QTimer::timeout, this,
@@ -809,7 +829,15 @@ void CoreContext::attachRelayStrategy(const RelayStrategyConfig &config)
             const QString reason =
                 QStringLiteral("auto-relay:%1")
                     .arg(strategyName.isEmpty() ? QString::number(strategyId) : strategyName);
-            enqueueControl(static_cast<quint8>(targetNodeId), channel, action, reason);
+            // channel=-1 表示控制所有通道，0-kMaxChannelId 表示单个通道
+            if (channel >= 0 && channel <= kMaxChannelId) {
+                enqueueControl(static_cast<quint8>(targetNodeId), static_cast<quint8>(channel), action, reason);
+            } else {
+                // channel=-1 表示控制所有通道
+                for (quint8 ch = 0; ch <= kMaxChannelId; ++ch) {
+                    enqueueControl(static_cast<quint8>(targetNodeId), ch, action, reason);
+                }
+            }
         });
         relayStrategyTimers_.insert(config.strategyId, timer);
     } else {
@@ -982,6 +1010,8 @@ bool CoreContext::addChannelToGroup(int groupId, quint8 node, int channel, QStri
         if (error) *error = QStringLiteral("device not found");
         return false;
     }
+    // 注意：此函数用于添加特定通道到分组，channel=-1 不适用于此场景
+    // 如需添加所有通道，请多次调用此函数或使用 addDeviceToGroup
     if (channel < 0 || channel > kMaxChannelId) {
         if (error) *error = QStringLiteral("invalid channel (0-%1)").arg(kMaxChannelId);
         return false;

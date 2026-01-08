@@ -105,7 +105,7 @@ struct AutoStrategyConfig {
     int strategyId = 0;          ///< 策略ID
     QString name;                 ///< 策略名称
     int groupId = 0;             ///< 绑定的分组ID
-    quint8 channel = 0;          ///< 控制通道
+    qint8 channel = 0;           ///< 控制通道，-1表示所有通道
     QString action = QStringLiteral("stop");  ///< 控制动作
     int intervalSec = 60;        ///< 执行间隔（秒）
     bool enabled = true;         ///< 是否启用
@@ -139,7 +139,7 @@ struct RelayStrategyConfig {
     int strategyId = 0;          ///< 策略ID
     QString name;                 ///< 策略名称
     int nodeId = 0;              ///< 目标设备节点ID
-    quint8 channel = 0;          ///< 控制通道
+    qint8 channel = 0;           ///< 控制通道，-1表示所有通道
     QString action = QStringLiteral("stop");  ///< 控制动作
     int intervalSec = 60;        ///< 执行间隔（秒）
     bool enabled = true;         ///< 是否启用

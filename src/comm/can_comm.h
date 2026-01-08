@@ -113,7 +113,7 @@ private:
     static constexpr int kTxIntervalMs = 2;
     static constexpr int kTxBackoffMs = 10;
     static constexpr int kMaxBackoffMultiplier = 5;  ///< 最大退避乘数 (10ms * 2^5 = 320ms)
-    static constexpr int kMaxConsecutiveMaxBackoffRetries = 10;  ///< 最大连续重试次数，超过后尝试重置接口
+    static constexpr int kMaxConsecutiveMaxBackoffRetries = 3;  ///< 最大连续重试次数，超过后尝试重置接口（减少等待时间）
     static constexpr int kResetThreshold = 3;  ///< 丢弃帧次数阈值，超过后触发接口重置
     static constexpr int kMaxResetAttempts = 3;  ///< 最大接口重置尝试次数
     static constexpr int kResetCooldownMs = 30000;  ///< 接口重置冷却时间（毫秒）
