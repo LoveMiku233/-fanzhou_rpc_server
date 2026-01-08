@@ -140,6 +140,10 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                         <span class="icon">ℹ️</span>
                         系统信息
                     </button>
+                    <button class="quick-action-btn warning" onclick="callMethod('can.status', {})">
+                        <span class="icon">🔧</span>
+                        CAN状态
+                    </button>
                     <button class="quick-action-btn success" onclick="refreshDeviceList()">
                         <span class="icon">🔌</span>
                         刷新设备
@@ -572,7 +576,8 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                     <ul>
                         <li><code>rpc.ping</code> - 测试连接 (无参数)</li>
                         <li><code>rpc.list</code> - 列出所有方法 (无参数)</li>
-                        <li><code>sys.info</code> - 获取系统信息 (无参数)</li>
+                        <li><code>sys.info</code> - 获取系统信息（包含canOpened、canTxQueueSize）(无参数)</li>
+                        <li><code>can.status</code> - <strong>获取CAN总线状态和诊断信息</strong> (无参数) - 控制不生效时请先检查此项</li>
                         <li><code>relay.control</code> - 控制继电器 <code>{"node": 1, "ch": 0, "action": "fwd"}</code></li>
                         <li><code>relay.status</code> - 查询状态 <code>{"node": 1, "ch": 0}</code></li>
                         <li><code>relay.statusAll</code> - 查询单设备全部通道 <code>{"node": 1}</code></li>

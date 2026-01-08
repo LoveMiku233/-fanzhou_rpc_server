@@ -53,6 +53,18 @@ public:
     qint64 writeBytes(const QByteArray &data) override;
 
     /**
+     * @brief 检查CAN通道是否已打开
+     * @return 已打开返回true
+     */
+    bool isOpened() const { return socket_ >= 0; }
+
+    /**
+     * @brief 获取发送队列大小
+     * @return 当前队列中待发送的帧数
+     */
+    int txQueueSize() const { return txQueue_.size(); }
+
+    /**
      * @brief 发送CAN帧
      * @param canId CAN标识符
      * @param payload 帧数据（经典CAN最大8字节）

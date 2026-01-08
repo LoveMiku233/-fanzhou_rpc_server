@@ -249,6 +249,15 @@ journalctl -u fanzhou-rpc -f
 | `rpc.list` | 无 | 列出所有RPC方法 |
 | `echo` | 任意 | 回显参数 |
 
+### CAN总线诊断
+
+| 方法 | 参数 | 说明 |
+|------|------|------|
+| `can.status` | 无 | 获取CAN总线状态（接口、波特率、是否打开、发送队列大小） |
+| `can.send` | `{id, dataHex, extended?}` | 发送原始CAN帧 |
+
+**说明**：当CAN控制不生效时，首先调用 `can.status` 检查CAN总线状态。如果 `opened` 为 `false`，则CAN接口未正确打开，请参考故障排除章节。
+
 ### 继电器控制
 
 | 方法 | 参数 | 说明 |
