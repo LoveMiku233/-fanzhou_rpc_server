@@ -971,8 +971,9 @@ void RpcRegistry::registerAuto()
             return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing name"));
         if (!rpc::RpcHelpers::getI32(params, "groupId", groupId) || groupId <= 0)
             return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid groupId"));
-        if (!rpc::RpcHelpers::getI32(params, "channel", channel) || channel < 0 || channel > kMaxChannelId)
-            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("invalid channel (0-%1)").arg(kMaxChannelId));
+        // channel=-1 表示控制所有通道，0-3 表示单个通道
+        if (!rpc::RpcHelpers::getI32(params, "channel", channel) || channel < -1 || channel > kMaxChannelId)
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("invalid channel (-1 for all, or 0-%1)").arg(kMaxChannelId));
         if (!rpc::RpcHelpers::getString(params, "action", action))
             return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing action"));
 
@@ -985,7 +986,7 @@ void RpcRegistry::registerAuto()
         config.strategyId = id;
         config.name = name;
         config.groupId = groupId;
-        config.channel = static_cast<quint8>(channel);
+        config.channel = static_cast<qint8>(channel);
         config.action = action;
         config.intervalSec = qMax(1, intervalSec);
         config.enabled = enabled;
@@ -1165,8 +1166,9 @@ void RpcRegistry::registerAuto()
             return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing name"));
         if (!rpc::RpcHelpers::getI32(params, "nodeId", nodeId) || nodeId < 1 || nodeId > 255)
             return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid nodeId (1-255)"));
-        if (!rpc::RpcHelpers::getI32(params, "channel", channel) || channel < 0 || channel > kMaxChannelId)
-            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("invalid channel (0-%1)").arg(kMaxChannelId));
+        // channel=-1 表示控制所有通道，0-3 表示单个通道
+        if (!rpc::RpcHelpers::getI32(params, "channel", channel) || channel < -1 || channel > kMaxChannelId)
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("invalid channel (-1 for all, or 0-%1)").arg(kMaxChannelId));
         if (!rpc::RpcHelpers::getString(params, "action", action))
             return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing action"));
 
@@ -1179,7 +1181,7 @@ void RpcRegistry::registerAuto()
         config.strategyId = id;
         config.name = name;
         config.nodeId = nodeId;
-        config.channel = static_cast<quint8>(channel);
+        config.channel = static_cast<qint8>(channel);
         config.action = action;
         config.intervalSec = qMax(1, intervalSec);
         config.enabled = enabled;
@@ -1282,9 +1284,10 @@ void RpcRegistry::registerAuto()
         }
 
         // 可选参数
+        // channel=-1 表示控制所有通道，0-3 表示单个通道
         rpc::RpcHelpers::getI32(params, "channel", channel);
-        if (channel < 0 || channel > kMaxChannelId)
-            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("invalid channel (0-%1)").arg(kMaxChannelId));
+        if (channel < -1 || channel > kMaxChannelId)
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("invalid channel (-1 for all, or 0-%1)").arg(kMaxChannelId));
         rpc::RpcHelpers::getI32(params, "cooldownSec", cooldownSec);
         rpc::RpcHelpers::getBool(params, "enabled", enabled, true);
 
