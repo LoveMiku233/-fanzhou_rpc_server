@@ -199,7 +199,8 @@ void CanComm::onTxPump()
 
     if (n == sizeof(item.frame)) {
         // 去除扩展帧标志位获取实际CAN ID
-        const quint32 canIdWithoutFlags = item.frame.can_id & CAN_SFF_MASK;
+        const bool extended = (item.frame.can_id & CAN_EFF_FLAG) != 0;
+        const quint32 canIdWithoutFlags = item.frame.can_id & (extended ? CAN_EFF_MASK : CAN_SFF_MASK);
         LOG_DEBUG(kLogSource,
                   QStringLiteral("Frame sent: id=0x%1, dlc=%2")
                       .arg(canIdWithoutFlags, 0, 16)
@@ -244,7 +245,8 @@ void CanComm::onTxPump()
         // 如果连续达到最大退避次数超过限制，丢弃当前帧并重置退避
         // 这防止系统因持续的总线问题而永久卡死
         if (txConsecutiveMaxBackoffCount_ >= kMaxConsecutiveMaxBackoffRetries) {
-            const quint32 droppedCanId = item.frame.can_id & CAN_SFF_MASK;
+            const bool extended = (item.frame.can_id & CAN_EFF_FLAG) != 0;
+            const quint32 droppedCanId = item.frame.can_id & (extended ? CAN_EFF_MASK : CAN_SFF_MASK);
             LOG_WARNING(kLogSource,
                         QStringLiteral("TX持续失败，丢弃帧: id=0x%1, dlc=%2, 已重试%3次")
                             .arg(droppedCanId, 0, 16)
