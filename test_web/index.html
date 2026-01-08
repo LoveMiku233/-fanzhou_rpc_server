@@ -299,6 +299,8 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                         <li><strong>传感器策略：</strong>当传感器数值满足条件时自动触发（如温度超过30度时启动风扇）</li>
                         <li><strong>分组程序：</strong>将设备的指定通道绑定到分组，实现批量控制</li>
                         <li><strong>操作按钮：</strong>启用/禁用控制策略是否生效，触发可立即执行一次策略，删除将永久移除策略</li>
+                        <li><strong>多策略支持：</strong>每个分组可以添加多个策略，只要策略ID不同即可。<br>
+                            💡 <em>推荐使用"蓝图编辑器"可视化管理策略，系统会自动生成唯一ID</em></li>
                     </ul>
                 </div>
 
@@ -312,8 +314,8 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                     <!-- 基本配置 -->
                     <div class="form-row">
                         <div class="form-group">
-                            <label>策略ID</label>
-                            <input type="number" id="newStrategyId" value="1" min="1" title="策略的唯一标识符">
+                            <label>策略ID <button type="button" class="btn-small" onclick="autoFillStrategyId()" title="自动获取下一个可用ID" style="font-size: 10px; padding: 2px 6px; margin-left: 5px;">🔄 自动</button></label>
+                            <input type="number" id="newStrategyId" value="1" min="1" title="策略的唯一标识符，每个策略必须有不同的ID">
                         </div>
                         <div class="form-group">
                             <label>策略名称</label>
@@ -321,7 +323,7 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                         </div>
                         <div class="form-group">
                             <label>绑定分组ID</label>
-                            <input type="number" id="newStrategyGroupId" value="1" min="1" title="要控制的设备分组">
+                            <input type="number" id="newStrategyGroupId" value="1" min="1" title="要控制的设备分组（同一分组可添加多个策略）">
                         </div>
                     </div>
                     
@@ -387,8 +389,8 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                     </p>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>策略ID</label>
-                            <input type="number" id="sensorStrategyId" value="1" min="1">
+                            <label>策略ID <button type="button" class="btn-small" onclick="autoFillSensorStrategyId()" title="自动获取下一个可用ID" style="font-size: 10px; padding: 2px 6px; margin-left: 5px;">🔄 自动</button></label>
+                            <input type="number" id="sensorStrategyId" value="1" min="1" title="策略的唯一标识符，每个策略必须有不同的ID">
                         </div>
                         <div class="form-group">
                             <label>策略名称</label>
@@ -698,6 +700,7 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                         <div class="canvas-toolbar">
                             <button onclick="clearBlueprint()" title="删除所有节点和连线">🗑️ 清空画布</button>
                             <button class="success" onclick="deployBlueprintStrategies()" title="将蓝图转换为实际的RPC策略">🚀 部署策略</button>
+                            <button class="warning" onclick="loadExistingStrategies()" title="从服务器读取已有的策略并显示在画布上">📋 读取策略</button>
                             <button class="secondary" onclick="generateSystemDiagram()" title="从服务器读取设备和分组信息">📊 生成系统框图</button>
                             <button onclick="downloadBlueprint()" title="将蓝图保存为JSON文件">💾 导出蓝图</button>
                             <button onclick="uploadBlueprint()" title="从JSON文件导入蓝图">📂 导入蓝图</button>
@@ -740,8 +743,10 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                         <li><strong>删除连线：</strong>点击连线（会变成红色）后确认删除</li>
                         <li><strong>清空画布：</strong>点击工具栏"清空画布"按钮可删除所有节点和连线</li>
                         <li><strong>部署策略：</strong>完成连线后点击"部署策略"将蓝图转换为实际的RPC策略</li>
+                        <li><strong>读取策略：</strong>点击"读取策略"从服务器读取已创建的策略，以节点形式显示在画布上，可直接管理</li>
                         <li><strong>系统框图：</strong>点击"生成系统框图"可自动从服务器读取设备和分组信息</li>
                         <li><strong>导入/导出：</strong>可将蓝图保存为JSON文件，方便备份和分享</li>
+                        <li><strong>多策略支持：</strong>每个分组可以添加多个策略，只要策略ID不同即可（系统自动生成唯一ID）</li>
                     </ul>
                 </div>
             </div>
