@@ -316,11 +316,11 @@ void DeviceWidget::updateDeviceStatus(int nodeId, const QJsonObject &status)
             if (ch23Item) {
                 QString combinedText;
                 if (!ch2Text.isEmpty() && !ch3Text.isEmpty()) {
-                    combinedText = QStringLiteral("%1/%2").arg(ch2Text, ch3Text);
+                    combinedText = QStringLiteral("2:%1 3:%2").arg(ch2Text, ch3Text);
                 } else if (!ch2Text.isEmpty()) {
-                    combinedText = ch2Text;
+                    combinedText = QStringLiteral("2:%1").arg(ch2Text);
                 } else if (!ch3Text.isEmpty()) {
-                    combinedText = ch3Text;
+                    combinedText = QStringLiteral("3:%1").arg(ch3Text);
                 } else {
                     combinedText = QStringLiteral("-");
                 }

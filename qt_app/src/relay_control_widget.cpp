@@ -144,7 +144,7 @@ void RelayControlWidget::setupUi()
 
     resultTextEdit_ = new QTextEdit(this);
     resultTextEdit_->setReadOnly(true);
-    resultTextEdit_->setMinimumHeight(120);
+    resultTextEdit_->setMinimumHeight(150);
 
     QPushButton *clearButton = new QPushButton(QStringLiteral("清空"), this);
     connect(clearButton, &QPushButton::clicked, resultTextEdit_, &QTextEdit::clear);
