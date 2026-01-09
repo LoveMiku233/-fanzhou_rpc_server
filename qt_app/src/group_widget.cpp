@@ -1,6 +1,6 @@
 /**
  * @file group_widget.cpp
- * @brief 分组管理页面实现 - 优化垂直布局
+ * @brief 分组管理页面实现 - 按钮弹窗方式操作
  */
 
 #include "group_widget.h"
@@ -16,19 +16,18 @@
 #include <QMessageBox>
 #include <QFormLayout>
 #include <QFrame>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QSpinBox>
+#include <QLineEdit>
+#include <QComboBox>
 
 GroupWidget::GroupWidget(RpcClient *rpcClient, QWidget *parent)
     : QWidget(parent)
     , rpcClient_(rpcClient)
     , groupTable_(nullptr)
     , statusLabel_(nullptr)
-    , newGroupIdSpinBox_(nullptr)
-    , newGroupNameEdit_(nullptr)
-    , targetGroupIdSpinBox_(nullptr)
-    , deviceNodeIdSpinBox_(nullptr)
-    , controlGroupIdSpinBox_(nullptr)
-    , controlChannelCombo_(nullptr)
-    , controlActionCombo_(nullptr)
+    , selectedGroupId_(1)
 {
     setupUi();
 }
@@ -39,210 +38,82 @@ void GroupWidget::setupUi()
     mainLayout->setContentsMargins(10, 10, 10, 10);
     mainLayout->setSpacing(8);
 
-    // 页面标题 - 使用纯文本
+    // 页面标题
     QLabel *titleLabel = new QLabel(QStringLiteral("分组管理"), this);
     titleLabel->setStyleSheet(QStringLiteral(
         "font-size: 18px; font-weight: bold; color: #2c3e50; padding: 4px 0;"));
     mainLayout->addWidget(titleLabel);
 
-    // 工具栏
+    // 工具栏 - 表格上方按钮
     QHBoxLayout *toolbarLayout = new QHBoxLayout();
     toolbarLayout->setSpacing(8);
 
-    QPushButton *refreshButton = new QPushButton(QStringLiteral("刷新分组"), this);
-    refreshButton->setMinimumHeight(36);
+    QPushButton *refreshButton = new QPushButton(QStringLiteral("刷新"), this);
+    refreshButton->setMinimumHeight(40);
     connect(refreshButton, &QPushButton::clicked, this, &GroupWidget::refreshGroupList);
     toolbarLayout->addWidget(refreshButton);
+
+    QPushButton *createButton = new QPushButton(QStringLiteral("创建分组"), this);
+    createButton->setProperty("type", QStringLiteral("success"));
+    createButton->setMinimumHeight(40);
+    connect(createButton, &QPushButton::clicked, this, &GroupWidget::onCreateGroupClicked);
+    toolbarLayout->addWidget(createButton);
+
+    QPushButton *deleteButton = new QPushButton(QStringLiteral("删除分组"), this);
+    deleteButton->setProperty("type", QStringLiteral("danger"));
+    deleteButton->setMinimumHeight(40);
+    connect(deleteButton, &QPushButton::clicked, this, &GroupWidget::onDeleteGroupClicked);
+    toolbarLayout->addWidget(deleteButton);
+
+    QPushButton *manageButton = new QPushButton(QStringLiteral("管理设备"), this);
+    manageButton->setProperty("type", QStringLiteral("warning"));
+    manageButton->setMinimumHeight(40);
+    connect(manageButton, &QPushButton::clicked, this, &GroupWidget::onManageDevicesClicked);
+    toolbarLayout->addWidget(manageButton);
+
+    QPushButton *controlButton = new QPushButton(QStringLiteral("批量控制"), this);
+    controlButton->setMinimumHeight(40);
+    connect(controlButton, &QPushButton::clicked, this, &GroupWidget::onGroupControlClicked);
+    toolbarLayout->addWidget(controlButton);
 
     toolbarLayout->addStretch();
 
     statusLabel_ = new QLabel(this);
-    statusLabel_->setStyleSheet(QStringLiteral("color: #7f8c8d; font-size: 11px;"));
+    statusLabel_->setStyleSheet(QStringLiteral("color: #7f8c8d; font-size: 12px;"));
     toolbarLayout->addWidget(statusLabel_);
 
     mainLayout->addLayout(toolbarLayout);
 
     // 分组列表表格
-    QGroupBox *tableGroupBox = new QGroupBox(QStringLiteral("分组列表"), this);
-    QVBoxLayout *tableLayout = new QVBoxLayout(tableGroupBox);
-    tableLayout->setContentsMargins(8, 12, 8, 8);
-
     groupTable_ = new QTableWidget(this);
     groupTable_->setColumnCount(4);
     groupTable_->setHorizontalHeaderLabels({
         QStringLiteral("ID"),
         QStringLiteral("名称"),
-        QStringLiteral("数量"),
-        QStringLiteral("设备")
+        QStringLiteral("设备数"),
+        QStringLiteral("设备列表")
     });
 
     groupTable_->horizontalHeader()->setStretchLastSection(true);
     groupTable_->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     groupTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    groupTable_->setSelectionMode(QAbstractItemView::SingleSelection);
     groupTable_->setAlternatingRowColors(true);
     groupTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    groupTable_->setMinimumHeight(100);
-    groupTable_->setMaximumHeight(140);
 
     connect(groupTable_, &QTableWidget::cellClicked,
             this, &GroupWidget::onGroupTableCellClicked);
 
-    tableLayout->addWidget(groupTable_);
-    mainLayout->addWidget(tableGroupBox);
+    mainLayout->addWidget(groupTable_, 1);
 
-    // 创建分组区域
-    QGroupBox *createGroupBox = new QGroupBox(QStringLiteral("创建/删除分组"), this);
-    QVBoxLayout *createLayout = new QVBoxLayout(createGroupBox);
-    createLayout->setSpacing(6);
-    createLayout->setContentsMargins(8, 12, 8, 8);
-
-    QHBoxLayout *createRow1 = new QHBoxLayout();
-    createRow1->setSpacing(6);
-    
-    QLabel *groupIdLabel = new QLabel(QStringLiteral("ID:"), this);
-    createRow1->addWidget(groupIdLabel);
-    
-    newGroupIdSpinBox_ = new QSpinBox(this);
-    newGroupIdSpinBox_->setRange(1, 999);
-    newGroupIdSpinBox_->setValue(1);
-    newGroupIdSpinBox_->setMinimumHeight(32);
-    newGroupIdSpinBox_->setMinimumWidth(60);
-    createRow1->addWidget(newGroupIdSpinBox_);
-    
-    QLabel *nameLabel = new QLabel(QStringLiteral("名称:"), this);
-    createRow1->addWidget(nameLabel);
-    
-    newGroupNameEdit_ = new QLineEdit(this);
-    newGroupNameEdit_->setPlaceholderText(QStringLiteral("分组名称"));
-    newGroupNameEdit_->setMinimumHeight(32);
-    createRow1->addWidget(newGroupNameEdit_, 1);
-    
-    createLayout->addLayout(createRow1);
-
-    QHBoxLayout *createRow2 = new QHBoxLayout();
-    createRow2->setSpacing(6);
-    
-    QPushButton *createButton = new QPushButton(QStringLiteral("创建"), this);
-    createButton->setProperty("type", QStringLiteral("success"));
-    createButton->setMinimumHeight(36);
-    connect(createButton, &QPushButton::clicked, this, &GroupWidget::onCreateGroupClicked);
-    createRow2->addWidget(createButton);
-
-    QPushButton *deleteButton = new QPushButton(QStringLiteral("删除"), this);
-    deleteButton->setProperty("type", QStringLiteral("danger"));
-    deleteButton->setMinimumHeight(36);
-    connect(deleteButton, &QPushButton::clicked, this, &GroupWidget::onDeleteGroupClicked);
-    createRow2->addWidget(deleteButton);
-    
-    createLayout->addLayout(createRow2);
-    mainLayout->addWidget(createGroupBox);
-
-    // 管理设备区域
-    QGroupBox *deviceGroupBox = new QGroupBox(QStringLiteral("管理分组设备"), this);
-    QVBoxLayout *deviceLayout = new QVBoxLayout(deviceGroupBox);
-    deviceLayout->setSpacing(6);
-    deviceLayout->setContentsMargins(8, 12, 8, 8);
-
-    QHBoxLayout *deviceRow1 = new QHBoxLayout();
-    deviceRow1->setSpacing(6);
-    
-    QLabel *targetGroupLabel = new QLabel(QStringLiteral("分组:"), this);
-    deviceRow1->addWidget(targetGroupLabel);
-    
-    targetGroupIdSpinBox_ = new QSpinBox(this);
-    targetGroupIdSpinBox_->setRange(1, 999);
-    targetGroupIdSpinBox_->setValue(1);
-    targetGroupIdSpinBox_->setMinimumHeight(32);
-    targetGroupIdSpinBox_->setMinimumWidth(60);
-    deviceRow1->addWidget(targetGroupIdSpinBox_);
-    
-    QLabel *nodeLabel = new QLabel(QStringLiteral("节点:"), this);
-    deviceRow1->addWidget(nodeLabel);
-    
-    deviceNodeIdSpinBox_ = new QSpinBox(this);
-    deviceNodeIdSpinBox_->setRange(1, 255);
-    deviceNodeIdSpinBox_->setValue(1);
-    deviceNodeIdSpinBox_->setMinimumHeight(32);
-    deviceNodeIdSpinBox_->setMinimumWidth(60);
-    deviceRow1->addWidget(deviceNodeIdSpinBox_);
-    
-    deviceRow1->addStretch();
-    deviceLayout->addLayout(deviceRow1);
-
-    QHBoxLayout *deviceRow2 = new QHBoxLayout();
-    deviceRow2->setSpacing(6);
-    
-    QPushButton *addDeviceButton = new QPushButton(QStringLiteral("添加设备"), this);
-    addDeviceButton->setProperty("type", QStringLiteral("success"));
-    addDeviceButton->setMinimumHeight(36);
-    connect(addDeviceButton, &QPushButton::clicked, this, &GroupWidget::onAddDeviceClicked);
-    deviceRow2->addWidget(addDeviceButton);
-
-    QPushButton *removeDeviceButton = new QPushButton(QStringLiteral("移除设备"), this);
-    removeDeviceButton->setProperty("type", QStringLiteral("warning"));
-    removeDeviceButton->setMinimumHeight(36);
-    connect(removeDeviceButton, &QPushButton::clicked, this, &GroupWidget::onRemoveDeviceClicked);
-    deviceRow2->addWidget(removeDeviceButton);
-    
-    deviceLayout->addLayout(deviceRow2);
-    mainLayout->addWidget(deviceGroupBox);
-
-    // 分组控制区域
-    QGroupBox *controlGroupBox = new QGroupBox(QStringLiteral("分组批量控制"), this);
-    QVBoxLayout *controlLayout = new QVBoxLayout(controlGroupBox);
-    controlLayout->setSpacing(6);
-    controlLayout->setContentsMargins(8, 12, 8, 8);
-
-    QHBoxLayout *controlRow1 = new QHBoxLayout();
-    controlRow1->setSpacing(6);
-    
-    QLabel *ctrlGroupLabel = new QLabel(QStringLiteral("分组:"), this);
-    controlRow1->addWidget(ctrlGroupLabel);
-    
-    controlGroupIdSpinBox_ = new QSpinBox(this);
-    controlGroupIdSpinBox_->setRange(1, 999);
-    controlGroupIdSpinBox_->setValue(1);
-    controlGroupIdSpinBox_->setMinimumHeight(32);
-    controlGroupIdSpinBox_->setMinimumWidth(60);
-    controlRow1->addWidget(controlGroupIdSpinBox_);
-    
-    QLabel *channelLabel = new QLabel(QStringLiteral("通道:"), this);
-    controlRow1->addWidget(channelLabel);
-    
-    controlChannelCombo_ = new QComboBox(this);
-    controlChannelCombo_->addItem(QStringLiteral("CH0"), 0);
-    controlChannelCombo_->addItem(QStringLiteral("CH1"), 1);
-    controlChannelCombo_->addItem(QStringLiteral("CH2"), 2);
-    controlChannelCombo_->addItem(QStringLiteral("CH3"), 3);
-    controlChannelCombo_->addItem(QStringLiteral("全部"), -1);
-    controlChannelCombo_->setMinimumHeight(32);
-    controlChannelCombo_->setMinimumWidth(70);
-    controlRow1->addWidget(controlChannelCombo_);
-    
-    QLabel *actionLabel = new QLabel(QStringLiteral("动作:"), this);
-    controlRow1->addWidget(actionLabel);
-    
-    controlActionCombo_ = new QComboBox(this);
-    controlActionCombo_->addItem(QStringLiteral("停止"), QStringLiteral("stop"));
-    controlActionCombo_->addItem(QStringLiteral("正转"), QStringLiteral("fwd"));
-    controlActionCombo_->addItem(QStringLiteral("反转"), QStringLiteral("rev"));
-    controlActionCombo_->setMinimumHeight(32);
-    controlActionCombo_->setMinimumWidth(70);
-    controlRow1->addWidget(controlActionCombo_);
-    
-    controlRow1->addStretch();
-    controlLayout->addLayout(controlRow1);
-
-    QPushButton *controlButton = new QPushButton(QStringLiteral("执行分组控制"), this);
-    controlButton->setProperty("type", QStringLiteral("success"));
-    controlButton->setMinimumHeight(40);
-    connect(controlButton, &QPushButton::clicked, this, &GroupWidget::onGroupControlClicked);
-    controlLayout->addWidget(controlButton);
-    
-    mainLayout->addWidget(controlGroupBox);
-
-    // 添加弹性空间
-    mainLayout->addStretch();
+    // 提示
+    QLabel *helpLabel = new QLabel(
+        QStringLiteral("提示：点击表格行选中分组，然后点击上方按钮操作"),
+        this);
+    helpLabel->setStyleSheet(QStringLiteral(
+        "color: #7f8c8d; font-size: 11px; padding: 4px;"));
+    helpLabel->setAlignment(Qt::AlignCenter);
+    mainLayout->addWidget(helpLabel);
 }
 
 void GroupWidget::refreshGroupList()
@@ -283,11 +154,47 @@ void GroupWidget::onCreateGroupClicked()
         return;
     }
 
-    int groupId = newGroupIdSpinBox_->value();
-    QString name = newGroupNameEdit_->text().trimmed();
+    // 创建弹窗
+    QDialog dialog(this);
+    dialog.setWindowTitle(QStringLiteral("创建分组"));
+    dialog.setMinimumWidth(350);
     
+    QVBoxLayout *layout = new QVBoxLayout(&dialog);
+    QFormLayout *formLayout = new QFormLayout();
+    
+    QSpinBox *groupIdSpinBox = new QSpinBox(&dialog);
+    groupIdSpinBox->setRange(1, 999);
+    groupIdSpinBox->setValue(selectedGroupId_);
+    groupIdSpinBox->setMinimumHeight(40);
+    formLayout->addRow(QStringLiteral("分组ID:"), groupIdSpinBox);
+    
+    QLineEdit *nameEdit = new QLineEdit(&dialog);
+    nameEdit->setPlaceholderText(QStringLiteral("分组名称(可空,自动生成)"));
+    nameEdit->setMinimumHeight(40);
+    formLayout->addRow(QStringLiteral("名称:"), nameEdit);
+    
+    layout->addLayout(formLayout);
+    
+    QDialogButtonBox *buttonBox = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    buttonBox->button(QDialogButtonBox::Ok)->setText(QStringLiteral("创建"));
+    buttonBox->button(QDialogButtonBox::Ok)->setMinimumHeight(40);
+    buttonBox->button(QDialogButtonBox::Cancel)->setText(QStringLiteral("取消"));
+    buttonBox->button(QDialogButtonBox::Cancel)->setMinimumHeight(40);
+    connect(buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttonBox);
+    
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    int groupId = groupIdSpinBox->value();
+    QString name = nameEdit->text().trimmed();
+    
+    // 名称为空时自动生成
     if (name.isEmpty()) {
-        name = QStringLiteral("group-%1").arg(groupId);
+        name = QStringLiteral("分组-%1").arg(groupId);
     }
 
     QJsonObject params;
@@ -297,8 +204,7 @@ void GroupWidget::onCreateGroupClicked()
     QJsonValue result = rpcClient_->call(QStringLiteral("group.create"), params);
     
     if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        QMessageBox::information(this, QStringLiteral("成功"), 
-            QStringLiteral("分组 %1 创建成功！").arg(groupId));
+        statusLabel_->setText(QStringLiteral("分组 %1 创建成功").arg(groupId));
         refreshGroupList();
     } else {
         QString error = result.toObject().value(QStringLiteral("error")).toString();
@@ -314,7 +220,7 @@ void GroupWidget::onDeleteGroupClicked()
         return;
     }
 
-    int groupId = newGroupIdSpinBox_->value();
+    int groupId = getSelectedGroupId();
 
     QMessageBox::StandardButton reply = QMessageBox::question(this, 
         QStringLiteral("确认删除"),
@@ -331,8 +237,7 @@ void GroupWidget::onDeleteGroupClicked()
     QJsonValue result = rpcClient_->call(QStringLiteral("group.delete"), params);
     
     if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        QMessageBox::information(this, QStringLiteral("成功"), 
-            QStringLiteral("分组 %1 删除成功！").arg(groupId));
+        statusLabel_->setText(QStringLiteral("分组 %1 删除成功").arg(groupId));
         refreshGroupList();
     } else {
         QString error = result.toObject().value(QStringLiteral("error")).toString();
@@ -341,56 +246,100 @@ void GroupWidget::onDeleteGroupClicked()
     }
 }
 
-void GroupWidget::onAddDeviceClicked()
+void GroupWidget::onManageDevicesClicked()
 {
     if (!rpcClient_ || !rpcClient_->isConnected()) {
         QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先连接服务器"));
         return;
     }
 
-    int groupId = targetGroupIdSpinBox_->value();
-    int nodeId = deviceNodeIdSpinBox_->value();
-
-    QJsonObject params;
-    params[QStringLiteral("groupId")] = groupId;
-    params[QStringLiteral("node")] = nodeId;
-
-    QJsonValue result = rpcClient_->call(QStringLiteral("group.addDevice"), params);
+    int groupId = getSelectedGroupId();
     
-    if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        statusLabel_->setText(QStringLiteral("[成功] 设备 %1 已添加到分组 %2").arg(nodeId).arg(groupId));
-        refreshGroupList();
-    } else {
-        QString error = result.toObject().value(QStringLiteral("error")).toString();
-        QMessageBox::warning(this, QStringLiteral("错误"), 
-            QStringLiteral("添加设备失败: %1").arg(error));
-    }
-}
-
-void GroupWidget::onRemoveDeviceClicked()
-{
-    if (!rpcClient_ || !rpcClient_->isConnected()) {
-        QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先连接服务器"));
-        return;
-    }
-
-    int groupId = targetGroupIdSpinBox_->value();
-    int nodeId = deviceNodeIdSpinBox_->value();
-
-    QJsonObject params;
-    params[QStringLiteral("groupId")] = groupId;
-    params[QStringLiteral("node")] = nodeId;
-
-    QJsonValue result = rpcClient_->call(QStringLiteral("group.removeDevice"), params);
+    // 创建弹窗
+    QDialog dialog(this);
+    dialog.setWindowTitle(QStringLiteral("管理分组设备 - 分组 %1").arg(groupId));
+    dialog.setMinimumWidth(350);
     
-    if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        statusLabel_->setText(QStringLiteral("[成功] 设备 %1 已从分组 %2 移除").arg(nodeId).arg(groupId));
-        refreshGroupList();
-    } else {
-        QString error = result.toObject().value(QStringLiteral("error")).toString();
-        QMessageBox::warning(this, QStringLiteral("错误"), 
-            QStringLiteral("移除设备失败: %1").arg(error));
-    }
+    QVBoxLayout *layout = new QVBoxLayout(&dialog);
+    
+    QLabel *infoLabel = new QLabel(QStringLiteral("当前操作分组: %1").arg(groupId), &dialog);
+    infoLabel->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 14px; padding: 8px;"));
+    layout->addWidget(infoLabel);
+    
+    QFormLayout *formLayout = new QFormLayout();
+    
+    QSpinBox *nodeIdSpinBox = new QSpinBox(&dialog);
+    nodeIdSpinBox->setRange(1, 255);
+    nodeIdSpinBox->setValue(1);
+    nodeIdSpinBox->setMinimumHeight(40);
+    formLayout->addRow(QStringLiteral("设备节点ID:"), nodeIdSpinBox);
+    
+    layout->addLayout(formLayout);
+    
+    QHBoxLayout *btnLayout = new QHBoxLayout();
+    
+    QPushButton *addBtn = new QPushButton(QStringLiteral("添加设备"), &dialog);
+    addBtn->setProperty("type", QStringLiteral("success"));
+    addBtn->setMinimumHeight(44);
+    btnLayout->addWidget(addBtn);
+    
+    QPushButton *removeBtn = new QPushButton(QStringLiteral("移除设备"), &dialog);
+    removeBtn->setProperty("type", QStringLiteral("warning"));
+    removeBtn->setMinimumHeight(44);
+    btnLayout->addWidget(removeBtn);
+    
+    layout->addLayout(btnLayout);
+    
+    QLabel *resultLabel = new QLabel(&dialog);
+    resultLabel->setAlignment(Qt::AlignCenter);
+    resultLabel->setMinimumHeight(30);
+    layout->addWidget(resultLabel);
+    
+    QPushButton *closeBtn = new QPushButton(QStringLiteral("关闭"), &dialog);
+    closeBtn->setMinimumHeight(40);
+    connect(closeBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
+    layout->addWidget(closeBtn);
+    
+    // 添加设备
+    connect(addBtn, &QPushButton::clicked, [&]() {
+        int nodeId = nodeIdSpinBox->value();
+        QJsonObject params;
+        params[QStringLiteral("groupId")] = groupId;
+        params[QStringLiteral("node")] = nodeId;
+        
+        QJsonValue result = rpcClient_->call(QStringLiteral("group.addDevice"), params);
+        
+        if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
+            resultLabel->setText(QStringLiteral("设备 %1 已添加到分组").arg(nodeId));
+            resultLabel->setStyleSheet(QStringLiteral("color: #27ae60; font-weight: bold;"));
+        } else {
+            QString error = result.toObject().value(QStringLiteral("error")).toString();
+            resultLabel->setText(QStringLiteral("添加失败: %1").arg(error));
+            resultLabel->setStyleSheet(QStringLiteral("color: #e74c3c; font-weight: bold;"));
+        }
+    });
+    
+    // 移除设备
+    connect(removeBtn, &QPushButton::clicked, [&]() {
+        int nodeId = nodeIdSpinBox->value();
+        QJsonObject params;
+        params[QStringLiteral("groupId")] = groupId;
+        params[QStringLiteral("node")] = nodeId;
+        
+        QJsonValue result = rpcClient_->call(QStringLiteral("group.removeDevice"), params);
+        
+        if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
+            resultLabel->setText(QStringLiteral("设备 %1 已从分组移除").arg(nodeId));
+            resultLabel->setStyleSheet(QStringLiteral("color: #27ae60; font-weight: bold;"));
+        } else {
+            QString error = result.toObject().value(QStringLiteral("error")).toString();
+            resultLabel->setText(QStringLiteral("移除失败: %1").arg(error));
+            resultLabel->setStyleSheet(QStringLiteral("color: #e74c3c; font-weight: bold;"));
+        }
+    });
+    
+    dialog.exec();
+    refreshGroupList();
 }
 
 void GroupWidget::onGroupControlClicked()
@@ -400,26 +349,83 @@ void GroupWidget::onGroupControlClicked()
         return;
     }
 
-    int groupId = controlGroupIdSpinBox_->value();
-    int channel = controlChannelCombo_->currentData().toInt();
-    QString action = controlActionCombo_->currentData().toString();
-
-    QJsonObject params;
-    params[QStringLiteral("groupId")] = groupId;
-    params[QStringLiteral("ch")] = channel;
-    params[QStringLiteral("action")] = action;
-
-    QJsonValue result = rpcClient_->call(QStringLiteral("group.control"), params);
+    int groupId = getSelectedGroupId();
     
-    if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        int success = result.toObject().value(QStringLiteral("successCount")).toInt();
-        int total = result.toObject().value(QStringLiteral("totalDevices")).toInt();
-        statusLabel_->setText(QStringLiteral("[成功] 分组控制完成: %1/%2 成功").arg(success).arg(total));
-    } else {
-        QString error = result.toObject().value(QStringLiteral("error")).toString();
-        QMessageBox::warning(this, QStringLiteral("错误"), 
-            QStringLiteral("分组控制失败: %1").arg(error));
-    }
+    // 创建弹窗
+    QDialog dialog(this);
+    dialog.setWindowTitle(QStringLiteral("分组批量控制 - 分组 %1").arg(groupId));
+    dialog.setMinimumWidth(350);
+    
+    QVBoxLayout *layout = new QVBoxLayout(&dialog);
+    
+    QLabel *infoLabel = new QLabel(QStringLiteral("当前操作分组: %1").arg(groupId), &dialog);
+    infoLabel->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 14px; padding: 8px;"));
+    layout->addWidget(infoLabel);
+    
+    QFormLayout *formLayout = new QFormLayout();
+    
+    QComboBox *channelCombo = new QComboBox(&dialog);
+    channelCombo->addItem(QStringLiteral("CH0"), 0);
+    channelCombo->addItem(QStringLiteral("CH1"), 1);
+    channelCombo->addItem(QStringLiteral("CH2"), 2);
+    channelCombo->addItem(QStringLiteral("CH3"), 3);
+    channelCombo->addItem(QStringLiteral("全部通道"), -1);
+    channelCombo->setCurrentIndex(4); // 默认全部
+    channelCombo->setMinimumHeight(40);
+    formLayout->addRow(QStringLiteral("通道:"), channelCombo);
+    
+    QComboBox *actionCombo = new QComboBox(&dialog);
+    actionCombo->addItem(QStringLiteral("停止"), QStringLiteral("stop"));
+    actionCombo->addItem(QStringLiteral("正转"), QStringLiteral("fwd"));
+    actionCombo->addItem(QStringLiteral("反转"), QStringLiteral("rev"));
+    actionCombo->setMinimumHeight(40);
+    formLayout->addRow(QStringLiteral("动作:"), actionCombo);
+    
+    layout->addLayout(formLayout);
+    
+    QLabel *resultLabel = new QLabel(&dialog);
+    resultLabel->setAlignment(Qt::AlignCenter);
+    resultLabel->setMinimumHeight(30);
+    layout->addWidget(resultLabel);
+    
+    QHBoxLayout *btnLayout = new QHBoxLayout();
+    
+    QPushButton *executeBtn = new QPushButton(QStringLiteral("执行控制"), &dialog);
+    executeBtn->setProperty("type", QStringLiteral("success"));
+    executeBtn->setMinimumHeight(44);
+    btnLayout->addWidget(executeBtn);
+    
+    QPushButton *closeBtn = new QPushButton(QStringLiteral("关闭"), &dialog);
+    closeBtn->setMinimumHeight(44);
+    connect(closeBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
+    btnLayout->addWidget(closeBtn);
+    
+    layout->addLayout(btnLayout);
+    
+    connect(executeBtn, &QPushButton::clicked, [&]() {
+        int channel = channelCombo->currentData().toInt();
+        QString action = actionCombo->currentData().toString();
+        
+        QJsonObject params;
+        params[QStringLiteral("groupId")] = groupId;
+        params[QStringLiteral("ch")] = channel;
+        params[QStringLiteral("action")] = action;
+        
+        QJsonValue result = rpcClient_->call(QStringLiteral("group.control"), params);
+        
+        if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
+            int success = result.toObject().value(QStringLiteral("successCount")).toInt();
+            int total = result.toObject().value(QStringLiteral("totalDevices")).toInt();
+            resultLabel->setText(QStringLiteral("控制完成: %1/%2 成功").arg(success).arg(total));
+            resultLabel->setStyleSheet(QStringLiteral("color: #27ae60; font-weight: bold;"));
+        } else {
+            QString error = result.toObject().value(QStringLiteral("error")).toString();
+            resultLabel->setText(QStringLiteral("控制失败: %1").arg(error));
+            resultLabel->setStyleSheet(QStringLiteral("color: #e74c3c; font-weight: bold;"));
+        }
+    });
+    
+    dialog.exec();
 }
 
 void GroupWidget::onGroupTableCellClicked(int row, int column)
@@ -428,11 +434,22 @@ void GroupWidget::onGroupTableCellClicked(int row, int column)
     
     QTableWidgetItem *groupIdItem = groupTable_->item(row, 0);
     if (groupIdItem) {
-        int groupId = groupIdItem->text().toInt();
-        newGroupIdSpinBox_->setValue(groupId);
-        targetGroupIdSpinBox_->setValue(groupId);
-        controlGroupIdSpinBox_->setValue(groupId);
+        selectedGroupId_ = groupIdItem->text().toInt();
+        statusLabel_->setText(QStringLiteral("已选中分组: %1").arg(selectedGroupId_));
     }
+}
+
+int GroupWidget::getSelectedGroupId()
+{
+    // 获取表格中选中的行
+    int currentRow = groupTable_->currentRow();
+    if (currentRow >= 0) {
+        QTableWidgetItem *idItem = groupTable_->item(currentRow, 0);
+        if (idItem) {
+            return idItem->text().toInt();
+        }
+    }
+    return selectedGroupId_;
 }
 
 void GroupWidget::updateGroupTable(const QJsonArray &groups)
