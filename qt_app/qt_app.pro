@@ -27,7 +27,11 @@ SOURCES += \
     src/group_widget.cpp \
     src/connection_dialog.cpp \
     src/connection_widget.cpp \
-    src/relay_control_widget.cpp
+    src/relay_control_widget.cpp \
+    src/home_widget.cpp \
+    src/log_widget.cpp \
+    src/settings_widget.cpp \
+    src/relay_control_dialog.cpp
 
 HEADERS += \
     src/mainwindow.h \
@@ -36,7 +40,11 @@ HEADERS += \
     src/group_widget.h \
     src/connection_dialog.h \
     src/connection_widget.h \
-    src/relay_control_widget.h
+    src/relay_control_widget.h \
+    src/home_widget.h \
+    src/log_widget.h \
+    src/settings_widget.h \
+    src/relay_control_dialog.h
 
 # Resources
 RESOURCES += \

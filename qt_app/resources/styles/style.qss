@@ -1,6 +1,6 @@
 /* FanZhou RPC Client Stylesheet */
 /* 针对7寸1024x600触屏优化的Qt5.12样式 */
-/* 左侧菜单栏 + 右侧内容区布局 */
+/* 大棚控制系统 - 左侧菜单栏 + 右侧内容区布局 */
 
 /* Main Window */
 QMainWindow {
@@ -14,30 +14,30 @@ QMainWindow {
 }
 
 #sidebarLogo {
-    color: #ffffff;
-    font-size: 18px;
+    color: #27ae60;
+    font-size: 16px;
     font-weight: bold;
-    padding: 12px 8px;
+    padding: 12px 4px;
     border-bottom: 1px solid #34495e;
 }
 
 #sidebarVersion {
     color: #7f8c8d;
-    font-size: 12px;
+    font-size: 11px;
     padding: 8px;
 }
 
-/* Menu Buttons in Sidebar */
+/* Menu Buttons in Sidebar - 垂直居中图标和文字 */
 #menuButton {
     background-color: transparent;
     color: #bdc3c7;
     border: none;
     border-radius: 8px;
-    padding: 14px 12px;
-    text-align: left;
-    font-size: 14px;
+    padding: 8px 4px;
+    text-align: center;
+    font-size: 12px;
     font-weight: bold;
-    min-height: 48px;
+    min-height: 60px;
 }
 
 #menuButton:hover {
@@ -46,12 +46,12 @@ QMainWindow {
 }
 
 #menuButton:checked {
-    background-color: #3498db;
+    background-color: #27ae60;
     color: #ffffff;
 }
 
 #menuButton:pressed {
-    background-color: #2980b9;
+    background-color: #1e8449;
 }
 
 /* Content Stack */
@@ -482,4 +482,49 @@ QMenu::item:selected {
     background-color: #3498db;
     color: white;
     border-radius: 4px;
+}
+
+/* Device Card Styles */
+#deviceCard {
+    background-color: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 12px;
+}
+
+#deviceCard:hover {
+    border-color: #27ae60;
+    background-color: #f8f9fa;
+}
+
+/* Dialog Styles */
+QDialog {
+    background-color: #ffffff;
+}
+
+QDialog QGroupBox {
+    margin-top: 16px;
+}
+
+/* Checkbox Styles */
+QCheckBox {
+    font-size: 14px;
+    spacing: 8px;
+}
+
+QCheckBox::indicator {
+    width: 24px;
+    height: 24px;
+    border: 2px solid #e0e0e0;
+    border-radius: 4px;
+    background-color: white;
+}
+
+QCheckBox::indicator:checked {
+    background-color: #27ae60;
+    border-color: #27ae60;
+}
+
+QCheckBox::indicator:hover {
+    border-color: #3498db;
 }

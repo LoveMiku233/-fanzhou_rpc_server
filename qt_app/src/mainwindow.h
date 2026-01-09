@@ -1,6 +1,6 @@
 /**
  * @file mainwindow.h
- * @brief 主窗口头文件
+ * @brief 主窗口头文件 - 大棚控制系统
  */
 
 #ifndef MAINWINDOW_H
@@ -14,17 +14,20 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QList>
+#include <QDateTime>
 
 class RpcClient;
-class ConnectionWidget;
+class HomeWidget;
 class DeviceWidget;
 class GroupWidget;
-class RelayControlWidget;
+class LogWidget;
+class SettingsWidget;
 
 /**
- * @brief 主窗口类
+ * @brief 主窗口类 - 大棚控制系统
  * 
  * 采用左侧菜单栏 + 右侧内容区的布局设计
+ * 页面：主页、设备管理、分组管理、日志、设置
  */
 class MainWindow : public QMainWindow
 {
@@ -38,6 +41,8 @@ private slots:
     void onMenuButtonClicked();
     void onConnectionStatusChanged(bool connected);
     void onAutoRefreshTimeout();
+    void onLogMessage(const QString &message, const QString &level = QStringLiteral("INFO"));
+    void updateStatusBarTime();
 
 private:
     void setupUi();
@@ -47,28 +52,38 @@ private:
     void createContentArea();
     void switchToPage(int index);
     void updateMenuButtonStyles(int activeIndex);
+    void updateStatusBarConnection(bool connected);
 
     // UI组件
     QWidget *sidebar_;
     QVBoxLayout *sidebarLayout_;
     QList<QPushButton*> menuButtons_;
     QStackedWidget *contentStack_;
+    
+    // 状态栏组件
     QLabel *connectionStatusLabel_;
+    QLabel *timeLabel_;
+    QLabel *alertLabel_;
 
     // 子页面
-    ConnectionWidget *connectionWidget_;
+    HomeWidget *homeWidget_;
     DeviceWidget *deviceWidget_;
     GroupWidget *groupWidget_;
-    RelayControlWidget *relayControlWidget_;
+    LogWidget *logWidget_;
+    SettingsWidget *settingsWidget_;
 
     // RPC客户端
     RpcClient *rpcClient_;
 
-    // 自动刷新定时器
+    // 定时器
     QTimer *autoRefreshTimer_;
+    QTimer *statusBarTimer_;
 
     // 当前页面索引
     int currentPageIndex_;
+
+    // 最后一条报警信息
+    QString lastAlertMessage_;
 };
 
 #endif // MAINWINDOW_H
