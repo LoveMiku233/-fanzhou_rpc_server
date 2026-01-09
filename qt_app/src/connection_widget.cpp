@@ -17,6 +17,7 @@
 #include <QDateTime>
 #include <QSettings>
 #include <QScrollArea>
+#include <QTextCursor>
 
 ConnectionWidget::ConnectionWidget(RpcClient *rpcClient, QWidget *parent)
     : QWidget(parent)
