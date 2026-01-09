@@ -54,9 +54,9 @@ void SettingsWidget::setupUi()
     mainLayout->setSpacing(10);
 
     // 页面标题 - 使用纯文本
-    QLabel *titleLabel = new QLabel(QStringLiteral("[S] 系统设置"), this);
+    QLabel *titleLabel = new QLabel(QStringLiteral("系统设置"), this);
     titleLabel->setStyleSheet(QStringLiteral(
-        "font-size: 16px; font-weight: bold; color: #2c3e50; padding: 4px 0;"));
+        "font-size: 18px; font-weight: bold; color: #2c3e50; padding: 4px 0;"));
     mainLayout->addWidget(titleLabel);
 
     // 服务器连接设置组

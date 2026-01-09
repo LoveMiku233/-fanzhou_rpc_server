@@ -26,10 +26,9 @@ class RpcClient;
  * @brief 策略管理页面
  *
  * 管理所有自动化策略：
- * - 定时策略（auto.strategy）
- * - 传感器策略（auto.sensor）
- * - 继电器策略（auto.relay）
- * - 传感器触发继电器策略（auto.sensorRelay）
+ * - 定时策略（auto.strategy）- 基于时间间隔触发分组控制
+ * - 传感器策略（auto.sensor）- 基于传感器数据触发分组控制
+ * - 继电器策略（auto.relay）- 基于时间间隔直接控制继电器
  */
 class StrategyWidget : public QWidget
 {

@@ -40,9 +40,9 @@ void GroupWidget::setupUi()
     mainLayout->setSpacing(8);
 
     // 页面标题 - 使用纯文本
-    QLabel *titleLabel = new QLabel(QStringLiteral("[G] 分组管理"), this);
+    QLabel *titleLabel = new QLabel(QStringLiteral("分组管理"), this);
     titleLabel->setStyleSheet(QStringLiteral(
-        "font-size: 16px; font-weight: bold; color: #2c3e50; padding: 4px 0;"));
+        "font-size: 18px; font-weight: bold; color: #2c3e50; padding: 4px 0;"));
     mainLayout->addWidget(titleLabel);
 
     // 工具栏

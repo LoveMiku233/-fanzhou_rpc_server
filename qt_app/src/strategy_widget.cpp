@@ -62,7 +62,7 @@ void StrategyWidget::setupUi()
     mainLayout->setSpacing(8);
 
     // 页面标题
-    QLabel *titleLabel = new QLabel(QStringLiteral("[A] 策略管理"), this);
+    QLabel *titleLabel = new QLabel(QStringLiteral("策略管理"), this);
     titleLabel->setStyleSheet(QStringLiteral(
         "font-size: 18px; font-weight: bold; color: #2c3e50; padding: 4px 0;"));
     mainLayout->addWidget(titleLabel);
