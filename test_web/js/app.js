@@ -1981,7 +1981,16 @@ function getSensorList(commType) {
 function readSensor(nodeId) {
     callMethod('sensor.read', { nodeId: nodeId }, function(response) {
         if (response.result && response.result.ok) {
-            log('info', `传感器 ${nodeId} 信息:\n` + JSON.stringify(response.result, null, 2));
+            const sensor = response.result;
+            let sensorInfo = `=== 传感器 ${nodeId} 信息 ===\n`;
+            sensorInfo += `名称: ${sensor.name || '--'}\n`;
+            sensorInfo += `类型: ${sensor.typeName || '--'}\n`;
+            sensorInfo += `通信方式: ${sensor.commTypeName || '--'}\n`;
+            sensorInfo += `总线: ${sensor.bus || '--'}`;
+            if (sensor.params) {
+                sensorInfo += `\n参数: ${JSON.stringify(sensor.params)}`;
+            }
+            log('info', sensorInfo);
         } else if (response.error) {
             log('error', `读取传感器失败: ${response.error.message || '未知错误'}`);
         }

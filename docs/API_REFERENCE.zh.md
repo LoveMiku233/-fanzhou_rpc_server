@@ -725,12 +725,11 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 | 方法名 | 参数 | 返回值 | 说明 |
 |--------|------|--------|------|
 | `sensor.list` | `{commType?}` | `{ok, sensors, total}` | 获取传感器列表，可按通信类型过滤 |
-| `sensor.read` | `{nodeId, sensorType?}` | 传感器信息对象 | 读取指定传感器数据 |
+| `sensor.read` | `{nodeId}` | 传感器信息对象 | 读取指定传感器配置信息 |
 
 **参数说明**：
 - `nodeId`: 传感器节点ID (1-255)
 - `commType`: 可选过滤参数，值为 "serial" 或 "can"
-- `sensorType`: 可选传感器类型过滤
 
 **使用示例**：
 ```bash

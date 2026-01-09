@@ -69,6 +69,9 @@ constexpr qint64 kOnlineTimeoutMs = 30000;
 // 最大通道ID（0-3表示4个通道）
 constexpr int kMaxChannelId = 3;
 
+// 默认通道数量（GD427继电器默认4通道）
+constexpr int kDefaultChannelCount = 4;
+
 // CAN TX队列拥堵阈值：超过此数量认为拥堵
 constexpr int kTxQueueCongestionThreshold = 10;
 
@@ -644,8 +647,8 @@ void RpcRegistry::registerRelay()
             auto *dev = it.value();
             if (!dev) continue;
 
-            // 停止每个设备的所有4个通道
-            for (quint8 ch = 0; ch < 4; ++ch) {
+            // 停止每个设备的所有通道
+            for (quint8 ch = 0; ch < kDefaultChannelCount; ++ch) {
                 const auto result = context_->enqueueControl(
                     node, ch,
                     device::RelayProtocol::Action::Stop,
@@ -685,13 +688,9 @@ void RpcRegistry::registerRelay()
     dispatcher_->registerMethod(QStringLiteral("sensor.read"),
                                  [this](const QJsonObject &params) {
         quint8 nodeId = 0;
-        QString sensorType;
 
         if (!rpc::RpcHelpers::getU8(params, "nodeId", nodeId))
             return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid nodeId"));
-
-        // 可选：传感器类型过滤
-        rpc::RpcHelpers::getString(params, "sensorType", sensorType);
 
         // 查找设备配置
         auto config = context_->getDeviceConfig(nodeId);
