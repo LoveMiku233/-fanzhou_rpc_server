@@ -32,6 +32,9 @@ public slots:
 signals:
     void newAlertMessage(const QString &message);
 
+private slots:
+    void onExportClicked();
+
 private:
     void setupUi();
 

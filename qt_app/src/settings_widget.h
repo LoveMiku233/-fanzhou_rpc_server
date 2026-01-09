@@ -43,6 +43,8 @@ private slots:
     void onRpcConnected();
     void onRpcDisconnected();
     void onRpcError(const QString &error);
+    void onRefreshIntervalChanged(int value);
+    void onAutoConnectToggled(bool checked);
 
 private:
     void setupUi();

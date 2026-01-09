@@ -342,19 +342,20 @@ void DeviceWidget::onDeviceCardClicked(int nodeId, const QString &name)
     }
 
     RelayControlDialog *dialog = new RelayControlDialog(rpcClient_, nodeId, name, this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
     connect(dialog, &RelayControlDialog::controlExecuted, this, [this](const QString &message) {
         emit logMessage(message);
     });
+    connect(dialog, &QDialog::finished, this, [this, nodeId]() {
+        // 刷新设备状态
+        QJsonObject params;
+        params[QStringLiteral("node")] = nodeId;
+        QJsonValue result = rpcClient_->call(QStringLiteral("relay.statusAll"), params);
+        if (result.isObject()) {
+            updateDeviceCardStatus(nodeId, result.toObject());
+        }
+    });
     dialog->exec();
-    delete dialog;
-
-    // 刷新设备状态
-    QJsonObject params;
-    params[QStringLiteral("node")] = nodeId;
-    QJsonValue result = rpcClient_->call(QStringLiteral("relay.statusAll"), params);
-    if (result.isObject()) {
-        updateDeviceCardStatus(nodeId, result.toObject());
-    }
 }
 
 void DeviceWidget::updateDeviceCards(const QJsonArray &devices)

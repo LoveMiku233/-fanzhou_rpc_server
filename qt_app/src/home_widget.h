@@ -9,7 +9,6 @@
 #include <QWidget>
 #include <QLabel>
 #include <QPushButton>
-#include <QTimer>
 
 class RpcClient;
 
@@ -30,6 +29,9 @@ signals:
     void navigateToDevices();
     void navigateToGroups();
     void navigateToSettings();
+
+private slots:
+    void onStopAllClicked();
 
 private:
     void setupUi();

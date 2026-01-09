@@ -92,28 +92,31 @@ void LogWidget::setupUi()
     exportButton_ = new QPushButton(QStringLiteral("💾 导出日志"), this);
     exportButton_->setMinimumHeight(50);
     exportButton_->setProperty("type", QStringLiteral("success"));
-    connect(exportButton_, &QPushButton::clicked, this, [this]() {
-        QString fileName = QFileDialog::getSaveFileName(this,
-            QStringLiteral("导出日志"),
-            QStringLiteral("log_%1.txt").arg(
-                QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_HHmmss"))),
-            QStringLiteral("文本文件 (*.txt)"));
-        if (!fileName.isEmpty()) {
-            QFile file(fileName);
-            if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-                QTextStream stream(&file);
-                stream << logTextEdit_->toPlainText();
-                file.close();
-                QMessageBox::information(this, QStringLiteral("成功"),
-                    QStringLiteral("日志已导出到: %1").arg(fileName));
-            }
-        }
-    });
+    connect(exportButton_, &QPushButton::clicked, this, &LogWidget::onExportClicked);
     buttonLayout->addWidget(exportButton_);
 
     buttonLayout->addStretch();
 
     mainLayout->addLayout(buttonLayout);
+}
+
+void LogWidget::onExportClicked()
+{
+    QString fileName = QFileDialog::getSaveFileName(this,
+        QStringLiteral("导出日志"),
+        QStringLiteral("log_%1.txt").arg(
+            QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_HHmmss"))),
+        QStringLiteral("文本文件 (*.txt)"));
+    if (!fileName.isEmpty()) {
+        QFile file(fileName);
+        if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QTextStream stream(&file);
+            stream << logTextEdit_->toPlainText();
+            file.close();
+            QMessageBox::information(this, QStringLiteral("成功"),
+                QStringLiteral("日志已导出到: %1").arg(fileName));
+        }
+    }
 }
 
 void LogWidget::appendLog(const QString &message, const QString &level)

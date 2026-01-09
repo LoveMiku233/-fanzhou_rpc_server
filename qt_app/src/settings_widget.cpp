@@ -138,23 +138,31 @@ void SettingsWidget::setupUi()
     refreshIntervalSpinBox_->setValue(5);
     refreshIntervalSpinBox_->setSuffix(QStringLiteral(" 秒"));
     refreshIntervalSpinBox_->setMinimumHeight(48);
-    connect(refreshIntervalSpinBox_, QOverload<int>::of(&QSpinBox::valueChanged), [](int value) {
-        QSettings settings;
-        settings.setValue(QStringLiteral("settings/refreshInterval"), value);
-    });
+    connect(refreshIntervalSpinBox_, QOverload<int>::of(&QSpinBox::valueChanged),
+            this, &SettingsWidget::onRefreshIntervalChanged);
     systemLayout->addRow(QStringLiteral("自动刷新间隔:"), refreshIntervalSpinBox_);
 
     autoConnectCheckBox_ = new QCheckBox(QStringLiteral("启动时自动连接"), this);
     autoConnectCheckBox_->setMinimumHeight(40);
-    connect(autoConnectCheckBox_, &QCheckBox::toggled, [](bool checked) {
-        QSettings settings;
-        settings.setValue(QStringLiteral("settings/autoConnect"), checked);
-    });
+    connect(autoConnectCheckBox_, &QCheckBox::toggled,
+            this, &SettingsWidget::onAutoConnectToggled);
     systemLayout->addRow(autoConnectCheckBox_);
 
     mainLayout->addWidget(systemGroupBox);
 
     mainLayout->addStretch();
+}
+
+void SettingsWidget::onRefreshIntervalChanged(int value)
+{
+    QSettings settings;
+    settings.setValue(QStringLiteral("settings/refreshInterval"), value);
+}
+
+void SettingsWidget::onAutoConnectToggled(bool checked)
+{
+    QSettings settings;
+    settings.setValue(QStringLiteral("settings/autoConnect"), checked);
 }
 
 QString SettingsWidget::host() const

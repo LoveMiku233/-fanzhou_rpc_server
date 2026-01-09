@@ -143,19 +143,7 @@ void HomeWidget::setupUi()
     stopAllButton_ = new QPushButton(QStringLiteral("🛑 全部停止"), this);
     stopAllButton_->setMinimumHeight(60);
     stopAllButton_->setProperty("type", QStringLiteral("danger"));
-    connect(stopAllButton_, &QPushButton::clicked, this, [this]() {
-        if (!rpcClient_ || !rpcClient_->isConnected()) {
-            QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先连接服务器"));
-            return;
-        }
-        QMessageBox::StandardButton reply = QMessageBox::question(this,
-            QStringLiteral("确认"),
-            QStringLiteral("确定要停止所有设备吗？"),
-            QMessageBox::Yes | QMessageBox::No);
-        if (reply == QMessageBox::Yes) {
-            rpcClient_->call(QStringLiteral("relay.stopAll"));
-        }
-    });
+    connect(stopAllButton_, &QPushButton::clicked, this, &HomeWidget::onStopAllClicked);
     actionsLayout->addWidget(stopAllButton_);
 
     mainLayout->addWidget(actionsBox);
@@ -167,6 +155,21 @@ void HomeWidget::setupUi()
     mainLayout->addWidget(lastUpdateLabel_);
 
     mainLayout->addStretch();
+}
+
+void HomeWidget::onStopAllClicked()
+{
+    if (!rpcClient_ || !rpcClient_->isConnected()) {
+        QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先连接服务器"));
+        return;
+    }
+    QMessageBox::StandardButton reply = QMessageBox::question(this,
+        QStringLiteral("确认"),
+        QStringLiteral("确定要停止所有设备吗？"),
+        QMessageBox::Yes | QMessageBox::No);
+    if (reply == QMessageBox::Yes) {
+        rpcClient_->call(QStringLiteral("relay.stopAll"));
+    }
 }
 
 void HomeWidget::refreshData()
