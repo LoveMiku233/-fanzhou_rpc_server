@@ -15,6 +15,7 @@
 #include <QJsonObject>
 #include <QMessageBox>
 #include <QTimer>
+#include <QColor>
 
 DeviceWidget::DeviceWidget(RpcClient *rpcClient, QWidget *parent)
     : QWidget(parent)
@@ -30,16 +31,18 @@ DeviceWidget::DeviceWidget(RpcClient *rpcClient, QWidget *parent)
 void DeviceWidget::setupUi()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(10, 10, 10, 10);
+    mainLayout->setContentsMargins(6, 6, 6, 6);
+    mainLayout->setSpacing(6);
 
     // 工具栏
     QHBoxLayout *toolbarLayout = new QHBoxLayout();
+    toolbarLayout->setSpacing(8);
 
-    refreshButton_ = new QPushButton(QStringLiteral("🔄 刷新设备列表"), this);
+    refreshButton_ = new QPushButton(QStringLiteral("刷新设备"), this);
     connect(refreshButton_, &QPushButton::clicked, this, &DeviceWidget::refreshDeviceList);
     toolbarLayout->addWidget(refreshButton_);
 
-    queryAllButton_ = new QPushButton(QStringLiteral("🔍 查询全部状态"), this);
+    queryAllButton_ = new QPushButton(QStringLiteral("查询全部"), this);
     queryAllButton_->setProperty("type", QStringLiteral("success"));
     connect(queryAllButton_, &QPushButton::clicked, this, &DeviceWidget::onQueryAllClicked);
     toolbarLayout->addWidget(queryAllButton_);
@@ -54,17 +57,18 @@ void DeviceWidget::setupUi()
     // 设备表格
     QGroupBox *tableGroupBox = new QGroupBox(QStringLiteral("设备列表"), this);
     QVBoxLayout *tableLayout = new QVBoxLayout(tableGroupBox);
+    tableLayout->setContentsMargins(6, 6, 6, 6);
 
     deviceTable_ = new QTableWidget(this);
     deviceTable_->setColumnCount(7);
     deviceTable_->setHorizontalHeaderLabels({
-        QStringLiteral("节点ID"),
-        QStringLiteral("设备名称"),
+        QStringLiteral("节点"),
+        QStringLiteral("名称"),
         QStringLiteral("类型"),
-        QStringLiteral("在线状态"),
-        QStringLiteral("通道0"),
-        QStringLiteral("通道1"),
-        QStringLiteral("通道2/3")
+        QStringLiteral("状态"),
+        QStringLiteral("CH0"),
+        QStringLiteral("CH1"),
+        QStringLiteral("CH2/3")
     });
     
     deviceTable_->horizontalHeader()->setStretchLastSection(true);
@@ -79,19 +83,19 @@ void DeviceWidget::setupUi()
     tableLayout->addWidget(deviceTable_);
     mainLayout->addWidget(tableGroupBox, 1);
 
-    // 说明
+    // 说明 - 简化文本
     QLabel *helpLabel = new QLabel(
-        QStringLiteral("💡 提示：点击设备行可以查看详细状态。使用\"查询全部状态\"按钮可以刷新所有设备的通道状态。"),
+        QStringLiteral("提示：点击设备行查看详细状态"),
         this);
     helpLabel->setWordWrap(true);
-    helpLabel->setStyleSheet(QStringLiteral("color: #666; font-size: 12px; padding: 5px;"));
+    helpLabel->setStyleSheet(QStringLiteral("color: #666; padding: 4px;"));
     mainLayout->addWidget(helpLabel);
 }
 
 void DeviceWidget::refreshDeviceList()
 {
     if (!rpcClient_ || !rpcClient_->isConnected()) {
-        statusLabel_->setText(QStringLiteral("⚠️ 未连接服务器"));
+        statusLabel_->setText(QStringLiteral("[警告] 未连接服务器"));
         return;
     }
 
@@ -104,7 +108,7 @@ void DeviceWidget::refreshDeviceList()
         if (obj.contains(QStringLiteral("nodes"))) {
             QJsonArray nodes = obj.value(QStringLiteral("nodes")).toArray();
             updateDeviceTable(nodes);
-            statusLabel_->setText(QStringLiteral("✅ 共 %1 个设备").arg(nodes.size()));
+            statusLabel_->setText(QStringLiteral("共 %1 个设备").arg(nodes.size()));
             return;
         }
     }
@@ -112,11 +116,11 @@ void DeviceWidget::refreshDeviceList()
     if (result.isArray()) {
         QJsonArray nodes = result.toArray();
         updateDeviceTable(nodes);
-        statusLabel_->setText(QStringLiteral("✅ 共 %1 个设备").arg(nodes.size()));
+        statusLabel_->setText(QStringLiteral("共 %1 个设备").arg(nodes.size()));
         return;
     }
 
-    statusLabel_->setText(QStringLiteral("⚠️ 获取设备列表失败"));
+    statusLabel_->setText(QStringLiteral("[错误] 获取失败"));
 }
 
 void DeviceWidget::refreshDeviceStatus()
@@ -158,7 +162,7 @@ void DeviceWidget::onQueryAllClicked()
         QJsonObject obj = result.toObject();
         if (obj.value(QStringLiteral("ok")).toBool()) {
             int queried = obj.value(QStringLiteral("queriedDevices")).toInt();
-            statusLabel_->setText(QStringLiteral("✅ 已查询 %1 个设备").arg(queried));
+            statusLabel_->setText(QStringLiteral("已查询 %1 个设备").arg(queried));
             
             // 延迟后刷新状态
             QTimer::singleShot(500, this, &DeviceWidget::refreshDeviceStatus);
@@ -166,7 +170,7 @@ void DeviceWidget::onQueryAllClicked()
         }
     }
 
-    statusLabel_->setText(QStringLiteral("⚠️ 查询失败"));
+    statusLabel_->setText(QStringLiteral("[错误] 查询失败"));
 }
 
 void DeviceWidget::onDeviceTableCellClicked(int row, int column)
@@ -227,11 +231,12 @@ void DeviceWidget::updateDeviceTable(const QJsonArray &devices)
         }
         deviceTable_->setItem(row, 2, new QTableWidgetItem(type));
 
-        // 在线状态
+        // 在线状态 - 使用文字代替emoji
         bool online = device.value(QStringLiteral("online")).toBool();
         QTableWidgetItem *statusItem = new QTableWidgetItem(
-            online ? QStringLiteral("🟢 在线") : QStringLiteral("🔴 离线"));
+            online ? QStringLiteral("[在线]") : QStringLiteral("[离线]"));
         statusItem->setTextAlignment(Qt::AlignCenter);
+        statusItem->setForeground(online ? QColor("#27ae60") : QColor("#e74c3c"));
         deviceTable_->setItem(row, 3, statusItem);
 
         // 通道状态（占位符）
@@ -254,17 +259,22 @@ void DeviceWidget::updateDeviceStatus(int nodeId, const QJsonObject &status)
             qint64 ageMs = static_cast<qint64>(status.value(QStringLiteral("ageMs")).toDouble(-1));
             
             QString statusText;
+            QColor statusColor;
             if (ageMs < 0) {
-                statusText = QStringLiteral("⚫ 从未响应");
+                statusText = QStringLiteral("[无响应]");
+                statusColor = QColor("#666666");
             } else if (online) {
-                statusText = QStringLiteral("🟢 在线 (%1ms)").arg(ageMs);
+                statusText = QStringLiteral("[在线] %1ms").arg(ageMs);
+                statusColor = QColor("#27ae60");
             } else {
-                statusText = QStringLiteral("🔴 离线 (%1s)").arg(ageMs / 1000);
+                statusText = QStringLiteral("[离线] %1s").arg(ageMs / 1000);
+                statusColor = QColor("#e74c3c");
             }
             
             QTableWidgetItem *statusItem = deviceTable_->item(row, 3);
             if (statusItem) {
                 statusItem->setText(statusText);
+                statusItem->setForeground(statusColor);
             }
 
             // 更新通道状态
@@ -281,10 +291,10 @@ void DeviceWidget::updateDeviceStatus(int nodeId, const QJsonObject &status)
                     
                     QString modeText;
                     switch (mode) {
-                        case 0: modeText = QStringLiteral("⏹ 停止"); break;
-                        case 1: modeText = QStringLiteral("▶️ 正转"); break;
-                        case 2: modeText = QStringLiteral("◀️ 反转"); break;
-                        default: modeText = QStringLiteral("? 未知"); break;
+                        case 0: modeText = QStringLiteral("停"); break;
+                        case 1: modeText = QStringLiteral("正"); break;
+                        case 2: modeText = QStringLiteral("反"); break;
+                        default: modeText = QStringLiteral("?"); break;
                     }
 
                     if (ch < 2) {
@@ -306,11 +316,11 @@ void DeviceWidget::updateDeviceStatus(int nodeId, const QJsonObject &status)
             if (ch23Item) {
                 QString combinedText;
                 if (!ch2Text.isEmpty() && !ch3Text.isEmpty()) {
-                    combinedText = QStringLiteral("CH2:%1 | CH3:%2").arg(ch2Text, ch3Text);
+                    combinedText = QStringLiteral("2:%1 3:%2").arg(ch2Text, ch3Text);
                 } else if (!ch2Text.isEmpty()) {
-                    combinedText = QStringLiteral("CH2:%1").arg(ch2Text);
+                    combinedText = QStringLiteral("2:%1").arg(ch2Text);
                 } else if (!ch3Text.isEmpty()) {
-                    combinedText = QStringLiteral("CH3:%1").arg(ch3Text);
+                    combinedText = QStringLiteral("3:%1").arg(ch3Text);
                 } else {
                     combinedText = QStringLiteral("-");
                 }

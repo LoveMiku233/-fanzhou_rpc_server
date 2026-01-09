@@ -127,13 +127,13 @@ void MainWindow::setupToolBar()
     QToolBar *toolBar = addToolBar(QStringLiteral("主工具栏"));
     toolBar->setMovable(false);
 
-    toolBar->addAction(QStringLiteral("🔌 连接"), this, &MainWindow::onConnectButtonClicked);
-    toolBar->addAction(QStringLiteral("❌ 断开"), this, &MainWindow::onDisconnectButtonClicked);
+    toolBar->addAction(QStringLiteral("连接"), this, &MainWindow::onConnectButtonClicked);
+    toolBar->addAction(QStringLiteral("断开"), this, &MainWindow::onDisconnectButtonClicked);
     toolBar->addSeparator();
-    toolBar->addAction(QStringLiteral("🔔 Ping"), this, &MainWindow::onPingButtonClicked);
-    toolBar->addAction(QStringLiteral("ℹ️ 系统信息"), this, &MainWindow::onSysInfoButtonClicked);
+    toolBar->addAction(QStringLiteral("Ping"), this, &MainWindow::onPingButtonClicked);
+    toolBar->addAction(QStringLiteral("系统信息"), this, &MainWindow::onSysInfoButtonClicked);
     toolBar->addSeparator();
-    toolBar->addAction(QStringLiteral("💾 保存配置"), this, &MainWindow::onSaveConfigButtonClicked);
+    toolBar->addAction(QStringLiteral("保存配置"), this, &MainWindow::onSaveConfigButtonClicked);
 }
 
 void MainWindow::setupStatusBar()
@@ -154,8 +154,9 @@ void MainWindow::setupCentralWidget()
     setCentralWidget(centralWidget);
 
     QVBoxLayout *mainLayout = new QVBoxLayout(centralWidget);
-    mainLayout->setContentsMargins(10, 10, 10, 10);
-    mainLayout->setSpacing(10);
+    // 减少边距适配7寸触屏
+    mainLayout->setContentsMargins(6, 6, 6, 6);
+    mainLayout->setSpacing(6);
 
     // 创建连接面板
     createConnectionPanel();
@@ -169,15 +170,15 @@ void MainWindow::setupCentralWidget()
 
     // 设备管理页面
     deviceWidget_ = new DeviceWidget(rpcClient_, this);
-    tabWidget_->addTab(deviceWidget_, QStringLiteral("🔌 设备管理"));
+    tabWidget_->addTab(deviceWidget_, QStringLiteral("设备管理"));
 
     // 分组管理页面
     groupWidget_ = new GroupWidget(rpcClient_, this);
-    tabWidget_->addTab(groupWidget_, QStringLiteral("📂 分组管理"));
+    tabWidget_->addTab(groupWidget_, QStringLiteral("分组管理"));
 
     // 继电器控制页面
     relayControlWidget_ = new RelayControlWidget(rpcClient_, this);
-    tabWidget_->addTab(relayControlWidget_, QStringLiteral("🎛️ 继电器控制"));
+    tabWidget_->addTab(relayControlWidget_, QStringLiteral("继电器控制"));
 
     mainSplitter->addWidget(tabWidget_);
 
@@ -186,8 +187,8 @@ void MainWindow::setupCentralWidget()
     QGroupBox *logGroupBox = findChild<QGroupBox*>(QStringLiteral("logGroupBox"));
     mainSplitter->addWidget(logGroupBox);
 
-    // 设置分割比例
-    mainSplitter->setStretchFactor(0, 3);
+    // 设置分割比例 - 减少日志面板宽度
+    mainSplitter->setStretchFactor(0, 4);
     mainSplitter->setStretchFactor(1, 1);
 
     mainLayout->addWidget(mainSplitter, 1);
@@ -195,16 +196,17 @@ void MainWindow::setupCentralWidget()
 
 void MainWindow::createConnectionPanel()
 {
-    QGroupBox *groupBox = new QGroupBox(QStringLiteral("📡 连接设置"), this);
+    QGroupBox *groupBox = new QGroupBox(QStringLiteral("连接设置"), this);
     groupBox->setObjectName(QStringLiteral("connectionGroupBox"));
 
     QHBoxLayout *layout = new QHBoxLayout(groupBox);
+    layout->setSpacing(8);
 
     // 服务器地址
-    QLabel *hostLabel = new QLabel(QStringLiteral("服务器地址:"), this);
+    QLabel *hostLabel = new QLabel(QStringLiteral("服务器:"), this);
     hostEdit_ = new QLineEdit(this);
-    hostEdit_->setPlaceholderText(QStringLiteral("例如: 192.168.1.100"));
-    hostEdit_->setMinimumWidth(200);
+    hostEdit_->setPlaceholderText(QStringLiteral("192.168.1.100"));
+    hostEdit_->setMinimumWidth(150);
 
     // 端口
     QLabel *portLabel = new QLabel(QStringLiteral("端口:"), this);
@@ -213,12 +215,12 @@ void MainWindow::createConnectionPanel()
     portSpinBox_->setValue(12345);
 
     // 连接按钮
-    connectButton_ = new QPushButton(QStringLiteral("🔌 连接"), this);
+    connectButton_ = new QPushButton(QStringLiteral("连接"), this);
     connectButton_->setProperty("type", QStringLiteral("success"));
     connect(connectButton_, &QPushButton::clicked, this, &MainWindow::onConnectButtonClicked);
 
     // 断开按钮
-    disconnectButton_ = new QPushButton(QStringLiteral("❌ 断开"), this);
+    disconnectButton_ = new QPushButton(QStringLiteral("断开"), this);
     disconnectButton_->setProperty("type", QStringLiteral("danger"));
     disconnectButton_->setEnabled(false);
     connect(disconnectButton_, &QPushButton::clicked, this, &MainWindow::onDisconnectButtonClicked);
@@ -234,16 +236,17 @@ void MainWindow::createConnectionPanel()
 
 void MainWindow::createLogPanel()
 {
-    QGroupBox *groupBox = new QGroupBox(QStringLiteral("📝 通信日志"), this);
+    QGroupBox *groupBox = new QGroupBox(QStringLiteral("通信日志"), this);
     groupBox->setObjectName(QStringLiteral("logGroupBox"));
 
     QVBoxLayout *layout = new QVBoxLayout(groupBox);
+    layout->setSpacing(6);
 
     logTextEdit_ = new QTextEdit(this);
     logTextEdit_->setReadOnly(true);
-    logTextEdit_->setMinimumWidth(350);
+    logTextEdit_->setMinimumWidth(250);
 
-    QPushButton *clearButton = new QPushButton(QStringLiteral("🗑️ 清空日志"), this);
+    QPushButton *clearButton = new QPushButton(QStringLiteral("清空日志"), this);
     connect(clearButton, &QPushButton::clicked, this, &MainWindow::clearLog);
 
     layout->addWidget(logTextEdit_);
@@ -326,7 +329,7 @@ void MainWindow::onSaveConfigButtonClicked()
 void MainWindow::onRpcConnected()
 {
     updateConnectionStatus(true);
-    appendLog(QStringLiteral("✅ 服务器连接成功"));
+    appendLog(QStringLiteral("[成功] 服务器连接成功"));
     
     // 启动自动刷新
     autoRefreshTimer_->start(5000);
@@ -343,13 +346,13 @@ void MainWindow::onRpcConnected()
 void MainWindow::onRpcDisconnected()
 {
     updateConnectionStatus(false);
-    appendLog(QStringLiteral("❌ 服务器连接已断开"));
+    appendLog(QStringLiteral("[断开] 服务器连接已断开"));
     autoRefreshTimer_->stop();
 }
 
 void MainWindow::onRpcError(const QString &error)
 {
-    appendLog(QStringLiteral("⚠️ 错误: %1").arg(error));
+    appendLog(QStringLiteral("[错误] %1").arg(error));
 }
 
 void MainWindow::onRpcLogMessage(const QString &message)
