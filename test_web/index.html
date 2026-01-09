@@ -243,54 +243,40 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
             <!-- ==================== 分组管理页面 ==================== -->
             <div class="page-content" id="page-groups">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="color: #333;">分组管理</h3>
-                    <button onclick="refreshGroupList()">🔄 刷新列表</button>
+                    <h3 style="color: #333;">📂 分组管理</h3>
+                    <div class="btn-group">
+                        <button onclick="refreshGroupList()">🔄 刷新</button>
+                    </div>
                 </div>
                 
-                <!-- 创建分组表单 -->
-                <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-                    <h4 style="margin-bottom: 15px; color: #333;">➕ 创建新分组</h4>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>分组ID</label>
-                            <input type="number" id="newGroupId" value="1" min="1">
-                        </div>
-                        <div class="form-group">
-                            <label>分组名称</label>
-                            <input type="text" id="newGroupName" placeholder="例如: main-group">
-                        </div>
-                    </div>
-                    <button class="success" onclick="createGroup()">➕ 创建分组</button>
-                </div>
-
-                <!-- 添加设备到分组 -->
-                <div style="background: #e8f5e9; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-                    <h4 style="margin-bottom: 15px; color: #333;">🔗 添加设备到分组</h4>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>分组ID</label>
-                            <input type="number" id="addDeviceGroupId" value="1" min="1">
-                        </div>
-                        <div class="form-group">
-                            <label>设备节点ID</label>
-                            <input type="number" id="addDeviceNodeId" value="1" min="1" max="255">
-                        </div>
-                    </div>
-                    <div class="btn-group">
-                        <button class="success" onclick="addDeviceToGroup()">➕ 添加设备</button>
-                        <button class="danger" onclick="removeDeviceFromGroup()">➖ 移除设备</button>
-                    </div>
+                <!-- 操作按钮区 - 表格上方 -->
+                <div class="action-toolbar" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 12px;">
+                    <button class="success" onclick="openCreateGroupModal()" style="min-width: 120px;">
+                        ➕ 创建分组
+                    </button>
+                    <button class="secondary" onclick="openManageDeviceModal()" style="min-width: 120px;">
+                        🔗 管理设备
+                    </button>
+                    <button class="warning" onclick="batchControlGroups('stop')" style="min-width: 100px;">
+                        ⏹️ 全部停止
+                    </button>
+                    <button class="success" onclick="batchControlGroups('fwd')" style="min-width: 100px;">
+                        ▶️ 全部正转
+                    </button>
+                    <button onclick="batchControlGroups('rev')" style="min-width: 100px;">
+                        ◀️ 全部反转
+                    </button>
                 </div>
 
                 <!-- 分组列表 -->
                 <div class="data-list" id="groupList">
                     <div class="data-list-header">
-                        <span>分组信息</span>
+                        <span>📂 分组信息</span>
                         <span>操作</span>
                     </div>
                     <div class="data-list-empty" id="groupListEmpty">
-                        <p>暂无分组数据</p>
-                        <p style="font-size: 12px; margin-top: 10px;">请先连接服务器并点击"刷新列表"</p>
+                        <p>📭 暂无分组数据</p>
+                        <p style="font-size: 12px; margin-top: 10px;">请先连接服务器并点击"刷新"按钮</p>
                     </div>
                     <div id="groupListContent"></div>
                 </div>
@@ -306,198 +292,18 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                     </div>
                 </div>
 
-                <!-- 简化提示 -->
-                <div style="background: #e3f2fd; padding: 15px 20px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
-                    <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
-                        <span style="font-size: 24px;">💡</span>
-                        <div>
-                            <strong style="color: #1565c0;">推荐使用蓝图编辑器</strong>
-                            <p style="color: #666; font-size: 13px; margin: 5px 0 0;">通过拖放方式可视化创建策略，更加直观易用！</p>
-                        </div>
-                        <button class="success" onclick="showPage('blueprint')" style="margin-left: auto;">🎨 打开蓝图编辑器</button>
-                    </div>
+                <!-- 操作按钮区 - 表格上方 -->
+                <div class="action-toolbar" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 12px;">
+                    <button class="success" onclick="openCreateStrategyModal()" style="min-width: 140px;">
+                        ⏱️ 创建定时策略
+                    </button>
+                    <button class="warning" onclick="openCreateSensorStrategyModal()" style="min-width: 140px;">
+                        📡 创建传感器策略
+                    </button>
+                    <button class="secondary" onclick="showPage('blueprint')" style="min-width: 120px;">
+                        🎨 蓝图编辑器
+                    </button>
                 </div>
-
-                <!-- 快速创建定时策略 - 简化版 -->
-                <details style="background: #f5f5f5; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-                    <summary style="cursor: pointer; font-weight: 600; color: #333; margin-bottom: 15px;">➕ 手动创建定时策略（点击展开）</summary>
-                    
-                    <div class="form-row" style="margin-top: 15px;">
-                        <div class="form-group">
-                            <label>策略ID <button type="button" onclick="autoFillStrategyId()" style="font-size: 10px; padding: 2px 6px; margin-left: 5px;">🔄 自动</button></label>
-                            <input type="number" id="newStrategyId" value="1" min="1">
-                        </div>
-                        <div class="form-group">
-                            <label>策略名称</label>
-                            <input type="text" id="newStrategyName" placeholder="例如: 定时通风">
-                        </div>
-                        <div class="form-group">
-                            <label>绑定分组ID</label>
-                            <input type="number" id="newStrategyGroupId" value="1" min="1">
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>控制通道</label>
-                            <select id="newStrategyChannel">
-                                <option value="0">通道 0</option>
-                                <option value="1">通道 1</option>
-                                <option value="2">通道 2</option>
-                                <option value="3">通道 3</option>
-                                <option value="-1">全部通道</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>执行动作</label>
-                            <select id="newStrategyAction">
-                                <option value="stop">⏹️ 停止</option>
-                                <option value="fwd">▶️ 正转</option>
-                                <option value="rev">◀️ 反转</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>自动启动</label>
-                            <select id="newStrategyAutoStart">
-                                <option value="true">✅ 是</option>
-                                <option value="false">❌ 否</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <!-- 时间触发配置 -->
-                    <div style="background: #fff; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #e0e0e0;">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>触发方式</label>
-                                <select id="newStrategyTriggerType" onchange="toggleTimerTypeInputs()">
-                                    <option value="interval">⏱️ 间隔执行</option>
-                                    <option value="daily">📅 每日定时</option>
-                                </select>
-                            </div>
-                            <div class="form-group" id="intervalInputGroup">
-                                <label>执行间隔（秒）</label>
-                                <input type="number" id="newStrategyInterval" value="60" min="1">
-                            </div>
-                            <div class="form-group" id="dailyTimeInputGroup" style="display: none;">
-                                <label>每日执行时间</label>
-                                <input type="time" id="newStrategyDailyTime" value="08:00">
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <button class="success" onclick="createTimerStrategy()">➕ 创建策略</button>
-                </details>
-                
-                <!-- 传感器触发策略 - 简化为可折叠 -->
-                <details style="background: #fff3e0; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-                    <summary style="cursor: pointer; font-weight: 600; color: #333;">📡 创建传感器触发策略（点击展开）</summary>
-                    
-                    <div class="form-row" style="margin-top: 15px;">
-                        <div class="form-group">
-                            <label>策略ID <button type="button" onclick="autoFillSensorStrategyId()" style="font-size: 10px; padding: 2px 6px; margin-left: 5px;">🔄 自动</button></label>
-                            <input type="number" id="sensorStrategyId" value="1" min="1">
-                        </div>
-                        <div class="form-group">
-                            <label>策略名称</label>
-                            <input type="text" id="sensorStrategyName" placeholder="例如: 高温报警">
-                        </div>
-                        <div class="form-group">
-                            <label>传感器类型</label>
-                            <select id="sensorType">
-                                <option value="temperature">🌡️ 温度</option>
-                                <option value="humidity">💧 湿度</option>
-                                <option value="light">💡 光照</option>
-                                <option value="soil_moisture">🌱 土壤湿度</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>传感器节点</label>
-                            <input type="number" id="sensorNodeId" value="1" min="1" max="255">
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>触发条件</label>
-                            <select id="sensorCondition">
-                                <option value="gt">大于 (>)</option>
-                                <option value="lt">小于 (<)</option>
-                                <option value="gte">≥</option>
-                                <option value="lte">≤</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>阈值</label>
-                            <input type="number" id="sensorThreshold" value="25" step="0.1">
-                        </div>
-                        <div class="form-group">
-                            <label>分组ID</label>
-                            <input type="number" id="sensorGroupId" value="1" min="1">
-                        </div>
-                        <div class="form-group">
-                            <label>通道</label>
-                            <select id="sensorChannel">
-                                <option value="0">CH0</option>
-                                <option value="1">CH1</option>
-                                <option value="2">CH2</option>
-                                <option value="3">CH3</option>
-                                <option value="-1">全部</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>执行动作</label>
-                            <select id="sensorAction">
-                                <option value="fwd">▶️ 正转</option>
-                                <option value="stop">⏹️ 停止</option>
-                                <option value="rev">◀️ 反转</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>冷却时间（秒）</label>
-                            <input type="number" id="sensorCooldown" value="60" min="0">
-                        </div>
-                        <div class="form-group">
-                            <label>启用</label>
-                            <select id="sensorEnabled">
-                                <option value="true">✅ 是</option>
-                                <option value="false">❌ 否</option>
-                            </select>
-                        </div>
-                    </div>
-                    <button class="success" onclick="createSensorStrategy()">➕ 创建</button>
-                </details>
-
-                <!-- 分组程序设置 - 简化为可折叠 -->
-                <details style="background: #e8f5e9; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-                    <summary style="cursor: pointer; font-weight: 600; color: #333;">🔧 分组通道管理（点击展开）</summary>
-                    
-                    <div class="form-row" style="margin-top: 15px;">
-                        <div class="form-group">
-                            <label>分组ID</label>
-                            <input type="number" id="programGroupId" value="1" min="1">
-                        </div>
-                        <div class="form-group">
-                            <label>设备节点</label>
-                            <input type="number" id="programNodeId" value="1" min="1" max="255">
-                        </div>
-                        <div class="form-group">
-                            <label>通道</label>
-                            <select id="programChannel">
-                                <option value="0">CH0</option>
-                                <option value="1">CH1</option>
-                                <option value="2">CH2</option>
-                                <option value="3">CH3</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="btn-group">
-                        <button class="success" onclick="addChannelToGroup()">➕ 添加</button>
-                        <button class="danger" onclick="removeChannelFromGroup()">➖ 移除</button>
-                        <button onclick="getGroupChannels()">🔍 查看</button>
-                    </div>
-                </details>
 
                 <!-- 策略列表 -->
                 <div class="data-list" id="strategyList">
@@ -507,7 +313,7 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                     </div>
                     <div class="data-list-empty" id="strategyListEmpty">
                         <p>📭 暂无定时策略</p>
-                        <p style="font-size: 12px; margin-top: 10px;">点击上方"刷新"按钮获取策略列表</p>
+                        <p style="font-size: 12px; margin-top: 10px;">点击上方"创建定时策略"按钮添加新策略</p>
                     </div>
                     <div id="strategyListContent"></div>
                 </div>
@@ -520,7 +326,7 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                     </div>
                     <div class="data-list-empty" id="sensorStrategyListEmpty">
                         <p>📭 暂无传感器策略</p>
-                        <p style="font-size: 12px; margin-top: 10px;">传感器策略可在上方"传感器触发策略"区域创建</p>
+                        <p style="font-size: 12px; margin-top: 10px;">点击上方"创建传感器策略"按钮添加新策略</p>
                     </div>
                     <div id="sensorStrategyListContent"></div>
                 </div>
@@ -759,6 +565,224 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
             </div>
         </div><!-- 结束 .log-sidebar -->
     </div><!-- 结束 .main-layout -->
+
+    <!-- ==================== 弹窗组件 ==================== -->
+    
+    <!-- 创建分组弹窗 -->
+    <div class="modal-overlay" id="groupModal" onclick="closeModalOnBackground(event, 'groupModal')">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>➕ 创建新分组</h3>
+                <button class="modal-close" onclick="closeModal('groupModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>分组ID</label>
+                    <input type="number" id="newGroupId" value="1" min="1">
+                </div>
+                <div class="form-group">
+                    <label>分组名称（可留空自动生成）</label>
+                    <input type="text" id="newGroupName" placeholder="例如: main-group">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="secondary" onclick="closeModal('groupModal')">取消</button>
+                <button class="success" onclick="createGroup()">➕ 创建分组</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 管理设备弹窗 -->
+    <div class="modal-overlay" id="manageDeviceModal" onclick="closeModalOnBackground(event, 'manageDeviceModal')">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🔗 管理分组设备</h3>
+                <button class="modal-close" onclick="closeModal('manageDeviceModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>分组ID</label>
+                        <input type="number" id="addDeviceGroupId" value="1" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>设备节点ID</label>
+                        <input type="number" id="addDeviceNodeId" value="1" min="1" max="255">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="secondary" onclick="closeModal('manageDeviceModal')">关闭</button>
+                <button class="danger" onclick="removeDeviceFromGroup()">➖ 移除设备</button>
+                <button class="success" onclick="addDeviceToGroup()">➕ 添加设备</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 创建定时策略弹窗 -->
+    <div class="modal-overlay" id="strategyModal" onclick="closeModalOnBackground(event, 'strategyModal')">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>⏱️ 创建定时策略</h3>
+                <button class="modal-close" onclick="closeModal('strategyModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>策略ID</label>
+                        <input type="number" id="newStrategyId" value="1" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>策略名称</label>
+                        <input type="text" id="newStrategyName" placeholder="例如: 定时通风">
+                    </div>
+                    <div class="form-group">
+                        <label>绑定分组ID</label>
+                        <input type="number" id="newStrategyGroupId" value="1" min="1">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>控制通道</label>
+                        <select id="newStrategyChannel">
+                            <option value="0">通道 0</option>
+                            <option value="1">通道 1</option>
+                            <option value="2">通道 2</option>
+                            <option value="3">通道 3</option>
+                            <option value="-1">全部通道</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>执行动作</label>
+                        <select id="newStrategyAction">
+                            <option value="stop">⏹️ 停止</option>
+                            <option value="fwd">▶️ 正转</option>
+                            <option value="rev">◀️ 反转</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>自动启动</label>
+                        <select id="newStrategyAutoStart">
+                            <option value="true">✅ 是</option>
+                            <option value="false">❌ 否</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 15px;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>触发方式</label>
+                            <select id="newStrategyTriggerType" onchange="toggleTimerTypeInputs()">
+                                <option value="interval">⏱️ 间隔执行</option>
+                                <option value="daily">📅 每日定时</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="intervalInputGroup">
+                            <label>执行间隔（秒）</label>
+                            <input type="number" id="newStrategyInterval" value="60" min="1">
+                        </div>
+                        <div class="form-group" id="dailyTimeInputGroup" style="display: none;">
+                            <label>每日执行时间</label>
+                            <input type="time" id="newStrategyDailyTime" value="08:00">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="secondary" onclick="closeModal('strategyModal')">取消</button>
+                <button class="success" onclick="createTimerStrategyAndClose()">➕ 创建策略</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 创建传感器策略弹窗 -->
+    <div class="modal-overlay" id="sensorStrategyModal" onclick="closeModalOnBackground(event, 'sensorStrategyModal')">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>📡 创建传感器策略</h3>
+                <button class="modal-close" onclick="closeModal('sensorStrategyModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>策略ID</label>
+                        <input type="number" id="sensorStrategyId" value="1" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>策略名称</label>
+                        <input type="text" id="sensorStrategyName" placeholder="例如: 高温报警">
+                    </div>
+                    <div class="form-group">
+                        <label>传感器类型</label>
+                        <select id="sensorType">
+                            <option value="temperature">🌡️ 温度</option>
+                            <option value="humidity">💧 湿度</option>
+                            <option value="light">💡 光照</option>
+                            <option value="soil_moisture">🌱 土壤湿度</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>传感器节点</label>
+                        <input type="number" id="sensorNodeId" value="1" min="1" max="255">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>触发条件</label>
+                        <select id="sensorCondition">
+                            <option value="gt">大于 (>)</option>
+                            <option value="lt">小于 (<)</option>
+                            <option value="gte">≥</option>
+                            <option value="lte">≤</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>阈值</label>
+                        <input type="number" id="sensorThreshold" value="25" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>分组ID</label>
+                        <input type="number" id="sensorGroupId" value="1" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>通道</label>
+                        <select id="sensorChannel">
+                            <option value="0">CH0</option>
+                            <option value="1">CH1</option>
+                            <option value="2">CH2</option>
+                            <option value="3">CH3</option>
+                            <option value="-1">全部</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>执行动作</label>
+                        <select id="sensorAction">
+                            <option value="fwd">▶️ 正转</option>
+                            <option value="stop">⏹️ 停止</option>
+                            <option value="rev">◀️ 反转</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>冷却时间（秒）</label>
+                        <input type="number" id="sensorCooldown" value="60" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>启用</label>
+                        <select id="sensorEnabled">
+                            <option value="true">✅ 是</option>
+                            <option value="false">❌ 否</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="secondary" onclick="closeModal('sensorStrategyModal')">取消</button>
+                <button class="success" onclick="createSensorStrategyAndClose()">➕ 创建策略</button>
+            </div>
+        </div>
+    </div>
 
     <!-- 引入外部JavaScript -->
     <script src="js/app.js"></script>

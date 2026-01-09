@@ -453,14 +453,15 @@ function renderGroupList() {
 
 /**
  * 创建分组
+ * 如果名称为空，自动生成名称
  */
 function createGroup() {
     const groupId = parseInt(document.getElementById('newGroupId').value);
-    const name = document.getElementById('newGroupName').value.trim();
+    let name = document.getElementById('newGroupName').value.trim();
     
+    // 如果名称为空，自动生成名称（触控屏没有键盘）
     if (!name) {
-        alert('请输入分组名称');
-        return;
+        name = `分组${groupId}`;
     }
     
     callMethod('group.create', {
@@ -468,8 +469,10 @@ function createGroup() {
         name: name
     }, function(response) {
         if (response.result) {
-            log('info', '分组创建成功');
+            log('info', `分组 "${name}" 创建成功`);
             refreshGroupList();
+            // 关闭弹窗
+            closeModal('groupModal');
         }
     });
 }
@@ -652,8 +655,15 @@ function renderDeviceCards() {
     // 隐藏空状态提示
     if (emptyEl) emptyEl.style.display = 'none';
     
+    // 按节点ID排序设备列表
+    const sortedDevices = [...deviceListCache].sort((a, b) => {
+        const idA = a.nodeId || a.node || a;
+        const idB = b.nodeId || b.node || b;
+        return idA - idB;
+    });
+    
     let html = '';
-    deviceListCache.forEach(device => {
+    sortedDevices.forEach(device => {
         const nodeId = device.nodeId || device.node || device;
         const name = device.name || `节点 ${nodeId}`;
         const type = device.type || 'relay';
@@ -688,15 +698,38 @@ function renderDeviceCards() {
                 <div class="device-card-header">
                     <div class="device-card-title-group">
                         <span class="device-card-title">🔌 ${escapeHtml(name)}</span>
-                        <span class="device-card-subtitle">节点ID: ${nodeId} | 类型: ${escapeHtml(type)}${ageText ? ' | ' + ageText : ''}</span>
+                        <span class="device-card-subtitle">节点ID: ${nodeId} | 类型: ${escapeHtml(type)}</span>
                     </div>
                     <span class="device-card-status ${online ? 'online' : 'offline'}">
                         ${online ? '🟢 在线' : '🔴 离线'}
                     </span>
                 </div>
                 
-                <!-- 通道控制区域 -->
-                <div class="channel-control-grid">${channelHtml}</div>
+                <!-- 左右布局：设备状态+通道控制 -->
+                <div class="device-card-content">
+                    <!-- 左侧：设备状态 -->
+                    <div class="device-status-area">
+                        <div class="status-title">📊 设备状态</div>
+                        <div class="device-status-item">
+                            <span class="label">通道数</span>
+                            <span class="value">${channels}</span>
+                        </div>
+                        <div class="device-status-item">
+                            <span class="label">状态</span>
+                            <span class="value">${online ? '🟢 在线' : '🔴 离线'}</span>
+                        </div>
+                        <div class="device-status-item">
+                            <span class="label">响应</span>
+                            <span class="value">${ageText || '--'}</span>
+                        </div>
+                    </div>
+                    
+                    <!-- 右侧：通道控制 -->
+                    <div class="channel-control-area">
+                        <div class="control-title">🎛️ 通道控制</div>
+                        <div class="channel-control-grid">${channelHtml}</div>
+                    </div>
+                </div>
                 
                 <!-- 批量操作按钮 -->
                 <div class="device-card-actions">
@@ -1331,10 +1364,19 @@ function createTimerStrategy() {
                 `每 ${params.intervalSec} 秒执行`;
             log('info', `定时策略 "${name}" 创建成功（${triggerDesc}）`);
             refreshStrategyList();
+            // 成功后关闭弹窗
+            closeModal('strategyModal');
         } else if (response.error) {
             log('error', `创建失败: ${response.error.message || '未知错误'}`);
         }
     });
+}
+
+/**
+ * 创建定时策略并关闭弹窗（用于弹窗按钮调用）
+ */
+function createTimerStrategyAndClose() {
+    createTimerStrategy();
 }
 
 /**
@@ -1375,10 +1417,19 @@ function createSensorStrategy() {
         if (response.result && response.result.ok) {
             log('info', `传感器策略 "${name}" 创建成功`);
             refreshStrategyList();
+            // 成功后关闭弹窗
+            closeModal('sensorStrategyModal');
         } else if (response.error) {
             log('error', `创建失败: ${response.error.message || '未知错误'}`);
         }
     });
+}
+
+/**
+ * 创建传感器策略并关闭弹窗（用于弹窗按钮调用）
+ */
+function createSensorStrategyAndClose() {
+    createSensorStrategy();
 }
 
 /**
@@ -1716,6 +1767,139 @@ function checkCanStatus() {
             log('info', message);
         } else if (response.error) {
             log('error', `获取CAN状态失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/* ========================================================
+ * 弹窗（Modal）功能
+ * 用于分组管理和策略管理的弹窗式操作
+ * ======================================================== */
+
+/**
+ * 打开弹窗
+ * @param {string} modalId - 弹窗ID
+ */
+function openModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.style.display = 'flex';
+        // 添加动画效果
+        setTimeout(() => {
+            modal.classList.add('show');
+        }, 10);
+    }
+}
+
+/**
+ * 关闭弹窗
+ * @param {string} modalId - 弹窗ID
+ */
+function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.remove('show');
+        setTimeout(() => {
+            modal.style.display = 'none';
+        }, 300);
+    }
+}
+
+/**
+ * 点击弹窗背景关闭弹窗
+ * @param {Event} event - 点击事件
+ * @param {string} modalId - 弹窗ID
+ */
+function closeModalOnBackground(event, modalId) {
+    if (event.target.classList.contains('modal-overlay')) {
+        closeModal(modalId);
+    }
+}
+
+/**
+ * 打开创建分组弹窗
+ */
+function openCreateGroupModal() {
+    // 设置默认值
+    const groupIdInput = document.getElementById('newGroupId');
+    const groupNameInput = document.getElementById('newGroupName');
+    
+    if (groupIdInput) groupIdInput.value = 1;
+    if (groupNameInput) groupNameInput.value = '';
+    
+    // 尝试自动填充下一个可用的分组ID（如果已连接）
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        callMethod('group.list', {}, function(response) {
+            let maxId = 0;
+            if (response.result) {
+                const groups = response.result.groups || response.result || [];
+                groups.forEach(g => {
+                    const id = g.groupId || g.id || 0;
+                    if (id > maxId) maxId = id;
+                });
+            }
+            if (groupIdInput) groupIdInput.value = maxId + 1;
+        });
+    }
+    
+    // 无论是否连接都打开弹窗
+    openModal('groupModal');
+}
+
+/**
+ * 打开管理设备弹窗
+ */
+function openManageDeviceModal() {
+    openModal('manageDeviceModal');
+}
+
+/**
+ * 打开创建策略弹窗
+ */
+function openCreateStrategyModal() {
+    // 自动填充下一个可用的策略ID
+    autoFillStrategyId();
+    document.getElementById('newStrategyName').value = '';
+    openModal('strategyModal');
+}
+
+/**
+ * 打开创建传感器策略弹窗
+ */
+function openCreateSensorStrategyModal() {
+    autoFillSensorStrategyId();
+    document.getElementById('sensorStrategyName').value = '';
+    openModal('sensorStrategyModal');
+}
+
+/**
+ * 批量控制所有分组
+ * @param {string} action - 动作 (stop/fwd/rev)
+ */
+function batchControlGroups(action) {
+    if (!groupListCache || groupListCache.length === 0) {
+        log('info', '暂无分组数据，请先刷新列表');
+        return;
+    }
+    
+    const actionNames = {
+        'stop': '停止',
+        'fwd': '正转',
+        'rev': '反转'
+    };
+    
+    log('info', `批量控制所有分组: ${actionNames[action] || action}`);
+    
+    // 对每个分组的所有通道执行操作
+    groupListCache.forEach(group => {
+        const groupId = group.groupId || group.id;
+        // 控制所有通道（使用通道-1表示全部通道，或逐个发送）
+        for (let ch = 0; ch < DEFAULT_CHANNEL_COUNT; ch++) {
+            callMethod('group.control', {
+                groupId: groupId,
+                ch: ch,
+                action: action
+            });
         }
     });
 }
