@@ -683,6 +683,7 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 | `relay.statusAll` | `{node}` | 所有通道状态（包含online、ageMs、diagnostic?、txQueueSize?） | 获取节点所有通道 |
 | `relay.nodes` | 无 | 节点列表 | 获取所有节点 |
 | `relay.queryAll` | 无 | `{ok, queriedDevices, txQueueSize, warning?}` | 批量查询所有设备 |
+| `relay.emergencyStop` | 无 | `{ok, stoppedChannels, failedChannels, deviceCount}` | **急停** - 立即停止所有设备的所有通道 |
 
 **参数说明**：
 - `node`: 节点ID (1-255)，支持数字或字符串
@@ -695,6 +696,56 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 - `diagnostic`: 当设备离线或从未响应时返回诊断信息，帮助排查问题
 - `online`: 设备是否在线（30秒内有响应）
 - `ageMs`: 设备上次响应距今的毫秒数，-1表示从未响应
+
+**急停方法说明**：
+
+`relay.emergencyStop` 方法用于紧急情况下立即停止所有设备。该方法会遍历所有已注册的继电器设备，向每个设备的所有通道（0-3）发送停止命令。
+
+使用示例：
+```bash
+# 执行急停
+{"jsonrpc":"2.0","id":1,"method":"relay.emergencyStop","params":{}}
+
+# 响应示例
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "ok": true,
+    "stoppedChannels": 12,
+    "failedChannels": 0,
+    "deviceCount": 3,
+    "txQueueSize": 12
+  }
+}
+```
+
+### 传感器方法
+
+| 方法名 | 参数 | 返回值 | 说明 |
+|--------|------|--------|------|
+| `sensor.list` | `{commType?}` | `{ok, sensors, total}` | 获取传感器列表，可按通信类型过滤 |
+| `sensor.read` | `{nodeId, sensorType?}` | 传感器信息对象 | 读取指定传感器数据 |
+
+**参数说明**：
+- `nodeId`: 传感器节点ID (1-255)
+- `commType`: 可选过滤参数，值为 "serial" 或 "can"
+- `sensorType`: 可选传感器类型过滤
+
+**使用示例**：
+```bash
+# 获取所有传感器列表
+{"jsonrpc":"2.0","id":1,"method":"sensor.list","params":{}}
+
+# 只获取串口传感器
+{"jsonrpc":"2.0","id":2,"method":"sensor.list","params":{"commType":"serial"}}
+
+# 只获取CAN传感器
+{"jsonrpc":"2.0","id":3,"method":"sensor.list","params":{"commType":"can"}}
+
+# 读取指定传感器
+{"jsonrpc":"2.0","id":4,"method":"sensor.read","params":{"nodeId":10}}
+```
 
 ### 分组方法
 
@@ -939,6 +990,7 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 | 1.0.3 | 2026-01 | 改进：relay.control/status/statusAll/queryAll增加txQueueSize和diagnostic字段，帮助诊断CAN总线拥堵和设备离线问题 |
 | 1.0.4 | 2026-01 | 新增：RTC时间管理（sys.time.*）和网络配置（sys.network.*）RPC方法 |
 | 1.0.5 | 2026-01 | 新增：配置管理RPC方法（config.get/save/reload），解决"Web页面修改无法保存"问题；改进CAN诊断信息 |
+| 1.0.6 | 2026-01 | 新增：急停功能（relay.emergencyStop）和传感器接口（sensor.list/read），支持串口和CAN通讯方式 |
 
 ---
 

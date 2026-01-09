@@ -1903,3 +1903,87 @@ function batchControlGroups(action) {
         }
     });
 }
+
+/* ========================================================
+ * 急停功能
+ * 
+ * 紧急停止所有设备的所有通道
+ * 使用 relay.emergencyStop RPC 方法
+ * ======================================================== */
+
+/**
+ * 急停 - 立即停止所有设备
+ * 不需要确认，直接执行
+ */
+function emergencyStop() {
+    log('info', '🛑 执行急停命令...');
+    
+    callMethod('relay.emergencyStop', {}, function(response) {
+        if (response.result && response.result.ok === true) {
+            const stoppedChannels = response.result.stoppedChannels || 0;
+            const deviceCount = response.result.deviceCount || 0;
+            const failedChannels = response.result.failedChannels || 0;
+            
+            log('info', `✅ 急停执行完成！已停止 ${deviceCount} 个设备的 ${stoppedChannels} 个通道`);
+            
+            if (failedChannels > 0) {
+                log('error', `⚠️ ${failedChannels} 个通道停止失败`);
+            }
+            
+            // 刷新设备状态
+            setTimeout(refreshDeviceList, 500);
+        } else if (response.error) {
+            log('error', `❌ 急停执行失败: ${response.error.message || '未知错误'}`);
+        } else {
+            log('error', '❌ 急停执行失败: 未知响应格式');
+        }
+    });
+}
+
+/* ========================================================
+ * 传感器管理功能
+ * 
+ * 传感器接口支持串口(Serial)和CAN两种通讯方式
+ * ======================================================== */
+
+/**
+ * 获取传感器列表
+ * @param {string} commType - 可选过滤：'serial' 或 'can'
+ */
+function getSensorList(commType) {
+    const params = {};
+    if (commType) {
+        params.commType = commType;
+    }
+    
+    callMethod('sensor.list', params, function(response) {
+        if (response.result && response.result.ok) {
+            const sensors = response.result.sensors || [];
+            log('info', `获取到 ${sensors.length} 个传感器设备`);
+            
+            if (sensors.length > 0) {
+                let sensorInfo = '传感器列表:\n';
+                sensors.forEach(sensor => {
+                    sensorInfo += `  - 节点 ${sensor.nodeId}: ${sensor.name} (${sensor.typeName}, ${sensor.commTypeName})\n`;
+                });
+                log('info', sensorInfo);
+            }
+        } else if (response.error) {
+            log('error', `获取传感器列表失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 读取传感器数据
+ * @param {number} nodeId - 传感器节点ID
+ */
+function readSensor(nodeId) {
+    callMethod('sensor.read', { nodeId: nodeId }, function(response) {
+        if (response.result && response.result.ok) {
+            log('info', `传感器 ${nodeId} 信息:\n` + JSON.stringify(response.result, null, 2));
+        } else if (response.error) {
+            log('error', `读取传感器失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}

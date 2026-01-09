@@ -630,6 +630,153 @@ void RpcRegistry::registerRelay()
 
         return result;
     });
+
+    // 急停 - 立即停止所有设备的所有通道
+    dispatcher_->registerMethod(QStringLiteral("relay.emergencyStop"),
+                                 [this](const QJsonObject &) {
+        int stoppedCount = 0;
+        int failedCount = 0;
+        QJsonArray failedNodes;
+
+        // 遍历所有继电器设备
+        for (auto it = context_->relays.begin(); it != context_->relays.end(); ++it) {
+            quint8 node = it.key();
+            auto *dev = it.value();
+            if (!dev) continue;
+
+            // 停止每个设备的所有4个通道
+            for (quint8 ch = 0; ch < 4; ++ch) {
+                const auto result = context_->enqueueControl(
+                    node, ch,
+                    device::RelayProtocol::Action::Stop,
+                    QStringLiteral("rpc:relay.emergencyStop"),
+                    false  // 不强制排队，立即执行
+                );
+                if (result.accepted) {
+                    stoppedCount++;
+                } else {
+                    failedCount++;
+                    failedNodes.append(static_cast<int>(node));
+                }
+            }
+        }
+
+        QJsonObject result{
+            {kKeyOk, true},
+            {QStringLiteral("stoppedChannels"), stoppedCount},
+            {QStringLiteral("failedChannels"), failedCount},
+            {QStringLiteral("deviceCount"), context_->relays.size()}
+        };
+
+        if (failedCount > 0) {
+            result[QStringLiteral("failedNodes")] = failedNodes;
+        }
+
+        // 添加CAN TX队列大小用于诊断
+        if (context_->canBus) {
+            const int txQueueSize = context_->canBus->txQueueSize();
+            result[QStringLiteral("txQueueSize")] = txQueueSize;
+        }
+
+        return result;
+    });
+
+    // 传感器读取 - 读取指定传感器的当前数值
+    dispatcher_->registerMethod(QStringLiteral("sensor.read"),
+                                 [this](const QJsonObject &params) {
+        quint8 nodeId = 0;
+        QString sensorType;
+
+        if (!rpc::RpcHelpers::getU8(params, "nodeId", nodeId))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid nodeId"));
+
+        // 可选：传感器类型过滤
+        rpc::RpcHelpers::getString(params, "sensorType", sensorType);
+
+        // 查找设备配置
+        auto config = context_->getDeviceConfig(nodeId);
+        if (config.nodeId < 0) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("sensor not found"));
+        }
+
+        // 检查是否为传感器类型
+        if (!device::isSensorType(config.deviceType)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("device is not a sensor"));
+        }
+
+        // 构建传感器信息
+        QJsonObject result{
+            {kKeyOk, true},
+            {QStringLiteral("nodeId"), static_cast<int>(nodeId)},
+            {kKeyName, config.name},
+            {QStringLiteral("type"), static_cast<int>(config.deviceType)},
+            {QStringLiteral("typeName"), QString::fromLatin1(device::deviceTypeToString(config.deviceType))},
+            {QStringLiteral("commType"), static_cast<int>(config.commType)},
+            {QStringLiteral("commTypeName"), QString::fromLatin1(device::commTypeToString(config.commType))},
+            {QStringLiteral("bus"), config.bus}
+        };
+
+        // 如果有额外参数，也返回
+        if (!config.params.isEmpty()) {
+            result[QStringLiteral("params")] = config.params;
+        }
+
+        // TODO: 实际的传感器数据读取需要根据设备类型调用相应的驱动
+        // 这里返回配置信息，实际数据需要通过设备驱动获取
+        result[QStringLiteral("note")] = QStringLiteral("Sensor data reading requires device driver implementation");
+
+        return result;
+    });
+
+    // 传感器列表 - 列出所有已配置的传感器设备
+    dispatcher_->registerMethod(QStringLiteral("sensor.list"),
+                                 [this](const QJsonObject &params) {
+        QString commTypeFilter;
+        rpc::RpcHelpers::getString(params, "commType", commTypeFilter);  // 可选过滤：serial/can
+
+        QJsonArray sensors;
+        const auto devices = context_->listDevices();
+
+        for (const auto &dev : devices) {
+            // 只返回传感器类型的设备
+            if (!device::isSensorType(dev.deviceType)) {
+                continue;
+            }
+
+            // 如果指定了通信类型过滤
+            if (!commTypeFilter.isEmpty()) {
+                if (commTypeFilter.toLower() == QStringLiteral("serial") &&
+                    dev.commType != device::CommTypeId::Serial) {
+                    continue;
+                }
+                if (commTypeFilter.toLower() == QStringLiteral("can") &&
+                    dev.commType != device::CommTypeId::Can) {
+                    continue;
+                }
+            }
+
+            QJsonObject sensorObj;
+            sensorObj[QStringLiteral("nodeId")] = dev.nodeId;
+            sensorObj[kKeyName] = dev.name;
+            sensorObj[QStringLiteral("type")] = static_cast<int>(dev.deviceType);
+            sensorObj[QStringLiteral("typeName")] = QString::fromLatin1(device::deviceTypeToString(dev.deviceType));
+            sensorObj[QStringLiteral("commType")] = static_cast<int>(dev.commType);
+            sensorObj[QStringLiteral("commTypeName")] = QString::fromLatin1(device::commTypeToString(dev.commType));
+            sensorObj[QStringLiteral("bus")] = dev.bus;
+
+            if (!dev.params.isEmpty()) {
+                sensorObj[QStringLiteral("params")] = dev.params;
+            }
+
+            sensors.append(sensorObj);
+        }
+
+        return QJsonObject{
+            {kKeyOk, true},
+            {QStringLiteral("sensors"), sensors},
+            {kKeyTotal, sensors.size()}
+        };
+    });
 }
 
 void RpcRegistry::registerGroup()

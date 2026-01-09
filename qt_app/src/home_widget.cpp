@@ -28,6 +28,7 @@ HomeWidget::HomeWidget(RpcClient *rpcClient, QWidget *parent)
     , lastUpdateLabel_(nullptr)
     , refreshButton_(nullptr)
     , stopAllButton_(nullptr)
+    , emergencyStopButton_(nullptr)
 {
     setupUi();
 }
@@ -158,6 +159,28 @@ void HomeWidget::setupUi()
 
     mainLayout->addWidget(actionsBox);
 
+    // 急停按钮 - 醒目的红色大按钮
+    emergencyStopButton_ = new QPushButton(QStringLiteral("急 停"), this);
+    emergencyStopButton_->setMinimumHeight(60);
+    emergencyStopButton_->setStyleSheet(QStringLiteral(
+        "QPushButton {"
+        "  background-color: #c0392b;"
+        "  color: white;"
+        "  font-size: 20px;"
+        "  font-weight: bold;"
+        "  border: 3px solid #922b21;"
+        "  border-radius: 10px;"
+        "}"
+        "QPushButton:hover {"
+        "  background-color: #e74c3c;"
+        "}"
+        "QPushButton:pressed {"
+        "  background-color: #922b21;"
+        "}"
+    ));
+    connect(emergencyStopButton_, &QPushButton::clicked, this, &HomeWidget::onEmergencyStopClicked);
+    mainLayout->addWidget(emergencyStopButton_);
+
     // 最后更新时间
     lastUpdateLabel_ = new QLabel(QStringLiteral("最后更新: --"), this);
     lastUpdateLabel_->setStyleSheet(QStringLiteral("color: #7f8c8d; font-size: 10px;"));
@@ -178,7 +201,32 @@ void HomeWidget::onStopAllClicked()
         QStringLiteral("确定要停止所有设备吗？"),
         QMessageBox::Yes | QMessageBox::No);
     if (reply == QMessageBox::Yes) {
-        rpcClient_->call(QStringLiteral("relay.stopAll"));
+        rpcClient_->call(QStringLiteral("relay.emergencyStop"));
+    }
+}
+
+void HomeWidget::onEmergencyStopClicked()
+{
+    if (!rpcClient_ || !rpcClient_->isConnected()) {
+        QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先连接服务器"));
+        return;
+    }
+
+    // 急停不需要确认，直接执行
+    QJsonValue result = rpcClient_->call(QStringLiteral("relay.emergencyStop"));
+
+    // 显示执行结果
+    if (result.isObject()) {
+        QJsonObject obj = result.toObject();
+        if (obj.value(QStringLiteral("ok")).toBool()) {
+            int stopped = obj.value(QStringLiteral("stoppedChannels")).toInt();
+            int devices = obj.value(QStringLiteral("deviceCount")).toInt();
+            QMessageBox::information(this, QStringLiteral("急停执行完成"),
+                QStringLiteral("已停止 %1 个设备的 %2 个通道").arg(devices).arg(stopped));
+        } else {
+            QMessageBox::warning(this, QStringLiteral("急停执行失败"),
+                QStringLiteral("执行急停命令时发生错误"));
+        }
     }
 }
 
