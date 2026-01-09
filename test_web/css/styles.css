@@ -40,7 +40,16 @@
     }
 }
 
-/* 动态背景容器 - 已禁用动画 */
+@keyframes pulseGlow {
+    0%, 100% {
+        box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 40px rgba(102, 126, 234, 0.6);
+    }
+}
+
+/* 动态背景容器 - 启用动画 */
 .animated-background {
     position: fixed;
     top: 0;
@@ -48,14 +57,14 @@
     width: 100%;
     height: 100%;
     background: linear-gradient(-45deg, #667eea, #764ba2, #6B8DD6, #8E37D7);
-    background-size: 100% 100%;
-    /* animation: gradientAnimation 15s ease infinite; */
+    background-size: 400% 400%;
+    animation: gradientAnimation 15s ease infinite;
     z-index: -2;
 }
 
-/* 浮动装饰元素容器 - 已禁用动画 */
+/* 浮动装饰元素容器 - 启用动画 */
 .floating-shapes {
-    display: none;
+    display: block;
     position: fixed;
     top: 0;
     left: 0;
@@ -66,13 +75,13 @@
     pointer-events: none;
 }
 
-/* 浮动形状基础样式 - 已禁用动画 */
+/* 浮动形状基础样式 - 启用动画 */
 .floating-shape {
-    display: none;
+    display: block;
     position: absolute;
     background: rgba(255, 255, 255, 0.1);
     border-radius: 50%;
-    /* animation: floatAnimation 6s ease-in-out infinite; */
+    animation: floatAnimation 6s ease-in-out infinite;
 }
 
 /* 不同大小和位置的浮动形状 */
@@ -673,10 +682,11 @@ button:disabled {
 /* 
  * 整合后的设备卡片样式
  * 每个卡片包含：设备信息、通道状态、控制按钮
+ * 布局：设备状态放左边，通道控制放右边
  */
 .device-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(520px, 1fr));
     gap: 20px;
     margin-top: 20px;
 }
@@ -737,12 +747,72 @@ button:disabled {
     color: #721c24;
 }
 
+/* 设备卡片内容区 - 左右布局 */
+.device-card-content {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 15px;
+}
+
+/* 左侧设备状态区 */
+.device-status-area {
+    flex: 0 0 180px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 10px;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.device-status-area .status-title {
+    font-size: 12px;
+    color: #666;
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.device-status-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.device-status-item:last-child {
+    border-bottom: none;
+}
+
+.device-status-item .label {
+    font-size: 12px;
+    color: #666;
+}
+
+.device-status-item .value {
+    font-weight: 600;
+    font-size: 13px;
+    color: #333;
+}
+
+/* 右侧通道控制区 */
+.channel-control-area {
+    flex: 1;
+    min-width: 0;
+}
+
+.channel-control-area .control-title {
+    font-size: 12px;
+    color: #666;
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
 /* 通道控制区域样式 */
 .channel-control-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 10px;
-    margin-bottom: 15px;
 }
 
 .channel-control-item {
@@ -791,14 +861,14 @@ button:disabled {
 /* 通道控制按钮 */
 .channel-control-item .ch-buttons {
     display: flex;
-    gap: 4px;
+    gap: 6px;
 }
 
 .channel-control-item .ch-btn {
     flex: 1;
-    padding: 6px 8px;
+    padding: 8px 10px;
     font-size: 14px;
-    min-width: 36px;
+    min-width: 40px;
     border-radius: 6px;
 }
 
@@ -819,16 +889,16 @@ button:disabled {
 .device-card-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 10px;
     padding-top: 12px;
     border-top: 1px solid #eee;
 }
 
 .device-card-actions button {
     flex: 1;
-    min-width: 80px;
-    padding: 8px 10px;
-    font-size: 12px;
+    min-width: 100px;
+    padding: 10px 12px;
+    font-size: 13px;
 }
 
 /* 旧的channel-grid样式保留用于兼容 */
@@ -981,4 +1051,183 @@ button:disabled {
     .device-card-actions button {
         min-width: auto;
     }
+
+    /* 小屏幕设备卡片内容区调整 */
+    .device-card-content {
+        flex-direction: column;
+    }
+
+    .device-status-area {
+        flex: none;
+        width: 100%;
+    }
+}
+
+/* ==================== 弹窗样式 ==================== */
+
+/* 弹窗遮罩层 */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.modal-overlay.show {
+    opacity: 1;
+}
+
+/* 弹窗内容 */
+.modal-content {
+    background: white;
+    border-radius: 16px;
+    padding: 0;
+    max-width: 500px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    transform: scale(0.9) translateY(-20px);
+    transition: transform 0.3s ease;
+}
+
+.modal-overlay.show .modal-content {
+    transform: scale(1) translateY(0);
+}
+
+.modal-content.modal-large {
+    max-width: 700px;
+}
+
+/* 弹窗头部 */
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e0e0e0;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 16px 16px 0 0;
+}
+
+.modal-header h3 {
+    color: white;
+    margin: 0;
+    font-size: 1.2em;
+}
+
+.modal-close {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+    padding: 0;
+}
+
+.modal-close:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: none;
+    box-shadow: none;
+}
+
+/* 弹窗主体 */
+.modal-body {
+    padding: 24px;
+}
+
+/* 弹窗底部 */
+.modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    background: #f8f9fa;
+    border-radius: 0 0 16px 16px;
+}
+
+/* ==================== 操作工具栏样式 ==================== */
+.action-toolbar {
+    animation: fadeInUp 0.5s ease;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 按钮悬停动画增强 */
+button {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+button:hover {
+    transform: translateY(-3px);
+}
+
+button:active {
+    transform: translateY(-1px);
+}
+
+/* 卡片动画 */
+.device-card {
+    animation: fadeInScale 0.4s ease;
+}
+
+@keyframes fadeInScale {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* 列表项动画 */
+.data-list-item {
+    animation: slideInLeft 0.3s ease;
+}
+
+@keyframes slideInLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* 状态徽章动画 */
+.device-card-status {
+    transition: all 0.3s ease;
+}
+
+.device-card-status.online {
+    animation: pulseGlow 2s infinite;
 }
