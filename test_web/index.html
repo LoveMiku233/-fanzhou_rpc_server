@@ -44,47 +44,11 @@
     <!-- ==================== 页面头部 ==================== -->
     <div class="header">
         <h1>🚀 泛舟RPC服务器调试工具</h1>
-        <p>用于调试运行在全志A133平台上的JSON-RPC服务器</p>
-    </div>
-
-    <!-- ==================== 连接设置卡片 ==================== -->
-    <div class="card" style="max-width: 1600px; margin: 0 auto 20px;">
-        <h2>📡 连接设置</h2>
-        <div class="connection-panel">
-            <!-- 服务器地址输入 -->
-            <div class="form-group" style="flex: 2; min-width: 200px;">
-                <label>服务器地址</label>
-                <input type="text" id="serverHost" placeholder="例如: 192.168.1.100" value="localhost">
-            </div>
-            <!-- WebSocket端口输入 -->
-            <div class="form-group" style="flex: 1; min-width: 120px;">
-                <label>WebSocket端口</label>
-                <input type="number" id="serverPort" placeholder="端口" value="12346">
-            </div>
-            <!-- 连接/断开按钮 -->
-            <div class="form-group" style="min-width: 120px;">
-                <label>&nbsp;</label>
-                <button id="connectBtn" onclick="toggleConnection()">🔌 连接</button>
-            </div>
-            <!-- 连接状态显示 -->
-            <div class="form-group" style="min-width: 100px;">
-                <label>状态</label>
-                <span class="status-badge disconnected" id="connectionStatus">
-                    <span class="status-dot"></span>
-                    <span>未连接</span>
-                </span>
-            </div>
-        </div>
-        <!-- 连接说明 -->
-        <div class="help-section">
-            <h4>📋 连接说明</h4>
-            <p style="margin-bottom: 10px; color: #666;">由于浏览器安全限制，需要在设备上运行WebSocket代理。请执行以下命令：</p>
-            <pre>
-# 安装websocat（如果尚未安装）
-# 下载地址: https://github.com/vi/websocat/releases
-
-# 启动WebSocket到TCP的代理（文本模式）
-websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
+        <div class="header-status">
+            <span class="status-badge disconnected" id="headerConnectionStatus">
+                <span class="status-dot"></span>
+                <span>未连接</span>
+            </span>
         </div>
     </div>
 
@@ -93,6 +57,9 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
         <!-- ==================== 左侧导航栏 ==================== -->
         <div class="sidebar">
             <div class="sidebar-nav">
+                <button class="nav-btn" onclick="showPage('connection')" data-page="connection">
+                    📡 连接
+                </button>
                 <button class="nav-btn active" onclick="showPage('quick')" data-page="quick">
                     🏠 主页
                 </button>
@@ -117,6 +84,54 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
         <!-- ==================== 右侧内容区 ==================== -->
         <div class="content-area">
             <div class="card">
+
+            <!-- ==================== 连接设置页面 ==================== -->
+            <div class="page-content" id="page-connection">
+                <h3 style="margin-bottom: 20px; color: #333;">📡 连接设置</h3>
+                
+                <div style="background: #f8f9fa; padding: 25px; border-radius: 12px; margin-bottom: 20px;">
+                    <div class="form-row">
+                        <!-- 服务器地址输入 -->
+                        <div class="form-group">
+                            <label>服务器地址</label>
+                            <input type="text" id="serverHost" placeholder="例如: 192.168.1.100" value="localhost">
+                        </div>
+                        <!-- WebSocket端口输入 -->
+                        <div class="form-group">
+                            <label>WebSocket端口</label>
+                            <input type="number" id="serverPort" placeholder="端口" value="12346">
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; align-items: center; gap: 20px; margin-top: 20px; flex-wrap: wrap;">
+                        <!-- 连接/断开按钮 -->
+                        <button id="connectBtn" onclick="toggleConnection()" style="min-width: 150px;">🔌 连接</button>
+                        <!-- 连接状态显示 -->
+                        <span class="status-badge disconnected" id="connectionStatus">
+                            <span class="status-dot"></span>
+                            <span>未连接</span>
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- 连接说明 -->
+                <div class="help-section">
+                    <h4>📋 连接说明</h4>
+                    <p style="margin-bottom: 10px; color: #666;">由于浏览器安全限制，需要在设备上运行WebSocket代理。请执行以下命令：</p>
+                    <pre>
+# 安装websocat（如果尚未安装）
+# 下载地址: https://github.com/vi/websocat/releases
+
+# 启动WebSocket到TCP的代理（文本模式）
+websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
+                </div>
+                
+                <!-- 快速提示 -->
+                <div style="background: #e3f2fd; padding: 15px 20px; border-radius: 12px; margin-top: 20px; border-left: 4px solid #2196f3;">
+                    <strong style="color: #1565c0;">💡 提示</strong>
+                    <p style="color: #666; font-size: 13px; margin-top: 5px;">连接成功后，请切换到"主页"标签页开始使用各项功能。</p>
+                </div>
+            </div>
 
             <!-- ==================== 快捷操作页面 ==================== -->
             <div class="page-content active" id="page-quick">

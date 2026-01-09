@@ -145,9 +145,8 @@ function connect() {
  */
 function updateConnectionStatus(status) {
     const statusEl = document.getElementById('connectionStatus');
+    const headerStatusEl = document.getElementById('headerConnectionStatus');
     const connectBtn = document.getElementById('connectBtn');
-    
-    statusEl.className = 'status-badge ' + status;
     
     const statusTexts = {
         'connected': '已连接',
@@ -155,15 +154,29 @@ function updateConnectionStatus(status) {
         'connecting': '连接中...'
     };
     
-    statusEl.innerHTML = `<span class="status-dot"></span><span>${statusTexts[status]}</span>`;
+    const statusHtml = `<span class="status-dot"></span><span>${statusTexts[status]}</span>`;
+    
+    // 更新连接设置页面的状态
+    if (statusEl) {
+        statusEl.className = 'status-badge ' + status;
+        statusEl.innerHTML = statusHtml;
+    }
+    
+    // 更新头部的状态
+    if (headerStatusEl) {
+        headerStatusEl.className = 'status-badge ' + status;
+        headerStatusEl.innerHTML = statusHtml;
+    }
     
     // 更新按钮文字
-    if (status === 'connected') {
-        connectBtn.textContent = '🔌 断开';
-        connectBtn.classList.add('danger');
-    } else {
-        connectBtn.textContent = '🔌 连接';
-        connectBtn.classList.remove('danger');
+    if (connectBtn) {
+        if (status === 'connected') {
+            connectBtn.textContent = '🔌 断开';
+            connectBtn.classList.add('danger');
+        } else {
+            connectBtn.textContent = '🔌 连接';
+            connectBtn.classList.remove('danger');
+        }
     }
 }
 
