@@ -194,11 +194,11 @@ body {
 .header {
     text-align: center;
     color: white;
-    margin-bottom: 30px;
+    margin-bottom: 20px;
 }
 
 .header h1 {
-    font-size: 2.5em;
+    font-size: 2em;
     margin-bottom: 10px;
     text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
 }
@@ -206,6 +206,14 @@ body {
 .header p {
     opacity: 0.9;
     font-size: 1.1em;
+}
+
+.header-status {
+    margin-top: 10px;
+}
+
+.header-status .status-badge {
+    display: inline-flex;
 }
 
 /* ==================== 卡片样式 ==================== */
