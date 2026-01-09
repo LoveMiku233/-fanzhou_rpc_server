@@ -686,7 +686,7 @@ button:disabled {
  */
 .device-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(520px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
     gap: 20px;
     margin-top: 20px;
 }
@@ -944,6 +944,11 @@ button:disabled {
     .log-sidebar {
         width: 320px;
     }
+    
+    /* 平板设备：减小设备卡片最小宽度 */
+    .device-cards {
+        grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    }
 }
 
 @media (max-width: 1200px) {
@@ -966,6 +971,11 @@ button:disabled {
 
     .log-sidebar .log-container {
         max-height: 400px;
+    }
+    
+    /* 进一步减小设备卡片宽度 */
+    .device-cards {
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     }
 }
 

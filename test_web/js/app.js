@@ -1364,10 +1364,19 @@ function createTimerStrategy() {
                 `每 ${params.intervalSec} 秒执行`;
             log('info', `定时策略 "${name}" 创建成功（${triggerDesc}）`);
             refreshStrategyList();
+            // 成功后关闭弹窗
+            closeModal('strategyModal');
         } else if (response.error) {
             log('error', `创建失败: ${response.error.message || '未知错误'}`);
         }
     });
+}
+
+/**
+ * 创建定时策略并关闭弹窗（用于弹窗按钮调用）
+ */
+function createTimerStrategyAndClose() {
+    createTimerStrategy();
 }
 
 /**
@@ -1408,10 +1417,19 @@ function createSensorStrategy() {
         if (response.result && response.result.ok) {
             log('info', `传感器策略 "${name}" 创建成功`);
             refreshStrategyList();
+            // 成功后关闭弹窗
+            closeModal('sensorStrategyModal');
         } else if (response.error) {
             log('error', `创建失败: ${response.error.message || '未知错误'}`);
         }
     });
+}
+
+/**
+ * 创建传感器策略并关闭弹窗（用于弹窗按钮调用）
+ */
+function createSensorStrategyAndClose() {
+    createSensorStrategy();
 }
 
 /**
@@ -1872,12 +1890,16 @@ function batchControlGroups(action) {
     
     log('info', `批量控制所有分组: ${actionNames[action] || action}`);
     
+    // 对每个分组的所有通道执行操作
     groupListCache.forEach(group => {
         const groupId = group.groupId || group.id;
-        callMethod('group.control', {
-            groupId: groupId,
-            ch: 0,  // 默认通道0
-            action: action
-        });
+        // 控制所有通道（使用通道-1表示全部通道，或逐个发送）
+        for (let ch = 0; ch < DEFAULT_CHANNEL_COUNT; ch++) {
+            callMethod('group.control', {
+                groupId: groupId,
+                ch: ch,
+                action: action
+            });
+        }
     });
 }
