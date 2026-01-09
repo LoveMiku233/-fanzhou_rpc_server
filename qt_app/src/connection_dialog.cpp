@@ -23,50 +23,56 @@ ConnectionDialog::ConnectionDialog(QWidget *parent)
 void ConnectionDialog::setupUi()
 {
     setWindowTitle(QStringLiteral("连接设置"));
-    setMinimumWidth(360);
+    setMinimumWidth(320);
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setSpacing(10);
+    mainLayout->setSpacing(8);
+    mainLayout->setContentsMargins(12, 12, 12, 12);
 
     // 连接设置组
     QGroupBox *groupBox = new QGroupBox(QStringLiteral("服务器设置"), this);
     QFormLayout *formLayout = new QFormLayout(groupBox);
-    formLayout->setSpacing(10);
+    formLayout->setSpacing(8);
+    formLayout->setContentsMargins(10, 14, 10, 10);
 
     hostEdit_ = new QLineEdit(this);
     hostEdit_->setPlaceholderText(QStringLiteral("192.168.1.100"));
     hostEdit_->setText(QStringLiteral("127.0.0.1"));
+    hostEdit_->setMinimumHeight(32);
     formLayout->addRow(QStringLiteral("服务器:"), hostEdit_);
 
     portSpinBox_ = new QSpinBox(this);
     portSpinBox_->setRange(1, 65535);
     portSpinBox_->setValue(12345);
+    portSpinBox_->setMinimumHeight(32);
     formLayout->addRow(QStringLiteral("端口:"), portSpinBox_);
 
     mainLayout->addWidget(groupBox);
 
     // 说明
     QLabel *helpLabel = new QLabel(
-        QStringLiteral("提示：连接到运行泛舟RPC服务器的设备，默认端口12345"),
+        QStringLiteral("提示：连接到RPC服务器，默认端口12345"),
         this);
     helpLabel->setWordWrap(true);
-    helpLabel->setStyleSheet(QStringLiteral("color: #666; padding: 4px;"));
+    helpLabel->setStyleSheet(QStringLiteral("color: #666; padding: 2px; font-size: 10px;"));
     mainLayout->addWidget(helpLabel);
 
     mainLayout->addStretch();
 
     // 按钮
     QHBoxLayout *buttonLayout = new QHBoxLayout();
-    buttonLayout->setSpacing(10);
+    buttonLayout->setSpacing(8);
     buttonLayout->addStretch();
 
     QPushButton *cancelButton = new QPushButton(QStringLiteral("取消"), this);
+    cancelButton->setMinimumHeight(32);
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
     buttonLayout->addWidget(cancelButton);
 
     QPushButton *okButton = new QPushButton(QStringLiteral("确定"), this);
     okButton->setDefault(true);
     okButton->setProperty("type", QStringLiteral("success"));
+    okButton->setMinimumHeight(32);
     connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
     buttonLayout->addWidget(okButton);
 

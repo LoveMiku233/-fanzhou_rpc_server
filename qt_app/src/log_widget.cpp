@@ -32,18 +32,18 @@ LogWidget::LogWidget(QWidget *parent)
 void LogWidget::setupUi()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(16, 16, 16, 16);
-    mainLayout->setSpacing(12);
+    mainLayout->setContentsMargins(10, 10, 10, 10);
+    mainLayout->setSpacing(8);
 
-    // 页面标题
-    QLabel *titleLabel = new QLabel(QStringLiteral("📋 系统日志"), this);
+    // 页面标题 - 使用纯文本
+    QLabel *titleLabel = new QLabel(QStringLiteral("[L] 系统日志"), this);
     titleLabel->setStyleSheet(QStringLiteral(
-        "font-size: 20px; font-weight: bold; color: #2c3e50; padding: 8px 0;"));
+        "font-size: 16px; font-weight: bold; color: #2c3e50; padding: 4px 0;"));
     mainLayout->addWidget(titleLabel);
 
     // 工具栏
     QHBoxLayout *toolbarLayout = new QHBoxLayout();
-    toolbarLayout->setSpacing(12);
+    toolbarLayout->setSpacing(8);
 
     QLabel *filterLabel = new QLabel(QStringLiteral("筛选:"), this);
     toolbarLayout->addWidget(filterLabel);
@@ -53,13 +53,13 @@ void LogWidget::setupUi()
     filterCombo_->addItem(QStringLiteral("信息"), QStringLiteral("INFO"));
     filterCombo_->addItem(QStringLiteral("警告"), QStringLiteral("WARN"));
     filterCombo_->addItem(QStringLiteral("错误"), QStringLiteral("ERROR"));
-    filterCombo_->setMinimumWidth(120);
+    filterCombo_->setMinimumWidth(80);
     toolbarLayout->addWidget(filterCombo_);
 
     toolbarLayout->addStretch();
 
-    countLabel_ = new QLabel(QStringLiteral("总计: 0 | 警告: 0 | 错误: 0"), this);
-    countLabel_->setStyleSheet(QStringLiteral("color: #7f8c8d;"));
+    countLabel_ = new QLabel(QStringLiteral("共: 0 | 警: 0 | 错: 0"), this);
+    countLabel_->setStyleSheet(QStringLiteral("color: #7f8c8d; font-size: 10px;"));
     toolbarLayout->addWidget(countLabel_);
 
     mainLayout->addLayout(toolbarLayout);
@@ -67,30 +67,30 @@ void LogWidget::setupUi()
     // 日志显示区域
     logTextEdit_ = new QTextEdit(this);
     logTextEdit_->setReadOnly(true);
-    logTextEdit_->setMinimumHeight(300);
+    logTextEdit_->setMinimumHeight(200);
     logTextEdit_->setStyleSheet(QStringLiteral(
         "QTextEdit { "
         "  background-color: #1e1e1e; "
         "  color: #d4d4d4; "
         "  font-family: 'Consolas', 'Monaco', monospace; "
-        "  font-size: 13px; "
-        "  border: 2px solid #e0e0e0; "
-        "  border-radius: 8px; "
-        "  padding: 10px; "
+        "  font-size: 11px; "
+        "  border: 1px solid #d0d5dd; "
+        "  border-radius: 6px; "
+        "  padding: 6px; "
         "}"));
     mainLayout->addWidget(logTextEdit_, 1);
 
     // 按钮区域
     QHBoxLayout *buttonLayout = new QHBoxLayout();
-    buttonLayout->setSpacing(12);
+    buttonLayout->setSpacing(8);
 
-    clearButton_ = new QPushButton(QStringLiteral("🗑️ 清空日志"), this);
-    clearButton_->setMinimumHeight(50);
+    clearButton_ = new QPushButton(QStringLiteral("清空日志"), this);
+    clearButton_->setMinimumHeight(36);
     connect(clearButton_, &QPushButton::clicked, this, &LogWidget::clearLogs);
     buttonLayout->addWidget(clearButton_);
 
-    exportButton_ = new QPushButton(QStringLiteral("💾 导出日志"), this);
-    exportButton_->setMinimumHeight(50);
+    exportButton_ = new QPushButton(QStringLiteral("导出日志"), this);
+    exportButton_->setMinimumHeight(36);
     exportButton_->setProperty("type", QStringLiteral("success"));
     connect(exportButton_, &QPushButton::clicked, this, &LogWidget::onExportClicked);
     buttonLayout->addWidget(exportButton_);
@@ -127,16 +127,16 @@ void LogWidget::appendLog(const QString &message, const QString &level)
 
     if (level == QStringLiteral("WARN") || level == QStringLiteral("WARNING")) {
         colorCode = QStringLiteral("#f39c12");
-        levelText = QStringLiteral("⚠️ 警告");
+        levelText = QStringLiteral("[!] 警告");
         warningCount_++;
     } else if (level == QStringLiteral("ERROR")) {
         colorCode = QStringLiteral("#e74c3c");
-        levelText = QStringLiteral("❌ 错误");
+        levelText = QStringLiteral("[X] 错误");
         errorCount_++;
         emit newAlertMessage(message);
     } else {
         colorCode = QStringLiteral("#3498db");
-        levelText = QStringLiteral("ℹ️ 信息");
+        levelText = QStringLiteral("[i] 信息");
     }
 
     totalCount_++;
@@ -154,7 +154,7 @@ void LogWidget::appendLog(const QString &message, const QString &level)
     logTextEdit_->setTextCursor(cursor);
 
     // 更新计数
-    countLabel_->setText(QStringLiteral("总计: %1 | 警告: %2 | 错误: %3")
+    countLabel_->setText(QStringLiteral("共: %1 | 警: %2 | 错: %3")
         .arg(totalCount_).arg(warningCount_).arg(errorCount_));
 }
 
@@ -174,5 +174,5 @@ void LogWidget::clearLogs()
     totalCount_ = 0;
     warningCount_ = 0;
     errorCount_ = 0;
-    countLabel_->setText(QStringLiteral("总计: 0 | 警告: 0 | 错误: 0"));
+    countLabel_->setText(QStringLiteral("共: 0 | 警: 0 | 错: 0"));
 }

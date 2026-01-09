@@ -65,16 +65,16 @@ void MainWindow::setupStatusBar()
     QStatusBar *statusBar = this->statusBar();
     statusBar->setStyleSheet(QStringLiteral(
         "QStatusBar { "
-        "  background-color: #2c3e50; "
+        "  background-color: #1a252f; "
         "  color: white; "
-        "  padding: 4px 8px; "
-        "  font-size: 13px; "
+        "  padding: 2px 6px; "
+        "  font-size: 11px; "
         "}"));
 
     // 连接状态
-    connectionStatusLabel_ = new QLabel(QStringLiteral("❌ 未连接"));
+    connectionStatusLabel_ = new QLabel(QStringLiteral("[X] 未连接"));
     connectionStatusLabel_->setStyleSheet(QStringLiteral(
-        "color: #e74c3c; font-weight: bold; padding: 4px 12px;"));
+        "color: #e74c3c; font-weight: bold; padding: 2px 8px;"));
     statusBar->addWidget(connectionStatusLabel_);
 
     // 分隔符
@@ -86,7 +86,7 @@ void MainWindow::setupStatusBar()
     // 时间
     timeLabel_ = new QLabel(QStringLiteral("--:--:--"));
     timeLabel_->setStyleSheet(QStringLiteral(
-        "color: #ecf0f1; padding: 4px 12px;"));
+        "color: #ecf0f1; padding: 2px 8px;"));
     statusBar->addWidget(timeLabel_);
 
     // 分隔符
@@ -98,7 +98,7 @@ void MainWindow::setupStatusBar()
     // 报警/日志信息
     alertLabel_ = new QLabel(QStringLiteral("系统就绪"));
     alertLabel_->setStyleSheet(QStringLiteral(
-        "color: #bdc3c7; padding: 4px 12px;"));
+        "color: #bdc3c7; padding: 2px 8px;"));
     statusBar->addWidget(alertLabel_, 1);
 }
 
@@ -124,42 +124,40 @@ void MainWindow::createSidebar()
 {
     sidebar_ = new QWidget(this);
     sidebar_->setObjectName(QStringLiteral("sidebar"));
-    sidebar_->setFixedWidth(120);
+    sidebar_->setFixedWidth(80);  // 缩减侧边栏宽度
 
     sidebarLayout_ = new QVBoxLayout(sidebar_);
-    sidebarLayout_->setContentsMargins(8, 16, 8, 16);
-    sidebarLayout_->setSpacing(8);
+    sidebarLayout_->setContentsMargins(4, 8, 4, 8);
+    sidebarLayout_->setSpacing(4);
 
-    // Logo/标题
-    QLabel *logoLabel = new QLabel(QStringLiteral("🌱 大棚控制"), sidebar_);
+    // Logo/标题 - 使用纯文本
+    QLabel *logoLabel = new QLabel(QStringLiteral("大棚\n控制"), sidebar_);
     logoLabel->setObjectName(QStringLiteral("sidebarLogo"));
     logoLabel->setAlignment(Qt::AlignCenter);
     logoLabel->setWordWrap(true);
     sidebarLayout_->addWidget(logoLabel);
 
-    sidebarLayout_->addSpacing(16);
+    sidebarLayout_->addSpacing(8);
 
-    // 菜单按钮
+    // 菜单按钮 - 使用纯文本，无emoji
     struct MenuItem {
         QString text;
-        QString icon;
     };
 
     QList<MenuItem> menuItems = {
-        {QStringLiteral("主页"), QStringLiteral("🏠")},
-        {QStringLiteral("设备"), QStringLiteral("📱")},
-        {QStringLiteral("分组"), QStringLiteral("📂")},
-        {QStringLiteral("日志"), QStringLiteral("📋")},
-        {QStringLiteral("设置"), QStringLiteral("⚙️")}
+        {QStringLiteral("主页")},
+        {QStringLiteral("设备")},
+        {QStringLiteral("分组")},
+        {QStringLiteral("日志")},
+        {QStringLiteral("设置")}
     };
 
     for (int i = 0; i < menuItems.size(); ++i) {
-        QPushButton *btn = new QPushButton(
-            QStringLiteral("%1\n%2").arg(menuItems[i].icon, menuItems[i].text), sidebar_);
+        QPushButton *btn = new QPushButton(menuItems[i].text, sidebar_);
         btn->setObjectName(QStringLiteral("menuButton"));
         btn->setProperty("menuIndex", i);
         btn->setCheckable(true);
-        btn->setMinimumHeight(70);
+        btn->setMinimumHeight(45);
         connect(btn, &QPushButton::clicked, this, &MainWindow::onMenuButtonClicked);
         sidebarLayout_->addWidget(btn);
         menuButtons_.append(btn);
@@ -168,7 +166,7 @@ void MainWindow::createSidebar()
     sidebarLayout_->addStretch();
 
     // 版本信息
-    QLabel *versionLabel = new QLabel(QStringLiteral("v1.0.0"), sidebar_);
+    QLabel *versionLabel = new QLabel(QStringLiteral("v1.0"), sidebar_);
     versionLabel->setObjectName(QStringLiteral("sidebarVersion"));
     versionLabel->setAlignment(Qt::AlignCenter);
     sidebarLayout_->addWidget(versionLabel);
@@ -225,9 +223,9 @@ void MainWindow::createContentArea()
     QScroller::grabGesture(logScrollArea->viewport(), QScroller::LeftMouseButtonGesture);
     connect(logWidget_, &LogWidget::newAlertMessage, this, [this](const QString &message) {
         lastAlertMessage_ = message;
-        alertLabel_->setText(QStringLiteral("⚠️ %1").arg(message));
+        alertLabel_->setText(QStringLiteral("[!] %1").arg(message));
         alertLabel_->setStyleSheet(QStringLiteral(
-            "color: #f39c12; padding: 4px 12px; font-weight: bold;"));
+            "color: #f39c12; padding: 2px 8px; font-weight: bold;"));
     });
     contentStack_->addWidget(logScrollArea);
 
@@ -317,16 +315,16 @@ void MainWindow::onConnectionStatusChanged(bool connected)
 void MainWindow::updateStatusBarConnection(bool connected)
 {
     if (connected) {
-        connectionStatusLabel_->setText(QStringLiteral("✅ 已连接"));
+        connectionStatusLabel_->setText(QStringLiteral("[OK] 已连接"));
         connectionStatusLabel_->setStyleSheet(QStringLiteral(
-            "color: #27ae60; font-weight: bold; padding: 4px 12px;"));
+            "color: #27ae60; font-weight: bold; padding: 2px 8px;"));
         alertLabel_->setText(QStringLiteral("系统运行正常"));
         alertLabel_->setStyleSheet(QStringLiteral(
-            "color: #bdc3c7; padding: 4px 12px;"));
+            "color: #bdc3c7; padding: 2px 8px;"));
     } else {
-        connectionStatusLabel_->setText(QStringLiteral("❌ 未连接"));
+        connectionStatusLabel_->setText(QStringLiteral("[X] 未连接"));
         connectionStatusLabel_->setStyleSheet(QStringLiteral(
-            "color: #e74c3c; font-weight: bold; padding: 4px 12px;"));
+            "color: #e74c3c; font-weight: bold; padding: 2px 8px;"));
     }
 }
 
@@ -352,13 +350,13 @@ void MainWindow::onLogMessage(const QString &message, const QString &level)
 
     // 更新状态栏报警信息
     if (level == QStringLiteral("ERROR")) {
-        alertLabel_->setText(QStringLiteral("❌ %1").arg(message));
+        alertLabel_->setText(QStringLiteral("[ERR] %1").arg(message));
         alertLabel_->setStyleSheet(QStringLiteral(
-            "color: #e74c3c; padding: 4px 12px; font-weight: bold;"));
+            "color: #e74c3c; padding: 2px 8px; font-weight: bold;"));
     } else if (level == QStringLiteral("WARN")) {
-        alertLabel_->setText(QStringLiteral("⚠️ %1").arg(message));
+        alertLabel_->setText(QStringLiteral("[!] %1").arg(message));
         alertLabel_->setStyleSheet(QStringLiteral(
-            "color: #f39c12; padding: 4px 12px;"));
+            "color: #f39c12; padding: 2px 8px;"));
     }
 }
 

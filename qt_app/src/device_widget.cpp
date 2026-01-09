@@ -45,35 +45,35 @@ void DeviceCard::setupUi()
     setStyleSheet(QStringLiteral(
         "#deviceCard {"
         "  background-color: white;"
-        "  border: 2px solid #e0e0e0;"
-        "  border-radius: 12px;"
-        "  padding: 12px;"
+        "  border: 1px solid #d0d5dd;"
+        "  border-radius: 8px;"
+        "  padding: 8px;"
         "}"
         "#deviceCard:hover {"
         "  border-color: #3498db;"
         "  background-color: #f8f9fa;"
         "}"));
     setCursor(Qt::PointingHandCursor);
-    setMinimumHeight(120);
+    setMinimumHeight(90);
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(12, 12, 12, 12);
-    mainLayout->setSpacing(8);
+    mainLayout->setContentsMargins(8, 8, 8, 8);
+    mainLayout->setSpacing(4);
 
     // 顶部行：名称和节点ID
     QHBoxLayout *topRow = new QHBoxLayout();
     
     nameLabel_ = new QLabel(name_, this);
     nameLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 16px; font-weight: bold; color: #2c3e50;"));
+        "font-size: 13px; font-weight: bold; color: #2c3e50;"));
     topRow->addWidget(nameLabel_);
     
     topRow->addStretch();
     
-    nodeIdLabel_ = new QLabel(QStringLiteral("节点 %1").arg(nodeId_), this);
+    nodeIdLabel_ = new QLabel(QStringLiteral("#%1").arg(nodeId_), this);
     nodeIdLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 12px; color: #7f8c8d; background-color: #ecf0f1; "
-        "padding: 4px 8px; border-radius: 4px;"));
+        "font-size: 10px; color: #7f8c8d; background-color: #ecf0f1; "
+        "padding: 2px 6px; border-radius: 3px;"));
     topRow->addWidget(nodeIdLabel_);
     
     mainLayout->addLayout(topRow);
@@ -81,41 +81,41 @@ void DeviceCard::setupUi()
     // 中间行：状态和电流
     QHBoxLayout *middleRow = new QHBoxLayout();
     
-    statusLabel_ = new QLabel(QStringLiteral("⏳ 等待中"), this);
-    statusLabel_->setStyleSheet(QStringLiteral("font-size: 14px; font-weight: bold;"));
+    statusLabel_ = new QLabel(QStringLiteral("[...] 等待中"), this);
+    statusLabel_->setStyleSheet(QStringLiteral("font-size: 11px; font-weight: bold;"));
     middleRow->addWidget(statusLabel_);
     
     middleRow->addStretch();
     
     currentLabel_ = new QLabel(QStringLiteral("电流: -- mA"), this);
     currentLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 14px; color: #3498db; font-weight: bold;"));
+        "font-size: 11px; color: #3498db; font-weight: bold;"));
     middleRow->addWidget(currentLabel_);
     
     mainLayout->addLayout(middleRow);
 
     // 底部行：通道状态
     QHBoxLayout *bottomRow = new QHBoxLayout();
-    bottomRow->setSpacing(8);
+    bottomRow->setSpacing(4);
     
-    ch0Label_ = new QLabel(QStringLiteral("CH0: --"), this);
+    ch0Label_ = new QLabel(QStringLiteral("0:--"), this);
     ch0Label_->setStyleSheet(QStringLiteral(
-        "font-size: 12px; padding: 4px 8px; background-color: #f5f5f5; border-radius: 4px;"));
+        "font-size: 10px; padding: 2px 4px; background-color: #f5f5f5; border-radius: 3px;"));
     bottomRow->addWidget(ch0Label_);
     
-    ch1Label_ = new QLabel(QStringLiteral("CH1: --"), this);
+    ch1Label_ = new QLabel(QStringLiteral("1:--"), this);
     ch1Label_->setStyleSheet(QStringLiteral(
-        "font-size: 12px; padding: 4px 8px; background-color: #f5f5f5; border-radius: 4px;"));
+        "font-size: 10px; padding: 2px 4px; background-color: #f5f5f5; border-radius: 3px;"));
     bottomRow->addWidget(ch1Label_);
     
-    ch2Label_ = new QLabel(QStringLiteral("CH2: --"), this);
+    ch2Label_ = new QLabel(QStringLiteral("2:--"), this);
     ch2Label_->setStyleSheet(QStringLiteral(
-        "font-size: 12px; padding: 4px 8px; background-color: #f5f5f5; border-radius: 4px;"));
+        "font-size: 10px; padding: 2px 4px; background-color: #f5f5f5; border-radius: 3px;"));
     bottomRow->addWidget(ch2Label_);
     
-    ch3Label_ = new QLabel(QStringLiteral("CH3: --"), this);
+    ch3Label_ = new QLabel(QStringLiteral("3:--"), this);
     ch3Label_->setStyleSheet(QStringLiteral(
-        "font-size: 12px; padding: 4px 8px; background-color: #f5f5f5; border-radius: 4px;"));
+        "font-size: 10px; padding: 2px 4px; background-color: #f5f5f5; border-radius: 3px;"));
     bottomRow->addWidget(ch3Label_);
     
     bottomRow->addStretch();
@@ -125,23 +125,23 @@ void DeviceCard::setupUi()
 
 void DeviceCard::updateStatus(bool online, qint64 ageMs, double totalCurrent, const QJsonObject &channels)
 {
-    // 更新在线状态
+    // 更新在线状态 - 使用纯文本
     if (online) {
-        statusLabel_->setText(QStringLiteral("✅ 在线 (%1ms)").arg(ageMs));
+        statusLabel_->setText(QStringLiteral("[OK] %1ms").arg(ageMs));
         statusLabel_->setStyleSheet(QStringLiteral(
-            "font-size: 14px; font-weight: bold; color: #27ae60;"));
+            "font-size: 11px; font-weight: bold; color: #27ae60;"));
     } else if (ageMs < 0) {
-        statusLabel_->setText(QStringLiteral("⚠️ 无响应"));
+        statusLabel_->setText(QStringLiteral("[!] 无响应"));
         statusLabel_->setStyleSheet(QStringLiteral(
-            "font-size: 14px; font-weight: bold; color: #f39c12;"));
+            "font-size: 11px; font-weight: bold; color: #f39c12;"));
     } else {
-        statusLabel_->setText(QStringLiteral("❌ 离线 (%1s)").arg(ageMs / 1000));
+        statusLabel_->setText(QStringLiteral("[X] %1s").arg(ageMs / 1000));
         statusLabel_->setStyleSheet(QStringLiteral(
-            "font-size: 14px; font-weight: bold; color: #e74c3c;"));
+            "font-size: 11px; font-weight: bold; color: #e74c3c;"));
     }
 
     // 更新总电流
-    currentLabel_->setText(QStringLiteral("电流: %1 mA").arg(totalCurrent, 0, 'f', 1));
+    currentLabel_->setText(QStringLiteral("%1mA").arg(totalCurrent, 0, 'f', 1));
 
     // 更新通道状态
     QLabel *chLabels[] = {ch0Label_, ch1Label_, ch2Label_, ch3Label_};
@@ -160,9 +160,9 @@ void DeviceCard::updateStatus(bool online, qint64 ageMs, double totalCurrent, co
                 default: modeText = QStringLiteral("?"); bgColor = QStringLiteral("#f5f5f5"); break;
             }
 
-            chLabels[ch]->setText(QStringLiteral("CH%1: %2").arg(ch).arg(modeText));
+            chLabels[ch]->setText(QStringLiteral("%1:%2").arg(ch).arg(modeText));
             chLabels[ch]->setStyleSheet(QStringLiteral(
-                "font-size: 12px; padding: 4px 8px; background-color: %1; border-radius: 4px;")
+                "font-size: 10px; padding: 2px 4px; background-color: %1; border-radius: 3px;")
                 .arg(bgColor));
         }
     }
@@ -192,34 +192,34 @@ DeviceWidget::DeviceWidget(RpcClient *rpcClient, QWidget *parent)
 void DeviceWidget::setupUi()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(16, 16, 16, 16);
-    mainLayout->setSpacing(12);
+    mainLayout->setContentsMargins(10, 10, 10, 10);
+    mainLayout->setSpacing(8);
 
-    // 页面标题
-    QLabel *titleLabel = new QLabel(QStringLiteral("📱 设备管理"), this);
+    // 页面标题 - 使用纯文本
+    QLabel *titleLabel = new QLabel(QStringLiteral("[D] 设备管理"), this);
     titleLabel->setStyleSheet(QStringLiteral(
-        "font-size: 20px; font-weight: bold; color: #2c3e50; padding: 8px 0;"));
+        "font-size: 16px; font-weight: bold; color: #2c3e50; padding: 4px 0;"));
     mainLayout->addWidget(titleLabel);
 
     // 工具栏
     QHBoxLayout *toolbarLayout = new QHBoxLayout();
-    toolbarLayout->setSpacing(12);
+    toolbarLayout->setSpacing(8);
 
-    refreshButton_ = new QPushButton(QStringLiteral("🔄 刷新设备"), this);
-    refreshButton_->setMinimumHeight(50);
+    refreshButton_ = new QPushButton(QStringLiteral("刷新设备"), this);
+    refreshButton_->setMinimumHeight(36);
     connect(refreshButton_, &QPushButton::clicked, this, &DeviceWidget::refreshDeviceList);
     toolbarLayout->addWidget(refreshButton_);
 
-    queryAllButton_ = new QPushButton(QStringLiteral("📡 查询全部"), this);
+    queryAllButton_ = new QPushButton(QStringLiteral("查询全部"), this);
     queryAllButton_->setProperty("type", QStringLiteral("success"));
-    queryAllButton_->setMinimumHeight(50);
+    queryAllButton_->setMinimumHeight(36);
     connect(queryAllButton_, &QPushButton::clicked, this, &DeviceWidget::onQueryAllClicked);
     toolbarLayout->addWidget(queryAllButton_);
 
     toolbarLayout->addStretch();
 
     statusLabel_ = new QLabel(this);
-    statusLabel_->setStyleSheet(QStringLiteral("color: #7f8c8d;"));
+    statusLabel_->setStyleSheet(QStringLiteral("color: #7f8c8d; font-size: 11px;"));
     toolbarLayout->addWidget(statusLabel_);
 
     mainLayout->addLayout(toolbarLayout);
@@ -228,17 +228,17 @@ void DeviceWidget::setupUi()
     QWidget *cardsContainer = new QWidget(this);
     cardsLayout_ = new QVBoxLayout(cardsContainer);
     cardsLayout_->setContentsMargins(0, 0, 0, 0);
-    cardsLayout_->setSpacing(12);
+    cardsLayout_->setSpacing(6);
     cardsLayout_->addStretch();
 
     mainLayout->addWidget(cardsContainer, 1);
 
     // 提示文本
     QLabel *helpLabel = new QLabel(
-        QStringLiteral("💡 点击设备卡片可打开控制面板"),
+        QStringLiteral("点击设备卡片可打开控制面板"),
         this);
     helpLabel->setStyleSheet(QStringLiteral(
-        "color: #7f8c8d; font-size: 12px; padding: 8px;"));
+        "color: #7f8c8d; font-size: 10px; padding: 4px;"));
     helpLabel->setAlignment(Qt::AlignCenter);
     mainLayout->addWidget(helpLabel);
 }
@@ -255,7 +255,7 @@ void DeviceWidget::clearDeviceCards()
 void DeviceWidget::refreshDeviceList()
 {
     if (!rpcClient_ || !rpcClient_->isConnected()) {
-        statusLabel_->setText(QStringLiteral("⚠️ 未连接服务器"));
+        statusLabel_->setText(QStringLiteral("[!] 未连接"));
         emit logMessage(QStringLiteral("刷新设备失败：未连接服务器"), QStringLiteral("WARN"));
         return;
     }
@@ -283,7 +283,7 @@ void DeviceWidget::refreshDeviceList()
         return;
     }
 
-    statusLabel_->setText(QStringLiteral("❌ 获取失败"));
+    statusLabel_->setText(QStringLiteral("[X] 获取失败"));
     emit logMessage(QStringLiteral("获取设备列表失败"), QStringLiteral("ERROR"));
 }
 
@@ -330,7 +330,7 @@ void DeviceWidget::onQueryAllClicked()
         }
     }
 
-    statusLabel_->setText(QStringLiteral("❌ 查询失败"));
+    statusLabel_->setText(QStringLiteral("[X] 查询失败"));
     emit logMessage(QStringLiteral("查询所有设备失败"), QStringLiteral("ERROR"));
 }
 
