@@ -137,6 +137,29 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
             <div class="page-content active" id="page-quick">
                 <h3 style="margin-bottom: 20px; color: #333;">常用RPC方法快捷按钮</h3>
                 
+                <!-- 急停按钮区域 - 最醒目的红色大按钮 -->
+                <div style="margin-bottom: 25px;">
+                    <button id="emergencyStopBtn" onclick="emergencyStop()" style="
+                        width: 100%;
+                        padding: 20px;
+                        font-size: 24px;
+                        font-weight: bold;
+                        color: white;
+                        background: linear-gradient(135deg, #c0392b 0%, #e74c3c 100%);
+                        border: 3px solid #922b21;
+                        border-radius: 12px;
+                        cursor: pointer;
+                        box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
+                        transition: all 0.3s ease;
+                    " onmouseover="this.style.transform='scale(1.02)'; this.style.boxShadow='0 6px 20px rgba(231, 76, 60, 0.6)';"
+                       onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 4px 15px rgba(231, 76, 60, 0.4)';">
+                        🛑 急 停
+                    </button>
+                    <p style="text-align: center; color: #e74c3c; font-size: 12px; margin-top: 8px;">
+                        点击立即停止所有设备的所有通道
+                    </p>
+                </div>
+
                 <!-- 快速状态卡片 -->
                 <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px;">
                     <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 12px; color: white;">

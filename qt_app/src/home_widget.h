@@ -32,6 +32,7 @@ signals:
 
 private slots:
     void onStopAllClicked();
+    void onEmergencyStopClicked();
 
 private:
     void setupUi();
@@ -50,6 +51,7 @@ private:
     // 快捷操作按钮
     QPushButton *refreshButton_;
     QPushButton *stopAllButton_;
+    QPushButton *emergencyStopButton_;
 };
 
 #endif // HOME_WIDGET_H
