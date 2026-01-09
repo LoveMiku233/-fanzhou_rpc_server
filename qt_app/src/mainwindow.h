@@ -7,22 +7,24 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-#include <QTabWidget>
-#include <QTextEdit>
+#include <QStackedWidget>
+#include <QScrollArea>
 #include <QLabel>
 #include <QPushButton>
 #include <QTimer>
-#include <QSplitter>
-#include <QLineEdit>
-#include <QSpinBox>
+#include <QVBoxLayout>
+#include <QList>
 
 class RpcClient;
+class ConnectionWidget;
 class DeviceWidget;
 class GroupWidget;
 class RelayControlWidget;
 
 /**
  * @brief 主窗口类
+ * 
+ * 采用左侧菜单栏 + 右侧内容区的布局设计
  */
 class MainWindow : public QMainWindow
 {
@@ -33,45 +35,28 @@ public:
     ~MainWindow();
 
 private slots:
-    void onConnectButtonClicked();
-    void onDisconnectButtonClicked();
-    void onPingButtonClicked();
-    void onSysInfoButtonClicked();
-    void onSaveConfigButtonClicked();
-
-    void onRpcConnected();
-    void onRpcDisconnected();
-    void onRpcError(const QString &error);
-    void onRpcLogMessage(const QString &message);
-
+    void onMenuButtonClicked();
+    void onConnectionStatusChanged(bool connected);
     void onAutoRefreshTimeout();
 
 private:
     void setupUi();
-    void setupMenuBar();
-    void setupToolBar();
     void setupStatusBar();
     void setupCentralWidget();
-    void createConnectionPanel();
-    void createLogPanel();
-
-    void updateConnectionStatus(bool connected);
-    void appendLog(const QString &message);
-    void clearLog();
+    void createSidebar();
+    void createContentArea();
+    void switchToPage(int index);
+    void updateMenuButtonStyles(int activeIndex);
 
     // UI组件
-    QTabWidget *tabWidget_;
-    QTextEdit *logTextEdit_;
-    QLabel *statusLabel_;
+    QWidget *sidebar_;
+    QVBoxLayout *sidebarLayout_;
+    QList<QPushButton*> menuButtons_;
+    QStackedWidget *contentStack_;
     QLabel *connectionStatusLabel_;
 
-    // 连接面板组件
-    QLineEdit *hostEdit_;
-    QSpinBox *portSpinBox_;
-    QPushButton *connectButton_;
-    QPushButton *disconnectButton_;
-
     // 子页面
+    ConnectionWidget *connectionWidget_;
     DeviceWidget *deviceWidget_;
     GroupWidget *groupWidget_;
     RelayControlWidget *relayControlWidget_;
@@ -81,6 +66,9 @@ private:
 
     // 自动刷新定时器
     QTimer *autoRefreshTimer_;
+
+    // 当前页面索引
+    int currentPageIndex_;
 };
 
 #endif // MAINWINDOW_H

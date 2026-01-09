@@ -80,3 +80,4 @@ moc_predefs.h
 qt_app/build/
 qt_app/bin/
 qt_app/*.pro.user*
+qt_app/.qmake.stash
