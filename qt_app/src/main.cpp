@@ -19,10 +19,10 @@ int main(int argc, char *argv[])
     app.setApplicationVersion(QStringLiteral("1.0.0"));
     app.setOrganizationName(QStringLiteral("FanZhou"));
 
-    // 设置应用程序字体 - 针对7寸1024x600触屏优化，增大字体便于阅读
+    // 设置应用程序字体 - 针对7寸1024x600触屏优化，使用合适的字体大小
     QFont defaultFont = app.font();
     defaultFont.setFamily(QStringLiteral("Ubuntu,DejaVu Sans,Noto Sans CJK SC,Sans-serif"));
-    defaultFont.setPointSize(14);  // 增大字体便于7寸屏幕阅读
+    defaultFont.setPointSize(11);  // 适配小屏幕的紧凑字体
     app.setFont(defaultFont);
 
     // 加载样式表

@@ -1,47 +1,48 @@
 /* FanZhou RPC Client Stylesheet */
 /* 针对7寸1024x600触屏优化的Qt5.12样式 */
 /* 大棚控制系统 - 左侧菜单栏 + 右侧内容区布局 */
+/* 优化版本：减少间距、移除emoji依赖、适配小屏幕 */
 
 /* Main Window */
 QMainWindow {
-    background-color: #f5f5f5;
+    background-color: #f0f2f5;
 }
 
-/* Sidebar */
+/* Sidebar - 紧凑型设计 */
 #sidebar {
-    background-color: #2c3e50;
-    border-right: 2px solid #1a252f;
+    background-color: #1a252f;
+    border-right: 1px solid #0d1318;
 }
 
 #sidebarLogo {
     color: #27ae60;
-    font-size: 16px;
+    font-size: 13px;
     font-weight: bold;
-    padding: 12px 4px;
-    border-bottom: 1px solid #34495e;
+    padding: 8px 2px;
+    border-bottom: 1px solid #2c3e50;
 }
 
 #sidebarVersion {
     color: #7f8c8d;
-    font-size: 11px;
-    padding: 8px;
+    font-size: 10px;
+    padding: 4px;
 }
 
-/* Menu Buttons in Sidebar - 垂直居中图标和文字 */
+/* Menu Buttons in Sidebar - 紧凑型设计 */
 #menuButton {
     background-color: transparent;
     color: #bdc3c7;
     border: none;
-    border-radius: 8px;
-    padding: 8px 4px;
+    border-radius: 6px;
+    padding: 6px 2px;
     text-align: center;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: bold;
-    min-height: 60px;
+    min-height: 45px;
 }
 
 #menuButton:hover {
-    background-color: #34495e;
+    background-color: #2c3e50;
     color: #ffffff;
 }
 
@@ -56,48 +57,48 @@ QMainWindow {
 
 /* Content Stack */
 #contentStack {
-    background-color: #ffffff;
+    background-color: #f8f9fa;
 }
 
 /* Scroll Area */
 QScrollArea {
-    background-color: #ffffff;
+    background-color: #f8f9fa;
     border: none;
 }
 
 QScrollArea > QWidget > QWidget {
-    background-color: #ffffff;
+    background-color: #f8f9fa;
 }
 
-/* Group Boxes */
+/* Group Boxes - 紧凑型设计 */
 QGroupBox {
     font-weight: bold;
-    font-size: 14px;
-    border: 2px solid #e0e0e0;
-    border-radius: 8px;
-    margin-top: 14px;
-    padding-top: 12px;
+    font-size: 12px;
+    border: 1px solid #d0d5dd;
+    border-radius: 6px;
+    margin-top: 10px;
+    padding-top: 8px;
     background-color: #ffffff;
 }
 
 QGroupBox::title {
     subcontrol-origin: margin;
     subcontrol-position: top left;
-    padding: 0 12px;
+    padding: 0 8px;
     color: #2c3e50;
 }
 
-/* Push Buttons - 触屏优化，增大点击区域 */
+/* Push Buttons - 触屏优化，紧凑型设计 */
 QPushButton {
     background-color: #4a90d9;
     color: white;
     border: none;
-    border-radius: 8px;
-    padding: 14px 22px;
-    min-width: 90px;
-    min-height: 44px;
+    border-radius: 6px;
+    padding: 8px 14px;
+    min-width: 70px;
+    min-height: 32px;
     font-weight: bold;
-    font-size: 14px;
+    font-size: 12px;
 }
 
 QPushButton:hover {
@@ -149,29 +150,29 @@ QPushButton[type="danger"]:pressed {
     background-color: #a93226;
 }
 
-/* Line Edit - 触屏优化 */
+/* Line Edit - 触屏优化，紧凑型设计 */
 QLineEdit {
-    border: 2px solid #e0e0e0;
-    border-radius: 8px;
-    padding: 12px 16px;
+    border: 1px solid #d0d5dd;
+    border-radius: 6px;
+    padding: 8px 10px;
     background-color: white;
-    font-size: 14px;
-    min-height: 40px;
+    font-size: 12px;
+    min-height: 28px;
 }
 
 QLineEdit:focus {
     border-color: #3498db;
 }
 
-/* SpinBox - 触屏优化，增大按钮 */
+/* SpinBox - 触屏优化，紧凑型设计 */
 QSpinBox {
-    border: 2px solid #e0e0e0;
-    border-radius: 8px;
-    padding: 12px 16px;
+    border: 1px solid #d0d5dd;
+    border-radius: 6px;
+    padding: 8px 10px;
     background-color: white;
-    font-size: 14px;
-    min-height: 40px;
-    min-width: 100px;
+    font-size: 12px;
+    min-height: 28px;
+    min-width: 80px;
 }
 
 QSpinBox:focus {
@@ -179,7 +180,7 @@ QSpinBox:focus {
 }
 
 QSpinBox::up-button, QSpinBox::down-button {
-    width: 32px;
+    width: 28px;
     border: none;
     background-color: #f0f0f0;
 }
@@ -195,28 +196,28 @@ QSpinBox::up-button:pressed, QSpinBox::down-button:pressed {
 QSpinBox::up-arrow {
     width: 0;
     height: 0;
-    border-left: 8px solid transparent;
-    border-right: 8px solid transparent;
-    border-bottom: 10px solid #666666;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-bottom: 7px solid #666666;
 }
 
 QSpinBox::down-arrow {
     width: 0;
     height: 0;
-    border-left: 8px solid transparent;
-    border-right: 8px solid transparent;
-    border-top: 10px solid #666666;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 7px solid #666666;
 }
 
-/* Combo Box - 触屏优化，使用纯CSS下拉箭头（不依赖图标） */
+/* Combo Box - 触屏优化，紧凑型设计 */
 QComboBox {
-    border: 2px solid #e0e0e0;
-    border-radius: 8px;
-    padding: 12px 44px 12px 16px;
+    border: 1px solid #d0d5dd;
+    border-radius: 6px;
+    padding: 8px 32px 8px 10px;
     background-color: white;
-    min-width: 120px;
-    min-height: 40px;
-    font-size: 14px;
+    min-width: 90px;
+    min-height: 28px;
+    font-size: 12px;
 }
 
 QComboBox:focus {
@@ -226,11 +227,11 @@ QComboBox:focus {
 QComboBox::drop-down {
     subcontrol-origin: padding;
     subcontrol-position: top right;
-    width: 40px;
+    width: 28px;
     border: none;
-    border-left: 2px solid #e0e0e0;
-    border-top-right-radius: 8px;
-    border-bottom-right-radius: 8px;
+    border-left: 1px solid #d0d5dd;
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
     background-color: #f5f5f5;
 }
 
@@ -242,29 +243,29 @@ QComboBox::drop-down:hover {
 QComboBox::down-arrow {
     width: 0;
     height: 0;
-    border-left: 8px solid transparent;
-    border-right: 8px solid transparent;
-    border-top: 10px solid #666666;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 7px solid #666666;
 }
 
 QComboBox::down-arrow:on {
-    border-top: 10px solid #333333;
+    border-top: 7px solid #333333;
 }
 
 /* ComboBox下拉列表 - 触屏优化 */
 QComboBox QAbstractItemView {
-    border: 2px solid #e0e0e0;
-    border-radius: 6px;
+    border: 1px solid #d0d5dd;
+    border-radius: 4px;
     background-color: white;
     selection-background-color: #3498db;
     selection-color: white;
-    padding: 4px;
+    padding: 2px;
 }
 
 QComboBox QAbstractItemView::item {
-    min-height: 44px;
-    padding: 10px 14px;
-    font-size: 14px;
+    min-height: 32px;
+    padding: 6px 10px;
+    font-size: 12px;
 }
 
 QComboBox QAbstractItemView::item:hover {
@@ -273,27 +274,27 @@ QComboBox QAbstractItemView::item:hover {
 
 /* Text Edit / Log View */
 QTextEdit, QPlainTextEdit {
-    border: 2px solid #e0e0e0;
-    border-radius: 8px;
+    border: 1px solid #d0d5dd;
+    border-radius: 6px;
     background-color: #1e1e1e;
     color: #d4d4d4;
     font-family: "Consolas", "Monaco", monospace;
-    font-size: 13px;
-    padding: 10px;
+    font-size: 11px;
+    padding: 6px;
 }
 
-/* Table Widget - 触屏优化 */
+/* Table Widget - 触屏优化，紧凑型设计 */
 QTableWidget {
-    border: 2px solid #e0e0e0;
-    border-radius: 8px;
+    border: 1px solid #d0d5dd;
+    border-radius: 6px;
     background-color: white;
     gridline-color: #f0f0f0;
-    font-size: 13px;
+    font-size: 11px;
 }
 
 QTableWidget::item {
-    padding: 12px;
-    min-height: 40px;
+    padding: 6px;
+    min-height: 28px;
 }
 
 QTableWidget::item:selected {
@@ -303,63 +304,63 @@ QTableWidget::item:selected {
 
 QHeaderView::section {
     background-color: #ecf0f1;
-    padding: 12px;
+    padding: 6px;
     border: none;
-    border-bottom: 2px solid #e0e0e0;
+    border-bottom: 1px solid #d0d5dd;
     font-weight: bold;
-    font-size: 13px;
-    min-height: 40px;
+    font-size: 11px;
+    min-height: 28px;
 }
 
-/* Tab Widget - 触屏优化 */
+/* Tab Widget - 紧凑型设计 */
 QTabWidget::pane {
-    border: 2px solid #e0e0e0;
-    border-radius: 8px;
+    border: 1px solid #d0d5dd;
+    border-radius: 6px;
     background-color: white;
 }
 
 QTabBar::tab {
     background-color: #ecf0f1;
-    border: 2px solid #e0e0e0;
+    border: 1px solid #d0d5dd;
     border-bottom: none;
-    padding: 14px 22px;
+    padding: 8px 14px;
     margin-right: 2px;
-    border-top-left-radius: 8px;
-    border-top-right-radius: 8px;
-    font-size: 14px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    font-size: 12px;
     font-weight: bold;
 }
 
 QTabBar::tab:selected {
     background-color: white;
-    border-bottom: 2px solid white;
+    border-bottom: 1px solid white;
 }
 
 QTabBar::tab:hover:!selected {
     background-color: #d5dbdb;
 }
 
-/* Status Bar */
+/* Status Bar - 紧凑型设计 */
 QStatusBar {
-    background-color: #ecf0f1;
-    border-top: 2px solid #e0e0e0;
-    font-size: 13px;
-    min-height: 36px;
-    padding: 4px 8px;
+    background-color: #1a252f;
+    border-top: 1px solid #0d1318;
+    font-size: 11px;
+    min-height: 28px;
+    padding: 2px 6px;
 }
 
-/* Scroll Bar - 触屏优化，增宽滚动条便于触控 */
+/* Scroll Bar - 触屏优化，适度宽度 */
 QScrollBar:vertical {
-    background-color: #f5f5f5;
-    width: 20px;
-    border-radius: 8px;
-    margin: 2px;
+    background-color: #f0f2f5;
+    width: 14px;
+    border-radius: 6px;
+    margin: 1px;
 }
 
 QScrollBar::handle:vertical {
     background-color: #bdc3c7;
-    border-radius: 8px;
-    min-height: 60px;
+    border-radius: 6px;
+    min-height: 40px;
 }
 
 QScrollBar::handle:vertical:hover {
@@ -375,16 +376,16 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
 }
 
 QScrollBar:horizontal {
-    background-color: #f5f5f5;
-    height: 20px;
-    border-radius: 8px;
-    margin: 2px;
+    background-color: #f0f2f5;
+    height: 14px;
+    border-radius: 6px;
+    margin: 1px;
 }
 
 QScrollBar::handle:horizontal {
     background-color: #bdc3c7;
-    border-radius: 8px;
-    min-width: 60px;
+    border-radius: 6px;
+    min-width: 40px;
 }
 
 QScrollBar::handle:horizontal:hover {
@@ -399,14 +400,14 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
     width: 0px;
 }
 
-/* Labels */
+/* Labels - 紧凑型设计 */
 QLabel {
     color: #2c3e50;
-    font-size: 14px;
+    font-size: 12px;
 }
 
 QLabel[type="title"] {
-    font-size: 20px;
+    font-size: 16px;
     font-weight: bold;
     color: #2c3e50;
 }
@@ -421,44 +422,44 @@ QLabel[type="status-disconnected"] {
     font-weight: bold;
 }
 
-/* Splitter - 触屏优化，增宽分割手柄 */
+/* Splitter - 适度宽度 */
 QSplitter::handle {
-    background-color: #e0e0e0;
+    background-color: #d0d5dd;
 }
 
 QSplitter::handle:horizontal {
-    width: 8px;
+    width: 4px;
 }
 
 QSplitter::handle:vertical {
-    height: 8px;
+    height: 4px;
 }
 
-/* Tool Bar - 触屏优化 */
+/* Tool Bar - 紧凑型设计 */
 QToolBar {
     background-color: #ecf0f1;
-    border-bottom: 2px solid #e0e0e0;
-    spacing: 10px;
-    padding: 6px;
+    border-bottom: 1px solid #d0d5dd;
+    spacing: 6px;
+    padding: 4px;
 }
 
 QToolBar QToolButton {
-    padding: 12px 16px;
-    font-size: 14px;
-    min-width: 80px;
-    min-height: 40px;
+    padding: 6px 10px;
+    font-size: 12px;
+    min-width: 60px;
+    min-height: 28px;
 }
 
-/* Menu Bar */
+/* Menu Bar - 紧凑型设计 */
 QMenuBar {
     background-color: #ecf0f1;
-    border-bottom: 2px solid #e0e0e0;
-    padding: 4px;
-    font-size: 14px;
+    border-bottom: 1px solid #d0d5dd;
+    padding: 2px;
+    font-size: 12px;
 }
 
 QMenuBar::item {
-    padding: 10px 18px;
+    padding: 6px 12px;
 }
 
 QMenuBar::item:selected {
@@ -467,29 +468,29 @@ QMenuBar::item:selected {
 
 QMenu {
     background-color: white;
-    border: 2px solid #e0e0e0;
-    padding: 6px;
-    border-radius: 6px;
+    border: 1px solid #d0d5dd;
+    padding: 4px;
+    border-radius: 4px;
 }
 
 QMenu::item {
-    padding: 14px 32px;
-    font-size: 14px;
-    min-height: 36px;
+    padding: 8px 20px;
+    font-size: 12px;
+    min-height: 24px;
 }
 
 QMenu::item:selected {
     background-color: #3498db;
     color: white;
-    border-radius: 4px;
+    border-radius: 3px;
 }
 
-/* Device Card Styles */
+/* Device Card Styles - 紧凑型设计 */
 #deviceCard {
     background-color: white;
-    border: 2px solid #e0e0e0;
-    border-radius: 12px;
-    padding: 12px;
+    border: 1px solid #d0d5dd;
+    border-radius: 8px;
+    padding: 8px;
 }
 
 #deviceCard:hover {
@@ -499,24 +500,24 @@ QMenu::item:selected {
 
 /* Dialog Styles */
 QDialog {
-    background-color: #ffffff;
+    background-color: #f8f9fa;
 }
 
 QDialog QGroupBox {
-    margin-top: 16px;
+    margin-top: 12px;
 }
 
-/* Checkbox Styles */
+/* Checkbox Styles - 紧凑型设计 */
 QCheckBox {
-    font-size: 14px;
-    spacing: 8px;
+    font-size: 12px;
+    spacing: 6px;
 }
 
 QCheckBox::indicator {
-    width: 24px;
-    height: 24px;
-    border: 2px solid #e0e0e0;
-    border-radius: 4px;
+    width: 18px;
+    height: 18px;
+    border: 1px solid #d0d5dd;
+    border-radius: 3px;
     background-color: white;
 }
 

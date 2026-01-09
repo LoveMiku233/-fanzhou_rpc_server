@@ -50,53 +50,53 @@ SettingsWidget::SettingsWidget(RpcClient *rpcClient, QWidget *parent)
 void SettingsWidget::setupUi()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(16, 16, 16, 16);
-    mainLayout->setSpacing(16);
+    mainLayout->setContentsMargins(10, 10, 10, 10);
+    mainLayout->setSpacing(10);
 
-    // 页面标题
-    QLabel *titleLabel = new QLabel(QStringLiteral("⚙️ 系统设置"), this);
+    // 页面标题 - 使用纯文本
+    QLabel *titleLabel = new QLabel(QStringLiteral("[S] 系统设置"), this);
     titleLabel->setStyleSheet(QStringLiteral(
-        "font-size: 20px; font-weight: bold; color: #2c3e50; padding: 8px 0;"));
+        "font-size: 16px; font-weight: bold; color: #2c3e50; padding: 4px 0;"));
     mainLayout->addWidget(titleLabel);
 
     // 服务器连接设置组
     QGroupBox *serverGroupBox = new QGroupBox(QStringLiteral("服务器连接"), this);
     QFormLayout *serverLayout = new QFormLayout(serverGroupBox);
-    serverLayout->setSpacing(12);
-    serverLayout->setContentsMargins(16, 20, 16, 16);
+    serverLayout->setSpacing(8);
+    serverLayout->setContentsMargins(10, 14, 10, 10);
 
     hostEdit_ = new QLineEdit(this);
     hostEdit_->setPlaceholderText(QStringLiteral("192.168.1.100"));
-    hostEdit_->setMinimumHeight(48);
-    serverLayout->addRow(QStringLiteral("服务器地址:"), hostEdit_);
+    hostEdit_->setMinimumHeight(32);
+    serverLayout->addRow(QStringLiteral("地址:"), hostEdit_);
 
     portSpinBox_ = new QSpinBox(this);
     portSpinBox_->setRange(1, 65535);
     portSpinBox_->setValue(12345);
-    portSpinBox_->setMinimumHeight(48);
-    serverLayout->addRow(QStringLiteral("端口号:"), portSpinBox_);
+    portSpinBox_->setMinimumHeight(32);
+    serverLayout->addRow(QStringLiteral("端口:"), portSpinBox_);
 
     mainLayout->addWidget(serverGroupBox);
 
     // 连接状态卡片
     statusLabel_ = new QLabel(QStringLiteral("状态: 未连接"), this);
     statusLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 16px; padding: 12px; background-color: #f8d7da; color: #721c24; border-radius: 8px;"));
+        "font-size: 13px; padding: 8px; background-color: #f8d7da; color: #721c24; border-radius: 6px;"));
     mainLayout->addWidget(statusLabel_);
 
     // 连接操作按钮
     QHBoxLayout *connBtnLayout = new QHBoxLayout();
-    connBtnLayout->setSpacing(12);
+    connBtnLayout->setSpacing(8);
 
-    connectButton_ = new QPushButton(QStringLiteral("🔗 连接"), this);
+    connectButton_ = new QPushButton(QStringLiteral("连接"), this);
     connectButton_->setProperty("type", QStringLiteral("success"));
-    connectButton_->setMinimumHeight(56);
+    connectButton_->setMinimumHeight(40);
     connect(connectButton_, &QPushButton::clicked, this, &SettingsWidget::onConnect);
     connBtnLayout->addWidget(connectButton_);
 
-    disconnectButton_ = new QPushButton(QStringLiteral("🔌 断开"), this);
+    disconnectButton_ = new QPushButton(QStringLiteral("断开"), this);
     disconnectButton_->setProperty("type", QStringLiteral("danger"));
-    disconnectButton_->setMinimumHeight(56);
+    disconnectButton_->setMinimumHeight(40);
     disconnectButton_->setEnabled(false);
     connect(disconnectButton_, &QPushButton::clicked, this, &SettingsWidget::onDisconnect);
     connBtnLayout->addWidget(disconnectButton_);
@@ -106,22 +106,22 @@ void SettingsWidget::setupUi()
     // 工具按钮组
     QGroupBox *toolsGroupBox = new QGroupBox(QStringLiteral("诊断工具"), this);
     QGridLayout *toolsLayout = new QGridLayout(toolsGroupBox);
-    toolsLayout->setSpacing(12);
-    toolsLayout->setContentsMargins(16, 20, 16, 16);
+    toolsLayout->setSpacing(8);
+    toolsLayout->setContentsMargins(10, 14, 10, 10);
 
-    pingButton_ = new QPushButton(QStringLiteral("📡 Ping 测试"), this);
-    pingButton_->setMinimumHeight(50);
+    pingButton_ = new QPushButton(QStringLiteral("Ping 测试"), this);
+    pingButton_->setMinimumHeight(36);
     connect(pingButton_, &QPushButton::clicked, this, &SettingsWidget::onPing);
     toolsLayout->addWidget(pingButton_, 0, 0);
 
-    sysInfoButton_ = new QPushButton(QStringLiteral("ℹ️ 系统信息"), this);
-    sysInfoButton_->setMinimumHeight(50);
+    sysInfoButton_ = new QPushButton(QStringLiteral("系统信息"), this);
+    sysInfoButton_->setMinimumHeight(36);
     connect(sysInfoButton_, &QPushButton::clicked, this, &SettingsWidget::onSysInfo);
     toolsLayout->addWidget(sysInfoButton_, 0, 1);
 
-    saveConfigButton_ = new QPushButton(QStringLiteral("💾 保存服务器配置"), this);
+    saveConfigButton_ = new QPushButton(QStringLiteral("保存服务器配置"), this);
     saveConfigButton_->setProperty("type", QStringLiteral("warning"));
-    saveConfigButton_->setMinimumHeight(50);
+    saveConfigButton_->setMinimumHeight(36);
     connect(saveConfigButton_, &QPushButton::clicked, this, &SettingsWidget::onSaveConfig);
     toolsLayout->addWidget(saveConfigButton_, 1, 0, 1, 2);
 
@@ -130,20 +130,20 @@ void SettingsWidget::setupUi()
     // 系统设置组
     QGroupBox *systemGroupBox = new QGroupBox(QStringLiteral("系统设置"), this);
     QFormLayout *systemLayout = new QFormLayout(systemGroupBox);
-    systemLayout->setSpacing(12);
-    systemLayout->setContentsMargins(16, 20, 16, 16);
+    systemLayout->setSpacing(8);
+    systemLayout->setContentsMargins(10, 14, 10, 10);
 
     refreshIntervalSpinBox_ = new QSpinBox(this);
     refreshIntervalSpinBox_->setRange(1, 60);
     refreshIntervalSpinBox_->setValue(5);
     refreshIntervalSpinBox_->setSuffix(QStringLiteral(" 秒"));
-    refreshIntervalSpinBox_->setMinimumHeight(48);
+    refreshIntervalSpinBox_->setMinimumHeight(32);
     connect(refreshIntervalSpinBox_, QOverload<int>::of(&QSpinBox::valueChanged),
             this, &SettingsWidget::onRefreshIntervalChanged);
-    systemLayout->addRow(QStringLiteral("自动刷新间隔:"), refreshIntervalSpinBox_);
+    systemLayout->addRow(QStringLiteral("刷新间隔:"), refreshIntervalSpinBox_);
 
     autoConnectCheckBox_ = new QCheckBox(QStringLiteral("启动时自动连接"), this);
-    autoConnectCheckBox_->setMinimumHeight(40);
+    autoConnectCheckBox_->setMinimumHeight(28);
     connect(autoConnectCheckBox_, &QCheckBox::toggled,
             this, &SettingsWidget::onAutoConnectToggled);
     systemLayout->addRow(autoConnectCheckBox_);
@@ -271,16 +271,16 @@ void SettingsWidget::onRpcError(const QString &error)
 void SettingsWidget::updateConnectionStatus(bool connected)
 {
     if (connected) {
-        statusLabel_->setText(QStringLiteral("✅ 已连接到 %1:%2")
+        statusLabel_->setText(QStringLiteral("[OK] 已连接到 %1:%2")
             .arg(rpcClient_->host()).arg(rpcClient_->port()));
         statusLabel_->setStyleSheet(QStringLiteral(
-            "font-size: 16px; padding: 12px; background-color: #d4edda; color: #155724; border-radius: 8px;"));
+            "font-size: 13px; padding: 8px; background-color: #d4edda; color: #155724; border-radius: 6px;"));
         connectButton_->setEnabled(false);
         disconnectButton_->setEnabled(true);
     } else {
-        statusLabel_->setText(QStringLiteral("❌ 未连接"));
+        statusLabel_->setText(QStringLiteral("[X] 未连接"));
         statusLabel_->setStyleSheet(QStringLiteral(
-            "font-size: 16px; padding: 12px; background-color: #f8d7da; color: #721c24; border-radius: 8px;"));
+            "font-size: 13px; padding: 8px; background-color: #f8d7da; color: #721c24; border-radius: 6px;"));
         connectButton_->setEnabled(true);
         disconnectButton_->setEnabled(false);
     }
