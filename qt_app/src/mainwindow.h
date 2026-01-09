@@ -20,6 +20,7 @@ class RpcClient;
 class HomeWidget;
 class DeviceWidget;
 class GroupWidget;
+class StrategyWidget;
 class LogWidget;
 class SettingsWidget;
 
@@ -27,7 +28,7 @@ class SettingsWidget;
  * @brief 主窗口类 - 大棚控制系统
  * 
  * 采用左侧菜单栏 + 右侧内容区的布局设计
- * 页面：主页、设备管理、分组管理、日志、设置
+ * 页面：主页、设备管理、分组管理、策略管理、日志、设置
  */
 class MainWindow : public QMainWindow
 {
@@ -69,6 +70,7 @@ private:
     HomeWidget *homeWidget_;
     DeviceWidget *deviceWidget_;
     GroupWidget *groupWidget_;
+    StrategyWidget *strategyWidget_;
     LogWidget *logWidget_;
     SettingsWidget *settingsWidget_;
 

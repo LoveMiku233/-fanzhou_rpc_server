@@ -8,6 +8,7 @@
 #include "home_widget.h"
 #include "device_widget.h"
 #include "group_widget.h"
+#include "strategy_widget.h"
 #include "log_widget.h"
 #include "settings_widget.h"
 
@@ -30,6 +31,7 @@ MainWindow::MainWindow(QWidget *parent)
     , homeWidget_(nullptr)
     , deviceWidget_(nullptr)
     , groupWidget_(nullptr)
+    , strategyWidget_(nullptr)
     , logWidget_(nullptr)
     , settingsWidget_(nullptr)
     , rpcClient_(new RpcClient(this))
@@ -124,7 +126,7 @@ void MainWindow::createSidebar()
 {
     sidebar_ = new QWidget(this);
     sidebar_->setObjectName(QStringLiteral("sidebar"));
-    sidebar_->setFixedWidth(80);  // 缩减侧边栏宽度
+    sidebar_->setFixedWidth(90);  // 稍微增宽侧边栏以适应更大字体
 
     sidebarLayout_ = new QVBoxLayout(sidebar_);
     sidebarLayout_->setContentsMargins(4, 8, 4, 8);
@@ -139,7 +141,7 @@ void MainWindow::createSidebar()
 
     sidebarLayout_->addSpacing(8);
 
-    // 菜单按钮 - 使用纯文本，无emoji
+    // 菜单按钮 - 使用纯文本，无emoji，添加策略菜单
     struct MenuItem {
         QString text;
     };
@@ -148,6 +150,7 @@ void MainWindow::createSidebar()
         {QStringLiteral("主页")},
         {QStringLiteral("设备")},
         {QStringLiteral("分组")},
+        {QStringLiteral("策略")},
         {QStringLiteral("日志")},
         {QStringLiteral("设置")}
     };
@@ -157,7 +160,7 @@ void MainWindow::createSidebar()
         btn->setObjectName(QStringLiteral("menuButton"));
         btn->setProperty("menuIndex", i);
         btn->setCheckable(true);
-        btn->setMinimumHeight(45);
+        btn->setMinimumHeight(50);
         connect(btn, &QPushButton::clicked, this, &MainWindow::onMenuButtonClicked);
         sidebarLayout_->addWidget(btn);
         menuButtons_.append(btn);
@@ -212,6 +215,17 @@ void MainWindow::createContentArea()
     groupScrollArea->setWidget(groupWidget_);
     QScroller::grabGesture(groupScrollArea->viewport(), QScroller::LeftMouseButtonGesture);
     contentStack_->addWidget(groupScrollArea);
+
+    // 创建策略管理页面（带滚动）
+    QScrollArea *strategyScrollArea = new QScrollArea(this);
+    strategyScrollArea->setWidgetResizable(true);
+    strategyScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    strategyScrollArea->setFrameShape(QFrame::NoFrame);
+    strategyWidget_ = new StrategyWidget(rpcClient_, this);
+    strategyScrollArea->setWidget(strategyWidget_);
+    QScroller::grabGesture(strategyScrollArea->viewport(), QScroller::LeftMouseButtonGesture);
+    connect(strategyWidget_, &StrategyWidget::logMessage, this, &MainWindow::onLogMessage);
+    contentStack_->addWidget(strategyScrollArea);
 
     // 创建日志页面（带滚动）
     QScrollArea *logScrollArea = new QScrollArea(this);
@@ -274,6 +288,10 @@ void MainWindow::switchToPage(int index)
     if (index == 2 && groupWidget_ && rpcClient_->isConnected()) {
         groupWidget_->refreshGroupList();
     }
+    // 切换到策略管理页面时刷新策略列表
+    if (index == 3 && strategyWidget_ && rpcClient_->isConnected()) {
+        strategyWidget_->refreshAllStrategies();
+    }
 }
 
 void MainWindow::updateMenuButtonStyles(int activeIndex)
@@ -302,6 +320,9 @@ void MainWindow::onConnectionStatusChanged(bool connected)
         }
         if (groupWidget_) {
             groupWidget_->refreshGroupList();
+        }
+        if (strategyWidget_) {
+            strategyWidget_->refreshAllStrategies();
         }
 
         onLogMessage(QStringLiteral("已连接到服务器 %1:%2")

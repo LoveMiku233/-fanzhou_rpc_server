@@ -16,9 +16,9 @@ QMainWindow {
 
 #sidebarLogo {
     color: #27ae60;
-    font-size: 13px;
+    font-size: 15px;
     font-weight: bold;
-    padding: 8px 2px;
+    padding: 10px 4px;
     border-bottom: 1px solid #2c3e50;
 }
 
@@ -28,17 +28,17 @@ QMainWindow {
     padding: 4px;
 }
 
-/* Menu Buttons in Sidebar - 紧凑型设计 */
+/* Menu Buttons in Sidebar - 增大字体便于触控 */
 #menuButton {
     background-color: transparent;
     color: #bdc3c7;
     border: none;
     border-radius: 6px;
-    padding: 6px 2px;
+    padding: 8px 4px;
     text-align: center;
-    font-size: 11px;
+    font-size: 14px;
     font-weight: bold;
-    min-height: 45px;
+    min-height: 50px;
 }
 
 #menuButton:hover {
