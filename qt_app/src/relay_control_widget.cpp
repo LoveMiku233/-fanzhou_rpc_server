@@ -31,18 +31,21 @@ RelayControlWidget::RelayControlWidget(RpcClient *rpcClient, QWidget *parent)
 void RelayControlWidget::setupUi()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(10, 10, 10, 10);
+    mainLayout->setContentsMargins(6, 6, 6, 6);
+    mainLayout->setSpacing(6);
 
     QHBoxLayout *topLayout = new QHBoxLayout();
+    topLayout->setSpacing(8);
 
     // 控制面板
-    QGroupBox *controlGroupBox = new QGroupBox(QStringLiteral("🎛️ 继电器控制"), this);
+    QGroupBox *controlGroupBox = new QGroupBox(QStringLiteral("继电器控制"), this);
     QFormLayout *controlLayout = new QFormLayout(controlGroupBox);
+    controlLayout->setSpacing(8);
 
     nodeSpinBox_ = new QSpinBox(this);
     nodeSpinBox_->setRange(1, 255);
     nodeSpinBox_->setValue(1);
-    controlLayout->addRow(QStringLiteral("节点ID:"), nodeSpinBox_);
+    controlLayout->addRow(QStringLiteral("节点:"), nodeSpinBox_);
 
     channelCombo_ = new QComboBox(this);
     channelCombo_->addItem(QStringLiteral("通道 0"), 0);
@@ -52,32 +55,34 @@ void RelayControlWidget::setupUi()
     controlLayout->addRow(QStringLiteral("通道:"), channelCombo_);
 
     actionCombo_ = new QComboBox(this);
-    actionCombo_->addItem(QStringLiteral("⏹️ 停止"), QStringLiteral("stop"));
-    actionCombo_->addItem(QStringLiteral("▶️ 正转"), QStringLiteral("fwd"));
-    actionCombo_->addItem(QStringLiteral("◀️ 反转"), QStringLiteral("rev"));
+    actionCombo_->addItem(QStringLiteral("停止"), QStringLiteral("stop"));
+    actionCombo_->addItem(QStringLiteral("正转"), QStringLiteral("fwd"));
+    actionCombo_->addItem(QStringLiteral("反转"), QStringLiteral("rev"));
     controlLayout->addRow(QStringLiteral("动作:"), actionCombo_);
 
     // 控制按钮
     QHBoxLayout *btnLayout = new QHBoxLayout();
+    btnLayout->setSpacing(6);
     
-    QPushButton *controlButton = new QPushButton(QStringLiteral("⚡ 执行控制"), this);
+    QPushButton *controlButton = new QPushButton(QStringLiteral("执行"), this);
     controlButton->setProperty("type", QStringLiteral("success"));
     connect(controlButton, &QPushButton::clicked, this, &RelayControlWidget::onControlClicked);
     btnLayout->addWidget(controlButton);
 
-    QPushButton *queryButton = new QPushButton(QStringLiteral("🔍 查询状态"), this);
+    QPushButton *queryButton = new QPushButton(QStringLiteral("查询"), this);
     connect(queryButton, &QPushButton::clicked, this, &RelayControlWidget::onQueryClicked);
     btnLayout->addWidget(queryButton);
 
     controlLayout->addRow(btnLayout);
 
     QHBoxLayout *btn2Layout = new QHBoxLayout();
+    btn2Layout->setSpacing(6);
     
-    QPushButton *queryAllButton = new QPushButton(QStringLiteral("📊 查询全部通道"), this);
+    QPushButton *queryAllButton = new QPushButton(QStringLiteral("全部通道"), this);
     connect(queryAllButton, &QPushButton::clicked, this, &RelayControlWidget::onQueryAllClicked);
     btn2Layout->addWidget(queryAllButton);
 
-    QPushButton *stopAllButton = new QPushButton(QStringLiteral("🛑 停止全部"), this);
+    QPushButton *stopAllButton = new QPushButton(QStringLiteral("全部停止"), this);
     stopAllButton->setProperty("type", QStringLiteral("danger"));
     connect(stopAllButton, &QPushButton::clicked, this, &RelayControlWidget::onStopAllClicked);
     btn2Layout->addWidget(stopAllButton);
@@ -87,34 +92,38 @@ void RelayControlWidget::setupUi()
     topLayout->addWidget(controlGroupBox);
 
     // 快捷控制面板
-    QGroupBox *quickGroupBox = new QGroupBox(QStringLiteral("🚀 快捷控制"), this);
+    QGroupBox *quickGroupBox = new QGroupBox(QStringLiteral("快捷控制"), this);
     QGridLayout *quickLayout = new QGridLayout(quickGroupBox);
+    quickLayout->setSpacing(6);
 
-    // 为每个通道创建快捷按钮
+    // 为每个通道创建快捷按钮 - 增大按钮尺寸适配触屏
     for (int ch = 0; ch < 4; ++ch) {
-        QLabel *chLabel = new QLabel(QStringLiteral("通道 %1:").arg(ch), this);
+        QLabel *chLabel = new QLabel(QStringLiteral("CH%1:").arg(ch), this);
         quickLayout->addWidget(chLabel, ch, 0);
 
-        QPushButton *stopBtn = new QPushButton(QStringLiteral("⏹"), this);
+        QPushButton *stopBtn = new QPushButton(QStringLiteral("停"), this);
         stopBtn->setProperty("channel", ch);
         stopBtn->setProperty("action", QStringLiteral("stop"));
-        stopBtn->setMaximumWidth(50);
+        stopBtn->setMinimumWidth(60);
+        stopBtn->setMinimumHeight(40);
         connect(stopBtn, &QPushButton::clicked, this, &RelayControlWidget::onQuickControlClicked);
         quickLayout->addWidget(stopBtn, ch, 1);
 
-        QPushButton *fwdBtn = new QPushButton(QStringLiteral("▶"), this);
+        QPushButton *fwdBtn = new QPushButton(QStringLiteral("正"), this);
         fwdBtn->setProperty("channel", ch);
         fwdBtn->setProperty("action", QStringLiteral("fwd"));
         fwdBtn->setProperty("type", QStringLiteral("success"));
-        fwdBtn->setMaximumWidth(50);
+        fwdBtn->setMinimumWidth(60);
+        fwdBtn->setMinimumHeight(40);
         connect(fwdBtn, &QPushButton::clicked, this, &RelayControlWidget::onQuickControlClicked);
         quickLayout->addWidget(fwdBtn, ch, 2);
 
-        QPushButton *revBtn = new QPushButton(QStringLiteral("◀"), this);
+        QPushButton *revBtn = new QPushButton(QStringLiteral("反"), this);
         revBtn->setProperty("channel", ch);
         revBtn->setProperty("action", QStringLiteral("rev"));
         revBtn->setProperty("type", QStringLiteral("warning"));
-        revBtn->setMaximumWidth(50);
+        revBtn->setMinimumWidth(60);
+        revBtn->setMinimumHeight(40);
         connect(revBtn, &QPushButton::clicked, this, &RelayControlWidget::onQuickControlClicked);
         quickLayout->addWidget(revBtn, ch, 3);
     }
@@ -129,14 +138,15 @@ void RelayControlWidget::setupUi()
     mainLayout->addWidget(statusLabel_);
 
     // 结果显示
-    QGroupBox *resultGroupBox = new QGroupBox(QStringLiteral("📋 操作结果"), this);
+    QGroupBox *resultGroupBox = new QGroupBox(QStringLiteral("操作结果"), this);
     QVBoxLayout *resultLayout = new QVBoxLayout(resultGroupBox);
+    resultLayout->setSpacing(6);
 
     resultTextEdit_ = new QTextEdit(this);
     resultTextEdit_->setReadOnly(true);
-    resultTextEdit_->setMinimumHeight(200);
+    resultTextEdit_->setMinimumHeight(120);
 
-    QPushButton *clearButton = new QPushButton(QStringLiteral("🗑️ 清空"), this);
+    QPushButton *clearButton = new QPushButton(QStringLiteral("清空"), this);
     connect(clearButton, &QPushButton::clicked, resultTextEdit_, &QTextEdit::clear);
 
     resultLayout->addWidget(resultTextEdit_);
@@ -144,12 +154,12 @@ void RelayControlWidget::setupUi()
 
     mainLayout->addWidget(resultGroupBox, 1);
 
-    // 说明
+    // 说明 - 简化文本
     QLabel *helpLabel = new QLabel(
-        QStringLiteral("💡 提示：使用快捷控制按钮可以快速操作单个通道。⏹=停止，▶=正转，◀=反转"),
+        QStringLiteral("提示：停=停止，正=正转，反=反转"),
         this);
     helpLabel->setWordWrap(true);
-    helpLabel->setStyleSheet(QStringLiteral("color: #666; font-size: 12px; padding: 5px;"));
+    helpLabel->setStyleSheet(QStringLiteral("color: #666; padding: 4px;"));
     mainLayout->addWidget(helpLabel);
 }
 
@@ -186,7 +196,7 @@ void RelayControlWidget::onQueryClicked()
     QString resultStr = QString::fromUtf8(QJsonDocument(result.toObject()).toJson(QJsonDocument::Indented));
     appendResult(QStringLiteral("查询节点 %1 通道 %2:\n%3").arg(node).arg(channel).arg(resultStr));
     
-    statusLabel_->setText(QStringLiteral("✅ 查询完成"));
+    statusLabel_->setText(QStringLiteral("[成功] 查询完成"));
 }
 
 void RelayControlWidget::onQueryAllClicked()
@@ -206,7 +216,7 @@ void RelayControlWidget::onQueryAllClicked()
     QString resultStr = QString::fromUtf8(QJsonDocument(result.toObject()).toJson(QJsonDocument::Indented));
     appendResult(QStringLiteral("查询节点 %1 全部通道:\n%2").arg(node).arg(resultStr));
     
-    statusLabel_->setText(QStringLiteral("✅ 查询完成"));
+    statusLabel_->setText(QStringLiteral("[成功] 查询完成"));
 }
 
 void RelayControlWidget::onStopAllClicked()
@@ -231,7 +241,7 @@ void RelayControlWidget::onStopAllClicked()
         controlRelay(node, ch, QStringLiteral("stop"));
     }
 
-    statusLabel_->setText(QStringLiteral("✅ 已停止节点 %1 的所有通道").arg(node));
+    statusLabel_->setText(QStringLiteral("[成功] 已停止节点 %1 的所有通道").arg(node));
 }
 
 void RelayControlWidget::onQuickControlClicked()
@@ -267,14 +277,14 @@ void RelayControlWidget::controlRelay(int node, int channel, const QString &acti
         else if (action == QStringLiteral("fwd")) actionText = QStringLiteral("正转");
         else if (action == QStringLiteral("rev")) actionText = QStringLiteral("反转");
         
-        appendResult(QStringLiteral("✅ 节点 %1 通道 %2 -> %3")
+        appendResult(QStringLiteral("[成功] 节点 %1 通道 %2 -> %3")
             .arg(node).arg(channel).arg(actionText));
-        statusLabel_->setText(QStringLiteral("✅ 控制成功"));
+        statusLabel_->setText(QStringLiteral("[成功] 控制成功"));
         
         // 检查警告
         if (obj.contains(QStringLiteral("warning"))) {
             QString warning = obj.value(QStringLiteral("warning")).toString();
-            appendResult(QStringLiteral("⚠️ 警告: %1").arg(warning));
+            appendResult(QStringLiteral("[警告] %1").arg(warning));
         }
     } else {
         QString error = obj.value(QStringLiteral("error")).toString();
@@ -282,8 +292,8 @@ void RelayControlWidget::controlRelay(int node, int channel, const QString &acti
             QJsonObject rpcError = obj.value(QStringLiteral("rpcError")).toObject();
             error = rpcError.value(QStringLiteral("message")).toString();
         }
-        appendResult(QStringLiteral("❌ 控制失败: %1").arg(error));
-        statusLabel_->setText(QStringLiteral("❌ 控制失败"));
+        appendResult(QStringLiteral("[失败] 控制失败: %1").arg(error));
+        statusLabel_->setText(QStringLiteral("[失败] 控制失败"));
     }
 }
 
