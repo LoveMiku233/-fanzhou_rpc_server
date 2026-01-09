@@ -7,6 +7,7 @@
 #include "rpc_client.h"
 #include "relay_control_dialog.h"
 
+#include <algorithm>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -484,12 +485,19 @@ void DeviceWidget::updateDeviceCards(const QJsonArray &devices)
 {
     clearDeviceCards();
 
+    // 按nodeId排序
+    QList<QJsonObject> sortedDevices;
+    for (const QJsonValue &value : devices) {
+        sortedDevices.append(value.toObject());
+    }
+    std::sort(sortedDevices.begin(), sortedDevices.end(), [](const QJsonObject &a, const QJsonObject &b) {
+        return a.value(QStringLiteral("nodeId")).toInt() < b.value(QStringLiteral("nodeId")).toInt();
+    });
+
     int row = 0;
     int col = 0;
     
-    for (const QJsonValue &value : devices) {
-        QJsonObject device = value.toObject();
-
+    for (const QJsonObject &device : sortedDevices) {
         int nodeId = device.value(QStringLiteral("nodeId")).toInt();
         QString name = device.value(QStringLiteral("name")).toString();
         if (name.isEmpty()) {

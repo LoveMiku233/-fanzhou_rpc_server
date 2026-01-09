@@ -13,11 +13,12 @@
 #include <QLineEdit>
 #include <QSpinBox>
 #include <QComboBox>
+#include <QJsonArray>
 
 class RpcClient;
 
 /**
- * @brief 分组管理页面
+ * @brief 分组管理页面 - 按钮弹窗方式操作
  */
 class GroupWidget : public QWidget
 {
@@ -32,14 +33,14 @@ public slots:
 private slots:
     void onCreateGroupClicked();
     void onDeleteGroupClicked();
-    void onAddDeviceClicked();
-    void onRemoveDeviceClicked();
+    void onManageDevicesClicked();
     void onGroupControlClicked();
     void onGroupTableCellClicked(int row, int column);
 
 private:
     void setupUi();
     void updateGroupTable(const QJsonArray &groups);
+    int getSelectedGroupId();  // 获取当前选中的分组ID
 
     RpcClient *rpcClient_;
     
@@ -47,18 +48,8 @@ private:
     QTableWidget *groupTable_;
     QLabel *statusLabel_;
     
-    // 创建分组
-    QSpinBox *newGroupIdSpinBox_;
-    QLineEdit *newGroupNameEdit_;
-    
-    // 添加/移除设备
-    QSpinBox *targetGroupIdSpinBox_;
-    QSpinBox *deviceNodeIdSpinBox_;
-    
-    // 分组控制
-    QSpinBox *controlGroupIdSpinBox_;
-    QComboBox *controlChannelCombo_;
-    QComboBox *controlActionCombo_;
+    // 当前选中的分组ID
+    int selectedGroupId_;
 };
 
 #endif // GROUP_WIDGET_H

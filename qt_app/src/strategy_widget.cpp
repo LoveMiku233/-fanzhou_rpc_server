@@ -1,6 +1,6 @@
 /**
  * @file strategy_widget.cpp
- * @brief 策略管理页面实现
+ * @brief 策略管理页面实现 - 表格上方按钮弹窗方式
  */
 
 #include "strategy_widget.h"
@@ -17,6 +17,8 @@
 #include <QJsonObject>
 #include <QMessageBox>
 #include <QScrollArea>
+#include <QDialog>
+#include <QDialogButtonBox>
 
 StrategyWidget::StrategyWidget(RpcClient *rpcClient, QWidget *parent)
     : QWidget(parent)
@@ -99,10 +101,42 @@ QWidget* StrategyWidget::createTimerStrategyTab()
     layout->setContentsMargins(8, 8, 8, 8);
     layout->setSpacing(8);
 
-    // 策略列表
-    QGroupBox *listBox = new QGroupBox(QStringLiteral("定时策略列表"), tab);
-    QVBoxLayout *listLayout = new QVBoxLayout(listBox);
+    // 表格上方工具栏按钮
+    QHBoxLayout *toolbarLayout = new QHBoxLayout();
+    toolbarLayout->setSpacing(8);
 
+    QPushButton *refreshBtn = new QPushButton(QStringLiteral("刷新"), tab);
+    refreshBtn->setMinimumHeight(40);
+    connect(refreshBtn, &QPushButton::clicked, this, &StrategyWidget::onRefreshTimerStrategiesClicked);
+    toolbarLayout->addWidget(refreshBtn);
+
+    QPushButton *createBtn = new QPushButton(QStringLiteral("创建策略"), tab);
+    createBtn->setProperty("type", QStringLiteral("success"));
+    createBtn->setMinimumHeight(40);
+    connect(createBtn, &QPushButton::clicked, this, &StrategyWidget::onCreateTimerStrategyClicked);
+    toolbarLayout->addWidget(createBtn);
+
+    QPushButton *deleteBtn = new QPushButton(QStringLiteral("删除策略"), tab);
+    deleteBtn->setProperty("type", QStringLiteral("danger"));
+    deleteBtn->setMinimumHeight(40);
+    connect(deleteBtn, &QPushButton::clicked, this, &StrategyWidget::onDeleteTimerStrategyClicked);
+    toolbarLayout->addWidget(deleteBtn);
+
+    QPushButton *toggleBtn = new QPushButton(QStringLiteral("启用/禁用"), tab);
+    toggleBtn->setProperty("type", QStringLiteral("warning"));
+    toggleBtn->setMinimumHeight(40);
+    connect(toggleBtn, &QPushButton::clicked, this, &StrategyWidget::onToggleTimerStrategyClicked);
+    toolbarLayout->addWidget(toggleBtn);
+
+    QPushButton *triggerBtn = new QPushButton(QStringLiteral("立即触发"), tab);
+    triggerBtn->setMinimumHeight(40);
+    connect(triggerBtn, &QPushButton::clicked, this, &StrategyWidget::onTriggerTimerStrategyClicked);
+    toolbarLayout->addWidget(triggerBtn);
+
+    toolbarLayout->addStretch();
+    layout->addLayout(toolbarLayout);
+
+    // 策略列表表格
     timerStrategyTable_ = new QTableWidget(tab);
     timerStrategyTable_->setColumnCount(7);
     timerStrategyTable_->setHorizontalHeaderLabels({
@@ -112,102 +146,37 @@ QWidget* StrategyWidget::createTimerStrategyTab()
     });
     timerStrategyTable_->horizontalHeader()->setStretchLastSection(true);
     timerStrategyTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    timerStrategyTable_->setSelectionMode(QAbstractItemView::SingleSelection);
     timerStrategyTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    timerStrategyTable_->setMaximumHeight(150);
+    timerStrategyTable_->setAlternatingRowColors(true);
     connect(timerStrategyTable_, &QTableWidget::cellClicked,
             this, &StrategyWidget::onTimerStrategyTableClicked);
-    listLayout->addWidget(timerStrategyTable_);
+    layout->addWidget(timerStrategyTable_, 1);
 
-    QPushButton *refreshBtn = new QPushButton(QStringLiteral("刷新"), tab);
-    connect(refreshBtn, &QPushButton::clicked, this, &StrategyWidget::onRefreshTimerStrategiesClicked);
-    listLayout->addWidget(refreshBtn);
+    // 提示
+    QLabel *helpLabel = new QLabel(
+        QStringLiteral("提示：点击表格行选中策略，然后点击上方按钮操作"),
+        tab);
+    helpLabel->setStyleSheet(QStringLiteral(
+        "color: #7f8c8d; font-size: 11px; padding: 4px;"));
+    helpLabel->setAlignment(Qt::AlignCenter);
+    layout->addWidget(helpLabel);
 
-    layout->addWidget(listBox);
-
-    // 创建/编辑策略
-    QGroupBox *editBox = new QGroupBox(QStringLiteral("创建/管理策略"), tab);
-    QGridLayout *editGrid = new QGridLayout(editBox);
-    editGrid->setSpacing(8);
-
-    // 第一行
-    editGrid->addWidget(new QLabel(QStringLiteral("策略ID:"), tab), 0, 0);
+    // 隐藏的输入控件（用于弹窗）
     timerIdSpinBox_ = new QSpinBox(tab);
-    timerIdSpinBox_->setRange(1, 999);
-    timerIdSpinBox_->setMinimumHeight(32);
-    editGrid->addWidget(timerIdSpinBox_, 0, 1);
-
-    editGrid->addWidget(new QLabel(QStringLiteral("名称:"), tab), 0, 2);
+    timerIdSpinBox_->hide();
     timerNameEdit_ = new QLineEdit(tab);
-    timerNameEdit_->setPlaceholderText(QStringLiteral("策略名称"));
-    timerNameEdit_->setMinimumHeight(32);
-    editGrid->addWidget(timerNameEdit_, 0, 3);
-
-    // 第二行
-    editGrid->addWidget(new QLabel(QStringLiteral("分组ID:"), tab), 1, 0);
+    timerNameEdit_->hide();
     timerGroupIdSpinBox_ = new QSpinBox(tab);
-    timerGroupIdSpinBox_->setRange(1, 999);
-    timerGroupIdSpinBox_->setMinimumHeight(32);
-    editGrid->addWidget(timerGroupIdSpinBox_, 1, 1);
-
-    editGrid->addWidget(new QLabel(QStringLiteral("通道:"), tab), 1, 2);
+    timerGroupIdSpinBox_->hide();
     timerChannelSpinBox_ = new QSpinBox(tab);
-    timerChannelSpinBox_->setRange(-1, 3);
-    timerChannelSpinBox_->setValue(-1);  // -1=全部
-    timerChannelSpinBox_->setMinimumHeight(32);
-    editGrid->addWidget(timerChannelSpinBox_, 1, 3);
-
-    // 第三行
-    editGrid->addWidget(new QLabel(QStringLiteral("动作:"), tab), 2, 0);
+    timerChannelSpinBox_->hide();
     timerActionCombo_ = new QComboBox(tab);
-    timerActionCombo_->addItem(QStringLiteral("停止"), QStringLiteral("stop"));
-    timerActionCombo_->addItem(QStringLiteral("正转"), QStringLiteral("fwd"));
-    timerActionCombo_->addItem(QStringLiteral("反转"), QStringLiteral("rev"));
-    timerActionCombo_->setMinimumHeight(32);
-    editGrid->addWidget(timerActionCombo_, 2, 1);
-
-    editGrid->addWidget(new QLabel(QStringLiteral("间隔(秒):"), tab), 2, 2);
+    timerActionCombo_->hide();
     timerIntervalSpinBox_ = new QSpinBox(tab);
-    timerIntervalSpinBox_->setRange(1, 86400);
-    timerIntervalSpinBox_->setValue(60);
-    timerIntervalSpinBox_->setMinimumHeight(32);
-    editGrid->addWidget(timerIntervalSpinBox_, 2, 3);
-
-    // 第四行
-    timerEnabledCheckBox_ = new QCheckBox(QStringLiteral("启用"), tab);
-    timerEnabledCheckBox_->setChecked(true);
-    editGrid->addWidget(timerEnabledCheckBox_, 3, 0, 1, 2);
-
-    layout->addWidget(editBox);
-
-    // 操作按钮
-    QHBoxLayout *btnLayout = new QHBoxLayout();
-    btnLayout->setSpacing(8);
-
-    QPushButton *createBtn = new QPushButton(QStringLiteral("创建策略"), tab);
-    createBtn->setProperty("type", QStringLiteral("success"));
-    createBtn->setMinimumHeight(36);
-    connect(createBtn, &QPushButton::clicked, this, &StrategyWidget::onCreateTimerStrategyClicked);
-    btnLayout->addWidget(createBtn);
-
-    QPushButton *deleteBtn = new QPushButton(QStringLiteral("删除策略"), tab);
-    deleteBtn->setProperty("type", QStringLiteral("danger"));
-    deleteBtn->setMinimumHeight(36);
-    connect(deleteBtn, &QPushButton::clicked, this, &StrategyWidget::onDeleteTimerStrategyClicked);
-    btnLayout->addWidget(deleteBtn);
-
-    QPushButton *toggleBtn = new QPushButton(QStringLiteral("启用/禁用"), tab);
-    toggleBtn->setProperty("type", QStringLiteral("warning"));
-    toggleBtn->setMinimumHeight(36);
-    connect(toggleBtn, &QPushButton::clicked, this, &StrategyWidget::onToggleTimerStrategyClicked);
-    btnLayout->addWidget(toggleBtn);
-
-    QPushButton *triggerBtn = new QPushButton(QStringLiteral("立即触发"), tab);
-    triggerBtn->setMinimumHeight(36);
-    connect(triggerBtn, &QPushButton::clicked, this, &StrategyWidget::onTriggerTimerStrategyClicked);
-    btnLayout->addWidget(triggerBtn);
-
-    layout->addLayout(btnLayout);
-    layout->addStretch();
+    timerIntervalSpinBox_->hide();
+    timerEnabledCheckBox_ = new QCheckBox(tab);
+    timerEnabledCheckBox_->hide();
 
     return tab;
 }
@@ -219,10 +188,37 @@ QWidget* StrategyWidget::createSensorStrategyTab()
     layout->setContentsMargins(8, 8, 8, 8);
     layout->setSpacing(8);
 
-    // 策略列表
-    QGroupBox *listBox = new QGroupBox(QStringLiteral("传感器策略列表"), tab);
-    QVBoxLayout *listLayout = new QVBoxLayout(listBox);
+    // 表格上方工具栏按钮
+    QHBoxLayout *toolbarLayout = new QHBoxLayout();
+    toolbarLayout->setSpacing(8);
 
+    QPushButton *refreshBtn = new QPushButton(QStringLiteral("刷新"), tab);
+    refreshBtn->setMinimumHeight(40);
+    connect(refreshBtn, &QPushButton::clicked, this, &StrategyWidget::onRefreshSensorStrategiesClicked);
+    toolbarLayout->addWidget(refreshBtn);
+
+    QPushButton *createBtn = new QPushButton(QStringLiteral("创建策略"), tab);
+    createBtn->setProperty("type", QStringLiteral("success"));
+    createBtn->setMinimumHeight(40);
+    connect(createBtn, &QPushButton::clicked, this, &StrategyWidget::onCreateSensorStrategyClicked);
+    toolbarLayout->addWidget(createBtn);
+
+    QPushButton *deleteBtn = new QPushButton(QStringLiteral("删除策略"), tab);
+    deleteBtn->setProperty("type", QStringLiteral("danger"));
+    deleteBtn->setMinimumHeight(40);
+    connect(deleteBtn, &QPushButton::clicked, this, &StrategyWidget::onDeleteSensorStrategyClicked);
+    toolbarLayout->addWidget(deleteBtn);
+
+    QPushButton *toggleBtn = new QPushButton(QStringLiteral("启用/禁用"), tab);
+    toggleBtn->setProperty("type", QStringLiteral("warning"));
+    toggleBtn->setMinimumHeight(40);
+    connect(toggleBtn, &QPushButton::clicked, this, &StrategyWidget::onToggleSensorStrategyClicked);
+    toolbarLayout->addWidget(toggleBtn);
+
+    toolbarLayout->addStretch();
+    layout->addLayout(toolbarLayout);
+
+    // 策略列表表格
     sensorStrategyTable_ = new QTableWidget(tab);
     sensorStrategyTable_->setColumnCount(8);
     sensorStrategyTable_->setHorizontalHeaderLabels({
@@ -232,129 +228,45 @@ QWidget* StrategyWidget::createSensorStrategyTab()
     });
     sensorStrategyTable_->horizontalHeader()->setStretchLastSection(true);
     sensorStrategyTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    sensorStrategyTable_->setSelectionMode(QAbstractItemView::SingleSelection);
     sensorStrategyTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    sensorStrategyTable_->setMaximumHeight(130);
+    sensorStrategyTable_->setAlternatingRowColors(true);
     connect(sensorStrategyTable_, &QTableWidget::cellClicked,
             this, &StrategyWidget::onSensorStrategyTableClicked);
-    listLayout->addWidget(sensorStrategyTable_);
+    layout->addWidget(sensorStrategyTable_, 1);
 
-    QPushButton *refreshBtn = new QPushButton(QStringLiteral("刷新"), tab);
-    connect(refreshBtn, &QPushButton::clicked, this, &StrategyWidget::onRefreshSensorStrategiesClicked);
-    listLayout->addWidget(refreshBtn);
+    // 提示
+    QLabel *helpLabel = new QLabel(
+        QStringLiteral("提示：点击表格行选中策略，然后点击上方按钮操作"),
+        tab);
+    helpLabel->setStyleSheet(QStringLiteral(
+        "color: #7f8c8d; font-size: 11px; padding: 4px;"));
+    helpLabel->setAlignment(Qt::AlignCenter);
+    layout->addWidget(helpLabel);
 
-    layout->addWidget(listBox);
-
-    // 创建策略
-    QGroupBox *editBox = new QGroupBox(QStringLiteral("创建/管理传感器策略"), tab);
-    QGridLayout *editGrid = new QGridLayout(editBox);
-    editGrid->setSpacing(6);
-
-    // 第一行
-    editGrid->addWidget(new QLabel(QStringLiteral("ID:"), tab), 0, 0);
+    // 隐藏的输入控件（用于弹窗）
     sensorIdSpinBox_ = new QSpinBox(tab);
-    sensorIdSpinBox_->setRange(1, 999);
-    sensorIdSpinBox_->setMinimumHeight(32);
-    editGrid->addWidget(sensorIdSpinBox_, 0, 1);
-
-    editGrid->addWidget(new QLabel(QStringLiteral("名称:"), tab), 0, 2);
+    sensorIdSpinBox_->hide();
     sensorNameEdit_ = new QLineEdit(tab);
-    sensorNameEdit_->setMinimumHeight(32);
-    editGrid->addWidget(sensorNameEdit_, 0, 3);
-
-    // 第二行
-    editGrid->addWidget(new QLabel(QStringLiteral("传感器类型:"), tab), 1, 0);
+    sensorNameEdit_->hide();
     sensorTypeCombo_ = new QComboBox(tab);
-    sensorTypeCombo_->addItem(QStringLiteral("温度"), QStringLiteral("temperature"));
-    sensorTypeCombo_->addItem(QStringLiteral("湿度"), QStringLiteral("humidity"));
-    sensorTypeCombo_->addItem(QStringLiteral("光照"), QStringLiteral("light"));
-    sensorTypeCombo_->addItem(QStringLiteral("土壤湿度"), QStringLiteral("soil_moisture"));
-    sensorTypeCombo_->setMinimumHeight(32);
-    editGrid->addWidget(sensorTypeCombo_, 1, 1);
-
-    editGrid->addWidget(new QLabel(QStringLiteral("传感器节点:"), tab), 1, 2);
+    sensorTypeCombo_->hide();
     sensorNodeSpinBox_ = new QSpinBox(tab);
-    sensorNodeSpinBox_->setRange(1, 255);
-    sensorNodeSpinBox_->setMinimumHeight(32);
-    editGrid->addWidget(sensorNodeSpinBox_, 1, 3);
-
-    // 第三行
-    editGrid->addWidget(new QLabel(QStringLiteral("条件:"), tab), 2, 0);
+    sensorNodeSpinBox_->hide();
     sensorConditionCombo_ = new QComboBox(tab);
-    sensorConditionCombo_->addItem(QStringLiteral("大于 >"), QStringLiteral(">"));
-    sensorConditionCombo_->addItem(QStringLiteral("小于 <"), QStringLiteral("<"));
-    sensorConditionCombo_->addItem(QStringLiteral("等于 ="), QStringLiteral("="));
-    sensorConditionCombo_->addItem(QStringLiteral("大于等于 >="), QStringLiteral(">="));
-    sensorConditionCombo_->addItem(QStringLiteral("小于等于 <="), QStringLiteral("<="));
-    sensorConditionCombo_->setMinimumHeight(32);
-    editGrid->addWidget(sensorConditionCombo_, 2, 1);
-
-    editGrid->addWidget(new QLabel(QStringLiteral("阈值:"), tab), 2, 2);
+    sensorConditionCombo_->hide();
     sensorThresholdSpinBox_ = new QDoubleSpinBox(tab);
-    sensorThresholdSpinBox_->setRange(-1000, 1000);
-    sensorThresholdSpinBox_->setDecimals(2);
-    sensorThresholdSpinBox_->setMinimumHeight(32);
-    editGrid->addWidget(sensorThresholdSpinBox_, 2, 3);
-
-    // 第四行
-    editGrid->addWidget(new QLabel(QStringLiteral("分组ID:"), tab), 3, 0);
+    sensorThresholdSpinBox_->hide();
     sensorGroupIdSpinBox_ = new QSpinBox(tab);
-    sensorGroupIdSpinBox_->setRange(1, 999);
-    sensorGroupIdSpinBox_->setMinimumHeight(32);
-    editGrid->addWidget(sensorGroupIdSpinBox_, 3, 1);
-
-    editGrid->addWidget(new QLabel(QStringLiteral("通道:"), tab), 3, 2);
+    sensorGroupIdSpinBox_->hide();
     sensorChannelSpinBox_ = new QSpinBox(tab);
-    sensorChannelSpinBox_->setRange(-1, 3);
-    sensorChannelSpinBox_->setValue(-1);
-    sensorChannelSpinBox_->setMinimumHeight(32);
-    editGrid->addWidget(sensorChannelSpinBox_, 3, 3);
-
-    // 第五行
-    editGrid->addWidget(new QLabel(QStringLiteral("动作:"), tab), 4, 0);
+    sensorChannelSpinBox_->hide();
     sensorActionCombo_ = new QComboBox(tab);
-    sensorActionCombo_->addItem(QStringLiteral("停止"), QStringLiteral("stop"));
-    sensorActionCombo_->addItem(QStringLiteral("正转"), QStringLiteral("fwd"));
-    sensorActionCombo_->addItem(QStringLiteral("反转"), QStringLiteral("rev"));
-    sensorActionCombo_->setMinimumHeight(32);
-    editGrid->addWidget(sensorActionCombo_, 4, 1);
-
-    editGrid->addWidget(new QLabel(QStringLiteral("冷却(秒):"), tab), 4, 2);
+    sensorActionCombo_->hide();
     sensorCooldownSpinBox_ = new QSpinBox(tab);
-    sensorCooldownSpinBox_->setRange(0, 86400);
-    sensorCooldownSpinBox_->setValue(60);
-    sensorCooldownSpinBox_->setMinimumHeight(32);
-    editGrid->addWidget(sensorCooldownSpinBox_, 4, 3);
-
-    sensorEnabledCheckBox_ = new QCheckBox(QStringLiteral("启用"), tab);
-    sensorEnabledCheckBox_->setChecked(true);
-    editGrid->addWidget(sensorEnabledCheckBox_, 5, 0, 1, 2);
-
-    layout->addWidget(editBox);
-
-    // 操作按钮
-    QHBoxLayout *btnLayout = new QHBoxLayout();
-    btnLayout->setSpacing(8);
-
-    QPushButton *createBtn = new QPushButton(QStringLiteral("创建策略"), tab);
-    createBtn->setProperty("type", QStringLiteral("success"));
-    createBtn->setMinimumHeight(36);
-    connect(createBtn, &QPushButton::clicked, this, &StrategyWidget::onCreateSensorStrategyClicked);
-    btnLayout->addWidget(createBtn);
-
-    QPushButton *deleteBtn = new QPushButton(QStringLiteral("删除策略"), tab);
-    deleteBtn->setProperty("type", QStringLiteral("danger"));
-    deleteBtn->setMinimumHeight(36);
-    connect(deleteBtn, &QPushButton::clicked, this, &StrategyWidget::onDeleteSensorStrategyClicked);
-    btnLayout->addWidget(deleteBtn);
-
-    QPushButton *toggleBtn = new QPushButton(QStringLiteral("启用/禁用"), tab);
-    toggleBtn->setProperty("type", QStringLiteral("warning"));
-    toggleBtn->setMinimumHeight(36);
-    connect(toggleBtn, &QPushButton::clicked, this, &StrategyWidget::onToggleSensorStrategyClicked);
-    btnLayout->addWidget(toggleBtn);
-
-    layout->addLayout(btnLayout);
-    layout->addStretch();
+    sensorCooldownSpinBox_->hide();
+    sensorEnabledCheckBox_ = new QCheckBox(tab);
+    sensorEnabledCheckBox_->hide();
 
     return tab;
 }
@@ -366,10 +278,37 @@ QWidget* StrategyWidget::createRelayStrategyTab()
     layout->setContentsMargins(8, 8, 8, 8);
     layout->setSpacing(8);
 
-    // 策略列表
-    QGroupBox *listBox = new QGroupBox(QStringLiteral("继电器定时策略列表"), tab);
-    QVBoxLayout *listLayout = new QVBoxLayout(listBox);
+    // 表格上方工具栏按钮
+    QHBoxLayout *toolbarLayout = new QHBoxLayout();
+    toolbarLayout->setSpacing(8);
 
+    QPushButton *refreshBtn = new QPushButton(QStringLiteral("刷新"), tab);
+    refreshBtn->setMinimumHeight(40);
+    connect(refreshBtn, &QPushButton::clicked, this, &StrategyWidget::onRefreshRelayStrategiesClicked);
+    toolbarLayout->addWidget(refreshBtn);
+
+    QPushButton *createBtn = new QPushButton(QStringLiteral("创建策略"), tab);
+    createBtn->setProperty("type", QStringLiteral("success"));
+    createBtn->setMinimumHeight(40);
+    connect(createBtn, &QPushButton::clicked, this, &StrategyWidget::onCreateRelayStrategyClicked);
+    toolbarLayout->addWidget(createBtn);
+
+    QPushButton *deleteBtn = new QPushButton(QStringLiteral("删除策略"), tab);
+    deleteBtn->setProperty("type", QStringLiteral("danger"));
+    deleteBtn->setMinimumHeight(40);
+    connect(deleteBtn, &QPushButton::clicked, this, &StrategyWidget::onDeleteRelayStrategyClicked);
+    toolbarLayout->addWidget(deleteBtn);
+
+    QPushButton *toggleBtn = new QPushButton(QStringLiteral("启用/禁用"), tab);
+    toggleBtn->setProperty("type", QStringLiteral("warning"));
+    toggleBtn->setMinimumHeight(40);
+    connect(toggleBtn, &QPushButton::clicked, this, &StrategyWidget::onToggleRelayStrategyClicked);
+    toolbarLayout->addWidget(toggleBtn);
+
+    toolbarLayout->addStretch();
+    layout->addLayout(toolbarLayout);
+
+    // 策略列表表格
     relayStrategyTable_ = new QTableWidget(tab);
     relayStrategyTable_->setColumnCount(7);
     relayStrategyTable_->setHorizontalHeaderLabels({
@@ -379,97 +318,37 @@ QWidget* StrategyWidget::createRelayStrategyTab()
     });
     relayStrategyTable_->horizontalHeader()->setStretchLastSection(true);
     relayStrategyTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    relayStrategyTable_->setSelectionMode(QAbstractItemView::SingleSelection);
     relayStrategyTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    relayStrategyTable_->setMaximumHeight(150);
+    relayStrategyTable_->setAlternatingRowColors(true);
     connect(relayStrategyTable_, &QTableWidget::cellClicked,
             this, &StrategyWidget::onRelayStrategyTableClicked);
-    listLayout->addWidget(relayStrategyTable_);
+    layout->addWidget(relayStrategyTable_, 1);
 
-    QPushButton *refreshBtn = new QPushButton(QStringLiteral("刷新"), tab);
-    connect(refreshBtn, &QPushButton::clicked, this, &StrategyWidget::onRefreshRelayStrategiesClicked);
-    listLayout->addWidget(refreshBtn);
+    // 提示
+    QLabel *helpLabel = new QLabel(
+        QStringLiteral("提示：点击表格行选中策略，然后点击上方按钮操作"),
+        tab);
+    helpLabel->setStyleSheet(QStringLiteral(
+        "color: #7f8c8d; font-size: 11px; padding: 4px;"));
+    helpLabel->setAlignment(Qt::AlignCenter);
+    layout->addWidget(helpLabel);
 
-    layout->addWidget(listBox);
-
-    // 创建策略
-    QGroupBox *editBox = new QGroupBox(QStringLiteral("创建/管理继电器策略"), tab);
-    QGridLayout *editGrid = new QGridLayout(editBox);
-    editGrid->setSpacing(8);
-
-    // 第一行
-    editGrid->addWidget(new QLabel(QStringLiteral("策略ID:"), tab), 0, 0);
+    // 隐藏的输入控件（用于弹窗）
     relayIdSpinBox_ = new QSpinBox(tab);
-    relayIdSpinBox_->setRange(1, 999);
-    relayIdSpinBox_->setMinimumHeight(32);
-    editGrid->addWidget(relayIdSpinBox_, 0, 1);
-
-    editGrid->addWidget(new QLabel(QStringLiteral("名称:"), tab), 0, 2);
+    relayIdSpinBox_->hide();
     relayNameEdit_ = new QLineEdit(tab);
-    relayNameEdit_->setPlaceholderText(QStringLiteral("策略名称"));
-    relayNameEdit_->setMinimumHeight(32);
-    editGrid->addWidget(relayNameEdit_, 0, 3);
-
-    // 第二行
-    editGrid->addWidget(new QLabel(QStringLiteral("节点ID:"), tab), 1, 0);
+    relayNameEdit_->hide();
     relayNodeIdSpinBox_ = new QSpinBox(tab);
-    relayNodeIdSpinBox_->setRange(1, 255);
-    relayNodeIdSpinBox_->setMinimumHeight(32);
-    editGrid->addWidget(relayNodeIdSpinBox_, 1, 1);
-
-    editGrid->addWidget(new QLabel(QStringLiteral("通道:"), tab), 1, 2);
+    relayNodeIdSpinBox_->hide();
     relayChannelSpinBox_ = new QSpinBox(tab);
-    relayChannelSpinBox_->setRange(-1, 3);
-    relayChannelSpinBox_->setValue(-1);
-    relayChannelSpinBox_->setMinimumHeight(32);
-    editGrid->addWidget(relayChannelSpinBox_, 1, 3);
-
-    // 第三行
-    editGrid->addWidget(new QLabel(QStringLiteral("动作:"), tab), 2, 0);
+    relayChannelSpinBox_->hide();
     relayActionCombo_ = new QComboBox(tab);
-    relayActionCombo_->addItem(QStringLiteral("停止"), QStringLiteral("stop"));
-    relayActionCombo_->addItem(QStringLiteral("正转"), QStringLiteral("fwd"));
-    relayActionCombo_->addItem(QStringLiteral("反转"), QStringLiteral("rev"));
-    relayActionCombo_->setMinimumHeight(32);
-    editGrid->addWidget(relayActionCombo_, 2, 1);
-
-    editGrid->addWidget(new QLabel(QStringLiteral("间隔(秒):"), tab), 2, 2);
+    relayActionCombo_->hide();
     relayIntervalSpinBox_ = new QSpinBox(tab);
-    relayIntervalSpinBox_->setRange(1, 86400);
-    relayIntervalSpinBox_->setValue(60);
-    relayIntervalSpinBox_->setMinimumHeight(32);
-    editGrid->addWidget(relayIntervalSpinBox_, 2, 3);
-
-    // 第四行
-    relayEnabledCheckBox_ = new QCheckBox(QStringLiteral("启用"), tab);
-    relayEnabledCheckBox_->setChecked(true);
-    editGrid->addWidget(relayEnabledCheckBox_, 3, 0, 1, 2);
-
-    layout->addWidget(editBox);
-
-    // 操作按钮
-    QHBoxLayout *btnLayout = new QHBoxLayout();
-    btnLayout->setSpacing(8);
-
-    QPushButton *createBtn = new QPushButton(QStringLiteral("创建策略"), tab);
-    createBtn->setProperty("type", QStringLiteral("success"));
-    createBtn->setMinimumHeight(36);
-    connect(createBtn, &QPushButton::clicked, this, &StrategyWidget::onCreateRelayStrategyClicked);
-    btnLayout->addWidget(createBtn);
-
-    QPushButton *deleteBtn = new QPushButton(QStringLiteral("删除策略"), tab);
-    deleteBtn->setProperty("type", QStringLiteral("danger"));
-    deleteBtn->setMinimumHeight(36);
-    connect(deleteBtn, &QPushButton::clicked, this, &StrategyWidget::onDeleteRelayStrategyClicked);
-    btnLayout->addWidget(deleteBtn);
-
-    QPushButton *toggleBtn = new QPushButton(QStringLiteral("启用/禁用"), tab);
-    toggleBtn->setProperty("type", QStringLiteral("warning"));
-    toggleBtn->setMinimumHeight(36);
-    connect(toggleBtn, &QPushButton::clicked, this, &StrategyWidget::onToggleRelayStrategyClicked);
-    btnLayout->addWidget(toggleBtn);
-
-    layout->addLayout(btnLayout);
-    layout->addStretch();
+    relayIntervalSpinBox_->hide();
+    relayEnabledCheckBox_ = new QCheckBox(tab);
+    relayEnabledCheckBox_->hide();
 
     return tab;
 }
@@ -510,19 +389,97 @@ void StrategyWidget::onCreateTimerStrategyClicked()
         return;
     }
 
+    // 创建弹窗
+    QDialog dialog(this);
+    dialog.setWindowTitle(QStringLiteral("创建定时策略"));
+    dialog.setMinimumWidth(400);
+    
+    QVBoxLayout *layout = new QVBoxLayout(&dialog);
+    QGridLayout *formGrid = new QGridLayout();
+    formGrid->setSpacing(8);
+    
+    // 第一行
+    formGrid->addWidget(new QLabel(QStringLiteral("策略ID:"), &dialog), 0, 0);
+    QSpinBox *idSpinBox = new QSpinBox(&dialog);
+    idSpinBox->setRange(1, 999);
+    idSpinBox->setMinimumHeight(40);
+    formGrid->addWidget(idSpinBox, 0, 1);
+    
+    formGrid->addWidget(new QLabel(QStringLiteral("名称:"), &dialog), 0, 2);
+    QLineEdit *nameEdit = new QLineEdit(&dialog);
+    nameEdit->setPlaceholderText(QStringLiteral("策略名称(可空)"));
+    nameEdit->setMinimumHeight(40);
+    formGrid->addWidget(nameEdit, 0, 3);
+    
+    // 第二行
+    formGrid->addWidget(new QLabel(QStringLiteral("分组ID:"), &dialog), 1, 0);
+    QSpinBox *groupIdSpinBox = new QSpinBox(&dialog);
+    groupIdSpinBox->setRange(1, 999);
+    groupIdSpinBox->setMinimumHeight(40);
+    formGrid->addWidget(groupIdSpinBox, 1, 1);
+    
+    formGrid->addWidget(new QLabel(QStringLiteral("通道:"), &dialog), 1, 2);
+    QSpinBox *channelSpinBox = new QSpinBox(&dialog);
+    channelSpinBox->setRange(-1, 3);
+    channelSpinBox->setValue(-1);
+    channelSpinBox->setMinimumHeight(40);
+    formGrid->addWidget(channelSpinBox, 1, 3);
+    
+    // 第三行
+    formGrid->addWidget(new QLabel(QStringLiteral("动作:"), &dialog), 2, 0);
+    QComboBox *actionCombo = new QComboBox(&dialog);
+    actionCombo->addItem(QStringLiteral("停止"), QStringLiteral("stop"));
+    actionCombo->addItem(QStringLiteral("正转"), QStringLiteral("fwd"));
+    actionCombo->addItem(QStringLiteral("反转"), QStringLiteral("rev"));
+    actionCombo->setMinimumHeight(40);
+    formGrid->addWidget(actionCombo, 2, 1);
+    
+    formGrid->addWidget(new QLabel(QStringLiteral("间隔(秒):"), &dialog), 2, 2);
+    QSpinBox *intervalSpinBox = new QSpinBox(&dialog);
+    intervalSpinBox->setRange(1, 86400);
+    intervalSpinBox->setValue(60);
+    intervalSpinBox->setMinimumHeight(40);
+    formGrid->addWidget(intervalSpinBox, 2, 3);
+    
+    // 第四行
+    QCheckBox *enabledCheckBox = new QCheckBox(QStringLiteral("启用策略"), &dialog);
+    enabledCheckBox->setChecked(true);
+    formGrid->addWidget(enabledCheckBox, 3, 0, 1, 2);
+    
+    layout->addLayout(formGrid);
+    
+    QDialogButtonBox *buttonBox = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    buttonBox->button(QDialogButtonBox::Ok)->setText(QStringLiteral("创建"));
+    buttonBox->button(QDialogButtonBox::Ok)->setMinimumHeight(40);
+    buttonBox->button(QDialogButtonBox::Cancel)->setText(QStringLiteral("取消"));
+    buttonBox->button(QDialogButtonBox::Cancel)->setMinimumHeight(40);
+    connect(buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttonBox);
+    
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    QString name = nameEdit->text().trimmed();
+    if (name.isEmpty()) {
+        name = QStringLiteral("策略-%1").arg(idSpinBox->value());
+    }
+
     QJsonObject params;
-    params[QStringLiteral("id")] = timerIdSpinBox_->value();
-    params[QStringLiteral("name")] = timerNameEdit_->text().trimmed();
-    params[QStringLiteral("groupId")] = timerGroupIdSpinBox_->value();
-    params[QStringLiteral("channel")] = timerChannelSpinBox_->value();
-    params[QStringLiteral("action")] = timerActionCombo_->currentData().toString();
-    params[QStringLiteral("intervalSec")] = timerIntervalSpinBox_->value();
-    params[QStringLiteral("enabled")] = timerEnabledCheckBox_->isChecked();
+    params[QStringLiteral("id")] = idSpinBox->value();
+    params[QStringLiteral("name")] = name;
+    params[QStringLiteral("groupId")] = groupIdSpinBox->value();
+    params[QStringLiteral("channel")] = channelSpinBox->value();
+    params[QStringLiteral("action")] = actionCombo->currentData().toString();
+    params[QStringLiteral("intervalSec")] = intervalSpinBox->value();
+    params[QStringLiteral("enabled")] = enabledCheckBox->isChecked();
 
     QJsonValue result = rpcClient_->call(QStringLiteral("auto.strategy.create"), params);
 
     if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        QMessageBox::information(this, QStringLiteral("成功"), QStringLiteral("策略创建成功！"));
+        statusLabel_->setText(QStringLiteral("策略创建成功"));
         emit logMessage(QStringLiteral("创建定时策略成功"));
         onRefreshTimerStrategiesClicked();
     } else {
@@ -538,7 +495,17 @@ void StrategyWidget::onDeleteTimerStrategyClicked()
         return;
     }
 
-    int id = timerIdSpinBox_->value();
+    // 从表格获取选中的策略ID
+    int currentRow = timerStrategyTable_->currentRow();
+    if (currentRow < 0) {
+        QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先选择一个策略"));
+        return;
+    }
+    
+    QTableWidgetItem *idItem = timerStrategyTable_->item(currentRow, 0);
+    if (!idItem) return;
+    
+    int id = idItem->text().toInt();
     QMessageBox::StandardButton reply = QMessageBox::question(this,
         QStringLiteral("确认删除"),
         QStringLiteral("确定要删除策略 %1 吗？").arg(id),
@@ -552,7 +519,7 @@ void StrategyWidget::onDeleteTimerStrategyClicked()
     QJsonValue result = rpcClient_->call(QStringLiteral("auto.strategy.delete"), params);
 
     if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        QMessageBox::information(this, QStringLiteral("成功"), QStringLiteral("策略删除成功！"));
+        statusLabel_->setText(QStringLiteral("策略 %1 删除成功").arg(id));
         emit logMessage(QStringLiteral("删除定时策略成功"));
         onRefreshTimerStrategiesClicked();
     } else {
@@ -568,13 +535,28 @@ void StrategyWidget::onToggleTimerStrategyClicked()
         return;
     }
 
+    // 从表格获取选中的策略ID
+    int currentRow = timerStrategyTable_->currentRow();
+    if (currentRow < 0) {
+        QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先选择一个策略"));
+        return;
+    }
+    
+    QTableWidgetItem *idItem = timerStrategyTable_->item(currentRow, 0);
+    QTableWidgetItem *statusItem = timerStrategyTable_->item(currentRow, 6);
+    if (!idItem) return;
+    
+    int id = idItem->text().toInt();
+    bool currentEnabled = statusItem && statusItem->text().contains(QStringLiteral("启用"));
+
     QJsonObject params;
-    params[QStringLiteral("id")] = timerIdSpinBox_->value();
-    params[QStringLiteral("enabled")] = timerEnabledCheckBox_->isChecked();
+    params[QStringLiteral("id")] = id;
+    params[QStringLiteral("enabled")] = !currentEnabled;  // 切换状态
 
     QJsonValue result = rpcClient_->call(QStringLiteral("auto.strategy.enable"), params);
 
     if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
+        statusLabel_->setText(QStringLiteral("策略 %1 状态已更新").arg(id));
         emit logMessage(QStringLiteral("策略状态已更新"));
         onRefreshTimerStrategiesClicked();
     } else {
@@ -590,13 +572,25 @@ void StrategyWidget::onTriggerTimerStrategyClicked()
         return;
     }
 
+    // 从表格获取选中的策略ID
+    int currentRow = timerStrategyTable_->currentRow();
+    if (currentRow < 0) {
+        QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先选择一个策略"));
+        return;
+    }
+    
+    QTableWidgetItem *idItem = timerStrategyTable_->item(currentRow, 0);
+    if (!idItem) return;
+    
+    int id = idItem->text().toInt();
+
     QJsonObject params;
-    params[QStringLiteral("id")] = timerIdSpinBox_->value();
+    params[QStringLiteral("id")] = id;
 
     QJsonValue result = rpcClient_->call(QStringLiteral("auto.strategy.trigger"), params);
 
     if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        QMessageBox::information(this, QStringLiteral("成功"), QStringLiteral("策略已触发！"));
+        statusLabel_->setText(QStringLiteral("策略 %1 已触发").arg(id));
         emit logMessage(QStringLiteral("手动触发策略成功"));
     } else {
         QString error = result.toObject().value(QStringLiteral("error")).toString();
