@@ -180,7 +180,7 @@ QSpinBox:focus {
 }
 
 QSpinBox::up-button, QSpinBox::down-button {
-    width: 24px;
+    width: 28px;
     border: none;
     background-color: #f0f0f0;
 }
