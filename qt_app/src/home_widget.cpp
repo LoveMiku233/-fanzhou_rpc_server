@@ -39,9 +39,9 @@ void HomeWidget::setupUi()
     mainLayout->setSpacing(10);
 
     // 页面标题 - 使用纯文本
-    QLabel *titleLabel = new QLabel(QStringLiteral("[*] 大棚控制系统"), this);
+    QLabel *titleLabel = new QLabel(QStringLiteral("大棚控制系统"), this);
     titleLabel->setStyleSheet(QStringLiteral(
-        "font-size: 18px; font-weight: bold; color: #27ae60; padding: 4px 0;"));
+        "font-size: 20px; font-weight: bold; color: #27ae60; padding: 4px 0;"));
     mainLayout->addWidget(titleLabel);
 
     // 连接状态卡片

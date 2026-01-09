@@ -29,7 +29,7 @@ RelayControlDialog::RelayControlDialog(RpcClient *rpcClient, int nodeId,
     , currentLabel_(nullptr)
 {
     setWindowTitle(QStringLiteral("控制: %1 (#%2)").arg(deviceName).arg(nodeId));
-    setMinimumSize(360, 420);
+    setMinimumSize(400, 500);
     setModal(true);
     setupUi();
     
@@ -40,90 +40,113 @@ RelayControlDialog::RelayControlDialog(RpcClient *rpcClient, int nodeId,
 void RelayControlDialog::setupUi()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(10, 10, 10, 10);
-    mainLayout->setSpacing(8);
+    mainLayout->setContentsMargins(12, 12, 12, 12);
+    mainLayout->setSpacing(10);
 
     // 设备信息 - 使用纯文本
-    QLabel *titleLabel = new QLabel(QStringLiteral("[R] %1").arg(deviceName_), this);
+    QLabel *titleLabel = new QLabel(QStringLiteral("设备: %1").arg(deviceName_), this);
     titleLabel->setStyleSheet(QStringLiteral(
-        "font-size: 14px; font-weight: bold; color: #2c3e50;"));
+        "font-size: 16px; font-weight: bold; color: #2c3e50;"));
     mainLayout->addWidget(titleLabel);
 
     QLabel *nodeLabel = new QLabel(QStringLiteral("节点ID: %1").arg(nodeId_), this);
-    nodeLabel->setStyleSheet(QStringLiteral("color: #7f8c8d; font-size: 11px;"));
+    nodeLabel->setStyleSheet(QStringLiteral("color: #7f8c8d; font-size: 12px;"));
     mainLayout->addWidget(nodeLabel);
 
     // 状态显示区域
     QGroupBox *statusBox = new QGroupBox(QStringLiteral("设备状态"), this);
     QVBoxLayout *statusLayout = new QVBoxLayout(statusBox);
-    statusLayout->setSpacing(6);
-    statusLayout->setContentsMargins(8, 12, 8, 8);
+    statusLayout->setSpacing(8);
+    statusLayout->setContentsMargins(10, 14, 10, 10);
 
     statusLabel_ = new QLabel(QStringLiteral("在线状态: 未知"), this);
-    statusLabel_->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 12px;"));
+    statusLabel_->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 14px;"));
     statusLayout->addWidget(statusLabel_);
 
     currentLabel_ = new QLabel(QStringLiteral("总电流: -- mA"), this);
     currentLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 13px; color: #3498db; font-weight: bold;"));
+        "font-size: 14px; color: #3498db; font-weight: bold;"));
     statusLayout->addWidget(currentLabel_);
 
-    // 通道状态
+    // 通道状态 - 使用更清晰的布局
     QGridLayout *chStatusGrid = new QGridLayout();
-    chStatusGrid->setSpacing(4);
+    chStatusGrid->setSpacing(8);
 
-    ch0StatusLabel_ = new QLabel(QStringLiteral("CH0: --"), this);
-    ch1StatusLabel_ = new QLabel(QStringLiteral("CH1: --"), this);
-    ch2StatusLabel_ = new QLabel(QStringLiteral("CH2: --"), this);
-    ch3StatusLabel_ = new QLabel(QStringLiteral("CH3: --"), this);
+    QLabel *ch0Title = new QLabel(QStringLiteral("通道0:"), this);
+    ch0Title->setStyleSheet(QStringLiteral("font-size: 13px; font-weight: bold;"));
+    ch0StatusLabel_ = new QLabel(QStringLiteral("--"), this);
+    ch0StatusLabel_->setStyleSheet(QStringLiteral("font-size: 13px;"));
+    chStatusGrid->addWidget(ch0Title, 0, 0);
+    chStatusGrid->addWidget(ch0StatusLabel_, 0, 1);
 
-    chStatusGrid->addWidget(ch0StatusLabel_, 0, 0);
-    chStatusGrid->addWidget(ch1StatusLabel_, 0, 1);
-    chStatusGrid->addWidget(ch2StatusLabel_, 1, 0);
-    chStatusGrid->addWidget(ch3StatusLabel_, 1, 1);
+    QLabel *ch1Title = new QLabel(QStringLiteral("通道1:"), this);
+    ch1Title->setStyleSheet(QStringLiteral("font-size: 13px; font-weight: bold;"));
+    ch1StatusLabel_ = new QLabel(QStringLiteral("--"), this);
+    ch1StatusLabel_->setStyleSheet(QStringLiteral("font-size: 13px;"));
+    chStatusGrid->addWidget(ch1Title, 0, 2);
+    chStatusGrid->addWidget(ch1StatusLabel_, 0, 3);
+
+    QLabel *ch2Title = new QLabel(QStringLiteral("通道2:"), this);
+    ch2Title->setStyleSheet(QStringLiteral("font-size: 13px; font-weight: bold;"));
+    ch2StatusLabel_ = new QLabel(QStringLiteral("--"), this);
+    ch2StatusLabel_->setStyleSheet(QStringLiteral("font-size: 13px;"));
+    chStatusGrid->addWidget(ch2Title, 1, 0);
+    chStatusGrid->addWidget(ch2StatusLabel_, 1, 1);
+
+    QLabel *ch3Title = new QLabel(QStringLiteral("通道3:"), this);
+    ch3Title->setStyleSheet(QStringLiteral("font-size: 13px; font-weight: bold;"));
+    ch3StatusLabel_ = new QLabel(QStringLiteral("--"), this);
+    ch3StatusLabel_->setStyleSheet(QStringLiteral("font-size: 13px;"));
+    chStatusGrid->addWidget(ch3Title, 1, 2);
+    chStatusGrid->addWidget(ch3StatusLabel_, 1, 3);
 
     statusLayout->addLayout(chStatusGrid);
 
     QPushButton *refreshBtn = new QPushButton(QStringLiteral("刷新状态"), this);
-    refreshBtn->setMinimumHeight(32);
+    refreshBtn->setMinimumHeight(36);
     connect(refreshBtn, &QPushButton::clicked, this, &RelayControlDialog::onQueryStatusClicked);
     statusLayout->addWidget(refreshBtn);
 
     mainLayout->addWidget(statusBox);
 
-    // 通道控制区域
+    // 通道控制区域 - 更清晰的布局
     QGroupBox *controlBox = new QGroupBox(QStringLiteral("通道控制"), this);
     QGridLayout *controlGrid = new QGridLayout(controlBox);
-    controlGrid->setSpacing(4);
-    controlGrid->setContentsMargins(8, 12, 8, 8);
+    controlGrid->setSpacing(6);
+    controlGrid->setContentsMargins(10, 14, 10, 10);
+
+    // 控制说明
+    QLabel *helpLabel = new QLabel(QStringLiteral("停=停止  正=正转  反=反转"), this);
+    helpLabel->setStyleSheet(QStringLiteral("color: #7f8c8d; font-size: 11px;"));
+    controlGrid->addWidget(helpLabel, 0, 0, 1, 4, Qt::AlignCenter);
 
     for (int ch = 0; ch < 4; ++ch) {
-        QLabel *chLabel = new QLabel(QStringLiteral("CH%1:").arg(ch), this);
-        chLabel->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 11px;"));
-        controlGrid->addWidget(chLabel, ch, 0);
+        QLabel *chLabel = new QLabel(QStringLiteral("通道%1:").arg(ch), this);
+        chLabel->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 13px;"));
+        controlGrid->addWidget(chLabel, ch + 1, 0);
 
-        QPushButton *stopBtn = new QPushButton(QStringLiteral("停"), this);
+        QPushButton *stopBtn = new QPushButton(QStringLiteral("停止"), this);
         stopBtn->setProperty("channel", ch);
         stopBtn->setProperty("action", QStringLiteral("stop"));
-        stopBtn->setMinimumSize(50, 32);
+        stopBtn->setMinimumSize(60, 36);
         connect(stopBtn, &QPushButton::clicked, this, &RelayControlDialog::onChannelControlClicked);
-        controlGrid->addWidget(stopBtn, ch, 1);
+        controlGrid->addWidget(stopBtn, ch + 1, 1);
 
-        QPushButton *fwdBtn = new QPushButton(QStringLiteral("正"), this);
+        QPushButton *fwdBtn = new QPushButton(QStringLiteral("正转"), this);
         fwdBtn->setProperty("channel", ch);
         fwdBtn->setProperty("action", QStringLiteral("fwd"));
         fwdBtn->setProperty("type", QStringLiteral("success"));
-        fwdBtn->setMinimumSize(50, 32);
+        fwdBtn->setMinimumSize(60, 36);
         connect(fwdBtn, &QPushButton::clicked, this, &RelayControlDialog::onChannelControlClicked);
-        controlGrid->addWidget(fwdBtn, ch, 2);
+        controlGrid->addWidget(fwdBtn, ch + 1, 2);
 
-        QPushButton *revBtn = new QPushButton(QStringLiteral("反"), this);
+        QPushButton *revBtn = new QPushButton(QStringLiteral("反转"), this);
         revBtn->setProperty("channel", ch);
         revBtn->setProperty("action", QStringLiteral("rev"));
         revBtn->setProperty("type", QStringLiteral("warning"));
-        revBtn->setMinimumSize(50, 32);
+        revBtn->setMinimumSize(60, 36);
         connect(revBtn, &QPushButton::clicked, this, &RelayControlDialog::onChannelControlClicked);
-        controlGrid->addWidget(revBtn, ch, 3);
+        controlGrid->addWidget(revBtn, ch + 1, 3);
     }
 
     mainLayout->addWidget(controlBox);
@@ -131,13 +154,13 @@ void RelayControlDialog::setupUi()
     // 全部停止按钮
     QPushButton *stopAllBtn = new QPushButton(QStringLiteral("全部停止"), this);
     stopAllBtn->setProperty("type", QStringLiteral("danger"));
-    stopAllBtn->setMinimumHeight(40);
+    stopAllBtn->setMinimumHeight(44);
     connect(stopAllBtn, &QPushButton::clicked, this, &RelayControlDialog::onStopAllClicked);
     mainLayout->addWidget(stopAllBtn);
 
     // 关闭按钮
     QPushButton *closeBtn = new QPushButton(QStringLiteral("关闭"), this);
-    closeBtn->setMinimumHeight(36);
+    closeBtn->setMinimumHeight(40);
     connect(closeBtn, &QPushButton::clicked, this, &QDialog::accept);
     mainLayout->addWidget(closeBtn);
 }
@@ -186,14 +209,14 @@ void RelayControlDialog::updateStatusDisplay(const QJsonObject &status)
     qint64 ageMs = static_cast<qint64>(status.value(QStringLiteral("ageMs")).toDouble(-1));
 
     if (online) {
-        statusLabel_->setText(QStringLiteral("在线状态: [OK] 在线 (%1ms)").arg(ageMs));
-        statusLabel_->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 12px; color: #27ae60;"));
+        statusLabel_->setText(QStringLiteral("在线状态: 在线 (%1ms)").arg(ageMs));
+        statusLabel_->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 14px; color: #27ae60;"));
     } else if (ageMs < 0) {
-        statusLabel_->setText(QStringLiteral("在线状态: [!] 无响应"));
-        statusLabel_->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 12px; color: #f39c12;"));
+        statusLabel_->setText(QStringLiteral("在线状态: 无响应"));
+        statusLabel_->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 14px; color: #f39c12;"));
     } else {
-        statusLabel_->setText(QStringLiteral("在线状态: [X] 离线 (%1s)").arg(ageMs / 1000));
-        statusLabel_->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 12px; color: #e74c3c;"));
+        statusLabel_->setText(QStringLiteral("在线状态: 离线 (%1s)").arg(ageMs / 1000));
+        statusLabel_->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 14px; color: #e74c3c;"));
     }
 
     // 更新电流
@@ -220,12 +243,12 @@ void RelayControlDialog::updateStatusDisplay(const QJsonObject &status)
                 default: modeText = QStringLiteral("未知"); color = QStringLiteral("#95a5a6"); break;
             }
 
-            chLabels[ch]->setText(QStringLiteral("CH%1: %2 (%3mA)")
-                .arg(ch).arg(modeText).arg(current, 0, 'f', 1));
-            chLabels[ch]->setStyleSheet(QStringLiteral("color: %1; font-weight: bold; font-size: 11px;").arg(color));
+            chLabels[ch]->setText(QStringLiteral("%1 (%2mA)")
+                .arg(modeText).arg(current, 0, 'f', 1));
+            chLabels[ch]->setStyleSheet(QStringLiteral("color: %1; font-weight: bold; font-size: 13px;").arg(color));
         } else {
-            chLabels[ch]->setText(QStringLiteral("CH%1: --").arg(ch));
-            chLabels[ch]->setStyleSheet(QStringLiteral("color: #95a5a6; font-size: 11px;"));
+            chLabels[ch]->setText(QStringLiteral("--"));
+            chLabels[ch]->setStyleSheet(QStringLiteral("color: #95a5a6; font-size: 13px;"));
         }
     }
 }

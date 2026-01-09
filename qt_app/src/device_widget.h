@@ -1,6 +1,6 @@
 /**
  * @file device_widget.h
- * @brief 设备管理页面头文件 - 卡片式布局
+ * @brief 设备管理页面头文件 - 网格卡片布局（一行两个）
  */
 
 #ifndef DEVICE_WIDGET_H
@@ -10,6 +10,7 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QVBoxLayout>
+#include <QGridLayout>
 #include <QScrollArea>
 #include <QList>
 #include <QJsonArray>
@@ -29,6 +30,7 @@ public:
     explicit DeviceCard(int nodeId, const QString &name, QWidget *parent = nullptr);
     
     int nodeId() const { return nodeId_; }
+    QString deviceName() const { return name_; }
     void updateStatus(bool online, qint64 ageMs, double totalCurrent, const QJsonObject &channels);
 
 signals:
@@ -54,7 +56,7 @@ private:
 };
 
 /**
- * @brief 设备管理页面 - 卡片式布局
+ * @brief 设备管理页面 - 网格卡片布局（一行两个）
  */
 class DeviceWidget : public QWidget
 {
@@ -73,6 +75,7 @@ public slots:
 
 private slots:
     void onQueryAllClicked();
+    void onAddDeviceClicked();
     void onDeviceCardClicked(int nodeId, const QString &name);
 
 private:
@@ -85,8 +88,10 @@ private:
     QLabel *statusLabel_;
     QPushButton *refreshButton_;
     QPushButton *queryAllButton_;
+    QPushButton *addDeviceButton_;
     
-    QVBoxLayout *cardsLayout_;
+    QWidget *cardsContainer_;
+    QGridLayout *cardsLayout_;
     QList<DeviceCard*> deviceCards_;
 };
 
