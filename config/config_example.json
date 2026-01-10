@@ -58,11 +58,80 @@
     {
       "name": "temp-sensor01",
       "type": 22,
-      "commType": 1,
+      "commType": 3,
       "nodeId": 10,
       "bus": "/dev/ttyS1",
       "params": {
         "modbusAddr": 1,
+        "baudRate": 9600,
+        "registerAddr": 0,
+        "registerCount": 1,
+        "scale": 0.1,
+        "offset": 0,
+        "enabled": true
+      }
+    },
+    {
+      "name": "humidity-sensor01",
+      "type": 23,
+      "commType": 3,
+      "nodeId": 11,
+      "bus": "/dev/ttyS1",
+      "params": {
+        "modbusAddr": 2,
+        "baudRate": 9600,
+        "registerAddr": 0,
+        "registerCount": 1,
+        "scale": 0.1,
+        "offset": 0,
+        "enabled": true
+      }
+    },
+    {
+      "name": "soil-sensor01",
+      "type": 24,
+      "commType": 3,
+      "nodeId": 12,
+      "bus": "/dev/ttyS1",
+      "params": {
+        "modbusAddr": 3,
+        "baudRate": 9600,
+        "registerAddr": 0,
+        "registerCount": 2,
+        "enabled": true
+      }
+    },
+    {
+      "name": "co2-sensor01",
+      "type": 25,
+      "commType": 3,
+      "nodeId": 13,
+      "bus": "/dev/ttyS1",
+      "params": {
+        "modbusAddr": 4,
+        "baudRate": 9600,
+        "enabled": true
+      }
+    },
+    {
+      "name": "light-sensor01",
+      "type": 26,
+      "commType": 3,
+      "nodeId": 14,
+      "bus": "/dev/ttyS1",
+      "params": {
+        "modbusAddr": 5,
+        "baudRate": 9600,
+        "enabled": true
+      }
+    },
+    {
+      "name": "gps-sensor01",
+      "type": 82,
+      "commType": 4,
+      "nodeId": 20,
+      "bus": "/dev/ttyS2",
+      "params": {
         "baudRate": 9600,
         "enabled": true
       }
@@ -93,7 +162,23 @@
       "action": "stop",
       "intervalSec": 120,
       "enabled": true,
-      "autoStart": false
+      "autoStart": false,
+      "triggerType": "interval"
+    }
+  ],
+  "sensorStrategies": [
+    {
+      "id": 1,
+      "name": "temp-control",
+      "sensorType": "temperature",
+      "sensorNode": 10,
+      "condition": "gt",
+      "threshold": 30.0,
+      "groupId": 1,
+      "channel": 0,
+      "action": "fwd",
+      "cooldownSec": 300,
+      "enabled": true
     }
   ]
 }

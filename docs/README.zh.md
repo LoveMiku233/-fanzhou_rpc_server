@@ -45,7 +45,8 @@ fanzhou_rpc_server/
 ├── config/                     # 配置文件
 │   └── config_example.json     # 配置示例
 ├── docs/                       # 文档
-│   └── README.zh.md            # 中文文档
+│   ├── README.zh.md            # 中文文档
+│   └── API_REFERENCE.zh.md     # API参考手册
 ├── test_web/                   # Web调试工具
 │   └── index.html              # 调试界面
 └── src/
@@ -70,14 +71,20 @@ fanzhou_rpc_server/
     │   ├── can_comm.h/cpp             # CAN通信
     │   └── serial_comm.h/cpp          # 串口通信
     └── device/                 # 设备层
-        ├── device_types.h      # 设备类型定义
+        ├── device_types.h      # 设备/通信/接口类型定义
         ├── base/
-        │   └── device_adapter.h/cpp   # 设备适配器基类
-        └── can/
-            ├── i_can_device.h         # CAN设备接口
-            ├── can_device_manager.h/cpp
-            ├── relay_protocol.h       # 继电器协议
-            └── relay_gd427.h/cpp      # GD427继电器
+        │   ├── device_adapter.h/cpp   # 设备适配器基类
+        │   └── i_sensor.h             # 传感器接口
+        ├── can/
+        │   ├── i_can_device.h         # CAN设备接口
+        │   ├── can_device_manager.h/cpp
+        │   ├── relay_protocol.h       # 继电器协议
+        │   └── relay_gd427.h/cpp      # GD427继电器
+        ├── modbus/             # Modbus传感器
+        │   ├── modbus_sensor.h/cpp    # Modbus传感器基类
+        │   └── modbus_temp_sensor.h/cpp # 温度传感器
+        └── uart/               # UART传感器
+            └── uart_sensor.h/cpp      # UART传感器基类
 ```
 
 ## 编译
