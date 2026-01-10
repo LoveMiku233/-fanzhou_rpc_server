@@ -3,6 +3,7 @@
  * @brief 设备类型定义
  *
  * 定义系统的设备类型、通信类型和接口类型。
+ * 注意：串口协议类型定义在 serial/serial_protocol.h 中。
  */
 
 #ifndef FANZHOU_DEVICE_TYPES_H
@@ -56,24 +57,10 @@ enum class DeviceTypeId : int {
  * @brief 通信类型标识符
  */
 enum class CommTypeId : int {
-    Serial = 1,     ///< 串口通信（通用，支持协议选择）
+    Serial = 1,     ///< 串口通信（通用，支持协议选择，参见 serial/serial_protocol.h）
     Can = 2,        ///< CAN总线通信
     Modbus = 3,     ///< Modbus通信（基于串口RS485，已整合到Serial）
     Uart = 4,       ///< UART通信（异步串口，已整合到Serial）
-};
-
-/**
- * @brief 串口传感器协议类型标识符
- *
- * 用于串口传感器的协议选择：
- * - Modbus: 标准Modbus RTU协议
- * - Custom: 自定义帧格式协议
- * - Raw: 原始数据流
- */
-enum class SerialProtocolId : int {
-    Modbus = 0,     ///< Modbus RTU协议
-    Custom = 1,     ///< 自定义帧协议
-    Raw = 2,        ///< 原始数据流
 };
 
 /**
@@ -158,21 +145,6 @@ inline const char* interfaceTypeToString(InterfaceTypeId type)
     case InterfaceTypeId::Gpio: return "GPIO";
     case InterfaceTypeId::I2c: return "I2C";
     case InterfaceTypeId::Spi: return "SPI";
-    default: return "Unknown";
-    }
-}
-
-/**
- * @brief 将串口协议类型转换为字符串
- * @param protocol 协议类型
- * @return 协议名称
- */
-inline const char* serialProtocolIdToString(SerialProtocolId protocol)
-{
-    switch (protocol) {
-    case SerialProtocolId::Modbus: return "Modbus";
-    case SerialProtocolId::Custom: return "Custom";
-    case SerialProtocolId::Raw: return "Raw";
     default: return "Unknown";
     }
 }

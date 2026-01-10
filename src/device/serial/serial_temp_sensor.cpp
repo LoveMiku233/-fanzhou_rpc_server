@@ -49,7 +49,8 @@ SensorReading SerialTempSensor::parseModbusResponse(const QByteArray &data)
         return reading;
     }
 
-    // 解析温度值（假设为16位有符号整数，0.1°C精度）
+    // 解析温度值（假设为16位有符号整数）
+    // 注意：缩放因子由配置中的scale参数控制，在基类中应用
     if (byteCount >= 2) {
         qint16 rawValue = static_cast<qint16>(
             (static_cast<quint8>(data[3]) << 8) | static_cast<quint8>(data[4]));

@@ -59,6 +59,9 @@ void SerialSensor::poll()
     case SerialProtocol::Raw:
         // Raw协议通常不需要主动请求
         return;
+    default:
+        // 未知协议类型，不发送请求
+        return;
     }
 
     if (!request.isEmpty()) {

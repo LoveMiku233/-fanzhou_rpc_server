@@ -8,6 +8,8 @@
 #ifndef FANZHOU_SERIAL_PROTOCOL_H
 #define FANZHOU_SERIAL_PROTOCOL_H
 
+#include <cstring>
+
 namespace fanzhou {
 namespace device {
 
