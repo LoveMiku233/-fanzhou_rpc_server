@@ -1996,3 +1996,398 @@ function readSensor(nodeId) {
         }
     });
 }
+
+/* ========================================================
+ * 快速策略创建功能
+ * 
+ * 提供一键创建常用策略模板，对新手更友好
+ * ======================================================== */
+
+/**
+ * 策略模板定义
+ * 每个模板包含预设的策略参数，用户只需选择即可创建
+ */
+const STRATEGY_TEMPLATES = {
+    // 定时通风：每小时运行5分钟
+    'ventilation': {
+        type: 'timer',
+        name: '定时通风',
+        description: '每小时自动启动通风设备',
+        groupId: 1,
+        channel: -1,  // 所有通道
+        action: 'fwd',
+        intervalSec: 3600,  // 1小时
+        enabled: true,
+        autoStart: true
+    },
+    // 定时浇水：每天早上8点
+    'irrigation': {
+        type: 'timer',
+        name: '定时浇水',
+        description: '每天早晚定时浇水',
+        groupId: 1,
+        channel: 0,
+        action: 'fwd',
+        intervalSec: 43200,  // 12小时
+        dailyTime: '08:00',
+        triggerType: 'daily',
+        enabled: true,
+        autoStart: true
+    },
+    // 高温自动降温：温度超过30度启动
+    'hightemp': {
+        type: 'sensor',
+        name: '高温自动降温',
+        description: '温度超过30°C时自动启动风扇',
+        sensorType: 'temperature',
+        sensorNode: 1,
+        condition: 'gt',
+        threshold: 30,
+        groupId: 1,
+        channel: -1,
+        action: 'fwd',
+        cooldownSec: 300,
+        enabled: true
+    },
+    // 低温保护：温度低于10度启动
+    'lowtemp': {
+        type: 'sensor',
+        name: '低温自动保暖',
+        description: '温度低于10°C时自动启动加热',
+        sensorType: 'temperature',
+        sensorNode: 1,
+        condition: 'lt',
+        threshold: 10,
+        groupId: 1,
+        channel: 0,
+        action: 'fwd',
+        cooldownSec: 300,
+        enabled: true
+    }
+};
+
+/**
+ * 一键创建快速策略
+ * @param {string} templateId - 模板ID
+ */
+function createQuickStrategy(templateId) {
+    const template = STRATEGY_TEMPLATES[templateId];
+    if (!template) {
+        log('error', `未知的策略模板: ${templateId}`);
+        return;
+    }
+    
+    // 检查连接状态
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        alert('请先连接到服务器！\n\n点击左侧"📡 连接"按钮连接服务器后再创建策略。');
+        showPage('connection');
+        return;
+    }
+    
+    // 确认创建
+    const confirmMsg = `确定要创建"${template.name}"策略吗？\n\n${template.description}`;
+    if (!confirm(confirmMsg)) {
+        return;
+    }
+    
+    log('info', `正在创建快速策略: ${template.name}...`);
+    
+    if (template.type === 'timer') {
+        createQuickTimerStrategy(template);
+    } else if (template.type === 'sensor') {
+        createQuickSensorStrategy(template);
+    }
+}
+
+/**
+ * 创建快速定时策略
+ * @param {object} template - 策略模板
+ */
+function createQuickTimerStrategy(template) {
+    // 获取下一个可用的策略ID
+    callMethod('auto.strategy.list', {}, function(response) {
+        let maxId = 0;
+        if (response.result && response.result.strategies) {
+            response.result.strategies.forEach(s => {
+                if (s.id > maxId) maxId = s.id;
+            });
+        }
+        const nextId = maxId + 1;
+        
+        const params = {
+            id: nextId,
+            name: template.name,
+            groupId: template.groupId,
+            channel: template.channel,
+            action: template.action,
+            intervalSec: template.intervalSec,
+            enabled: template.enabled,
+            autoStart: template.autoStart
+        };
+        
+        // 如果有每日定时设置
+        if (template.triggerType === 'daily' && template.dailyTime) {
+            params.triggerType = 'daily';
+            params.dailyTime = template.dailyTime;
+        }
+        
+        callMethod('auto.strategy.create', params, function(response) {
+            if (response.result && response.result.ok) {
+                log('info', `✅ 策略"${template.name}"创建成功！(ID: ${nextId})`);
+                alert(`策略"${template.name}"创建成功！\n\n策略ID: ${nextId}\n\n提示：记得点击"💾 保存配置"将修改保存到服务器。`);
+                refreshStrategyList();
+            } else if (response.error) {
+                log('error', `创建策略失败: ${response.error.message || '未知错误'}`);
+                alert(`创建策略失败：${response.error.message || '未知错误'}`);
+            }
+        });
+    });
+}
+
+/**
+ * 创建快速传感器策略
+ * @param {object} template - 策略模板
+ */
+function createQuickSensorStrategy(template) {
+    // 获取下一个可用的策略ID
+    callMethod('auto.sensor.list', {}, function(response) {
+        let maxId = 0;
+        if (response.result && response.result.strategies) {
+            response.result.strategies.forEach(s => {
+                if (s.id > maxId) maxId = s.id;
+            });
+        }
+        const nextId = maxId + 1;
+        
+        const params = {
+            id: nextId,
+            name: template.name,
+            sensorType: template.sensorType,
+            sensorNode: template.sensorNode,
+            condition: template.condition,
+            threshold: template.threshold,
+            groupId: template.groupId,
+            channel: template.channel,
+            action: template.action,
+            cooldownSec: template.cooldownSec,
+            enabled: template.enabled
+        };
+        
+        callMethod('auto.sensor.create', params, function(response) {
+            if (response.result && response.result.ok) {
+                log('info', `✅ 传感器策略"${template.name}"创建成功！(ID: ${nextId})`);
+                alert(`传感器策略"${template.name}"创建成功！\n\n策略ID: ${nextId}\n\n提示：记得点击"💾 保存配置"将修改保存到服务器。`);
+                refreshStrategyList();
+            } else if (response.error) {
+                log('error', `创建策略失败: ${response.error.message || '未知错误'}`);
+                alert(`创建策略失败：${response.error.message || '未知错误'}`);
+            }
+        });
+    });
+}
+
+/* ========================================================
+ * 简化策略向导功能
+ * 
+ * 提供步骤化的策略创建流程，更适合新手
+ * ======================================================== */
+
+// 向导当前选择的类型
+let wizardSelectedType = null;
+
+/**
+ * 打开简化策略向导
+ */
+function openSimpleStrategyWizard() {
+    // 检查连接状态
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        alert('请先连接到服务器！\n\n点击左侧"📡 连接"按钮连接服务器后再创建策略。');
+        showPage('connection');
+        return;
+    }
+    
+    // 重置向导状态
+    wizardSelectedType = null;
+    document.getElementById('wizardStep1').style.display = 'block';
+    document.getElementById('wizardStep2Timer').style.display = 'none';
+    document.getElementById('wizardStep2Sensor').style.display = 'none';
+    document.getElementById('wizardSubmitBtn').style.display = 'none';
+    
+    // 清除选中状态
+    document.getElementById('wizardTypeTimer').style.borderColor = '#e0e0e0';
+    document.getElementById('wizardTypeTimer').style.background = 'white';
+    document.getElementById('wizardTypeSensor').style.borderColor = '#e0e0e0';
+    document.getElementById('wizardTypeSensor').style.background = 'white';
+    
+    // 清空表单
+    document.getElementById('wizardTimerName').value = '';
+    document.getElementById('wizardTimerGroupId').value = '1';
+    document.getElementById('wizardTimerChannel').value = '-1';
+    document.getElementById('wizardTimerAction').value = 'fwd';
+    document.getElementById('wizardTimerInterval').value = '3600';
+    
+    document.getElementById('wizardSensorName').value = '';
+    document.getElementById('wizardSensorType').value = 'temperature';
+    document.getElementById('wizardSensorNode').value = '1';
+    document.getElementById('wizardSensorCondition').value = 'gt';
+    document.getElementById('wizardSensorThreshold').value = '30';
+    document.getElementById('wizardSensorGroupId').value = '1';
+    document.getElementById('wizardSensorAction').value = 'fwd';
+    
+    openModal('simpleStrategyWizard');
+}
+
+/**
+ * 选择向导策略类型
+ * @param {string} type - 'timer' 或 'sensor'
+ */
+function selectWizardType(type) {
+    wizardSelectedType = type;
+    
+    // 更新UI状态
+    const timerOption = document.getElementById('wizardTypeTimer');
+    const sensorOption = document.getElementById('wizardTypeSensor');
+    
+    if (type === 'timer') {
+        timerOption.style.borderColor = '#667eea';
+        timerOption.style.background = 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)';
+        sensorOption.style.borderColor = '#e0e0e0';
+        sensorOption.style.background = 'white';
+        
+        document.getElementById('wizardStep2Timer').style.display = 'block';
+        document.getElementById('wizardStep2Sensor').style.display = 'none';
+    } else if (type === 'sensor') {
+        sensorOption.style.borderColor = '#e67e22';
+        sensorOption.style.background = 'linear-gradient(135deg, rgba(230, 126, 34, 0.1) 0%, rgba(243, 156, 18, 0.1) 100%)';
+        timerOption.style.borderColor = '#e0e0e0';
+        timerOption.style.background = 'white';
+        
+        document.getElementById('wizardStep2Timer').style.display = 'none';
+        document.getElementById('wizardStep2Sensor').style.display = 'block';
+    }
+    
+    // 显示提交按钮
+    document.getElementById('wizardSubmitBtn').style.display = 'inline-flex';
+}
+
+/**
+ * 提交向导策略
+ */
+function submitWizardStrategy() {
+    if (!wizardSelectedType) {
+        alert('请先选择策略类型！');
+        return;
+    }
+    
+    if (wizardSelectedType === 'timer') {
+        submitWizardTimerStrategy();
+    } else if (wizardSelectedType === 'sensor') {
+        submitWizardSensorStrategy();
+    }
+}
+
+/**
+ * 提交向导定时策略
+ */
+function submitWizardTimerStrategy() {
+    const name = document.getElementById('wizardTimerName').value.trim();
+    const groupId = parseInt(document.getElementById('wizardTimerGroupId').value);
+    const channel = parseInt(document.getElementById('wizardTimerChannel').value);
+    const action = document.getElementById('wizardTimerAction').value;
+    const intervalSec = parseInt(document.getElementById('wizardTimerInterval').value);
+    
+    if (!intervalSec || intervalSec < 1) {
+        alert('请输入有效的执行间隔！');
+        return;
+    }
+    
+    log('info', '正在创建定时策略...');
+    
+    // 获取下一个可用的策略ID并创建
+    callMethod('auto.strategy.list', {}, function(response) {
+        let maxId = 0;
+        if (response.result && response.result.strategies) {
+            response.result.strategies.forEach(s => {
+                if (s.id > maxId) maxId = s.id;
+            });
+        }
+        const nextId = maxId + 1;
+        const strategyName = name || `定时策略_${nextId}`;
+        
+        const params = {
+            id: nextId,
+            name: strategyName,
+            groupId: groupId,
+            channel: channel,
+            action: action,
+            intervalSec: intervalSec,
+            enabled: true,
+            autoStart: true
+        };
+        
+        callMethod('auto.strategy.create', params, function(response) {
+            if (response.result && response.result.ok) {
+                log('info', `✅ 策略"${strategyName}"创建成功！(ID: ${nextId})`);
+                alert(`策略创建成功！\n\n名称: ${strategyName}\n策略ID: ${nextId}\n\n提示：记得点击"💾 保存配置"将修改保存到服务器。`);
+                closeModal('simpleStrategyWizard');
+                refreshStrategyList();
+            } else if (response.error) {
+                log('error', `创建策略失败: ${response.error.message || '未知错误'}`);
+                alert(`创建策略失败：${response.error.message || '未知错误'}`);
+            }
+        });
+    });
+}
+
+/**
+ * 提交向导传感器策略
+ */
+function submitWizardSensorStrategy() {
+    const name = document.getElementById('wizardSensorName').value.trim();
+    const sensorType = document.getElementById('wizardSensorType').value;
+    const sensorNode = parseInt(document.getElementById('wizardSensorNode').value);
+    const condition = document.getElementById('wizardSensorCondition').value;
+    const threshold = parseFloat(document.getElementById('wizardSensorThreshold').value);
+    const groupId = parseInt(document.getElementById('wizardSensorGroupId').value);
+    const action = document.getElementById('wizardSensorAction').value;
+    
+    log('info', '正在创建传感器策略...');
+    
+    // 获取下一个可用的策略ID并创建
+    callMethod('auto.sensor.list', {}, function(response) {
+        let maxId = 0;
+        if (response.result && response.result.strategies) {
+            response.result.strategies.forEach(s => {
+                if (s.id > maxId) maxId = s.id;
+            });
+        }
+        const nextId = maxId + 1;
+        const strategyName = name || `传感器策略_${nextId}`;
+        
+        const params = {
+            id: nextId,
+            name: strategyName,
+            sensorType: sensorType,
+            sensorNode: sensorNode,
+            condition: condition,
+            threshold: threshold,
+            groupId: groupId,
+            channel: -1,  // 所有通道
+            action: action,
+            cooldownSec: 60,
+            enabled: true
+        };
+        
+        callMethod('auto.sensor.create', params, function(response) {
+            if (response.result && response.result.ok) {
+                log('info', `✅ 传感器策略"${strategyName}"创建成功！(ID: ${nextId})`);
+                alert(`传感器策略创建成功！\n\n名称: ${strategyName}\n策略ID: ${nextId}\n\n提示：记得点击"💾 保存配置"将修改保存到服务器。`);
+                closeModal('simpleStrategyWizard');
+                refreshStrategyList();
+            } else if (response.error) {
+                log('error', `创建策略失败: ${response.error.message || '未知错误'}`);
+                alert(`创建策略失败：${response.error.message || '未知错误'}`);
+            }
+        });
+    });
+}
