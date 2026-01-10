@@ -56,10 +56,24 @@ enum class DeviceTypeId : int {
  * @brief 通信类型标识符
  */
 enum class CommTypeId : int {
-    Serial = 1,     ///< 串口通信（通用）
+    Serial = 1,     ///< 串口通信（通用，支持协议选择）
     Can = 2,        ///< CAN总线通信
-    Modbus = 3,     ///< Modbus通信（基于串口RS485）
-    Uart = 4,       ///< UART通信（异步串口）
+    Modbus = 3,     ///< Modbus通信（基于串口RS485，已整合到Serial）
+    Uart = 4,       ///< UART通信（异步串口，已整合到Serial）
+};
+
+/**
+ * @brief 串口传感器协议类型标识符
+ *
+ * 用于串口传感器的协议选择：
+ * - Modbus: 标准Modbus RTU协议
+ * - Custom: 自定义帧格式协议
+ * - Raw: 原始数据流
+ */
+enum class SerialProtocolId : int {
+    Modbus = 0,     ///< Modbus RTU协议
+    Custom = 1,     ///< 自定义帧协议
+    Raw = 2,        ///< 原始数据流
 };
 
 /**
@@ -146,6 +160,34 @@ inline const char* interfaceTypeToString(InterfaceTypeId type)
     case InterfaceTypeId::Spi: return "SPI";
     default: return "Unknown";
     }
+}
+
+/**
+ * @brief 将串口协议类型转换为字符串
+ * @param protocol 协议类型
+ * @return 协议名称
+ */
+inline const char* serialProtocolIdToString(SerialProtocolId protocol)
+{
+    switch (protocol) {
+    case SerialProtocolId::Modbus: return "Modbus";
+    case SerialProtocolId::Custom: return "Custom";
+    case SerialProtocolId::Raw: return "Raw";
+    default: return "Unknown";
+    }
+}
+
+/**
+ * @brief 判断设备类型是否为串口传感器
+ * @param type 设备类型
+ * @return 是串口传感器返回true（包括Modbus和UART传感器）
+ */
+inline bool isSerialSensorType(DeviceTypeId type)
+{
+    const int typeValue = static_cast<int>(type);
+    // Modbus传感器 (21-50) || UART传感器 (81-100)
+    return (typeValue >= 21 && typeValue <= 50) ||
+           (typeValue >= 81 && typeValue <= 100);
 }
 
 /**
