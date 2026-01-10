@@ -3,6 +3,7 @@
  * @brief 设备类型定义
  *
  * 定义系统的设备类型、通信类型和接口类型。
+ * 注意：串口协议类型定义在 serial/serial_protocol.h 中。
  */
 
 #ifndef FANZHOU_DEVICE_TYPES_H
@@ -56,10 +57,10 @@ enum class DeviceTypeId : int {
  * @brief 通信类型标识符
  */
 enum class CommTypeId : int {
-    Serial = 1,     ///< 串口通信（通用）
+    Serial = 1,     ///< 串口通信（通用，支持协议选择，参见 serial/serial_protocol.h）
     Can = 2,        ///< CAN总线通信
-    Modbus = 3,     ///< Modbus通信（基于串口RS485）
-    Uart = 4,       ///< UART通信（异步串口）
+    Modbus = 3,     ///< Modbus通信（基于串口RS485，已整合到Serial）
+    Uart = 4,       ///< UART通信（异步串口，已整合到Serial）
 };
 
 /**
@@ -146,6 +147,19 @@ inline const char* interfaceTypeToString(InterfaceTypeId type)
     case InterfaceTypeId::Spi: return "SPI";
     default: return "Unknown";
     }
+}
+
+/**
+ * @brief 判断设备类型是否为串口传感器
+ * @param type 设备类型
+ * @return 是串口传感器返回true（包括Modbus和UART传感器）
+ */
+inline bool isSerialSensorType(DeviceTypeId type)
+{
+    const int typeValue = static_cast<int>(type);
+    // Modbus传感器 (21-50) || UART传感器 (81-100)
+    return (typeValue >= 21 && typeValue <= 50) ||
+           (typeValue >= 81 && typeValue <= 100);
 }
 
 /**

@@ -25,6 +25,8 @@ SOURCES += \
     src/device/base/device_adapter.cpp \
     src/device/can/can_device_manager.cpp \
     src/device/can/relay_gd427.cpp \
+    src/device/serial/serial_sensor.cpp \
+    src/device/serial/serial_temp_sensor.cpp \
     src/device/modbus/modbus_sensor.cpp \
     src/device/modbus/modbus_temp_sensor.cpp \
     src/device/uart/uart_sensor.cpp \
@@ -50,6 +52,9 @@ HEADERS += \
     src/device/can/relay_protocol.h \
     src/device/can/can_device_manager.h \
     src/device/can/relay_gd427.h \
+    src/device/serial/serial_protocol.h \
+    src/device/serial/serial_sensor.h \
+    src/device/serial/serial_temp_sensor.h \
     src/device/modbus/modbus_sensor.h \
     src/device/modbus/modbus_temp_sensor.h \
     src/device/uart/uart_sensor.h \

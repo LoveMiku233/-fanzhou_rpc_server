@@ -49,6 +49,10 @@ fanzhou_rpc_server/
 │   └── API_REFERENCE.zh.md     # API参考手册
 ├── test_web/                   # Web调试工具
 │   └── index.html              # 调试界面
+├── qt_app/                     # Qt桌面应用程序
+│   ├── qt_app.pro              # Qt项目文件
+│   ├── resources/              # 资源文件
+│   └── src/                    # 源代码
 └── src/
     ├── utils/                  # 工具类
     │   ├── logger.h/cpp        # 日志系统
@@ -71,20 +75,72 @@ fanzhou_rpc_server/
     │   ├── can_comm.h/cpp             # CAN通信
     │   └── serial_comm.h/cpp          # 串口通信
     └── device/                 # 设备层
-        ├── device_types.h      # 设备/通信/接口类型定义
+        ├── device_types.h      # 设备/通信/接口/协议类型定义
         ├── base/
         │   ├── device_adapter.h/cpp   # 设备适配器基类
         │   └── i_sensor.h             # 传感器接口
-        ├── can/
+        ├── can/                # CAN设备
         │   ├── i_can_device.h         # CAN设备接口
         │   ├── can_device_manager.h/cpp
         │   ├── relay_protocol.h       # 继电器协议
         │   └── relay_gd427.h/cpp      # GD427继电器
-        ├── modbus/             # Modbus传感器
+        ├── serial/             # 串口传感器（统一模块）
+        │   ├── serial_protocol.h      # 串口协议定义（Modbus/Custom/Raw）
+        │   ├── serial_sensor.h/cpp    # 串口传感器基类（支持协议切换）
+        │   └── serial_temp_sensor.h/cpp # 串口温度传感器
+        ├── modbus/             # Modbus传感器（兼容模块）
         │   ├── modbus_sensor.h/cpp    # Modbus传感器基类
         │   └── modbus_temp_sensor.h/cpp # 温度传感器
-        └── uart/               # UART传感器
+        └── uart/               # UART传感器（兼容模块）
             └── uart_sensor.h/cpp      # UART传感器基类
+```
+
+### 串口传感器协议选择
+
+新增的 `serial/` 目录提供统一的串口传感器框架，支持以下协议：
+
+| 协议类型 | 说明 |
+|----------|------|
+| `Modbus` | 标准Modbus RTU协议，使用从机地址和寄存器读取数据 |
+| `Custom` | 自定义帧格式协议，支持帧头/帧尾/固定长度配置 |
+| `Raw`    | 原始数据流，无帧格式，适用于特殊传感器 |
+
+配置示例：
+
+```json
+{
+  "name": "temp-sensor01",
+  "type": 22,
+  "commType": 1,
+  "nodeId": 10,
+  "bus": "/dev/ttyS1",
+  "params": {
+    "protocol": "Modbus",
+    "modbusAddr": 1,
+    "baudRate": 9600,
+    "registerAddr": 0,
+    "registerCount": 1,
+    "scale": 0.1
+  }
+}
+```
+
+使用自定义协议时：
+
+```json
+{
+  "name": "custom-sensor01",
+  "type": 81,
+  "commType": 1,
+  "nodeId": 20,
+  "bus": "/dev/ttyS2",
+  "params": {
+    "protocol": "Custom",
+    "baudRate": 9600,
+    "frameHeader": "AA55",
+    "frameLength": 8
+  }
+}
 ```
 
 ## 编译
