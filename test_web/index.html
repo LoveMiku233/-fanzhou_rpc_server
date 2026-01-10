@@ -695,7 +695,7 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
         </div>
     </div>
 
-    <!-- 创建定时策略弹窗 -->
+    <!-- 创建定时策略弹窗 - 优化版 -->
     <div class="modal-overlay" id="strategyModal" onclick="closeModalOnBackground(event, 'strategyModal')">
         <div class="modal-content modal-large">
             <div class="modal-header">
@@ -703,17 +703,22 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                 <button class="modal-close" onclick="closeModal('strategyModal')">✕</button>
             </div>
             <div class="modal-body">
+                <!-- 提示信息 -->
+                <div style="background: #e3f2fd; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; font-size: 13px; color: #1565c0;">
+                    💡 <strong>提示：</strong>定时策略会按照设定的时间间隔自动执行指定动作。策略ID会自动生成，名称可留空。
+                </div>
+                
                 <div class="form-row">
                     <div class="form-group">
-                        <label>策略ID</label>
-                        <input type="number" id="newStrategyId" value="1" min="1">
+                        <label>策略ID <span style="color: #999; font-size: 11px;">（自动生成）</span></label>
+                        <input type="number" id="newStrategyId" value="1" min="1" readonly style="background: #f5f5f5;">
                     </div>
                     <div class="form-group">
-                        <label>策略名称</label>
-                        <input type="text" id="newStrategyName" placeholder="例如: 定时通风">
+                        <label>策略名称 <span style="color: #999; font-size: 11px;">（可选）</span></label>
+                        <input type="text" id="newStrategyName" placeholder="留空自动生成">
                     </div>
                     <div class="form-group">
-                        <label>绑定分组ID</label>
+                        <label>绑定分组ID <span style="color: #c62828; font-size: 11px;">*必填</span></label>
                         <input type="number" id="newStrategyGroupId" value="1" min="1">
                     </div>
                 </div>
@@ -721,18 +726,18 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                     <div class="form-group">
                         <label>控制通道</label>
                         <select id="newStrategyChannel">
+                            <option value="-1">🔄 全部通道</option>
                             <option value="0">通道 0</option>
                             <option value="1">通道 1</option>
                             <option value="2">通道 2</option>
                             <option value="3">通道 3</option>
-                            <option value="-1">全部通道</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label>执行动作</label>
                         <select id="newStrategyAction">
+                            <option value="fwd">▶️ 正转（启动）</option>
                             <option value="stop">⏹️ 停止</option>
-                            <option value="fwd">▶️ 正转</option>
                             <option value="rev">◀️ 反转</option>
                         </select>
                     </div>
@@ -755,7 +760,8 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                         </div>
                         <div class="form-group" id="intervalInputGroup">
                             <label>执行间隔（秒）</label>
-                            <input type="number" id="newStrategyInterval" value="60" min="1">
+                            <input type="number" id="newStrategyInterval" value="3600" min="1">
+                            <div style="font-size: 11px; color: #666; margin-top: 4px;">常用：60=1分钟, 3600=1小时, 86400=1天</div>
                         </div>
                         <div class="form-group" id="dailyTimeInputGroup" style="display: none;">
                             <label>每日执行时间</label>
@@ -771,22 +777,27 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
         </div>
     </div>
 
-    <!-- 创建传感器策略弹窗 -->
+    <!-- 创建传感器策略弹窗 - 优化版 -->
     <div class="modal-overlay" id="sensorStrategyModal" onclick="closeModalOnBackground(event, 'sensorStrategyModal')">
         <div class="modal-content modal-large">
-            <div class="modal-header">
+            <div class="modal-header" style="background: linear-gradient(135deg, #e67e22 0%, #f39c12 100%);">
                 <h3>📡 创建传感器策略</h3>
                 <button class="modal-close" onclick="closeModal('sensorStrategyModal')">✕</button>
             </div>
             <div class="modal-body">
+                <!-- 提示信息 -->
+                <div style="background: #fff3e0; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; font-size: 13px; color: #e65100;">
+                    💡 <strong>提示：</strong>传感器策略会在传感器数值满足条件时自动执行。例如：温度>30°C时启动风扇降温。
+                </div>
+                
                 <div class="form-row">
                     <div class="form-group">
-                        <label>策略ID</label>
-                        <input type="number" id="sensorStrategyId" value="1" min="1">
+                        <label>策略ID <span style="color: #999; font-size: 11px;">（自动生成）</span></label>
+                        <input type="number" id="sensorStrategyId" value="1" min="1" readonly style="background: #f5f5f5;">
                     </div>
                     <div class="form-group">
-                        <label>策略名称</label>
-                        <input type="text" id="sensorStrategyName" placeholder="例如: 高温报警">
+                        <label>策略名称 <span style="color: #999; font-size: 11px;">（可选）</span></label>
+                        <input type="text" id="sensorStrategyName" placeholder="留空自动生成">
                     </div>
                     <div class="form-group">
                         <label>传感器类型</label>
@@ -802,54 +813,68 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                         <input type="number" id="sensorNodeId" value="1" min="1" max="255">
                     </div>
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>触发条件</label>
-                        <select id="sensorCondition">
-                            <option value="gt">大于 (>)</option>
-                            <option value="lt">小于 (<)</option>
-                            <option value="gte">≥</option>
-                            <option value="lte">≤</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>阈值</label>
-                        <input type="number" id="sensorThreshold" value="25" step="0.1">
-                    </div>
-                    <div class="form-group">
-                        <label>分组ID</label>
-                        <input type="number" id="sensorGroupId" value="1" min="1">
-                    </div>
-                    <div class="form-group">
-                        <label>通道</label>
-                        <select id="sensorChannel">
-                            <option value="0">CH0</option>
-                            <option value="1">CH1</option>
-                            <option value="2">CH2</option>
-                            <option value="3">CH3</option>
-                            <option value="-1">全部</option>
-                        </select>
+                
+                <!-- 触发条件区域 -->
+                <div style="background: #fafafa; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #e67e22;">
+                    <div style="font-weight: 600; color: #333; margin-bottom: 10px;">📊 触发条件设置</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>当传感器数值</label>
+                            <select id="sensorCondition">
+                                <option value="gt">大于 (>) - 超过阈值时触发</option>
+                                <option value="lt">小于 (&lt;) - 低于阈值时触发</option>
+                                <option value="gte">大于等于 (≥)</option>
+                                <option value="lte">小于等于 (≤)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>阈值</label>
+                            <input type="number" id="sensorThreshold" value="30" step="0.1">
+                            <div style="font-size: 11px; color: #666; margin-top: 4px;">例如：温度30表示30°C</div>
+                        </div>
                     </div>
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>执行动作</label>
-                        <select id="sensorAction">
-                            <option value="fwd">▶️ 正转</option>
-                            <option value="stop">⏹️ 停止</option>
-                            <option value="rev">◀️ 反转</option>
-                        </select>
+                
+                <!-- 执行动作区域 -->
+                <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; border-left: 4px solid #4caf50;">
+                    <div style="font-weight: 600; color: #333; margin-bottom: 10px;">⚡ 执行动作设置</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>控制分组ID <span style="color: #c62828; font-size: 11px;">*必填</span></label>
+                            <input type="number" id="sensorGroupId" value="1" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label>控制通道</label>
+                            <select id="sensorChannel">
+                                <option value="-1">🔄 全部通道</option>
+                                <option value="0">通道 0</option>
+                                <option value="1">通道 1</option>
+                                <option value="2">通道 2</option>
+                                <option value="3">通道 3</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>冷却时间（秒）</label>
-                        <input type="number" id="sensorCooldown" value="60" min="0">
-                    </div>
-                    <div class="form-group">
-                        <label>启用</label>
-                        <select id="sensorEnabled">
-                            <option value="true">✅ 是</option>
-                            <option value="false">❌ 否</option>
-                        </select>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>执行动作</label>
+                            <select id="sensorAction">
+                                <option value="fwd">▶️ 正转（启动设备）</option>
+                                <option value="stop">⏹️ 停止</option>
+                                <option value="rev">◀️ 反转</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>冷却时间（秒）</label>
+                            <input type="number" id="sensorCooldown" value="60" min="0">
+                            <div style="font-size: 11px; color: #666; margin-top: 4px;">触发后多久才能再次触发</div>
+                        </div>
+                        <div class="form-group">
+                            <label>启用</label>
+                            <select id="sensorEnabled">
+                                <option value="true">✅ 是</option>
+                                <option value="false">❌ 否</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
             </div>
