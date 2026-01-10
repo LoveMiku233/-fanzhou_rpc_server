@@ -25,6 +25,9 @@ SOURCES += \
     src/device/base/device_adapter.cpp \
     src/device/can/can_device_manager.cpp \
     src/device/can/relay_gd427.cpp \
+    src/device/modbus/modbus_sensor.cpp \
+    src/device/modbus/modbus_temp_sensor.cpp \
+    src/device/uart/uart_sensor.cpp \
     src/rpc/rpc_helpers.cpp \
     src/rpc/json_rpc_dispatcher.cpp \
     src/rpc/json_rpc_server.cpp \
@@ -42,10 +45,14 @@ HEADERS += \
     src/comm/can_comm.h \
     src/device/device_types.h \
     src/device/base/device_adapter.h \
+    src/device/base/i_sensor.h \
     src/device/can/i_can_device.h \
     src/device/can/relay_protocol.h \
     src/device/can/can_device_manager.h \
     src/device/can/relay_gd427.h \
+    src/device/modbus/modbus_sensor.h \
+    src/device/modbus/modbus_temp_sensor.h \
+    src/device/uart/uart_sensor.h \
     src/rpc/rpc_error_codes.h \
     src/rpc/rpc_helpers.h \
     src/rpc/json_rpc_dispatcher.h \

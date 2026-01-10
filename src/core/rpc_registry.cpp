@@ -1511,10 +1511,44 @@ void RpcRegistry::registerDevice()
             arr.append(QJsonObject{
                 {QStringLiteral("id"), static_cast<int>(types[i].id)},
                 {QStringLiteral("name"), QString::fromLatin1(types[i].name)},
-                {QStringLiteral("category"), QString::fromLatin1(types[i].category)}
+                {QStringLiteral("category"), QString::fromLatin1(types[i].category)},
+                {QStringLiteral("defaultCommType"), static_cast<int>(types[i].defaultCommType)},
+                {QStringLiteral("defaultCommTypeName"), QString::fromLatin1(device::commTypeToString(types[i].defaultCommType))}
             });
         }
         return QJsonObject{{kKeyOk, true}, {QStringLiteral("types"), arr}};
+    });
+
+    // 获取通信类型列表
+    dispatcher_->registerMethod(QStringLiteral("device.commTypes"),
+                                 [](const QJsonObject &) {
+        QJsonArray arr;
+        int count = 0;
+        const auto* types = device::allCommTypes(count);
+        for (int i = 0; i < count; ++i) {
+            arr.append(QJsonObject{
+                {QStringLiteral("id"), static_cast<int>(types[i].id)},
+                {QStringLiteral("name"), QString::fromLatin1(types[i].name)},
+                {QStringLiteral("description"), QString::fromUtf8(types[i].description)}
+            });
+        }
+        return QJsonObject{{kKeyOk, true}, {QStringLiteral("commTypes"), arr}};
+    });
+
+    // 获取接口类型列表
+    dispatcher_->registerMethod(QStringLiteral("device.interfaceTypes"),
+                                 [](const QJsonObject &) {
+        QJsonArray arr;
+        int count = 0;
+        const auto* types = device::allInterfaceTypes(count);
+        for (int i = 0; i < count; ++i) {
+            arr.append(QJsonObject{
+                {QStringLiteral("id"), static_cast<int>(types[i].id)},
+                {QStringLiteral("name"), QString::fromLatin1(types[i].name)},
+                {QStringLiteral("description"), QString::fromUtf8(types[i].description)}
+            });
+        }
+        return QJsonObject{{kKeyOk, true}, {QStringLiteral("interfaceTypes"), arr}};
     });
 
     // 获取设备列表
@@ -1595,12 +1629,8 @@ void RpcRegistry::registerDevice()
         if (commType > 0) {
             config.commType = static_cast<device::CommTypeId>(commType);
         } else {
-            // Default comm type based on device type
-            if (device::isModbusSensorType(config.deviceType)) {
-                config.commType = device::CommTypeId::Serial;
-            } else {
-                config.commType = device::CommTypeId::Can;
-            }
+            // Use the new getDefaultCommType function
+            config.commType = device::getDefaultCommType(config.deviceType);
         }
         config.bus = bus.isEmpty() ? context_->canInterface : bus;
 

@@ -345,22 +345,45 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 | 值 | 说明 |
 |----|------|
 | `RelayGd427 = 1` | GD427 CAN继电器 |
+| `ActuatorGeneric = 11` | 通用执行器 |
 | `SensorModbusGeneric = 21` | 通用Modbus传感器 |
-| `SensorModbusTemp = 22` | 温度传感器 |
-| `SensorModbusHumidity = 23` | 湿度传感器 |
-| `SensorModbusSoil = 24` | 土壤传感器 |
-| `SensorModbusCO2 = 25` | CO2传感器 |
-| `SensorModbusLight = 26` | 光照传感器 |
-| `SensorModbusPH = 27` | pH传感器 |
-| `SensorModbusEC = 28` | EC传感器 |
+| `SensorModbusTemp = 22` | 温度传感器 (Modbus) |
+| `SensorModbusHumidity = 23` | 湿度传感器 (Modbus) |
+| `SensorModbusSoil = 24` | 土壤传感器 (Modbus) |
+| `SensorModbusCO2 = 25` | CO2传感器 (Modbus) |
+| `SensorModbusLight = 26` | 光照传感器 (Modbus) |
+| `SensorModbusPH = 27` | pH传感器 (Modbus) |
+| `SensorModbusEC = 28` | EC传感器 (Modbus) |
+| `SensorModbusPressure = 29` | 气压传感器 (Modbus) |
+| `SensorModbusWind = 30` | 风速传感器 (Modbus) |
+| `SensorModbusRain = 31` | 雨量传感器 (Modbus) |
 | `SensorCanGeneric = 51` | 通用CAN传感器 |
+| `SensorCanTemp = 52` | 温度传感器 (CAN) |
+| `SensorCanHumidity = 53` | 湿度传感器 (CAN) |
+| `SensorUartGeneric = 81` | 通用UART传感器 |
+| `SensorUartGps = 82` | GPS传感器 (UART) |
+| `SensorUartPm25 = 83` | PM2.5传感器 (UART) |
 
 #### 枚举：`CommTypeId`
 
 | 值 | 说明 |
 |----|------|
-| `Serial = 1` | 串口通信 |
+| `Serial = 1` | 通用串口通信 |
 | `Can = 2` | CAN总线通信 |
+| `Modbus = 3` | Modbus RTU/TCP通信 |
+| `Uart = 4` | UART异步串口通信 |
+
+#### 枚举：`InterfaceTypeId`
+
+| 值 | 说明 |
+|----|------|
+| `Rs232 = 1` | RS232接口 |
+| `Rs485 = 2` | RS485差分接口 |
+| `CanBus = 3` | CAN总线接口 |
+| `Uart = 4` | UART接口 |
+| `Gpio = 5` | GPIO接口 |
+| `I2c = 6` | I2C总线接口 |
+| `Spi = 7` | SPI总线接口 |
 
 #### 工具函数
 
@@ -368,9 +391,64 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 |------|------|
 | `deviceTypeToString()` | 设备类型转字符串 |
 | `commTypeToString()` | 通信类型转字符串 |
+| `interfaceTypeToString()` | 接口类型转字符串 |
 | `isSensorType()` | 判断是否为传感器 |
 | `isModbusSensorType()` | 判断是否为Modbus传感器 |
+| `isCanSensorType()` | 判断是否为CAN传感器 |
+| `isUartSensorType()` | 判断是否为UART传感器 |
+| `isActuatorType()` | 判断是否为执行器 |
 | `allDeviceTypes()` | 获取所有设备类型信息 |
+| `allCommTypes()` | 获取所有通信类型信息 |
+| `allInterfaceTypes()` | 获取所有接口类型信息 |
+| `getDefaultCommType()` | 根据设备类型获取默认通信类型 |
+
+---
+
+### base/i_sensor.h
+
+**文件说明**：传感器设备接口定义。
+
+#### 枚举：`SensorUnit`
+
+| 值 | 说明 | 符号 |
+|----|------|------|
+| `None = 0` | 无单位 | - |
+| `Celsius = 1` | 摄氏度 | °C |
+| `Fahrenheit = 2` | 华氏度 | °F |
+| `Percent = 3` | 百分比 | % |
+| `Pascal = 4` | 帕斯卡 | Pa |
+| `Hectopascal = 5` | 百帕 | hPa |
+| `Lux = 6` | 勒克斯 | lux |
+| `Ppm = 7` | 百万分之一 | ppm |
+| `Ph = 8` | pH值 | pH |
+| `MsPerCm = 9` | 毫西门子/厘米 | mS/cm |
+| `Mm = 10` | 毫米（雨量） | mm |
+| `MPerS = 11` | 米/秒（风速） | m/s |
+| `UgPerM3 = 12` | 微克/立方米 | μg/m³ |
+| `Degree = 13` | 度（角度） | ° |
+
+#### 结构体：`SensorReading`
+
+| 成员 | 类型 | 说明 |
+|------|------|------|
+| `value` | `double` | 传感器数值 |
+| `unit` | `SensorUnit` | 数值单位 |
+| `timestampMs` | `qint64` | 读取时间戳（毫秒） |
+| `valid` | `bool` | 数据是否有效 |
+| `error` | `QString` | 错误信息（如果有） |
+
+#### 接口：`ISensor`
+
+| 虚方法 | 返回值 | 说明 |
+|--------|--------|------|
+| `sensorName()` | `QString` | 获取传感器名称 |
+| `sensorTypeName()` | `QString` | 获取传感器类型名称 |
+| `read()` | `SensorReading` | 读取传感器当前值 |
+| `lastReading()` | `SensorReading` | 获取最后读数 |
+| `unit()` | `SensorUnit` | 获取测量单位 |
+| `sensorInfo()` | `QJsonObject` | 获取传感器信息 |
+| `isAvailable()` | `bool` | 检查传感器是否可用 |
+| `calibrate()` | `bool` | 校准传感器 |
 
 ---
 
@@ -765,11 +843,41 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 
 | 方法名 | 参数 | 返回值 | 说明 |
 |--------|------|--------|------|
-| `device.types` | 无 | 设备类型列表 | 获取支持的设备类型 |
+| `device.types` | 无 | 设备类型列表 | 获取支持的设备类型（含默认通信类型） |
+| `device.commTypes` | 无 | 通信类型列表 | 获取支持的通信类型 |
+| `device.interfaceTypes` | 无 | 接口类型列表 | 获取支持的接口类型 |
 | `device.list` | 无 | 设备列表 | 获取已注册设备 |
 | `device.get` | `{nodeId}` | 设备详情 | 获取设备信息 |
 | `device.add` | `{nodeId, type, name, ...}` | `{ok, nodeId}` | 添加设备 |
 | `device.remove` | `{nodeId}` | `{ok}` | 移除设备 |
+
+**使用示例**：
+```bash
+# 获取所有支持的设备类型
+{"jsonrpc":"2.0","id":1,"method":"device.types","params":{}}
+
+# 获取所有通信类型
+{"jsonrpc":"2.0","id":2,"method":"device.commTypes","params":{}}
+
+# 获取所有接口类型
+{"jsonrpc":"2.0","id":3,"method":"device.interfaceTypes","params":{}}
+
+# 添加Modbus温度传感器
+{"jsonrpc":"2.0","id":4,"method":"device.add","params":{
+  "nodeId": 15,
+  "type": 22,
+  "name": "temp-sensor02",
+  "commType": 3,
+  "bus": "/dev/ttyS1",
+  "params": {
+    "modbusAddr": 5,
+    "baudRate": 9600,
+    "registerAddr": 0,
+    "registerCount": 1,
+    "scale": 0.1
+  }
+}}
+```
 
 ### 屏幕方法
 
@@ -990,6 +1098,7 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 | 1.0.4 | 2026-01 | 新增：RTC时间管理（sys.time.*）和网络配置（sys.network.*）RPC方法 |
 | 1.0.5 | 2026-01 | 新增：配置管理RPC方法（config.get/save/reload），解决"Web页面修改无法保存"问题；改进CAN诊断信息 |
 | 1.0.6 | 2026-01 | 新增：急停功能（relay.emergencyStop）和传感器接口（sensor.list/read），支持串口和CAN通讯方式 |
+| 1.1.0 | 2026-01 | **重大更新**：增强设备层架构，新增Modbus/UART/CAN传感器支持，添加接口类型定义，新增device.commTypes和device.interfaceTypes方法 |
 
 ---
 
