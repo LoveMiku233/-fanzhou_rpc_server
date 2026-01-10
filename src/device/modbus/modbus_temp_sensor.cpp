@@ -15,15 +15,21 @@ namespace {
 const char* const kLogSource = "ModbusTempSensor";
 }  // namespace
 
+/**
+ * 构造函数会自动设置温度传感器的默认配置：
+ * - 默认单位为摄氏度（如果未指定）
+ * - 默认缩放因子为0.1（常见温度传感器返回值需除以10）
+ */
 ModbusTempSensor::ModbusTempSensor(quint8 nodeId, const ModbusSensorConfig &config,
                                    comm::SerialComm *comm, QObject *parent)
     : ModbusSensor(nodeId, config, comm, parent)
 {
-    // 设置默认单位为摄氏度
+    // 设置默认单位为摄氏度（如果用户未指定）
     if (config_.unit == SensorUnit::None) {
         config_.unit = SensorUnit::Celsius;
     }
     // 常见温度传感器的缩放因子（除以10得到实际温度）
+    // 只有当用户未自定义缩放因子时才应用默认值
     if (config_.scale == 1.0) {
         config_.scale = 0.1;
     }
