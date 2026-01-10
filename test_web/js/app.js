@@ -2024,11 +2024,11 @@ const STRATEGY_TEMPLATES = {
     'irrigation': {
         type: 'timer',
         name: '定时浇水',
-        description: '每天早晚定时浇水',
+        description: '每天早上8点定时浇水',
         groupId: 1,
         channel: 0,
         action: 'fwd',
-        intervalSec: 43200,  // 12小时
+        intervalSec: 43200,  // 12小时（备用）
         dailyTime: '08:00',
         triggerType: 'daily',
         enabled: true,
