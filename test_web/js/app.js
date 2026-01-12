@@ -2285,13 +2285,20 @@ function openSimpleStrategyWizard() {
     document.getElementById('wizardTypeSensor').style.borderColor = '#e0e0e0';
     document.getElementById('wizardTypeSensor').style.background = 'white';
     
-    // 清空表单
+    // 清空表单 - 定时策略
     document.getElementById('wizardTimerName').value = '';
     document.getElementById('wizardTimerGroupId').value = '1';
     document.getElementById('wizardTimerChannel').value = '-1';
     document.getElementById('wizardTimerAction').value = 'fwd';
+    document.getElementById('wizardTimerTriggerType').value = 'interval';
     document.getElementById('wizardTimerInterval').value = '3600';
+    document.getElementById('wizardTimerDailyTime').value = '08:00';
     
+    // 重置触发类型输入框显示状态
+    document.getElementById('wizardIntervalInputGroup').style.display = 'block';
+    document.getElementById('wizardDailyTimeInputGroup').style.display = 'none';
+    
+    // 清空表单 - 传感器策略
     document.getElementById('wizardSensorName').value = '';
     document.getElementById('wizardSensorType').value = 'temperature';
     document.getElementById('wizardSensorNode').value = '1';
@@ -2353,18 +2360,46 @@ function submitWizardStrategy() {
 }
 
 /**
+ * 切换简易向导定时策略触发类型的输入框显示
+ */
+function toggleWizardTimerTypeInputs() {
+    const triggerType = document.getElementById('wizardTimerTriggerType').value;
+    const intervalGroup = document.getElementById('wizardIntervalInputGroup');
+    const dailyTimeGroup = document.getElementById('wizardDailyTimeInputGroup');
+    
+    if (triggerType === 'interval') {
+        intervalGroup.style.display = 'block';
+        dailyTimeGroup.style.display = 'none';
+    } else if (triggerType === 'daily') {
+        intervalGroup.style.display = 'none';
+        dailyTimeGroup.style.display = 'block';
+    }
+}
+
+/**
  * 提交向导定时策略
+ * 支持间隔执行和每日定时两种触发方式
  */
 function submitWizardTimerStrategy() {
     const name = document.getElementById('wizardTimerName').value.trim();
     const groupId = parseInt(document.getElementById('wizardTimerGroupId').value);
     const channel = parseInt(document.getElementById('wizardTimerChannel').value);
     const action = document.getElementById('wizardTimerAction').value;
+    const triggerType = document.getElementById('wizardTimerTriggerType').value;
     const intervalSec = parseInt(document.getElementById('wizardTimerInterval').value);
+    const dailyTime = document.getElementById('wizardTimerDailyTime').value;
     
-    if (!intervalSec || intervalSec < 1) {
-        alert('请输入有效的执行间隔！');
-        return;
+    // 根据触发类型验证参数
+    if (triggerType === 'interval') {
+        if (!intervalSec || intervalSec < 1) {
+            alert('请输入有效的执行间隔！');
+            return;
+        }
+    } else if (triggerType === 'daily') {
+        if (!dailyTime) {
+            alert('请选择每日执行时间！');
+            return;
+        }
     }
     
     log('info', '正在创建定时策略...');
@@ -2386,15 +2421,29 @@ function submitWizardTimerStrategy() {
             groupId: groupId,
             channel: channel,
             action: action,
-            intervalSec: intervalSec,
             enabled: true,
             autoStart: true
         };
         
+        // 根据触发类型设置不同的参数
+        if (triggerType === 'interval') {
+            params.intervalSec = intervalSec;
+            params.triggerType = 'interval';
+        } else if (triggerType === 'daily') {
+            params.dailyTime = dailyTime;
+            params.dailyTimeSec = timeToSeconds(dailyTime);
+            params.triggerType = 'daily';
+            // 设置一个默认间隔以防RPC验证需要
+            params.intervalSec = 86400;
+        }
+        
         callMethod('auto.strategy.create', params, function(response) {
             if (response.result && response.result.ok) {
-                log('info', `✅ 策略"${strategyName}"创建成功！(ID: ${nextId})`);
-                alert(`策略创建成功！\n\n名称: ${strategyName}\n策略ID: ${nextId}\n\n提示：记得点击"💾 保存配置"将修改保存到服务器。`);
+                const triggerDesc = triggerType === 'daily' ? 
+                    `每日 ${dailyTime} 执行` : 
+                    `每 ${intervalSec} 秒执行`;
+                log('info', `✅ 策略"${strategyName}"创建成功！(ID: ${nextId}, ${triggerDesc})`);
+                alert(`策略创建成功！\n\n名称: ${strategyName}\n策略ID: ${nextId}\n触发方式: ${triggerDesc}\n\n提示：记得点击"💾 保存配置"将修改保存到服务器。`);
                 closeModal('simpleStrategyWizard');
                 refreshStrategyList();
             } else if (response.error) {

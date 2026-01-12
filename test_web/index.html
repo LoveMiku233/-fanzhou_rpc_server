@@ -978,9 +978,23 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                                 </select>
                             </div>
                             <div class="form-group">
+                                <label>🔄 触发类型</label>
+                                <select id="wizardTimerTriggerType" onchange="toggleWizardTimerTypeInputs()">
+                                    <option value="interval">按间隔执行</option>
+                                    <option value="daily">每日定时执行</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" id="wizardIntervalInputGroup">
                                 <label>⏱️ 执行间隔（秒）</label>
                                 <input type="number" id="wizardTimerInterval" value="3600" min="1">
                                 <div style="font-size: 11px; color: #666; margin-top: 4px;">3600秒 = 1小时</div>
+                            </div>
+                            <div class="form-group" id="wizardDailyTimeInputGroup" style="display: none;">
+                                <label>📅 每日执行时间</label>
+                                <input type="time" id="wizardTimerDailyTime" value="08:00">
+                                <div style="font-size: 11px; color: #666; margin-top: 4px;">格式：HH:MM（24小时制）</div>
                             </div>
                         </div>
                     </div>
