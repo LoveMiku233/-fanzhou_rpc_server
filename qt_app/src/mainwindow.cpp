@@ -357,10 +357,10 @@ void MainWindow::onAutoRefreshTimeout()
         if (currentPageIndex_ == 0 && homeWidget_) {
             homeWidget_->refreshData();
         }
-        // 静默刷新设备状态（仅当设备页面可见时）
-        if (currentPageIndex_ == 1 && deviceWidget_) {
-            deviceWidget_->refreshDeviceStatus();
-        }
+        // 注意：移除了设备状态的自动轮询
+        // 原因：节点设备会主动通过CAN总线上报状态数据（CAN ID: 0x200+nodeId）
+        // 如果QT同时通过RPC轮询查询状态，会导致CAN TX buffer拥塞
+        // 用户可以通过手动点击"刷新设备"或"查询全部"按钮获取最新状态
     }
 }
 
