@@ -5,7 +5,10 @@
 
 #include "system_settings.h"
 
+#include <QFile>
 #include <QProcess>
+#include <QRegularExpression>
+#include <QTextStream>
 
 namespace fanzhou {
 namespace config {
@@ -391,17 +394,38 @@ bool SystemSettings::setDns(const QString &primary, const QString &secondary)
         return false;
     }
 
+    // 验证DNS地址格式（简单的IP地址格式检查）
+    static QRegularExpression ipRegex(
+        QStringLiteral("^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$"));
+    
+    if (!ipRegex.match(primary).hasMatch()) {
+        emit errorOccurred(QStringLiteral("setDns: invalid primary DNS format"));
+        return false;
+    }
+    
+    if (!secondary.isEmpty() && !ipRegex.match(secondary).hasMatch()) {
+        emit errorOccurred(QStringLiteral("setDns: invalid secondary DNS format"));
+        return false;
+    }
+
     // 构建resolv.conf内容
     QString content = QStringLiteral("nameserver %1\n").arg(primary);
     if (!secondary.isEmpty()) {
         content += QStringLiteral("nameserver %1\n").arg(secondary);
     }
 
-    // 写入/etc/resolv.conf
-    // 使用bash -c来执行写入操作
-    return runCommandWithStatus(QStringLiteral("bash"),
-        {QStringLiteral("-c"),
-         QStringLiteral("echo '%1' > /etc/resolv.conf").arg(content)});
+    // 使用QFile直接写入文件，避免命令注入风险
+    QFile file(QStringLiteral("/etc/resolv.conf"));
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        emit errorOccurred(QStringLiteral("setDns: cannot open /etc/resolv.conf for writing"));
+        return false;
+    }
+    
+    QTextStream out(&file);
+    out << content;
+    file.close();
+    
+    return true;
 }
 
 }  // namespace config

@@ -402,17 +402,27 @@ function refreshGroupList() {
     callMethod('group.list', {}, function(response) {
         if (response.result) {
             groupListCache = response.result.groups || response.result || [];
-            // 获取每个分组的通道信息
+            
+            // 先渲染一次基本列表
+            renderGroupList();
+            
+            // 批量获取所有分组的通道信息
+            let pendingRequests = groupListCache.length;
+            if (pendingRequests === 0) return;
+            
             groupListCache.forEach(group => {
                 const groupId = group.groupId || group.id;
                 callMethod('group.getChannels', { groupId: groupId }, function(chResponse) {
                     if (chResponse.result && chResponse.result.channels) {
                         group.channels = chResponse.result.channels;
                     }
-                    renderGroupList();
+                    pendingRequests--;
+                    // 只在所有请求完成后重新渲染一次
+                    if (pendingRequests === 0) {
+                        renderGroupList();
+                    }
                 });
             });
-            renderGroupList();
         }
     });
 }
@@ -490,9 +500,6 @@ function renderGroupList() {
     });
     
     if (contentEl) contentEl.innerHTML = html;
-}
-    
-    contentEl.innerHTML = html;
 }
 
 /**
