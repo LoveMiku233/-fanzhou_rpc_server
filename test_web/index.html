@@ -315,18 +315,71 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                     </div>
                 </div>
 
-                <!-- 操作按钮区 - 表格上方 -->
-                <div class="action-toolbar" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 12px;">
-                    <button class="success" onclick="openCreateStrategyModal()" style="min-width: 140px;">
-                        ⏱️ 创建定时策略
-                    </button>
-                    <button class="warning" onclick="openCreateSensorStrategyModal()" style="min-width: 140px;">
-                        📡 创建传感器策略
-                    </button>
-                    <button class="secondary" onclick="showPage('blueprint')" style="min-width: 120px;">
-                        🎨 蓝图编辑器
-                    </button>
+                <!-- 快速创建卡片区 - 新手友好的一键创建 -->
+                <div style="margin-bottom: 25px;">
+                    <h4 style="color: #555; margin-bottom: 12px; font-size: 14px;">🚀 快速创建 <span style="color: #999; font-weight: normal; font-size: 12px;">（选择场景，一键添加策略）</span></h4>
+                    <div class="quick-strategy-cards" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px;">
+                        <!-- 定时通风模板 -->
+                        <div class="quick-strategy-card" onclick="createQuickStrategy('ventilation')" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 20px; color: white; cursor: pointer; transition: all 0.3s;">
+                            <div style="font-size: 28px; margin-bottom: 10px;">🌬️</div>
+                            <div style="font-weight: 600; margin-bottom: 5px;">定时通风</div>
+                            <div style="font-size: 12px; opacity: 0.9;">每小时运行5分钟</div>
+                        </div>
+                        <!-- 定时浇水模板 -->
+                        <div class="quick-strategy-card" onclick="createQuickStrategy('irrigation')" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); border-radius: 12px; padding: 20px; color: white; cursor: pointer; transition: all 0.3s;">
+                            <div style="font-size: 28px; margin-bottom: 10px;">💧</div>
+                            <div style="font-weight: 600; margin-bottom: 5px;">定时浇水</div>
+                            <div style="font-size: 12px; opacity: 0.9;">每天早上8点执行</div>
+                        </div>
+                        <!-- 高温报警模板 -->
+                        <div class="quick-strategy-card" onclick="createQuickStrategy('hightemp')" style="background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%); border-radius: 12px; padding: 20px; color: white; cursor: pointer; transition: all 0.3s;">
+                            <div style="font-size: 28px; margin-bottom: 10px;">🌡️</div>
+                            <div style="font-weight: 600; margin-bottom: 5px;">高温自动降温</div>
+                            <div style="font-size: 12px; opacity: 0.9;">温度>30°C时启动风扇</div>
+                        </div>
+                        <!-- 低温保护模板 -->
+                        <div class="quick-strategy-card" onclick="createQuickStrategy('lowtemp')" style="background: linear-gradient(135deg, #00b4db 0%, #0083b0 100%); border-radius: 12px; padding: 20px; color: white; cursor: pointer; transition: all 0.3s;">
+                            <div style="font-size: 28px; margin-bottom: 10px;">❄️</div>
+                            <div style="font-weight: 600; margin-bottom: 5px;">低温自动保暖</div>
+                            <div style="font-size: 12px; opacity: 0.9;">温度&lt;10°C时启动加热</div>
+                        </div>
+                        <!-- 自定义策略 -->
+                        <div class="quick-strategy-card" onclick="openSimpleStrategyWizard()" style="background: linear-gradient(135deg, #6c757d 0%, #495057 100%); border-radius: 12px; padding: 20px; color: white; cursor: pointer; transition: all 0.3s; border: 2px dashed rgba(255,255,255,0.5);">
+                            <div style="font-size: 28px; margin-bottom: 10px;">➕</div>
+                            <div style="font-weight: 600; margin-bottom: 5px;">自定义策略</div>
+                            <div style="font-size: 12px; opacity: 0.9;">按需配置参数</div>
+                        </div>
+                    </div>
                 </div>
+
+                <!-- 使用提示 -->
+                <div style="background: #e8f5e9; padding: 15px 20px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #4caf50;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 20px;">💡</span>
+                        <div>
+                            <strong style="color: #2e7d32;">新手提示</strong>
+                            <span style="color: #666; font-size: 13px; margin-left: 10px;">点击上方卡片可快速创建常用策略，或使用下方按钮自定义创建</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 操作按钮区 - 高级选项 -->
+                <details style="margin-bottom: 20px;">
+                    <summary style="cursor: pointer; padding: 12px 15px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 12px; font-weight: 600; color: #1565c0;">
+                        🛠️ 高级选项（展开查看更多创建方式）
+                    </summary>
+                    <div style="display: flex; flex-wrap: wrap; gap: 10px; padding: 15px; background: #f5f5f5; border-radius: 0 0 12px 12px; margin-top: -5px;">
+                        <button class="success" onclick="openCreateStrategyModal()" style="min-width: 140px;">
+                            ⏱️ 创建定时策略
+                        </button>
+                        <button class="warning" onclick="openCreateSensorStrategyModal()" style="min-width: 140px;">
+                            📡 创建传感器策略
+                        </button>
+                        <button class="secondary" onclick="showPage('blueprint')" style="min-width: 120px;">
+                            🎨 蓝图编辑器
+                        </button>
+                    </div>
+                </details>
 
                 <!-- 策略列表 -->
                 <div class="data-list" id="strategyList">
@@ -336,7 +389,7 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                     </div>
                     <div class="data-list-empty" id="strategyListEmpty">
                         <p>📭 暂无定时策略</p>
-                        <p style="font-size: 12px; margin-top: 10px;">点击上方"创建定时策略"按钮添加新策略</p>
+                        <p style="font-size: 12px; margin-top: 10px;">点击上方的快速创建卡片添加策略</p>
                     </div>
                     <div id="strategyListContent"></div>
                 </div>
@@ -349,7 +402,7 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                     </div>
                     <div class="data-list-empty" id="sensorStrategyListEmpty">
                         <p>📭 暂无传感器策略</p>
-                        <p style="font-size: 12px; margin-top: 10px;">点击上方"创建传感器策略"按钮添加新策略</p>
+                        <p style="font-size: 12px; margin-top: 10px;">点击上方的快速创建卡片添加传感器策略</p>
                     </div>
                     <div id="sensorStrategyListContent"></div>
                 </div>
@@ -642,7 +695,7 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
         </div>
     </div>
 
-    <!-- 创建定时策略弹窗 -->
+    <!-- 创建定时策略弹窗 - 优化版 -->
     <div class="modal-overlay" id="strategyModal" onclick="closeModalOnBackground(event, 'strategyModal')">
         <div class="modal-content modal-large">
             <div class="modal-header">
@@ -650,17 +703,22 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                 <button class="modal-close" onclick="closeModal('strategyModal')">✕</button>
             </div>
             <div class="modal-body">
+                <!-- 提示信息 -->
+                <div style="background: #e3f2fd; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; font-size: 13px; color: #1565c0;">
+                    💡 <strong>提示：</strong>定时策略会按照设定的时间间隔自动执行指定动作。策略ID会自动生成，名称可留空。
+                </div>
+                
                 <div class="form-row">
                     <div class="form-group">
-                        <label>策略ID</label>
-                        <input type="number" id="newStrategyId" value="1" min="1">
+                        <label>策略ID <span style="color: #999; font-size: 11px;">（自动生成）</span></label>
+                        <input type="number" id="newStrategyId" value="1" min="1" readonly style="background: #f5f5f5;">
                     </div>
                     <div class="form-group">
-                        <label>策略名称</label>
-                        <input type="text" id="newStrategyName" placeholder="例如: 定时通风">
+                        <label>策略名称 <span style="color: #999; font-size: 11px;">（可选）</span></label>
+                        <input type="text" id="newStrategyName" placeholder="留空自动生成">
                     </div>
                     <div class="form-group">
-                        <label>绑定分组ID</label>
+                        <label>绑定分组ID <span style="color: #c62828; font-size: 11px;">*必填</span></label>
                         <input type="number" id="newStrategyGroupId" value="1" min="1">
                     </div>
                 </div>
@@ -668,18 +726,18 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                     <div class="form-group">
                         <label>控制通道</label>
                         <select id="newStrategyChannel">
+                            <option value="-1">🔄 全部通道</option>
                             <option value="0">通道 0</option>
                             <option value="1">通道 1</option>
                             <option value="2">通道 2</option>
                             <option value="3">通道 3</option>
-                            <option value="-1">全部通道</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label>执行动作</label>
                         <select id="newStrategyAction">
+                            <option value="fwd">▶️ 正转（启动）</option>
                             <option value="stop">⏹️ 停止</option>
-                            <option value="fwd">▶️ 正转</option>
                             <option value="rev">◀️ 反转</option>
                         </select>
                     </div>
@@ -702,7 +760,8 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                         </div>
                         <div class="form-group" id="intervalInputGroup">
                             <label>执行间隔（秒）</label>
-                            <input type="number" id="newStrategyInterval" value="60" min="1">
+                            <input type="number" id="newStrategyInterval" value="3600" min="1">
+                            <div style="font-size: 11px; color: #666; margin-top: 4px;">常用：60=1分钟, 3600=1小时, 86400=1天</div>
                         </div>
                         <div class="form-group" id="dailyTimeInputGroup" style="display: none;">
                             <label>每日执行时间</label>
@@ -718,22 +777,27 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
         </div>
     </div>
 
-    <!-- 创建传感器策略弹窗 -->
+    <!-- 创建传感器策略弹窗 - 优化版 -->
     <div class="modal-overlay" id="sensorStrategyModal" onclick="closeModalOnBackground(event, 'sensorStrategyModal')">
         <div class="modal-content modal-large">
-            <div class="modal-header">
+            <div class="modal-header" style="background: linear-gradient(135deg, #e67e22 0%, #f39c12 100%);">
                 <h3>📡 创建传感器策略</h3>
                 <button class="modal-close" onclick="closeModal('sensorStrategyModal')">✕</button>
             </div>
             <div class="modal-body">
+                <!-- 提示信息 -->
+                <div style="background: #fff3e0; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; font-size: 13px; color: #e65100;">
+                    💡 <strong>提示：</strong>传感器策略会在传感器数值满足条件时自动执行。例如：温度>30°C时启动风扇降温。
+                </div>
+                
                 <div class="form-row">
                     <div class="form-group">
-                        <label>策略ID</label>
-                        <input type="number" id="sensorStrategyId" value="1" min="1">
+                        <label>策略ID <span style="color: #999; font-size: 11px;">（自动生成）</span></label>
+                        <input type="number" id="sensorStrategyId" value="1" min="1" readonly style="background: #f5f5f5;">
                     </div>
                     <div class="form-group">
-                        <label>策略名称</label>
-                        <input type="text" id="sensorStrategyName" placeholder="例如: 高温报警">
+                        <label>策略名称 <span style="color: #999; font-size: 11px;">（可选）</span></label>
+                        <input type="text" id="sensorStrategyName" placeholder="留空自动生成">
                     </div>
                     <div class="form-group">
                         <label>传感器类型</label>
@@ -749,60 +813,201 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                         <input type="number" id="sensorNodeId" value="1" min="1" max="255">
                     </div>
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>触发条件</label>
-                        <select id="sensorCondition">
-                            <option value="gt">大于 (>)</option>
-                            <option value="lt">小于 (<)</option>
-                            <option value="gte">≥</option>
-                            <option value="lte">≤</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>阈值</label>
-                        <input type="number" id="sensorThreshold" value="25" step="0.1">
-                    </div>
-                    <div class="form-group">
-                        <label>分组ID</label>
-                        <input type="number" id="sensorGroupId" value="1" min="1">
-                    </div>
-                    <div class="form-group">
-                        <label>通道</label>
-                        <select id="sensorChannel">
-                            <option value="0">CH0</option>
-                            <option value="1">CH1</option>
-                            <option value="2">CH2</option>
-                            <option value="3">CH3</option>
-                            <option value="-1">全部</option>
-                        </select>
+                
+                <!-- 触发条件区域 -->
+                <div style="background: #fafafa; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #e67e22;">
+                    <div style="font-weight: 600; color: #333; margin-bottom: 10px;">📊 触发条件设置</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>当传感器数值</label>
+                            <select id="sensorCondition">
+                                <option value="gt">大于 (>) - 超过阈值时触发</option>
+                                <option value="lt">小于 (&lt;) - 低于阈值时触发</option>
+                                <option value="gte">大于等于 (≥)</option>
+                                <option value="lte">小于等于 (≤)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>阈值</label>
+                            <input type="number" id="sensorThreshold" value="30" step="0.1">
+                            <div style="font-size: 11px; color: #666; margin-top: 4px;">例如：温度30表示30°C</div>
+                        </div>
                     </div>
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>执行动作</label>
-                        <select id="sensorAction">
-                            <option value="fwd">▶️ 正转</option>
-                            <option value="stop">⏹️ 停止</option>
-                            <option value="rev">◀️ 反转</option>
-                        </select>
+                
+                <!-- 执行动作区域 -->
+                <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; border-left: 4px solid #4caf50;">
+                    <div style="font-weight: 600; color: #333; margin-bottom: 10px;">⚡ 执行动作设置</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>控制分组ID <span style="color: #c62828; font-size: 11px;">*必填</span></label>
+                            <input type="number" id="sensorGroupId" value="1" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label>控制通道</label>
+                            <select id="sensorChannel">
+                                <option value="-1">🔄 全部通道</option>
+                                <option value="0">通道 0</option>
+                                <option value="1">通道 1</option>
+                                <option value="2">通道 2</option>
+                                <option value="3">通道 3</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>冷却时间（秒）</label>
-                        <input type="number" id="sensorCooldown" value="60" min="0">
-                    </div>
-                    <div class="form-group">
-                        <label>启用</label>
-                        <select id="sensorEnabled">
-                            <option value="true">✅ 是</option>
-                            <option value="false">❌ 否</option>
-                        </select>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>执行动作</label>
+                            <select id="sensorAction">
+                                <option value="fwd">▶️ 正转（启动设备）</option>
+                                <option value="stop">⏹️ 停止</option>
+                                <option value="rev">◀️ 反转</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>冷却时间（秒）</label>
+                            <input type="number" id="sensorCooldown" value="60" min="0">
+                            <div style="font-size: 11px; color: #666; margin-top: 4px;">触发后多久才能再次触发</div>
+                        </div>
+                        <div class="form-group">
+                            <label>启用</label>
+                            <select id="sensorEnabled">
+                                <option value="true">✅ 是</option>
+                                <option value="false">❌ 否</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="secondary" onclick="closeModal('sensorStrategyModal')">取消</button>
                 <button class="success" onclick="createSensorStrategyAndClose()">➕ 创建策略</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 简化策略向导弹窗 - 新手友好的创建方式 -->
+    <div class="modal-overlay" id="simpleStrategyWizard" onclick="closeModalOnBackground(event, 'simpleStrategyWizard')">
+        <div class="modal-content modal-large">
+            <div class="modal-header" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+                <h3>✨ 简易策略向导</h3>
+                <button class="modal-close" onclick="closeModal('simpleStrategyWizard')">✕</button>
+            </div>
+            <div class="modal-body">
+                <!-- 步骤1：选择策略类型 -->
+                <div id="wizardStep1">
+                    <h4 style="margin-bottom: 15px; color: #333;">第1步：选择策略类型</h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div class="wizard-option" onclick="selectWizardType('timer')" style="border: 2px solid #e0e0e0; border-radius: 12px; padding: 20px; cursor: pointer; text-align: center; transition: all 0.3s;" id="wizardTypeTimer">
+                            <div style="font-size: 36px; margin-bottom: 10px;">⏰</div>
+                            <div style="font-weight: 600; margin-bottom: 5px;">定时策略</div>
+                            <div style="font-size: 12px; color: #666;">按时间间隔或每天固定时间执行</div>
+                        </div>
+                        <div class="wizard-option" onclick="selectWizardType('sensor')" style="border: 2px solid #e0e0e0; border-radius: 12px; padding: 20px; cursor: pointer; text-align: center; transition: all 0.3s;" id="wizardTypeSensor">
+                            <div style="font-size: 36px; margin-bottom: 10px;">📡</div>
+                            <div style="font-weight: 600; margin-bottom: 5px;">传感器策略</div>
+                            <div style="font-size: 12px; color: #666;">当传感器数值达到条件时执行</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 步骤2：配置策略（定时） -->
+                <div id="wizardStep2Timer" style="display: none;">
+                    <h4 style="margin-bottom: 15px; color: #333;">第2步：配置定时策略</h4>
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 12px;">
+                        <div class="form-group">
+                            <label>📝 策略名称 <span style="color: #999; font-size: 12px;">（可选，留空自动生成）</span></label>
+                            <input type="text" id="wizardTimerName" placeholder="例如：定时通风">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>📂 绑定分组ID</label>
+                                <input type="number" id="wizardTimerGroupId" value="1" min="1">
+                            </div>
+                            <div class="form-group">
+                                <label>🎚️ 控制通道</label>
+                                <select id="wizardTimerChannel">
+                                    <option value="-1">全部通道</option>
+                                    <option value="0">通道 0</option>
+                                    <option value="1">通道 1</option>
+                                    <option value="2">通道 2</option>
+                                    <option value="3">通道 3</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>⚡ 执行动作</label>
+                                <select id="wizardTimerAction">
+                                    <option value="fwd">▶️ 正转（启动）</option>
+                                    <option value="stop">⏹️ 停止</option>
+                                    <option value="rev">◀️ 反转</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>⏱️ 执行间隔（秒）</label>
+                                <input type="number" id="wizardTimerInterval" value="3600" min="1">
+                                <div style="font-size: 11px; color: #666; margin-top: 4px;">3600秒 = 1小时</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 步骤2：配置策略（传感器） -->
+                <div id="wizardStep2Sensor" style="display: none;">
+                    <h4 style="margin-bottom: 15px; color: #333;">第2步：配置传感器策略</h4>
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 12px;">
+                        <div class="form-group">
+                            <label>📝 策略名称 <span style="color: #999; font-size: 12px;">（可选，留空自动生成）</span></label>
+                            <input type="text" id="wizardSensorName" placeholder="例如：高温自动降温">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>🌡️ 传感器类型</label>
+                                <select id="wizardSensorType">
+                                    <option value="temperature">🌡️ 温度</option>
+                                    <option value="humidity">💧 湿度</option>
+                                    <option value="light">💡 光照</option>
+                                    <option value="soil_moisture">🌱 土壤湿度</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>📍 传感器节点</label>
+                                <input type="number" id="wizardSensorNode" value="1" min="1" max="255">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>📊 触发条件</label>
+                                <select id="wizardSensorCondition">
+                                    <option value="gt">大于 (>) - 超过阈值时触发</option>
+                                    <option value="lt">小于 (&lt;) - 低于阈值时触发</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>🎯 阈值</label>
+                                <input type="number" id="wizardSensorThreshold" value="30" step="0.1">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>📂 控制分组ID</label>
+                                <input type="number" id="wizardSensorGroupId" value="1" min="1">
+                            </div>
+                            <div class="form-group">
+                                <label>⚡ 执行动作</label>
+                                <select id="wizardSensorAction">
+                                    <option value="fwd">▶️ 正转（启动）</option>
+                                    <option value="stop">⏹️ 停止</option>
+                                    <option value="rev">◀️ 反转</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="secondary" onclick="closeModal('simpleStrategyWizard')">取消</button>
+                <button class="success" onclick="submitWizardStrategy()" id="wizardSubmitBtn" style="display: none;">✅ 创建策略</button>
             </div>
         </div>
     </div>
