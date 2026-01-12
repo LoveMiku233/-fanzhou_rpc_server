@@ -621,7 +621,7 @@ void GroupWidget::onGroupControlClicked(int groupId, const QString &action)
     // 控制分组绑定的所有通道
     QJsonObject params;
     params[QStringLiteral("groupId")] = groupId;
-    params[QStringLiteral("ch")] = 0;  // 会通过分组通道绑定来控制
+    params[QStringLiteral("ch")] = -1;  // 会通过分组通道绑定来控制
     params[QStringLiteral("action")] = action;
     
     QJsonValue result = rpcClient_->call(QStringLiteral("group.control"), params);
