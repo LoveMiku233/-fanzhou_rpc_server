@@ -65,7 +65,7 @@ void StrategyCard::setupUi()
     // 顶部行：名称、类型、ID
     QHBoxLayout *topRow = new QHBoxLayout();
     
-    nameLabel_ = new QLabel(QStringLiteral("⏱️ %1").arg(name_), this);
+    nameLabel_ = new QLabel(QStringLiteral("[T] %1").arg(name_), this);
     nameLabel_->setStyleSheet(QStringLiteral(
         "font-size: 14px; font-weight: bold; color: #2c3e50;"));
     topRow->addWidget(nameLabel_);
@@ -125,7 +125,7 @@ void StrategyCard::setupUi()
     });
     bottomRow->addWidget(triggerBtn);
     
-    QPushButton *deleteBtn = new QPushButton(QStringLiteral("🗑️"), this);
+    QPushButton *deleteBtn = new QPushButton(QStringLiteral("X"), this);
     deleteBtn->setMinimumHeight(28);
     deleteBtn->setMinimumWidth(32);
     deleteBtn->setStyleSheet(QStringLiteral(
@@ -145,7 +145,7 @@ void StrategyCard::updateInfo(const QString &name, const QString &description,
     enabled_ = enabled;
     
     QString icon = type_.contains(QStringLiteral("传感器")) ? 
-                   QStringLiteral("📡") : QStringLiteral("⏱️");
+                   QStringLiteral("[S]") : QStringLiteral("[T]");
     nameLabel_->setText(QStringLiteral("%1 %2").arg(icon, name));
     descLabel_->setText(description);
     

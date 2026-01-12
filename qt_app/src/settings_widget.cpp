@@ -558,20 +558,20 @@ void SettingsWidget::onGetNetworkInfo()
             // 接口列表
             QString interfaces = obj.value(QStringLiteral("interfaces")).toString();
             if (!interfaces.isEmpty()) {
-                infoText += QStringLiteral("📡 接口: %1\n").arg(interfaces.replace(QStringLiteral("\n"), QStringLiteral(" ")));
+                infoText += QStringLiteral("[IF] 接口: %1\n").arg(interfaces.replace(QStringLiteral("\n"), QStringLiteral(" ")));
             }
             
             // 接口状态
             QString state = obj.value(QStringLiteral("state")).toString();
             if (!state.isEmpty()) {
-                QString stateIcon = state.contains(QStringLiteral("up")) ? QStringLiteral("🟢") : QStringLiteral("🔴");
+                QString stateIcon = state.contains(QStringLiteral("up")) ? QStringLiteral("[UP]") : QStringLiteral("[DN]");
                 infoText += QStringLiteral("%1 状态: %2\n").arg(stateIcon, state);
             }
             
             // MAC地址
             QString mac = obj.value(QStringLiteral("mac")).toString();
             if (!mac.isEmpty()) {
-                infoText += QStringLiteral("🔗 MAC: %1\n").arg(mac);
+                infoText += QStringLiteral("[MAC] %1\n").arg(mac);
             }
             
             // IP地址信息（从ipAddr中提取）
@@ -589,7 +589,7 @@ void SettingsWidget::onGetNetworkInfo()
                     }
                 }
                 if (!ips.isEmpty()) {
-                    infoText += QStringLiteral("🌐 IP: %1\n").arg(ips.join(QStringLiteral(", ")));
+                    infoText += QStringLiteral("[IP] %1\n").arg(ips.join(QStringLiteral(", ")));
                 }
             }
             
@@ -599,7 +599,7 @@ void SettingsWidget::onGetNetworkInfo()
                 QRegularExpression gwRegex(QStringLiteral("default via (\\d+\\.\\d+\\.\\d+\\.\\d+)"));
                 QRegularExpressionMatch gwMatch = gwRegex.match(routes);
                 if (gwMatch.hasMatch()) {
-                    infoText += QStringLiteral("🚪 网关: %1\n").arg(gwMatch.captured(1));
+                    infoText += QStringLiteral("[GW] 网关: %1\n").arg(gwMatch.captured(1));
                 }
             }
             
@@ -613,7 +613,7 @@ void SettingsWidget::onGetNetworkInfo()
                     dnsServers << dnsIt.next().captured(1);
                 }
                 if (!dnsServers.isEmpty()) {
-                    infoText += QStringLiteral("🔍 DNS: %1").arg(dnsServers.join(QStringLiteral(", ")));
+                    infoText += QStringLiteral("[DNS] %1").arg(dnsServers.join(QStringLiteral(", ")));
                 }
             }
             

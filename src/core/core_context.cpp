@@ -26,6 +26,7 @@ const QString kErrDeviceNotFound = QStringLiteral("device not found");
 const QString kErrDeviceRejected = QStringLiteral("device rejected");
 constexpr int kMaxChannelId = 3;  ///< 最大通道ID（0-3表示4个通道）
 constexpr double kFloatCompareEpsilon = 0.001;  ///< 浮点数比较精度
+constexpr int kChannelKeyMultiplier = 256;  ///< 通道键编码乘数：channelKey = nodeId * 256 + channel
 }  // namespace
 
 CoreContext::CoreContext(QObject *parent)
@@ -376,6 +377,52 @@ GroupControlStats CoreContext::queueGroupControl(int groupId, quint8 channel,
     return stats;
 }
 
+GroupControlStats CoreContext::queueGroupBoundChannelsControl(int groupId,
+                                                               device::RelayProtocol::Action action,
+                                                               const QString &source)
+{
+    GroupControlStats stats;
+    
+    // 获取分组绑定的通道列表
+    const QList<int> channelKeys = groupChannels.value(groupId, {});
+    
+    if (channelKeys.isEmpty()) {
+        // 回退到控制分组中所有设备的所有通道（向后兼容）
+        // 触发条件：分组没有通过 group.addChannel 绑定任何特定通道
+        // 此时策略会控制分组中所有设备的所有通道（0-kMaxChannelId）
+        const QList<quint8> nodes = deviceGroups.value(groupId);
+        stats.total = nodes.size() * (kMaxChannelId + 1);
+        for (quint8 node : nodes) {
+            for (quint8 ch = 0; ch <= kMaxChannelId; ++ch) {
+                const auto result = enqueueControl(node, ch, action, source, true);
+                if (!result.accepted) {
+                    stats.missing++;
+                    continue;
+                }
+                stats.accepted++;
+                stats.jobIds.append(result.jobId);
+            }
+        }
+    } else {
+        // 只控制已绑定的特定通道
+        // channelKey = nodeId * kChannelKeyMultiplier + channel
+        stats.total = channelKeys.size();
+        for (int key : channelKeys) {
+            const quint8 node = static_cast<quint8>(key / kChannelKeyMultiplier);
+            const quint8 ch = static_cast<quint8>(key % kChannelKeyMultiplier);
+            const auto result = enqueueControl(node, ch, action, source, true);
+            if (!result.accepted) {
+                stats.missing++;
+                continue;
+            }
+            stats.accepted++;
+            stats.jobIds.append(result.jobId);
+        }
+    }
+    
+    return stats;
+}
+
 QueueSnapshot CoreContext::queueSnapshot() const
 {
     QueueSnapshot snapshot;
@@ -507,14 +554,13 @@ void CoreContext::attachStrategiesForGroup(int groupId)
                 const QString reason =
                     QStringLiteral("auto:%1")
                         .arg(strategyName.isEmpty() ? QString::number(strategyId) : strategyName);
-                // channel=-1 表示控制所有通道，0-kMaxChannelId 表示单个通道
+                // channel=-1 表示使用分组绑定的通道，0-kMaxChannelId 表示单个通道
                 if (channel >= 0 && channel <= kMaxChannelId) {
+                    // 指定通道：对分组中所有设备的指定通道发送控制命令
                     queueGroupControl(targetGroupId, static_cast<quint8>(channel), action, reason);
                 } else {
-                    // channel=-1 表示控制所有通道
-                    for (quint8 ch = 0; ch <= kMaxChannelId; ++ch) {
-                        queueGroupControl(targetGroupId, ch, action, reason);
-                    }
+                    // channel=-1：只控制分组中绑定的特定通道
+                    queueGroupBoundChannelsControl(targetGroupId, action, reason);
                 }
             });
             strategyTimers_.insert(config.strategyId, timer);
@@ -592,19 +638,16 @@ bool CoreContext::triggerStrategy(int strategyId)
         const QString reason = QStringLiteral("manual-strategy:%1")
             .arg(config.name.isEmpty() ? QString::number(config.strategyId) : config.name);
         
-        // channel=-1 表示控制所有通道，0-kMaxChannelId 表示单个通道
+        // channel=-1 表示使用分组绑定的通道，0-kMaxChannelId 表示单个通道
         if (config.channel >= 0 && config.channel <= kMaxChannelId) {
+            // 指定通道：对分组中所有设备的指定通道发送控制命令
             const auto stats = queueGroupControl(
                 config.groupId, static_cast<quint8>(config.channel), action, reason);
             return stats.accepted > 0;
         } else {
-            // channel=-1 表示控制所有通道
-            int totalAccepted = 0;
-            for (quint8 ch = 0; ch <= kMaxChannelId; ++ch) {
-                const auto stats = queueGroupControl(config.groupId, ch, action, reason);
-                totalAccepted += stats.accepted;
-            }
-            return totalAccepted > 0;
+            // channel=-1：只控制分组中绑定的特定通道
+            const auto stats = queueGroupBoundChannelsControl(config.groupId, action, reason);
+            return stats.accepted > 0;
         }
     }
     return false;
@@ -773,14 +816,13 @@ void CoreContext::checkSensorTriggers(const QString &sensorType, int sensorNode,
             .arg(sensorNode)
             .arg(value);
 
-        // 控制指定通道或所有通道
+        // channel=-1 表示使用分组绑定的通道，0-kMaxChannelId 表示单个通道
         if (config.channel >= 0 && config.channel <= kMaxChannelId) {
+            // 指定通道：对分组中所有设备的指定通道发送控制命令
             queueGroupControl(config.groupId, static_cast<quint8>(config.channel), action, reason);
         } else {
-            // channel=-1 表示控制所有通道
-            for (quint8 ch = 0; ch <= kMaxChannelId; ++ch) {
-                queueGroupControl(config.groupId, ch, action, reason);
-            }
+            // channel=-1：只控制分组中绑定的特定通道
+            queueGroupBoundChannelsControl(config.groupId, action, reason);
         }
 
         // 更新触发时间
@@ -1036,8 +1078,8 @@ bool CoreContext::addChannelToGroup(int groupId, quint8 node, int channel, QStri
         groupChannels.insert(groupId, {});
     }
 
-    // Encode node+channel as unique key: node * 256 + channel
-    const int channelKey = static_cast<int>(node) * 256 + channel;
+    // Encode node+channel as unique key: node * kChannelKeyMultiplier + channel
+    const int channelKey = static_cast<int>(node) * kChannelKeyMultiplier + channel;
     QList<int> &channels = groupChannels[groupId];
     if (!channels.contains(channelKey)) {
         channels.append(channelKey);
@@ -1054,7 +1096,7 @@ bool CoreContext::removeChannelFromGroup(int groupId, quint8 node, int channel, 
         return false;
     }
 
-    const int channelKey = static_cast<int>(node) * 256 + channel;
+    const int channelKey = static_cast<int>(node) * kChannelKeyMultiplier + channel;
     if (groupChannels.contains(groupId)) {
         groupChannels[groupId].removeAll(channelKey);
     }
@@ -1128,11 +1170,11 @@ bool CoreContext::removeDevice(quint8 nodeId, QString *error)
     // Remove channel references
     for (auto it = groupChannels.begin(); it != groupChannels.end(); ++it) {
         QList<int> &channels = it.value();
-        const int baseKey = static_cast<int>(nodeId) * 256;
+        const int baseKey = static_cast<int>(nodeId) * kChannelKeyMultiplier;
         channels.erase(
             std::remove_if(channels.begin(), channels.end(),
                            [baseKey](int key) {
-                               return key >= baseKey && key < baseKey + 256;
+                               return key >= baseKey && key < baseKey + kChannelKeyMultiplier;
                            }),
             channels.end());
     }

@@ -237,6 +237,20 @@ public:
     GroupControlStats queueGroupControl(int groupId, quint8 channel,
                                          device::RelayProtocol::Action action,
                                          const QString &source);
+    /**
+     * @brief 按分组绑定的通道控制
+     * 
+     * 只控制分组中已绑定的特定通道，而不是控制整个节点的所有通道。
+     * 这是为了解决"策略只能控制节点全部通道"的问题。
+     * 
+     * @param groupId 分组ID
+     * @param action 控制动作
+     * @param source 命令来源
+     * @return 控制统计信息
+     */
+    GroupControlStats queueGroupBoundChannelsControl(int groupId,
+                                                      device::RelayProtocol::Action action,
+                                                      const QString &source);
     QueueSnapshot queueSnapshot() const;
     ControlJobResult jobResult(quint64 jobId) const;
     device::RelayProtocol::Action parseAction(const QString &str, bool *ok = nullptr) const;
