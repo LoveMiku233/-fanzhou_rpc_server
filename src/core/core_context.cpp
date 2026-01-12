@@ -224,6 +224,7 @@ bool CoreContext::initDevices(const CoreConfig &config)
         groupChannels.clear();
         deviceGroups.reserve(config.groups.size());
         groupNames.reserve(config.groups.size());
+        groupChannels.reserve(config.groups.size());
 
         LOG_INFO(kLogSource,
                  QStringLiteral("Loading %1 device groups...").arg(config.groups.size()));
@@ -247,7 +248,7 @@ bool CoreContext::initDevices(const CoreConfig &config)
             deviceGroups.insert(grpConfig.groupId, nodes);
             groupNames.insert(grpConfig.groupId, grpConfig.name);
             
-            // 加载分组通道
+            // Load group channels
             if (!grpConfig.channels.isEmpty()) {
                 groupChannels.insert(grpConfig.groupId, grpConfig.channels);
             }
