@@ -18,6 +18,7 @@
 #include <QScrollArea>
 #include <QTabWidget>
 #include <QRegularExpression>
+#include <QSlider>
 
 SettingsWidget::SettingsWidget(RpcClient *rpcClient, QWidget *parent)
     : QWidget(parent)
@@ -45,6 +46,7 @@ SettingsWidget::SettingsWidget(RpcClient *rpcClient, QWidget *parent)
     , mqttTopicEdit_(nullptr)
     , mqttEnabledCheckBox_(nullptr)
     , mqttStatusLabel_(nullptr)
+    , brightnessSlider_(nullptr)
 {
     setupUi();
 
@@ -328,6 +330,72 @@ void SettingsWidget::setupUi()
     mqttLayout->addStretch();
 
     tabWidget->addTab(mqttTab, QStringLiteral("云平台"));
+
+    // ==================== 系统控制标签页 ====================
+    QWidget *systemTab = new QWidget();
+    QVBoxLayout *sysLayout = new QVBoxLayout(systemTab);
+    sysLayout->setContentsMargins(10, 10, 10, 10);
+    sysLayout->setSpacing(10);
+
+    // 屏幕亮度控制组
+    QGroupBox *screenGroupBox = new QGroupBox(QStringLiteral("屏幕设置"), systemTab);
+    QFormLayout *screenLayout = new QFormLayout(screenGroupBox);
+    screenLayout->setSpacing(8);
+    screenLayout->setContentsMargins(10, 14, 10, 10);
+
+    brightnessSlider_ = new QSlider(Qt::Horizontal, systemTab);
+    brightnessSlider_->setRange(0, 100);
+    brightnessSlider_->setValue(80);
+    brightnessSlider_->setMinimumHeight(32);
+    screenLayout->addRow(QStringLiteral("亮度:"), brightnessSlider_);
+
+    QHBoxLayout *screenBtnLayout = new QHBoxLayout();
+    QPushButton *getBrightnessBtn = new QPushButton(QStringLiteral("读取亮度"), systemTab);
+    getBrightnessBtn->setMinimumHeight(36);
+    connect(getBrightnessBtn, &QPushButton::clicked, this, &SettingsWidget::onGetBrightness);
+    screenBtnLayout->addWidget(getBrightnessBtn);
+
+    QPushButton *setBrightnessBtn = new QPushButton(QStringLiteral("设置亮度"), systemTab);
+    setBrightnessBtn->setProperty("type", QStringLiteral("success"));
+    setBrightnessBtn->setMinimumHeight(36);
+    connect(setBrightnessBtn, &QPushButton::clicked, this, &SettingsWidget::onSetBrightness);
+    screenBtnLayout->addWidget(setBrightnessBtn);
+
+    screenLayout->addRow(screenBtnLayout);
+    sysLayout->addWidget(screenGroupBox);
+
+    // 系统操作组
+    QGroupBox *sysOpGroupBox = new QGroupBox(QStringLiteral("系统操作"), systemTab);
+    QVBoxLayout *sysOpLayout = new QVBoxLayout(sysOpGroupBox);
+    sysOpLayout->setSpacing(8);
+    sysOpLayout->setContentsMargins(10, 14, 10, 10);
+
+    QLabel *warningLabel = new QLabel(
+        QStringLiteral("⚠️ 以下操作需要管理员权限，请谨慎使用"), systemTab);
+    warningLabel->setStyleSheet(QStringLiteral(
+        "color: #856404; font-size: 12px; padding: 8px; "
+        "background-color: #fff3cd; border-radius: 6px;"));
+    sysOpLayout->addWidget(warningLabel);
+
+    QHBoxLayout *sysOpBtnLayout = new QHBoxLayout();
+    
+    QPushButton *rebootBtn = new QPushButton(QStringLiteral("🔄 重启系统"), systemTab);
+    rebootBtn->setProperty("type", QStringLiteral("warning"));
+    rebootBtn->setMinimumHeight(44);
+    connect(rebootBtn, &QPushButton::clicked, this, &SettingsWidget::onRebootSystem);
+    sysOpBtnLayout->addWidget(rebootBtn);
+
+    QPushButton *shutdownBtn = new QPushButton(QStringLiteral("⏻ 关闭系统"), systemTab);
+    shutdownBtn->setProperty("type", QStringLiteral("danger"));
+    shutdownBtn->setMinimumHeight(44);
+    connect(shutdownBtn, &QPushButton::clicked, this, &SettingsWidget::onShutdownSystem);
+    sysOpBtnLayout->addWidget(shutdownBtn);
+
+    sysOpLayout->addLayout(sysOpBtnLayout);
+    sysLayout->addWidget(sysOpGroupBox);
+
+    sysLayout->addStretch();
+    tabWidget->addTab(systemTab, QStringLiteral("系统"));
 
     mainLayout->addWidget(tabWidget, 1);
 }
@@ -739,5 +807,104 @@ void SettingsWidget::onTestMqtt()
         QMessageBox::information(this, QStringLiteral("MQTT测试"),
             QStringLiteral("Broker: %1:%2\n\n%3").arg(broker).arg(port).arg(message));
         emit logMessage(QStringLiteral("MQTT测试: %1").arg(message));
+    }
+}
+
+// ==================== 系统控制槽函数 ====================
+
+void SettingsWidget::onGetBrightness()
+{
+    if (!rpcClient_ || !rpcClient_->isConnected()) {
+        QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先连接服务器"));
+        return;
+    }
+
+    QJsonValue result = rpcClient_->call(QStringLiteral("screen.brightness.get"));
+
+    if (result.isObject()) {
+        QJsonObject obj = result.toObject();
+        if (obj.value(QStringLiteral("ok")).toBool()) {
+            int brightness = obj.value(QStringLiteral("brightness")).toInt();
+            brightnessSlider_->setValue(brightness);
+            emit logMessage(QStringLiteral("获取亮度成功: %1%").arg(brightness));
+        } else {
+            QString error = obj.value(QStringLiteral("error")).toString();
+            emit logMessage(QStringLiteral("获取亮度失败: %1").arg(error), QStringLiteral("ERROR"));
+        }
+    }
+}
+
+void SettingsWidget::onSetBrightness()
+{
+    if (!rpcClient_ || !rpcClient_->isConnected()) {
+        QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先连接服务器"));
+        return;
+    }
+
+    int brightness = brightnessSlider_->value();
+
+    QJsonObject params;
+    params[QStringLiteral("brightness")] = brightness;
+
+    QJsonValue result = rpcClient_->call(QStringLiteral("screen.brightness.set"), params);
+
+    if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
+        emit logMessage(QStringLiteral("设置亮度成功: %1%").arg(brightness));
+    } else {
+        QString error = result.toObject().value(QStringLiteral("error")).toString();
+        QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("设置亮度失败: %1").arg(error));
+        emit logMessage(QStringLiteral("设置亮度失败: %1").arg(error), QStringLiteral("ERROR"));
+    }
+}
+
+void SettingsWidget::onRebootSystem()
+{
+    if (!rpcClient_ || !rpcClient_->isConnected()) {
+        QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先连接服务器"));
+        return;
+    }
+
+    QMessageBox::StandardButton reply = QMessageBox::warning(this,
+        QStringLiteral("确认重启"),
+        QStringLiteral("确定要重启系统吗？\n\n设备将在几秒后重新启动，请稍后重新连接。"),
+        QMessageBox::Yes | QMessageBox::No);
+
+    if (reply != QMessageBox::Yes) return;
+
+    QJsonValue result = rpcClient_->call(QStringLiteral("sys.reboot"));
+
+    if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
+        QMessageBox::information(this, QStringLiteral("重启中"), 
+            QStringLiteral("系统正在重启，请稍后重新连接..."));
+        emit logMessage(QStringLiteral("系统重启命令已发送"));
+    } else {
+        QString error = result.toObject().value(QStringLiteral("error")).toString();
+        QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("重启失败: %1").arg(error));
+    }
+}
+
+void SettingsWidget::onShutdownSystem()
+{
+    if (!rpcClient_ || !rpcClient_->isConnected()) {
+        QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先连接服务器"));
+        return;
+    }
+
+    QMessageBox::StandardButton reply = QMessageBox::critical(this,
+        QStringLiteral("确认关机"),
+        QStringLiteral("确定要关闭系统吗？\n\n⚠️ 关机后需要手动重新上电才能启动设备！"),
+        QMessageBox::Yes | QMessageBox::No);
+
+    if (reply != QMessageBox::Yes) return;
+
+    QJsonValue result = rpcClient_->call(QStringLiteral("sys.shutdown"));
+
+    if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
+        QMessageBox::information(this, QStringLiteral("关机中"), 
+            QStringLiteral("系统正在关机..."));
+        emit logMessage(QStringLiteral("系统关机命令已发送"));
+    } else {
+        QString error = result.toObject().value(QStringLiteral("error")).toString();
+        QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("关机失败: %1").arg(error));
     }
 }
