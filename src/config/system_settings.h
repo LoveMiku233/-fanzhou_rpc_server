@@ -9,6 +9,7 @@
 #define FANZHOU_SYSTEM_SETTINGS_H
 
 #include <QByteArray>
+#include <QJsonObject>
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -139,6 +140,13 @@ public:
     QString getNetworkInfo(const QString &interface = QString());
 
     /**
+     * @brief 获取详细的网络信息（JSON格式）
+     * @param interface 接口名（如eth0），空则获取所有接口
+     * @return 包含IP、MAC、状态等信息的JSON对象
+     */
+    QJsonObject getNetworkInfoDetailed(const QString &interface = QString());
+
+    /**
      * @brief 测试网络连通性
      * @param host 主机地址或域名
      * @param count ping次数
@@ -159,6 +167,21 @@ public:
                      const QString &address,
                      const QString &netmask,
                      const QString &gateway);
+
+    /**
+     * @brief 启用DHCP获取IP地址
+     * @param interface 接口名
+     * @return 成功返回true
+     */
+    bool enableDhcp(const QString &interface);
+
+    /**
+     * @brief 设置DNS服务器
+     * @param primary 主DNS服务器
+     * @param secondary 备用DNS服务器（可选）
+     * @return 成功返回true
+     */
+    bool setDns(const QString &primary, const QString &secondary = QString());
 
 signals:
     /**

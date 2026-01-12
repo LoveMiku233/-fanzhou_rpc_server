@@ -5,7 +5,10 @@
 
 #include "system_settings.h"
 
+#include <QFile>
 #include <QProcess>
+#include <QRegularExpression>
+#include <QTextStream>
 
 namespace fanzhou {
 namespace config {
@@ -273,6 +276,46 @@ QString SystemSettings::getNetworkInfo(const QString &interface)
     return runCommand(QStringLiteral("ifconfig"), args);
 }
 
+QJsonObject SystemSettings::getNetworkInfoDetailed(const QString &interface)
+{
+    QJsonObject result;
+    
+    // 获取IP地址信息
+    QString ipOutput = runCommand(QStringLiteral("ip"),
+        {QStringLiteral("addr"), QStringLiteral("show")});
+    result[QStringLiteral("ipAddr")] = ipOutput;
+    
+    // 获取路由信息
+    QString routeOutput = runCommand(QStringLiteral("ip"),
+        {QStringLiteral("route"), QStringLiteral("show")});
+    result[QStringLiteral("routes")] = routeOutput;
+    
+    // 获取DNS信息
+    QString dnsOutput = runCommand(QStringLiteral("cat"),
+        {QStringLiteral("/etc/resolv.conf")});
+    result[QStringLiteral("dns")] = dnsOutput;
+    
+    // 获取接口列表
+    QString interfaceList = runCommand(QStringLiteral("ls"),
+        {QStringLiteral("/sys/class/net/")});
+    result[QStringLiteral("interfaces")] = interfaceList;
+    
+    // 如果指定了接口，获取该接口的详细信息
+    if (!interface.isEmpty()) {
+        // 获取接口状态
+        QString stateOutput = runCommand(QStringLiteral("cat"),
+            {QStringLiteral("/sys/class/net/%1/operstate").arg(interface)});
+        result[QStringLiteral("state")] = stateOutput;
+        
+        // 获取MAC地址
+        QString macOutput = runCommand(QStringLiteral("cat"),
+            {QStringLiteral("/sys/class/net/%1/address").arg(interface)});
+        result[QStringLiteral("mac")] = macOutput;
+    }
+    
+    return result;
+}
+
 bool SystemSettings::pingTest(const QString &host, int count, int timeoutSec)
 {
     if (host.isEmpty()) {
@@ -326,6 +369,63 @@ bool SystemSettings::setStaticIp(const QString &interface,
     }
 
     return success;
+}
+
+bool SystemSettings::enableDhcp(const QString &interface)
+{
+    if (interface.isEmpty()) {
+        emit errorOccurred(QStringLiteral("enableDhcp: interface is empty"));
+        return false;
+    }
+
+    // 先释放现有的DHCP租约
+    runCommand(QStringLiteral("dhclient"),
+               {QStringLiteral("-r"), interface});
+
+    // 使用dhclient获取DHCP地址
+    return runCommandWithStatus(QStringLiteral("dhclient"),
+                                 {interface}, 30000);
+}
+
+bool SystemSettings::setDns(const QString &primary, const QString &secondary)
+{
+    if (primary.isEmpty()) {
+        emit errorOccurred(QStringLiteral("setDns: primary DNS is empty"));
+        return false;
+    }
+
+    // 验证DNS地址格式（简单的IP地址格式检查）
+    static QRegularExpression ipRegex(
+        QStringLiteral("^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$"));
+    
+    if (!ipRegex.match(primary).hasMatch()) {
+        emit errorOccurred(QStringLiteral("setDns: invalid primary DNS format"));
+        return false;
+    }
+    
+    if (!secondary.isEmpty() && !ipRegex.match(secondary).hasMatch()) {
+        emit errorOccurred(QStringLiteral("setDns: invalid secondary DNS format"));
+        return false;
+    }
+
+    // 构建resolv.conf内容
+    QString content = QStringLiteral("nameserver %1\n").arg(primary);
+    if (!secondary.isEmpty()) {
+        content += QStringLiteral("nameserver %1\n").arg(secondary);
+    }
+
+    // 使用QFile直接写入文件，避免命令注入风险
+    QFile file(QStringLiteral("/etc/resolv.conf"));
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        emit errorOccurred(QStringLiteral("setDns: cannot open /etc/resolv.conf for writing"));
+        return false;
+    }
+    
+    QTextStream out(&file);
+    out << content;
+    file.close();
+    
+    return true;
 }
 
 }  // namespace config

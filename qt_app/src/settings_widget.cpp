@@ -15,6 +15,8 @@
 #include <QJsonObject>
 #include <QMessageBox>
 #include <QSettings>
+#include <QScrollArea>
+#include <QTabWidget>
 
 SettingsWidget::SettingsWidget(RpcClient *rpcClient, QWidget *parent)
     : QWidget(parent)
@@ -29,6 +31,19 @@ SettingsWidget::SettingsWidget(RpcClient *rpcClient, QWidget *parent)
     , statusLabel_(nullptr)
     , refreshIntervalSpinBox_(nullptr)
     , autoConnectCheckBox_(nullptr)
+    , networkInterfaceEdit_(nullptr)
+    , ipAddressEdit_(nullptr)
+    , netmaskEdit_(nullptr)
+    , gatewayEdit_(nullptr)
+    , networkStatusLabel_(nullptr)
+    , mqttBrokerEdit_(nullptr)
+    , mqttPortSpinBox_(nullptr)
+    , mqttClientIdEdit_(nullptr)
+    , mqttUsernameEdit_(nullptr)
+    , mqttPasswordEdit_(nullptr)
+    , mqttTopicEdit_(nullptr)
+    , mqttEnabledCheckBox_(nullptr)
+    , mqttStatusLabel_(nullptr)
 {
     setupUi();
 
@@ -53,87 +68,100 @@ void SettingsWidget::setupUi()
     mainLayout->setContentsMargins(10, 10, 10, 10);
     mainLayout->setSpacing(10);
 
-    // 页面标题 - 使用纯文本
+    // 页面标题
     QLabel *titleLabel = new QLabel(QStringLiteral("系统设置"), this);
     titleLabel->setStyleSheet(QStringLiteral(
         "font-size: 18px; font-weight: bold; color: #2c3e50; padding: 4px 0;"));
     mainLayout->addWidget(titleLabel);
 
+    // 使用TabWidget组织设置页面
+    QTabWidget *tabWidget = new QTabWidget(this);
+    tabWidget->setStyleSheet(QStringLiteral(
+        "QTabWidget::pane { border: 1px solid #ddd; border-radius: 4px; }"
+        "QTabBar::tab { min-width: 80px; padding: 8px 12px; }"
+        "QTabBar::tab:selected { background-color: #3498db; color: white; }"));
+
+    // ==================== 连接设置标签页 ====================
+    QWidget *connectionTab = new QWidget();
+    QVBoxLayout *connLayout = new QVBoxLayout(connectionTab);
+    connLayout->setContentsMargins(10, 10, 10, 10);
+    connLayout->setSpacing(10);
+
     // 服务器连接设置组
-    QGroupBox *serverGroupBox = new QGroupBox(QStringLiteral("服务器连接"), this);
+    QGroupBox *serverGroupBox = new QGroupBox(QStringLiteral("RPC服务器"), connectionTab);
     QFormLayout *serverLayout = new QFormLayout(serverGroupBox);
     serverLayout->setSpacing(8);
     serverLayout->setContentsMargins(10, 14, 10, 10);
 
-    hostEdit_ = new QLineEdit(this);
+    hostEdit_ = new QLineEdit(connectionTab);
     hostEdit_->setPlaceholderText(QStringLiteral("192.168.1.100"));
     hostEdit_->setMinimumHeight(32);
     serverLayout->addRow(QStringLiteral("地址:"), hostEdit_);
 
-    portSpinBox_ = new QSpinBox(this);
+    portSpinBox_ = new QSpinBox(connectionTab);
     portSpinBox_->setRange(1, 65535);
     portSpinBox_->setValue(12345);
     portSpinBox_->setMinimumHeight(32);
     serverLayout->addRow(QStringLiteral("端口:"), portSpinBox_);
 
-    mainLayout->addWidget(serverGroupBox);
+    connLayout->addWidget(serverGroupBox);
 
     // 连接状态卡片
-    statusLabel_ = new QLabel(QStringLiteral("状态: 未连接"), this);
+    statusLabel_ = new QLabel(QStringLiteral("状态: 未连接"), connectionTab);
     statusLabel_->setStyleSheet(QStringLiteral(
         "font-size: 13px; padding: 8px; background-color: #f8d7da; color: #721c24; border-radius: 6px;"));
-    mainLayout->addWidget(statusLabel_);
+    connLayout->addWidget(statusLabel_);
 
     // 连接操作按钮
     QHBoxLayout *connBtnLayout = new QHBoxLayout();
     connBtnLayout->setSpacing(8);
 
-    connectButton_ = new QPushButton(QStringLiteral("连接"), this);
+    connectButton_ = new QPushButton(QStringLiteral("连接"), connectionTab);
     connectButton_->setProperty("type", QStringLiteral("success"));
     connectButton_->setMinimumHeight(40);
     connect(connectButton_, &QPushButton::clicked, this, &SettingsWidget::onConnect);
     connBtnLayout->addWidget(connectButton_);
 
-    disconnectButton_ = new QPushButton(QStringLiteral("断开"), this);
+    disconnectButton_ = new QPushButton(QStringLiteral("断开"), connectionTab);
     disconnectButton_->setProperty("type", QStringLiteral("danger"));
     disconnectButton_->setMinimumHeight(40);
     disconnectButton_->setEnabled(false);
     connect(disconnectButton_, &QPushButton::clicked, this, &SettingsWidget::onDisconnect);
     connBtnLayout->addWidget(disconnectButton_);
 
-    mainLayout->addLayout(connBtnLayout);
+    connLayout->addLayout(connBtnLayout);
 
     // 工具按钮组
-    QGroupBox *toolsGroupBox = new QGroupBox(QStringLiteral("诊断工具"), this);
+    QGroupBox *toolsGroupBox = new QGroupBox(QStringLiteral("诊断工具"), connectionTab);
     QGridLayout *toolsLayout = new QGridLayout(toolsGroupBox);
     toolsLayout->setSpacing(8);
     toolsLayout->setContentsMargins(10, 14, 10, 10);
 
-    pingButton_ = new QPushButton(QStringLiteral("Ping 测试"), this);
+    pingButton_ = new QPushButton(QStringLiteral("Ping 测试"), connectionTab);
     pingButton_->setMinimumHeight(36);
     connect(pingButton_, &QPushButton::clicked, this, &SettingsWidget::onPing);
     toolsLayout->addWidget(pingButton_, 0, 0);
 
-    sysInfoButton_ = new QPushButton(QStringLiteral("系统信息"), this);
+    sysInfoButton_ = new QPushButton(QStringLiteral("系统信息"), connectionTab);
     sysInfoButton_->setMinimumHeight(36);
     connect(sysInfoButton_, &QPushButton::clicked, this, &SettingsWidget::onSysInfo);
     toolsLayout->addWidget(sysInfoButton_, 0, 1);
 
-    saveConfigButton_ = new QPushButton(QStringLiteral("保存服务器配置"), this);
+    saveConfigButton_ = new QPushButton(QStringLiteral("保存服务器配置"), connectionTab);
     saveConfigButton_->setProperty("type", QStringLiteral("warning"));
     saveConfigButton_->setMinimumHeight(36);
     connect(saveConfigButton_, &QPushButton::clicked, this, &SettingsWidget::onSaveConfig);
     toolsLayout->addWidget(saveConfigButton_, 1, 0, 1, 2);
 
-    mainLayout->addWidget(toolsGroupBox);
+    connLayout->addWidget(toolsGroupBox);
 
     // 系统设置组
-    QGroupBox *systemGroupBox = new QGroupBox(QStringLiteral("系统设置"), this);
+    QGroupBox *systemGroupBox = new QGroupBox(QStringLiteral("本地设置"), connectionTab);
     QFormLayout *systemLayout = new QFormLayout(systemGroupBox);
     systemLayout->setSpacing(8);
     systemLayout->setContentsMargins(10, 14, 10, 10);
 
-    refreshIntervalSpinBox_ = new QSpinBox(this);
+    refreshIntervalSpinBox_ = new QSpinBox(connectionTab);
     refreshIntervalSpinBox_->setRange(1, 60);
     refreshIntervalSpinBox_->setValue(5);
     refreshIntervalSpinBox_->setSuffix(QStringLiteral(" 秒"));
@@ -142,15 +170,165 @@ void SettingsWidget::setupUi()
             this, &SettingsWidget::onRefreshIntervalChanged);
     systemLayout->addRow(QStringLiteral("刷新间隔:"), refreshIntervalSpinBox_);
 
-    autoConnectCheckBox_ = new QCheckBox(QStringLiteral("启动时自动连接"), this);
+    autoConnectCheckBox_ = new QCheckBox(QStringLiteral("启动时自动连接"), connectionTab);
     autoConnectCheckBox_->setMinimumHeight(28);
     connect(autoConnectCheckBox_, &QCheckBox::toggled,
             this, &SettingsWidget::onAutoConnectToggled);
     systemLayout->addRow(autoConnectCheckBox_);
 
-    mainLayout->addWidget(systemGroupBox);
+    connLayout->addWidget(systemGroupBox);
+    connLayout->addStretch();
 
-    mainLayout->addStretch();
+    tabWidget->addTab(connectionTab, QStringLiteral("连接"));
+
+    // ==================== 网络设置标签页 ====================
+    QWidget *networkTab = new QWidget();
+    QVBoxLayout *netLayout = new QVBoxLayout(networkTab);
+    netLayout->setContentsMargins(10, 10, 10, 10);
+    netLayout->setSpacing(10);
+
+    // 网络状态
+    networkStatusLabel_ = new QLabel(QStringLiteral("网络状态: 未获取"), networkTab);
+    networkStatusLabel_->setStyleSheet(QStringLiteral(
+        "font-size: 12px; padding: 8px; background-color: #e9ecef; border-radius: 6px;"));
+    networkStatusLabel_->setWordWrap(true);
+    netLayout->addWidget(networkStatusLabel_);
+
+    // 网络配置组
+    QGroupBox *netConfigBox = new QGroupBox(QStringLiteral("网络配置"), networkTab);
+    QFormLayout *netFormLayout = new QFormLayout(netConfigBox);
+    netFormLayout->setSpacing(8);
+    netFormLayout->setContentsMargins(10, 14, 10, 10);
+
+    networkInterfaceEdit_ = new QLineEdit(networkTab);
+    networkInterfaceEdit_->setText(QStringLiteral("eth0"));
+    networkInterfaceEdit_->setMinimumHeight(32);
+    netFormLayout->addRow(QStringLiteral("网络接口:"), networkInterfaceEdit_);
+
+    ipAddressEdit_ = new QLineEdit(networkTab);
+    ipAddressEdit_->setPlaceholderText(QStringLiteral("192.168.1.100"));
+    ipAddressEdit_->setMinimumHeight(32);
+    netFormLayout->addRow(QStringLiteral("IP地址:"), ipAddressEdit_);
+
+    netmaskEdit_ = new QLineEdit(networkTab);
+    netmaskEdit_->setText(QStringLiteral("255.255.255.0"));
+    netmaskEdit_->setMinimumHeight(32);
+    netFormLayout->addRow(QStringLiteral("子网掩码:"), netmaskEdit_);
+
+    gatewayEdit_ = new QLineEdit(networkTab);
+    gatewayEdit_->setPlaceholderText(QStringLiteral("192.168.1.1"));
+    gatewayEdit_->setMinimumHeight(32);
+    netFormLayout->addRow(QStringLiteral("网关:"), gatewayEdit_);
+
+    netLayout->addWidget(netConfigBox);
+
+    // 网络操作按钮
+    QHBoxLayout *netBtnLayout = new QHBoxLayout();
+    netBtnLayout->setSpacing(8);
+
+    QPushButton *getNetInfoBtn = new QPushButton(QStringLiteral("获取网络信息"), networkTab);
+    getNetInfoBtn->setMinimumHeight(40);
+    connect(getNetInfoBtn, &QPushButton::clicked, this, &SettingsWidget::onGetNetworkInfo);
+    netBtnLayout->addWidget(getNetInfoBtn);
+
+    QPushButton *setStaticIpBtn = new QPushButton(QStringLiteral("设置静态IP"), networkTab);
+    setStaticIpBtn->setProperty("type", QStringLiteral("warning"));
+    setStaticIpBtn->setMinimumHeight(40);
+    connect(setStaticIpBtn, &QPushButton::clicked, this, &SettingsWidget::onSetStaticIp);
+    netBtnLayout->addWidget(setStaticIpBtn);
+
+    QPushButton *enableDhcpBtn = new QPushButton(QStringLiteral("启用DHCP"), networkTab);
+    enableDhcpBtn->setProperty("type", QStringLiteral("success"));
+    enableDhcpBtn->setMinimumHeight(40);
+    connect(enableDhcpBtn, &QPushButton::clicked, this, &SettingsWidget::onEnableDhcp);
+    netBtnLayout->addWidget(enableDhcpBtn);
+
+    netLayout->addLayout(netBtnLayout);
+    netLayout->addStretch();
+
+    tabWidget->addTab(networkTab, QStringLiteral("网络"));
+
+    // ==================== MQTT云平台标签页 ====================
+    QWidget *mqttTab = new QWidget();
+    QVBoxLayout *mqttLayout = new QVBoxLayout(mqttTab);
+    mqttLayout->setContentsMargins(10, 10, 10, 10);
+    mqttLayout->setSpacing(10);
+
+    // MQTT状态
+    mqttStatusLabel_ = new QLabel(QStringLiteral("MQTT状态: 未配置"), mqttTab);
+    mqttStatusLabel_->setStyleSheet(QStringLiteral(
+        "font-size: 12px; padding: 8px; background-color: #e9ecef; border-radius: 6px;"));
+    mqttLayout->addWidget(mqttStatusLabel_);
+
+    // MQTT配置组
+    QGroupBox *mqttConfigBox = new QGroupBox(QStringLiteral("MQTT服务器配置"), mqttTab);
+    QFormLayout *mqttFormLayout = new QFormLayout(mqttConfigBox);
+    mqttFormLayout->setSpacing(8);
+    mqttFormLayout->setContentsMargins(10, 14, 10, 10);
+
+    mqttEnabledCheckBox_ = new QCheckBox(QStringLiteral("启用MQTT云平台"), mqttTab);
+    mqttEnabledCheckBox_->setMinimumHeight(28);
+    mqttFormLayout->addRow(mqttEnabledCheckBox_);
+
+    mqttBrokerEdit_ = new QLineEdit(mqttTab);
+    mqttBrokerEdit_->setPlaceholderText(QStringLiteral("mqtt.example.com"));
+    mqttBrokerEdit_->setMinimumHeight(32);
+    mqttFormLayout->addRow(QStringLiteral("Broker地址:"), mqttBrokerEdit_);
+
+    mqttPortSpinBox_ = new QSpinBox(mqttTab);
+    mqttPortSpinBox_->setRange(1, 65535);
+    mqttPortSpinBox_->setValue(1883);
+    mqttPortSpinBox_->setMinimumHeight(32);
+    mqttFormLayout->addRow(QStringLiteral("端口:"), mqttPortSpinBox_);
+
+    mqttClientIdEdit_ = new QLineEdit(mqttTab);
+    mqttClientIdEdit_->setPlaceholderText(QStringLiteral("fanzhou_device_001"));
+    mqttClientIdEdit_->setMinimumHeight(32);
+    mqttFormLayout->addRow(QStringLiteral("Client ID:"), mqttClientIdEdit_);
+
+    mqttUsernameEdit_ = new QLineEdit(mqttTab);
+    mqttUsernameEdit_->setMinimumHeight(32);
+    mqttFormLayout->addRow(QStringLiteral("用户名:"), mqttUsernameEdit_);
+
+    mqttPasswordEdit_ = new QLineEdit(mqttTab);
+    mqttPasswordEdit_->setEchoMode(QLineEdit::Password);
+    mqttPasswordEdit_->setMinimumHeight(32);
+    mqttFormLayout->addRow(QStringLiteral("密码:"), mqttPasswordEdit_);
+
+    mqttTopicEdit_ = new QLineEdit(mqttTab);
+    mqttTopicEdit_->setPlaceholderText(QStringLiteral("fanzhou/device/status"));
+    mqttTopicEdit_->setMinimumHeight(32);
+    mqttFormLayout->addRow(QStringLiteral("主题:"), mqttTopicEdit_);
+
+    mqttLayout->addWidget(mqttConfigBox);
+
+    // MQTT操作按钮
+    QHBoxLayout *mqttBtnLayout = new QHBoxLayout();
+    mqttBtnLayout->setSpacing(8);
+
+    QPushButton *getMqttBtn = new QPushButton(QStringLiteral("读取配置"), mqttTab);
+    getMqttBtn->setMinimumHeight(40);
+    connect(getMqttBtn, &QPushButton::clicked, this, &SettingsWidget::onGetMqttConfig);
+    mqttBtnLayout->addWidget(getMqttBtn);
+
+    QPushButton *setMqttBtn = new QPushButton(QStringLiteral("保存配置"), mqttTab);
+    setMqttBtn->setProperty("type", QStringLiteral("success"));
+    setMqttBtn->setMinimumHeight(40);
+    connect(setMqttBtn, &QPushButton::clicked, this, &SettingsWidget::onSetMqttConfig);
+    mqttBtnLayout->addWidget(setMqttBtn);
+
+    QPushButton *testMqttBtn = new QPushButton(QStringLiteral("测试连接"), mqttTab);
+    testMqttBtn->setProperty("type", QStringLiteral("warning"));
+    testMqttBtn->setMinimumHeight(40);
+    connect(testMqttBtn, &QPushButton::clicked, this, &SettingsWidget::onTestMqtt);
+    mqttBtnLayout->addWidget(testMqttBtn);
+
+    mqttLayout->addLayout(mqttBtnLayout);
+    mqttLayout->addStretch();
+
+    tabWidget->addTab(mqttTab, QStringLiteral("云平台"));
+
+    mainLayout->addWidget(tabWidget, 1);
 }
 
 void SettingsWidget::onRefreshIntervalChanged(int value)
@@ -283,5 +461,213 @@ void SettingsWidget::updateConnectionStatus(bool connected)
             "font-size: 13px; padding: 8px; background-color: #f8d7da; color: #721c24; border-radius: 6px;"));
         connectButton_->setEnabled(true);
         disconnectButton_->setEnabled(false);
+    }
+}
+
+// ==================== 网络设置槽函数 ====================
+
+void SettingsWidget::onGetNetworkInfo()
+{
+    if (!rpcClient_ || !rpcClient_->isConnected()) {
+        QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先连接服务器"));
+        return;
+    }
+
+    QString interface = networkInterfaceEdit_->text().trimmed();
+    QJsonObject params;
+    if (!interface.isEmpty()) {
+        params[QStringLiteral("interface")] = interface;
+    }
+
+    QJsonValue result = rpcClient_->call(QStringLiteral("sys.network.infoDetailed"), params);
+
+    if (result.isObject()) {
+        QJsonObject obj = result.toObject();
+        if (obj.value(QStringLiteral("ok")).toBool()) {
+            QString infoText;
+            infoText += QStringLiteral("接口列表: %1\n").arg(obj.value(QStringLiteral("interfaces")).toString());
+            infoText += QStringLiteral("状态: %1\n").arg(obj.value(QStringLiteral("state")).toString());
+            infoText += QStringLiteral("MAC: %1").arg(obj.value(QStringLiteral("mac")).toString());
+            networkStatusLabel_->setText(infoText);
+            networkStatusLabel_->setStyleSheet(QStringLiteral(
+                "font-size: 12px; padding: 8px; background-color: #d4edda; color: #155724; border-radius: 6px;"));
+            emit logMessage(QStringLiteral("获取网络信息成功"));
+        } else {
+            networkStatusLabel_->setText(QStringLiteral("获取网络信息失败"));
+            networkStatusLabel_->setStyleSheet(QStringLiteral(
+                "font-size: 12px; padding: 8px; background-color: #f8d7da; color: #721c24; border-radius: 6px;"));
+        }
+    }
+}
+
+void SettingsWidget::onSetStaticIp()
+{
+    if (!rpcClient_ || !rpcClient_->isConnected()) {
+        QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先连接服务器"));
+        return;
+    }
+
+    QString interface = networkInterfaceEdit_->text().trimmed();
+    QString address = ipAddressEdit_->text().trimmed();
+    QString netmask = netmaskEdit_->text().trimmed();
+    QString gateway = gatewayEdit_->text().trimmed();
+
+    if (interface.isEmpty() || address.isEmpty()) {
+        QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请输入接口名和IP地址"));
+        return;
+    }
+
+    QMessageBox::StandardButton reply = QMessageBox::question(this,
+        QStringLiteral("确认"),
+        QStringLiteral("确定要设置静态IP吗？\n接口: %1\nIP: %2\n子网掩码: %3\n网关: %4")
+            .arg(interface, address, netmask, gateway),
+        QMessageBox::Yes | QMessageBox::No);
+
+    if (reply != QMessageBox::Yes) return;
+
+    QJsonObject params;
+    params[QStringLiteral("interface")] = interface;
+    params[QStringLiteral("address")] = address;
+    if (!netmask.isEmpty()) params[QStringLiteral("netmask")] = netmask;
+    if (!gateway.isEmpty()) params[QStringLiteral("gateway")] = gateway;
+
+    QJsonValue result = rpcClient_->call(QStringLiteral("sys.network.setStaticIp"), params);
+
+    if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
+        QMessageBox::information(this, QStringLiteral("成功"), QStringLiteral("静态IP设置成功！"));
+        emit logMessage(QStringLiteral("静态IP设置成功"));
+        onGetNetworkInfo();
+    } else {
+        QString error = result.toObject().value(QStringLiteral("error")).toString();
+        QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("设置失败: %1").arg(error));
+        emit logMessage(QStringLiteral("静态IP设置失败: %1").arg(error), QStringLiteral("ERROR"));
+    }
+}
+
+void SettingsWidget::onEnableDhcp()
+{
+    if (!rpcClient_ || !rpcClient_->isConnected()) {
+        QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先连接服务器"));
+        return;
+    }
+
+    QString interface = networkInterfaceEdit_->text().trimmed();
+    if (interface.isEmpty()) {
+        QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请输入网络接口名"));
+        return;
+    }
+
+    QMessageBox::StandardButton reply = QMessageBox::question(this,
+        QStringLiteral("确认"),
+        QStringLiteral("确定要在接口 %1 上启用DHCP吗？").arg(interface),
+        QMessageBox::Yes | QMessageBox::No);
+
+    if (reply != QMessageBox::Yes) return;
+
+    QJsonObject params;
+    params[QStringLiteral("interface")] = interface;
+
+    QJsonValue result = rpcClient_->call(QStringLiteral("sys.network.enableDhcp"), params);
+
+    if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
+        QMessageBox::information(this, QStringLiteral("成功"), QStringLiteral("DHCP已启用！"));
+        emit logMessage(QStringLiteral("DHCP启用成功"));
+        onGetNetworkInfo();
+    } else {
+        QString error = result.toObject().value(QStringLiteral("error")).toString();
+        QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("启用DHCP失败: %1").arg(error));
+        emit logMessage(QStringLiteral("启用DHCP失败: %1").arg(error), QStringLiteral("ERROR"));
+    }
+}
+
+// ==================== MQTT云平台槽函数 ====================
+
+void SettingsWidget::onGetMqttConfig()
+{
+    if (!rpcClient_ || !rpcClient_->isConnected()) {
+        QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先连接服务器"));
+        return;
+    }
+
+    QJsonValue result = rpcClient_->call(QStringLiteral("cloud.mqtt.get"));
+
+    if (result.isObject()) {
+        QJsonObject obj = result.toObject();
+        if (obj.value(QStringLiteral("ok")).toBool()) {
+            mqttEnabledCheckBox_->setChecked(obj.value(QStringLiteral("enabled")).toBool());
+            mqttBrokerEdit_->setText(obj.value(QStringLiteral("broker")).toString());
+            mqttPortSpinBox_->setValue(obj.value(QStringLiteral("port")).toInt(1883));
+            mqttClientIdEdit_->setText(obj.value(QStringLiteral("clientId")).toString());
+            mqttUsernameEdit_->setText(obj.value(QStringLiteral("username")).toString());
+            mqttTopicEdit_->setText(obj.value(QStringLiteral("topic")).toString());
+
+            bool connected = obj.value(QStringLiteral("connected")).toBool();
+            bool enabled = obj.value(QStringLiteral("enabled")).toBool();
+            if (enabled && connected) {
+                mqttStatusLabel_->setText(QStringLiteral("MQTT状态: 已连接"));
+                mqttStatusLabel_->setStyleSheet(QStringLiteral(
+                    "font-size: 12px; padding: 8px; background-color: #d4edda; color: #155724; border-radius: 6px;"));
+            } else if (enabled) {
+                mqttStatusLabel_->setText(QStringLiteral("MQTT状态: 已启用但未连接"));
+                mqttStatusLabel_->setStyleSheet(QStringLiteral(
+                    "font-size: 12px; padding: 8px; background-color: #fff3cd; color: #856404; border-radius: 6px;"));
+            } else {
+                mqttStatusLabel_->setText(QStringLiteral("MQTT状态: 未启用"));
+                mqttStatusLabel_->setStyleSheet(QStringLiteral(
+                    "font-size: 12px; padding: 8px; background-color: #e9ecef; color: #495057; border-radius: 6px;"));
+            }
+
+            emit logMessage(QStringLiteral("MQTT配置读取成功"));
+        }
+    }
+}
+
+void SettingsWidget::onSetMqttConfig()
+{
+    if (!rpcClient_ || !rpcClient_->isConnected()) {
+        QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先连接服务器"));
+        return;
+    }
+
+    QJsonObject params;
+    params[QStringLiteral("enabled")] = mqttEnabledCheckBox_->isChecked();
+    params[QStringLiteral("broker")] = mqttBrokerEdit_->text().trimmed();
+    params[QStringLiteral("port")] = mqttPortSpinBox_->value();
+    params[QStringLiteral("clientId")] = mqttClientIdEdit_->text().trimmed();
+    params[QStringLiteral("username")] = mqttUsernameEdit_->text().trimmed();
+    params[QStringLiteral("password")] = mqttPasswordEdit_->text();
+    params[QStringLiteral("topic")] = mqttTopicEdit_->text().trimmed();
+
+    QJsonValue result = rpcClient_->call(QStringLiteral("cloud.mqtt.set"), params);
+
+    if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
+        QMessageBox::information(this, QStringLiteral("成功"), QStringLiteral("MQTT配置保存成功！"));
+        emit logMessage(QStringLiteral("MQTT配置保存成功"));
+        onGetMqttConfig();
+    } else {
+        QString error = result.toObject().value(QStringLiteral("error")).toString();
+        QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("保存MQTT配置失败: %1").arg(error));
+        emit logMessage(QStringLiteral("保存MQTT配置失败: %1").arg(error), QStringLiteral("ERROR"));
+    }
+}
+
+void SettingsWidget::onTestMqtt()
+{
+    if (!rpcClient_ || !rpcClient_->isConnected()) {
+        QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先连接服务器"));
+        return;
+    }
+
+    QJsonValue result = rpcClient_->call(QStringLiteral("cloud.mqtt.test"));
+
+    if (result.isObject()) {
+        QJsonObject obj = result.toObject();
+        QString message = obj.value(QStringLiteral("message")).toString();
+        QString broker = obj.value(QStringLiteral("broker")).toString();
+        int port = obj.value(QStringLiteral("port")).toInt();
+
+        QMessageBox::information(this, QStringLiteral("MQTT测试"),
+            QStringLiteral("Broker: %1:%2\n\n%3").arg(broker).arg(port).arg(message));
+        emit logMessage(QStringLiteral("MQTT测试: %1").arg(message));
     }
 }

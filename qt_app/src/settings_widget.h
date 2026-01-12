@@ -12,11 +12,12 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QCheckBox>
+#include <QComboBox>
 
 class RpcClient;
 
 /**
- * @brief 设置页面 - 包含连接设置和其他系统设置
+ * @brief 设置页面 - 包含连接设置、网络设置和MQTT云平台设置
  */
 class SettingsWidget : public QWidget
 {
@@ -45,6 +46,16 @@ private slots:
     void onRpcError(const QString &error);
     void onRefreshIntervalChanged(int value);
     void onAutoConnectToggled(bool checked);
+    
+    // 网络设置槽函数
+    void onGetNetworkInfo();
+    void onSetStaticIp();
+    void onEnableDhcp();
+    
+    // MQTT云平台槽函数
+    void onGetMqttConfig();
+    void onSetMqttConfig();
+    void onTestMqtt();
 
 private:
     void setupUi();
@@ -67,6 +78,23 @@ private:
     // 系统设置
     QSpinBox *refreshIntervalSpinBox_;
     QCheckBox *autoConnectCheckBox_;
+    
+    // 网络设置组件
+    QLineEdit *networkInterfaceEdit_;
+    QLineEdit *ipAddressEdit_;
+    QLineEdit *netmaskEdit_;
+    QLineEdit *gatewayEdit_;
+    QLabel *networkStatusLabel_;
+    
+    // MQTT云平台组件
+    QLineEdit *mqttBrokerEdit_;
+    QSpinBox *mqttPortSpinBox_;
+    QLineEdit *mqttClientIdEdit_;
+    QLineEdit *mqttUsernameEdit_;
+    QLineEdit *mqttPasswordEdit_;
+    QLineEdit *mqttTopicEdit_;
+    QCheckBox *mqttEnabledCheckBox_;
+    QLabel *mqttStatusLabel_;
 };
 
 #endif // SETTINGS_WIDGET_H
