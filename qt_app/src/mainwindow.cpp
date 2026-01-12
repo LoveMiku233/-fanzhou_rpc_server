@@ -214,6 +214,7 @@ void MainWindow::createContentArea()
     groupWidget_ = new GroupWidget(rpcClient_, this);
     groupScrollArea->setWidget(groupWidget_);
     QScroller::grabGesture(groupScrollArea->viewport(), QScroller::LeftMouseButtonGesture);
+    connect(groupWidget_, &GroupWidget::logMessage, this, &MainWindow::onLogMessage);
     contentStack_->addWidget(groupScrollArea);
 
     // 创建策略管理页面（带滚动）

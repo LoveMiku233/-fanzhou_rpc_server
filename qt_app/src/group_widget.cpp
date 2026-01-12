@@ -270,11 +270,15 @@ void GroupWidget::clearGroupCards()
 void GroupWidget::refreshGroupList()
 {
     if (!rpcClient_ || !rpcClient_->isConnected()) {
-        statusLabel_->setText(QStringLiteral("[警告] 未连接服务器"));
+        if (statusLabel_) {
+            statusLabel_->setText(QStringLiteral("[警告] 未连接服务器"));
+        }
         return;
     }
 
-    statusLabel_->setText(QStringLiteral("正在刷新..."));
+    if (statusLabel_) {
+        statusLabel_->setText(QStringLiteral("正在刷新..."));
+    }
 
     QJsonValue result = rpcClient_->call(QStringLiteral("group.list"));
     
@@ -284,7 +288,9 @@ void GroupWidget::refreshGroupList()
             QJsonArray groups = obj.value(QStringLiteral("groups")).toArray();
             groupsCache_ = groups;
             updateGroupCards(groups);
-            statusLabel_->setText(QStringLiteral("共 %1 个分组").arg(groups.size()));
+            if (statusLabel_) {
+                statusLabel_->setText(QStringLiteral("共 %1 个分组").arg(groups.size()));
+            }
             
             // 获取每个分组的通道信息
             for (const QJsonValue &v : groups) {
@@ -295,7 +301,9 @@ void GroupWidget::refreshGroupList()
         }
     }
     
-    statusLabel_->setText(QStringLiteral("[错误] 获取分组列表失败"));
+    if (statusLabel_) {
+        statusLabel_->setText(QStringLiteral("[错误] 获取分组列表失败"));
+    }
 }
 
 void GroupWidget::fetchGroupChannels(int groupId)
@@ -429,7 +437,9 @@ void GroupWidget::onCreateGroupClicked()
     QJsonValue result = rpcClient_->call(QStringLiteral("group.create"), params);
     
     if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        statusLabel_->setText(QStringLiteral("分组 %1 创建成功").arg(groupId));
+        if (statusLabel_) {
+            statusLabel_->setText(QStringLiteral("分组 %1 创建成功").arg(groupId));
+        }
         emit logMessage(QStringLiteral("创建分组成功: %1").arg(name));
         refreshGroupList();
     } else {
@@ -457,13 +467,20 @@ void GroupWidget::onDeleteGroupFromCard(int groupId)
         return;
     }
 
+    if (!rpcClient_ || !rpcClient_->isConnected()) {
+        QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先连接服务器"));
+        return;
+    }
+
     QJsonObject params;
     params[QStringLiteral("groupId")] = groupId;
 
     QJsonValue result = rpcClient_->call(QStringLiteral("group.delete"), params);
     
     if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        statusLabel_->setText(QStringLiteral("分组 %1 删除成功").arg(groupId));
+        if (statusLabel_) {
+            statusLabel_->setText(QStringLiteral("分组 %1 删除成功").arg(groupId));
+        }
         emit logMessage(QStringLiteral("删除分组成功: %1").arg(groupId));
         refreshGroupList();
     } else {
@@ -610,7 +627,9 @@ void GroupWidget::onGroupControlClicked(int groupId, const QString &action)
     QJsonValue result = rpcClient_->call(QStringLiteral("group.control"), params);
     
     if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        statusLabel_->setText(QStringLiteral("分组 %1 执行 %2 成功").arg(groupId).arg(action));
+        if (statusLabel_) {
+            statusLabel_->setText(QStringLiteral("分组 %1 执行 %2 成功").arg(groupId).arg(action));
+        }
         emit logMessage(QStringLiteral("分组控制: %1 -> %2").arg(groupId).arg(action));
     } else {
         QString error = result.toObject().value(QStringLiteral("error")).toString();
