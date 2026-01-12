@@ -35,6 +35,9 @@ const MAX_LOG_ENTRIES = 100;
 // 默认通道数量（GD427继电器默认4通道）
 const DEFAULT_CHANNEL_COUNT = 4;
 
+// 使用分组绑定的通道（ch=-1表示控制分组通过addChannel添加的特定通道）
+const BOUND_CHANNELS = -1;
+
 /* ========================================================
  * 页面导航功能
  * ======================================================== */
@@ -516,12 +519,12 @@ function createGroup() {
  * @param {string} action - 动作 (stop/fwd/rev)
  */
 function controlGroupById(groupId, action) {
-    // 使用ch=-1表示控制分组绑定的通道，而不是固定通道0
+    // 使用BOUND_CHANNELS（-1）表示控制分组绑定的通道
     // 这样会调用后端的queueGroupBoundChannelsControl()方法
     // 只控制通过group.addChannel添加的特定通道
     callMethod('group.control', {
         groupId: groupId,
-        ch: -1,
+        ch: BOUND_CHANNELS,
         action: action
     });
 }
