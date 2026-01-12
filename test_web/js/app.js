@@ -2377,6 +2377,20 @@ function toggleWizardTimerTypeInputs() {
 }
 
 /**
+ * 将时间字符串转换为秒数（从00:00开始）
+ * @param {string} timeStr - 时间字符串，格式为 HH:MM
+ * @returns {number} 秒数
+ */
+function timeToSeconds(timeStr) {
+    if (!timeStr || typeof timeStr !== 'string') return 0;
+    const parts = timeStr.split(':');
+    if (parts.length < 2) return 0;
+    const hours = parseInt(parts[0]) || 0;
+    const minutes = parseInt(parts[1]) || 0;
+    return hours * 3600 + minutes * 60;
+}
+
+/**
  * 提交向导定时策略
  * 支持间隔执行和每日定时两种触发方式
  */

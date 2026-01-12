@@ -759,7 +759,7 @@ void StrategyWidget::onCreateSensorStrategyClicked()
     params[QStringLiteral("condition")] = conditionCombo->currentData().toString();
     params[QStringLiteral("threshold")] = thresholdSpinBox->value();
     params[QStringLiteral("groupId")] = groupIdSpinBox->value();
-    params[QStringLiteral("channel")] = 0;  // 使用分组绑定的通道
+    params[QStringLiteral("channel")] = -1;  // 使用分组绑定的通道
     params[QStringLiteral("action")] = actionCombo->currentData().toString();
     params[QStringLiteral("cooldownSec")] = cooldownSpinBox->value();
     params[QStringLiteral("enabled")] = enabledCheckBox->isChecked();
