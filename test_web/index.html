@@ -863,6 +863,8 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                 </div>
                 
                 <!-- 执行动作区域 -->
+                <!-- 隐藏的通道字段，默认值为-1（使用分组绑定的通道） -->
+                <input type="hidden" id="sensorChannel" value="-1">
                 <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; border-left: 4px solid #4caf50;">
                     <div style="font-weight: 600; color: #333; margin-bottom: 10px;">⚡ 执行动作设置</div>
                     <div class="form-row">
@@ -871,8 +873,6 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                             <input type="number" id="sensorGroupId" value="1" min="1">
                             <div style="font-size: 11px; color: #666; margin-top: 4px;">策略将控制该分组绑定的所有通道</div>
                         </div>
-                        <!-- 隐藏的通道字段，默认值为-1（使用分组绑定的通道） -->
-                        <input type="hidden" id="sensorChannel" value="-1">
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -938,17 +938,13 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                             <label>📝 策略名称 <span style="color: #999; font-size: 12px;">（可选，留空自动生成）</span></label>
                             <input type="text" id="wizardTimerName" placeholder="例如：定时通风">
                         </div>
+                        <!-- 隐藏的通道字段，默认值为-1（使用分组绑定的通道） -->
+                        <input type="hidden" id="wizardTimerChannel" value="-1">
                         <div class="form-row">
                             <div class="form-group">
                                 <label>📂 绑定分组ID</label>
                                 <input type="number" id="wizardTimerGroupId" value="1" min="1">
                                 <div style="font-size: 11px; color: #666; margin-top: 4px;">策略将控制该分组绑定的所有通道</div>
-                            </div>
-                            <div class="form-group" style="display: none;">
-                                <label>🎚️ 控制通道</label>
-                                <select id="wizardTimerChannel">
-                                    <option value="-1" selected>使用分组绑定的通道</option>
-                                </select>
                             </div>
                         </div>
                         <div class="form-row">
