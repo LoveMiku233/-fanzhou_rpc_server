@@ -17,6 +17,7 @@
 #include <QSettings>
 #include <QScrollArea>
 #include <QTabWidget>
+#include <QRegularExpression>
 
 SettingsWidget::SettingsWidget(RpcClient *rpcClient, QWidget *parent)
     : QWidget(parent)
@@ -485,18 +486,87 @@ void SettingsWidget::onGetNetworkInfo()
         QJsonObject obj = result.toObject();
         if (obj.value(QStringLiteral("ok")).toBool()) {
             QString infoText;
-            infoText += QStringLiteral("接口列表: %1\n").arg(obj.value(QStringLiteral("interfaces")).toString());
-            infoText += QStringLiteral("状态: %1\n").arg(obj.value(QStringLiteral("state")).toString());
-            infoText += QStringLiteral("MAC: %1").arg(obj.value(QStringLiteral("mac")).toString());
+            
+            // 接口列表
+            QString interfaces = obj.value(QStringLiteral("interfaces")).toString();
+            if (!interfaces.isEmpty()) {
+                infoText += QStringLiteral("📡 接口: %1\n").arg(interfaces.replace(QStringLiteral("\n"), QStringLiteral(" ")));
+            }
+            
+            // 接口状态
+            QString state = obj.value(QStringLiteral("state")).toString();
+            if (!state.isEmpty()) {
+                QString stateIcon = state.contains(QStringLiteral("up")) ? QStringLiteral("🟢") : QStringLiteral("🔴");
+                infoText += QStringLiteral("%1 状态: %2\n").arg(stateIcon, state);
+            }
+            
+            // MAC地址
+            QString mac = obj.value(QStringLiteral("mac")).toString();
+            if (!mac.isEmpty()) {
+                infoText += QStringLiteral("🔗 MAC: %1\n").arg(mac);
+            }
+            
+            // IP地址信息（从ipAddr中提取）
+            QString ipAddr = obj.value(QStringLiteral("ipAddr")).toString();
+            if (!ipAddr.isEmpty()) {
+                // 尝试提取IPv4地址
+                QRegularExpression ipRegex(QStringLiteral("inet\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+)"));
+                QRegularExpressionMatchIterator it = ipRegex.globalMatch(ipAddr);
+                QStringList ips;
+                while (it.hasNext()) {
+                    QRegularExpressionMatch match = it.next();
+                    QString ip = match.captured(1);
+                    if (!ip.startsWith(QStringLiteral("127."))) {  // 排除回环地址
+                        ips << ip;
+                    }
+                }
+                if (!ips.isEmpty()) {
+                    infoText += QStringLiteral("🌐 IP: %1\n").arg(ips.join(QStringLiteral(", ")));
+                }
+            }
+            
+            // 路由信息（提取默认网关）
+            QString routes = obj.value(QStringLiteral("routes")).toString();
+            if (!routes.isEmpty()) {
+                QRegularExpression gwRegex(QStringLiteral("default via (\\d+\\.\\d+\\.\\d+\\.\\d+)"));
+                QRegularExpressionMatch gwMatch = gwRegex.match(routes);
+                if (gwMatch.hasMatch()) {
+                    infoText += QStringLiteral("🚪 网关: %1\n").arg(gwMatch.captured(1));
+                }
+            }
+            
+            // DNS信息
+            QString dns = obj.value(QStringLiteral("dns")).toString();
+            if (!dns.isEmpty()) {
+                QRegularExpression dnsRegex(QStringLiteral("nameserver\\s+(\\S+)"));
+                QRegularExpressionMatchIterator dnsIt = dnsRegex.globalMatch(dns);
+                QStringList dnsServers;
+                while (dnsIt.hasNext()) {
+                    dnsServers << dnsIt.next().captured(1);
+                }
+                if (!dnsServers.isEmpty()) {
+                    infoText += QStringLiteral("🔍 DNS: %1").arg(dnsServers.join(QStringLiteral(", ")));
+                }
+            }
+            
+            if (infoText.isEmpty()) {
+                infoText = QStringLiteral("未能获取网络详细信息");
+            }
+            
             networkStatusLabel_->setText(infoText);
             networkStatusLabel_->setStyleSheet(QStringLiteral(
                 "font-size: 12px; padding: 8px; background-color: #d4edda; color: #155724; border-radius: 6px;"));
             emit logMessage(QStringLiteral("获取网络信息成功"));
         } else {
-            networkStatusLabel_->setText(QStringLiteral("获取网络信息失败"));
+            QString error = obj.value(QStringLiteral("error")).toString();
+            networkStatusLabel_->setText(QStringLiteral("获取网络信息失败: %1").arg(error));
             networkStatusLabel_->setStyleSheet(QStringLiteral(
                 "font-size: 12px; padding: 8px; background-color: #f8d7da; color: #721c24; border-radius: 6px;"));
         }
+    } else {
+        networkStatusLabel_->setText(QStringLiteral("获取网络信息失败: 返回格式错误"));
+        networkStatusLabel_->setStyleSheet(QStringLiteral(
+            "font-size: 12px; padding: 8px; background-color: #f8d7da; color: #721c24; border-radius: 6px;"));
     }
 }
 
