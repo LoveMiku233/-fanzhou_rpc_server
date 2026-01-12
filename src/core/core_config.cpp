@@ -269,7 +269,7 @@ bool CoreConfig::loadFromFile(const QString &path, QString *error)
             strat.strategyId = obj.value(QStringLiteral("id")).toInt(0);
             strat.name = obj.value(QStringLiteral("name")).toString();
             strat.groupId = obj.value(QStringLiteral("groupId")).toInt(0);
-            strat.channel = static_cast<quint8>(obj.value(QStringLiteral("channel")).toInt(0));
+            strat.channel = static_cast<qint8>(obj.value(QStringLiteral("channel")).toInt(0));
             strat.action = obj.value(QStringLiteral("action")).toString(QStringLiteral("stop"));
             strat.intervalSec = obj.value(QStringLiteral("intervalSec")).toInt(60);
             strat.enabled = obj.value(QStringLiteral("enabled")).toBool(true);
