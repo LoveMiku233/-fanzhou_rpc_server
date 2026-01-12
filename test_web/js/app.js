@@ -1037,7 +1037,7 @@ function renderStrategyList() {
         const id = strategy.id;
         const name = strategy.name || `策略${id}`;
         const groupId = strategy.groupId;
-        const channel = strategy.channel === -1 ? '全部通道' : `通道 ${strategy.channel}`;
+        const channel = strategy.channel === -1 ? '📂 分组绑定通道' : `通道 ${strategy.channel}`;
         const action = actionNames[strategy.action] || strategy.action;
         const intervalSec = strategy.intervalSec;
         const dailyTime = strategy.dailyTime;
@@ -1174,7 +1174,7 @@ function renderSensorStrategyList() {
         const conditionDesc = conditionDescriptions[strategy.condition] || strategy.condition;
         const threshold = strategy.threshold;
         const groupId = strategy.groupId;
-        const channel = strategy.channel >= 0 ? `通道 ${strategy.channel}` : '全部通道';
+        const channel = strategy.channel >= 0 ? `通道 ${strategy.channel}` : '📂 分组绑定通道';
         const action = actionNames[strategy.action] || strategy.action;
         const enabled = strategy.enabled !== false;
         const cooldown = strategy.cooldownSec || 0;
