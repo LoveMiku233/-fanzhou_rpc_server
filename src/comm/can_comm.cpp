@@ -334,7 +334,12 @@ void CanComm::onTxPump()
                     droppedFrameCount_ = 0;
                     LOG_INFO(kLogSource, QStringLiteral("CAN接口重置成功，通信已恢复"));
                 } else {
-                    LOG_ERROR(kLogSource, QStringLiteral("CAN接口重置失败，通信可能仍然受阻"));
+                    // 重置失败（可能是冷却期间或其他原因），重置丢帧计数以避免每次丢帧都触发无效的重置尝试
+                    droppedFrameCount_ = 0;
+                    LOG_ERROR(kLogSource,
+                              QStringLiteral("CAN接口重置失败，通信可能仍然受阻。"
+                                             "将在连续丢弃%1帧后再次尝试重置。")
+                                  .arg(kResetThreshold));
                 }
             }
         }
