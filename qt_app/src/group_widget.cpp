@@ -65,7 +65,7 @@ void GroupCard::setupUi()
     // 顶部行：名称和ID
     QHBoxLayout *topRow = new QHBoxLayout();
     
-    nameLabel_ = new QLabel(QStringLiteral("📂 %1").arg(name_), this);
+    nameLabel_ = new QLabel(QStringLiteral("[G] %1").arg(name_), this);
     nameLabel_->setStyleSheet(QStringLiteral(
         "font-size: 15px; font-weight: bold; color: #2c3e50;"));
     topRow->addWidget(nameLabel_);
@@ -108,7 +108,7 @@ void GroupCard::setupUi()
     QHBoxLayout *buttonRow = new QHBoxLayout();
     buttonRow->setSpacing(6);
     
-    QPushButton *stopBtn = new QPushButton(QStringLiteral("⏹️ 停止"), this);
+    QPushButton *stopBtn = new QPushButton(QStringLiteral("[=] 停止"), this);
     stopBtn->setMinimumHeight(32);
     stopBtn->setStyleSheet(QStringLiteral(
         "background-color: #95a5a6; color: white; border: none; border-radius: 4px;"));
@@ -117,7 +117,7 @@ void GroupCard::setupUi()
     });
     buttonRow->addWidget(stopBtn);
     
-    QPushButton *fwdBtn = new QPushButton(QStringLiteral("▶️ 正转"), this);
+    QPushButton *fwdBtn = new QPushButton(QStringLiteral("[>] 正转"), this);
     fwdBtn->setMinimumHeight(32);
     fwdBtn->setStyleSheet(QStringLiteral(
         "background-color: #27ae60; color: white; border: none; border-radius: 4px;"));
@@ -126,7 +126,7 @@ void GroupCard::setupUi()
     });
     buttonRow->addWidget(fwdBtn);
     
-    QPushButton *revBtn = new QPushButton(QStringLiteral("◀️ 反转"), this);
+    QPushButton *revBtn = new QPushButton(QStringLiteral("[<] 反转"), this);
     revBtn->setMinimumHeight(32);
     revBtn->setStyleSheet(QStringLiteral(
         "background-color: #f39c12; color: white; border: none; border-radius: 4px;"));
@@ -135,7 +135,7 @@ void GroupCard::setupUi()
     });
     buttonRow->addWidget(revBtn);
     
-    QPushButton *deleteBtn = new QPushButton(QStringLiteral("🗑️"), this);
+    QPushButton *deleteBtn = new QPushButton(QStringLiteral("X"), this);
     deleteBtn->setMinimumHeight(32);
     deleteBtn->setMinimumWidth(40);
     deleteBtn->setStyleSheet(QStringLiteral(
@@ -152,7 +152,7 @@ void GroupCard::updateInfo(const QString &name, int deviceCount, int channelCoun
                           const QJsonArray &channels)
 {
     name_ = name;
-    nameLabel_->setText(QStringLiteral("📂 %1").arg(name));
+    nameLabel_->setText(QStringLiteral("[G] %1").arg(name));
     deviceCountLabel_->setText(QStringLiteral("%1 设备").arg(deviceCount));
     channelCountLabel_->setText(QStringLiteral("%1 通道").arg(channelCount));
     
@@ -167,7 +167,7 @@ void GroupCard::updateInfo(const QString &name, int deviceCount, int channelCoun
             QJsonObject ch = v.toObject();
             int node = ch.value(QStringLiteral("node")).toInt();
             int channel = ch.value(QStringLiteral("channel")).toInt();
-            channelTexts << QStringLiteral("📡 节点%1:通道%2").arg(node).arg(channel);
+            channelTexts << QStringLiteral("[CH] 节点%1:通道%2").arg(node).arg(channel);
         }
         channelsLabel_->setText(channelTexts.join(QStringLiteral(" | ")));
         channelsLabel_->setStyleSheet(QStringLiteral(
