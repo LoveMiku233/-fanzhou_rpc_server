@@ -913,6 +913,20 @@ void RpcRegistry::registerGroup()
             obj[QStringLiteral("devices")] = devices;
             obj[QStringLiteral("deviceCount")] = it.value().size();
 
+            // 直接返回通道列表，减少额外的RPC调用
+            const auto channelKeys = context_->getGroupChannels(it.key());
+            QJsonArray channels;
+            for (int key : channelKeys) {
+                const int node = key / 256;
+                const int ch = key % 256;
+                channels.append(QJsonObject{
+                    {kKeyNode, node},
+                    {kKeyChannel, ch}
+                });
+            }
+            obj[kKeyChannels] = channels;
+            obj[QStringLiteral("channelCount")] = channels.size();
+
             arr.append(obj);
         }
         return QJsonObject{{QStringLiteral("ok"), true}, {QStringLiteral("groups"), arr}};
@@ -1019,13 +1033,15 @@ void RpcRegistry::registerGroup()
     dispatcher_->registerMethod(QStringLiteral("group.control"),
                                  [this](const QJsonObject &params) {
         qint32 groupId = 0;
-        quint8 channel = 0;
+        qint32 channel = -1;  // 默认-1表示使用分组绑定的通道
         QString actionStr;
 
         if (!rpc::RpcHelpers::getI32(params, "groupId", groupId))
             return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing groupId"));
-        if (!rpc::RpcHelpers::getU8(params, "ch", channel) || channel > 3)
-            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("missing/invalid ch(0..3)"));
+        // channel是可选参数，默认-1表示使用分组绑定的通道
+        rpc::RpcHelpers::getI32(params, "ch", channel);
+        if (channel < -1 || channel > kMaxChannelId)
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("invalid ch (-1 for bound channels, or 0-%1)").arg(kMaxChannelId));
         if (!rpc::RpcHelpers::getString(params, "action", actionStr))
             return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing action"));
 
@@ -1037,7 +1053,15 @@ void RpcRegistry::registerGroup()
         if (!context_->deviceGroups.contains(groupId))
             return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("group not found"));
 
-        const auto stats = context_->queueGroupControl(groupId, channel, action, QStringLiteral("rpc:group.control"));
+        // channel=-1 表示使用分组绑定的通道，0-kMaxChannelId 表示控制所有设备的指定通道
+        GroupControlStats stats;
+        if (channel >= 0 && channel <= kMaxChannelId) {
+            // 指定通道：对分组中所有设备的指定通道发送控制命令
+            stats = context_->queueGroupControl(groupId, static_cast<quint8>(channel), action, QStringLiteral("rpc:group.control"));
+        } else {
+            // channel=-1：只控制分组中绑定的特定通道
+            stats = context_->queueGroupBoundChannelsControl(groupId, action, QStringLiteral("rpc:group.control"));
+        }
         QJsonArray jobs;
         for (quint64 id : stats.jobIds) {
             jobs.append(QString::number(id));

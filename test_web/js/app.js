@@ -396,33 +396,14 @@ function queryRelayAll() {
 
 /**
  * 刷新分组列表
- * 同时获取分组信息和通道信息
+ * group.list 现在直接返回通道信息，不需要额外调用 group.getChannels
  */
 function refreshGroupList() {
     callMethod('group.list', {}, function(response) {
         if (response.result) {
             groupListCache = response.result.groups || response.result || [];
-            
-            // 先渲染一次基本列表
+            // group.list 已经包含 channels 信息，直接渲染
             renderGroupList();
-            
-            // 批量获取所有分组的通道信息
-            let pendingRequests = groupListCache.length;
-            if (pendingRequests === 0) return;
-            
-            groupListCache.forEach(group => {
-                const groupId = group.groupId || group.id;
-                callMethod('group.getChannels', { groupId: groupId }, function(chResponse) {
-                    if (chResponse.result && chResponse.result.channels) {
-                        group.channels = chResponse.result.channels;
-                    }
-                    pendingRequests--;
-                    // 只在所有请求完成后重新渲染一次
-                    if (pendingRequests === 0) {
-                        renderGroupList();
-                    }
-                });
-            });
         }
     });
 }
@@ -535,11 +516,12 @@ function createGroup() {
  * @param {string} action - 动作 (stop/fwd/rev)
  */
 function controlGroupById(groupId, action) {
-    // 获取当前选择的通道
-    const ch = parseInt(document.getElementById('groupControlChannel')?.value || 0);
+    // 使用ch=-1表示控制分组绑定的通道，而不是固定通道0
+    // 这样会调用后端的queueGroupBoundChannelsControl()方法
+    // 只控制通过group.addChannel添加的特定通道
     callMethod('group.control', {
         groupId: groupId,
-        ch: ch,
+        ch: -1,
         action: action
     });
 }
