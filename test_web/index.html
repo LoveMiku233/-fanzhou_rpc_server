@@ -277,8 +277,8 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                     <button class="success" onclick="openCreateGroupModal()" style="min-width: 120px;">
                         ➕ 创建分组
                     </button>
-                    <button class="secondary" onclick="openManageDeviceModal()" style="min-width: 120px;">
-                        🔗 管理设备
+                    <button class="secondary" onclick="openManageChannelModal()" style="min-width: 140px;">
+                        🔧 管理设备通道
                     </button>
                     <button class="warning" onclick="batchControlGroups('stop')" style="min-width: 100px;">
                         ⏹️ 全部停止
@@ -291,17 +291,13 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                     </button>
                 </div>
 
-                <!-- 分组列表 -->
-                <div class="data-list" id="groupList">
-                    <div class="data-list-header">
-                        <span>📂 分组信息</span>
-                        <span>操作</span>
-                    </div>
-                    <div class="data-list-empty" id="groupListEmpty">
-                        <p>📭 暂无分组数据</p>
-                        <p style="font-size: 12px; margin-top: 10px;">请先连接服务器并点击"刷新"按钮</p>
-                    </div>
-                    <div id="groupListContent"></div>
+                <!-- 分组卡片视图 -->
+                <div id="groupCardsEmpty" class="data-list-empty" style="display: none; background: #f8f9fa; border-radius: 12px; padding: 40px 20px;">
+                    <p>📭 暂无分组数据</p>
+                    <p style="font-size: 12px; margin-top: 10px;">请先连接服务器并点击"刷新"按钮</p>
+                </div>
+                <div class="group-cards" id="groupCards">
+                    <!-- 分组卡片将由JavaScript动态生成 -->
                 </div>
             </div>
 
@@ -381,30 +377,24 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                     </div>
                 </details>
 
-                <!-- 策略列表 -->
-                <div class="data-list" id="strategyList">
-                    <div class="data-list-header">
-                        <span>⏱️ 定时策略列表</span>
-                        <span>操作</span>
-                    </div>
-                    <div class="data-list-empty" id="strategyListEmpty">
-                        <p>📭 暂无定时策略</p>
-                        <p style="font-size: 12px; margin-top: 10px;">点击上方的快速创建卡片添加策略</p>
-                    </div>
-                    <div id="strategyListContent"></div>
+                <!-- 策略卡片视图 -->
+                <h4 style="color: #555; margin-bottom: 12px; font-size: 14px;">⏱️ 定时策略</h4>
+                <div id="strategyCardsEmpty" class="data-list-empty" style="display: none; background: #f8f9fa; border-radius: 12px; padding: 40px 20px;">
+                    <p>📭 暂无定时策略</p>
+                    <p style="font-size: 12px; margin-top: 10px;">点击上方的快速创建卡片添加策略</p>
+                </div>
+                <div class="strategy-cards" id="strategyCards">
+                    <!-- 策略卡片将由JavaScript动态生成 -->
                 </div>
 
-                <!-- 传感器策略列表 -->
-                <div class="data-list" id="sensorStrategyList" style="margin-top: 20px;">
-                    <div class="data-list-header">
-                        <span>📡 传感器策略列表</span>
-                        <span>操作</span>
-                    </div>
-                    <div class="data-list-empty" id="sensorStrategyListEmpty">
-                        <p>📭 暂无传感器策略</p>
-                        <p style="font-size: 12px; margin-top: 10px;">点击上方的快速创建卡片添加传感器策略</p>
-                    </div>
-                    <div id="sensorStrategyListContent"></div>
+                <!-- 传感器策略卡片视图 -->
+                <h4 style="color: #555; margin: 25px 0 12px 0; font-size: 14px;">📡 传感器策略</h4>
+                <div id="sensorStrategyCardsEmpty" class="data-list-empty" style="display: none; background: #f8f9fa; border-radius: 12px; padding: 40px 20px;">
+                    <p>📭 暂无传感器策略</p>
+                    <p style="font-size: 12px; margin-top: 10px;">点击上方的快速创建卡片添加传感器策略</p>
+                </div>
+                <div class="strategy-cards" id="sensorStrategyCards">
+                    <!-- 传感器策略卡片将由JavaScript动态生成 -->
                 </div>
             </div>
 
@@ -691,6 +681,50 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                 <button class="secondary" onclick="closeModal('manageDeviceModal')">关闭</button>
                 <button class="danger" onclick="removeDeviceFromGroup()">➖ 移除设备</button>
                 <button class="success" onclick="addDeviceToGroup()">➕ 添加设备</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 管理设备通道弹窗 - 新增，支持按通道绑定 -->
+    <div class="modal-overlay" id="manageChannelModal" onclick="closeModalOnBackground(event, 'manageChannelModal')">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);">
+                <h3>🔧 管理设备通道</h3>
+                <button class="modal-close" onclick="closeModal('manageChannelModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div style="background: #e3f2fd; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; font-size: 13px; color: #1565c0;">
+                    💡 <strong>提示：</strong>可以将设备的单个通道添加到分组，同一设备的不同通道可以绑定到不同分组。
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>分组ID</label>
+                        <input type="number" id="channelGroupId" value="1" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>设备节点ID</label>
+                        <input type="number" id="channelNodeId" value="1" min="1" max="255">
+                    </div>
+                    <div class="form-group">
+                        <label>通道</label>
+                        <select id="channelNumber">
+                            <option value="0">通道 0</option>
+                            <option value="1">通道 1</option>
+                            <option value="2">通道 2</option>
+                            <option value="3">通道 3</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="channelListDisplay" style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 8px; display: none;">
+                    <div style="font-size: 12px; color: #666; margin-bottom: 8px;">当前分组的通道列表：</div>
+                    <div id="channelListContent" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="secondary" onclick="closeModal('manageChannelModal')">关闭</button>
+                <button onclick="viewGroupChannels()">📋 查看通道</button>
+                <button class="danger" onclick="removeChannelFromGroup()">➖ 移除通道</button>
+                <button class="success" onclick="addChannelToGroup()">➕ 添加通道</button>
             </div>
         </div>
     </div>

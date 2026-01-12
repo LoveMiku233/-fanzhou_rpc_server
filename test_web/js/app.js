@@ -396,49 +396,90 @@ function queryRelayAll() {
 
 /**
  * 刷新分组列表
+ * 同时获取分组信息和通道信息
  */
 function refreshGroupList() {
     callMethod('group.list', {}, function(response) {
         if (response.result) {
             groupListCache = response.result.groups || response.result || [];
+            // 获取每个分组的通道信息
+            groupListCache.forEach(group => {
+                const groupId = group.groupId || group.id;
+                callMethod('group.getChannels', { groupId: groupId }, function(chResponse) {
+                    if (chResponse.result && chResponse.result.channels) {
+                        group.channels = chResponse.result.channels;
+                    }
+                    renderGroupList();
+                });
+            });
             renderGroupList();
         }
     });
 }
 
 /**
- * 渲染分组列表
+ * 渲染分组列表为卡片视图
  */
 function renderGroupList() {
-    const contentEl = document.getElementById('groupListContent');
-    const emptyEl = document.getElementById('groupListEmpty');
+    const contentEl = document.getElementById('groupCards');
+    const emptyEl = document.getElementById('groupCardsEmpty');
     
     if (!groupListCache || groupListCache.length === 0) {
-        contentEl.innerHTML = '';
-        emptyEl.style.display = 'block';
+        if (contentEl) contentEl.innerHTML = '';
+        if (emptyEl) emptyEl.style.display = 'block';
         return;
     }
     
-    emptyEl.style.display = 'none';
+    if (emptyEl) emptyEl.style.display = 'none';
     
     let html = '';
     groupListCache.forEach(group => {
         const groupId = group.groupId || group.id;
         const name = group.name || `分组${groupId}`;
-        const deviceCount = group.devices ? group.devices.length : 0;
-        const enabled = group.enabled !== false;
+        const devices = group.devices || [];
+        const channels = group.channels || [];
+        const deviceCount = devices.length;
+        const channelCount = channels.length;
+        
+        // 构建设备标签
+        let devicesHtml = '';
+        if (devices.length > 0) {
+            devices.forEach(nodeId => {
+                devicesHtml += `<span class="group-device-tag">🔌 节点 ${nodeId}</span>`;
+            });
+        }
+        
+        // 构建通道标签
+        if (channels.length > 0) {
+            channels.forEach(ch => {
+                const node = ch.node;
+                const channel = ch.channel;
+                devicesHtml += `<span class="group-device-tag channel">📡 节点${node} 通道${channel}</span>`;
+            });
+        }
+        
+        if (!devicesHtml) {
+            devicesHtml = '<span class="group-empty-hint">暂无绑定设备或通道</span>';
+        }
         
         html += `
-            <div class="data-list-item">
-                <div class="item-info">
-                    <span class="item-name">📂 ${escapeHtml(name)}</span>
-                    <span class="item-detail">
-                        ID: ${groupId} | 
-                        设备数: ${deviceCount} | 
-                        状态: ${enabled ? '✅ 启用' : '❌ 禁用'}
-                    </span>
+            <div class="group-card" onclick="openEditGroupModal(${groupId})">
+                <div class="group-card-header">
+                    <div class="group-card-title">
+                        📂 ${escapeHtml(name)}
+                        <span class="group-card-id">ID: ${groupId}</span>
+                    </div>
+                    <div class="group-card-count">
+                        ${deviceCount} 设备 / ${channelCount} 通道
+                    </div>
                 </div>
-                <div class="item-actions">
+                <div class="group-card-body">
+                    <div class="group-devices-label">绑定的设备和通道：</div>
+                    <div class="group-devices-list">
+                        ${devicesHtml}
+                    </div>
+                </div>
+                <div class="group-card-actions" onclick="event.stopPropagation()">
                     <button onclick="controlGroupById(${groupId}, 'stop')">⏹️ 停止</button>
                     <button class="success" onclick="controlGroupById(${groupId}, 'fwd')">▶️ 正转</button>
                     <button class="warning" onclick="controlGroupById(${groupId}, 'rev')">◀️ 反转</button>
@@ -447,6 +488,9 @@ function renderGroupList() {
             </div>
         `;
     });
+    
+    if (contentEl) contentEl.innerHTML = html;
+}
     
     contentEl.innerHTML = html;
 }
@@ -960,19 +1004,19 @@ function refreshStrategyList() {
 
 /**
  * 渲染策略列表
- * 显示所有定时策略及其状态，使用更清晰的布局
+ * 显示所有定时策略及其状态，使用卡片视图
  */
 function renderStrategyList() {
-    const contentEl = document.getElementById('strategyListContent');
-    const emptyEl = document.getElementById('strategyListEmpty');
+    const contentEl = document.getElementById('strategyCards');
+    const emptyEl = document.getElementById('strategyCardsEmpty');
     
     if (!strategyListCache || strategyListCache.length === 0) {
-        contentEl.innerHTML = '';
-        emptyEl.style.display = 'block';
+        if (contentEl) contentEl.innerHTML = '';
+        if (emptyEl) emptyEl.style.display = 'block';
         return;
     }
     
-    emptyEl.style.display = 'none';
+    if (emptyEl) emptyEl.style.display = 'none';
     
     // 动作名称映射
     const actionNames = {
@@ -981,77 +1025,87 @@ function renderStrategyList() {
         'rev': '◀️ 反转'
     };
     
-    // 触发类型名称映射
-    const triggerTypeNames = {
-        'interval': '⏱️ 间隔执行',
-        'daily': '📅 每日定时'
-    };
-    
     let html = '';
     strategyListCache.forEach(strategy => {
         const id = strategy.id;
         const name = strategy.name || `策略${id}`;
         const groupId = strategy.groupId;
-        const channel = strategy.channel === -1 ? '全部' : strategy.channel;
+        const channel = strategy.channel === -1 ? '全部通道' : `通道 ${strategy.channel}`;
         const action = actionNames[strategy.action] || strategy.action;
         const intervalSec = strategy.intervalSec;
         const dailyTime = strategy.dailyTime;
         const triggerType = strategy.triggerType || (dailyTime ? 'daily' : 'interval');
         const enabled = strategy.enabled !== false;
         const running = strategy.running === true;
-        const attached = strategy.attached === true;
         
         // 构建触发时间描述
         let triggerDesc = '';
+        let triggerIcon = '⏱️';
         if (triggerType === 'daily' && dailyTime) {
-            triggerDesc = `📅 每天 ${dailyTime}`;
+            triggerDesc = `每天 ${dailyTime}`;
+            triggerIcon = '📅';
         } else if (intervalSec) {
-            // 将秒数转换为更易读的格式
             if (intervalSec >= 3600) {
                 const hours = Math.floor(intervalSec / 3600);
                 const mins = Math.floor((intervalSec % 3600) / 60);
-                triggerDesc = `⏱️ 每 ${hours}小时${mins > 0 ? mins + '分钟' : ''}`;
+                triggerDesc = `每 ${hours}小时${mins > 0 ? mins + '分钟' : ''}`;
             } else if (intervalSec >= 60) {
                 const mins = Math.floor(intervalSec / 60);
                 const secs = intervalSec % 60;
-                triggerDesc = `⏱️ 每 ${mins}分钟${secs > 0 ? secs + '秒' : ''}`;
+                triggerDesc = `每 ${mins}分钟${secs > 0 ? secs + '秒' : ''}`;
             } else {
-                triggerDesc = `⏱️ 每 ${intervalSec}秒`;
+                triggerDesc = `每 ${intervalSec}秒`;
             }
         }
         
-        // 状态图标
-        const statusIcon = enabled ? (running ? '🟢' : '🟡') : '🔴';
+        // 状态文本
         const statusText = enabled ? (running ? '运行中' : '已启用') : '已禁用';
+        const statusClass = enabled ? (running ? 'running' : 'enabled') : 'disabled';
+        const cardClass = enabled ? '' : 'disabled';
         
         html += `
-            <div class="data-list-item" style="flex-wrap: wrap; gap: 10px;">
-                <div class="item-info" style="min-width: 200px;">
-                    <span class="item-name">⏱️ ${escapeHtml(name)}</span>
-                    <span class="item-detail">
-                        <strong>ID:</strong> ${id} | 
-                        <strong>分组:</strong> ${groupId} | 
-                        <strong>通道:</strong> ${channel}
-                    </span>
-                    <span class="item-detail">
-                        <strong>动作:</strong> ${action} | 
-                        <strong>触发:</strong> ${triggerDesc}
-                    </span>
-                    <span class="item-detail">
-                        ${statusIcon} ${statusText}
-                        ${attached ? ' | 🔗 已挂载' : ''}
-                    </span>
+            <div class="strategy-card timer ${cardClass}" onclick="openEditStrategyModal(${id})">
+                <div class="strategy-card-header">
+                    <div class="strategy-card-title">
+                        ⏱️ ${escapeHtml(name)}
+                    </div>
+                    <div class="strategy-card-status ${statusClass}">
+                        ${statusText}
+                    </div>
                 </div>
-                <div class="item-actions" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                <div class="strategy-card-body">
+                    <div class="strategy-card-info">
+                        <div class="strategy-info-row">
+                            <span class="label">策略ID</span>
+                            <span class="value">${id}</span>
+                        </div>
+                        <div class="strategy-info-row">
+                            <span class="label">目标分组</span>
+                            <span class="value">分组 ${groupId}</span>
+                        </div>
+                        <div class="strategy-info-row">
+                            <span class="label">控制通道</span>
+                            <span class="value">${channel}</span>
+                        </div>
+                        <div class="strategy-info-row">
+                            <span class="label">执行动作</span>
+                            <span class="value">${action}</span>
+                        </div>
+                    </div>
+                    <div class="strategy-card-trigger">
+                        <div class="strategy-trigger-label">触发方式</div>
+                        <div class="strategy-trigger-value">${triggerIcon} ${triggerDesc}</div>
+                    </div>
+                </div>
+                <div class="strategy-card-actions" onclick="event.stopPropagation()">
                     <button onclick="toggleStrategyEnabled(${id}, ${!enabled})" 
-                            class="${enabled ? 'warning' : 'success'}" 
-                            title="${enabled ? '点击禁用此策略' : '点击启用此策略'}">
+                            class="${enabled ? 'warning' : 'success'}">
                         ${enabled ? '⏸️ 禁用' : '▶️ 启用'}
                     </button>
-                    <button class="secondary" onclick="triggerStrategy(${id})" title="立即执行一次此策略">
+                    <button class="secondary" onclick="triggerStrategy(${id})">
                         🎯 触发
                     </button>
-                    <button class="danger" onclick="deleteStrategy(${id})" title="永久删除此策略">
+                    <button class="danger" onclick="deleteStrategy(${id})">
                         🗑️ 删除
                     </button>
                 </div>
@@ -1059,16 +1113,16 @@ function renderStrategyList() {
         `;
     });
     
-    contentEl.innerHTML = html;
+    if (contentEl) contentEl.innerHTML = html;
 }
 
 /**
  * 渲染传感器策略列表
- * 显示所有传感器触发策略，使用更清晰的布局
+ * 显示所有传感器触发策略，使用卡片视图
  */
 function renderSensorStrategyList() {
-    const contentEl = document.getElementById('sensorStrategyListContent');
-    const emptyEl = document.getElementById('sensorStrategyListEmpty');
+    const contentEl = document.getElementById('sensorStrategyCards');
+    const emptyEl = document.getElementById('sensorStrategyCardsEmpty');
     
     if (!sensorStrategyListCache || sensorStrategyListCache.length === 0) {
         if (contentEl) contentEl.innerHTML = '';
@@ -1088,16 +1142,7 @@ function renderSensorStrategyList() {
         'co2': '🌫️ CO2'
     };
     
-    // 条件名称映射
-    const conditionNames = {
-        'gt': '>',
-        'lt': '<',
-        'eq': '=',
-        'gte': '>=',
-        'lte': '<='
-    };
-    
-    // 条件描述映射（更易理解）
+    // 条件描述映射
     const conditionDescriptions = {
         'gt': '大于',
         'lt': '小于',
@@ -1119,45 +1164,59 @@ function renderSensorStrategyList() {
         const name = strategy.name || `传感器策略${id}`;
         const sensorType = sensorTypeNames[strategy.sensorType] || strategy.sensorType;
         const sensorNode = strategy.sensorNode;
-        const condition = conditionNames[strategy.condition] || strategy.condition;
         const conditionDesc = conditionDescriptions[strategy.condition] || strategy.condition;
         const threshold = strategy.threshold;
         const groupId = strategy.groupId;
-        const channel = strategy.channel >= 0 ? strategy.channel : '全部';
+        const channel = strategy.channel >= 0 ? `通道 ${strategy.channel}` : '全部通道';
         const action = actionNames[strategy.action] || strategy.action;
         const enabled = strategy.enabled !== false;
         const cooldown = strategy.cooldownSec || 0;
         
-        // 状态图标
-        const statusIcon = enabled ? '🟢' : '🔴';
         const statusText = enabled ? '已启用' : '已禁用';
+        const statusClass = enabled ? 'enabled' : 'disabled';
+        const cardClass = enabled ? '' : 'disabled';
         
         html += `
-            <div class="data-list-item" style="flex-wrap: wrap; gap: 10px;">
-                <div class="item-info" style="min-width: 200px;">
-                    <span class="item-name">📡 ${escapeHtml(name)}</span>
-                    <span class="item-detail">
-                        <strong>ID:</strong> ${id} | 
-                        <strong>传感器:</strong> ${sensorType} (节点 ${sensorNode})
-                    </span>
-                    <span class="item-detail">
-                        <strong>触发条件:</strong> 当数值 ${conditionDesc} ${threshold} 时
-                    </span>
-                    <span class="item-detail">
-                        <strong>执行:</strong> 分组 ${groupId} 通道 ${channel} → ${action}
-                        ${cooldown > 0 ? ` | <strong>冷却:</strong> ${cooldown}秒` : ''}
-                    </span>
-                    <span class="item-detail">
-                        ${statusIcon} ${statusText}
-                    </span>
+            <div class="strategy-card sensor ${cardClass}" onclick="openEditSensorStrategyModal(${id})">
+                <div class="strategy-card-header">
+                    <div class="strategy-card-title">
+                        📡 ${escapeHtml(name)}
+                    </div>
+                    <div class="strategy-card-status ${statusClass}">
+                        ${statusText}
+                    </div>
                 </div>
-                <div class="item-actions" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                <div class="strategy-card-body">
+                    <div class="strategy-card-info">
+                        <div class="strategy-info-row">
+                            <span class="label">策略ID</span>
+                            <span class="value">${id}</span>
+                        </div>
+                        <div class="strategy-info-row">
+                            <span class="label">传感器</span>
+                            <span class="value">${sensorType} (节点 ${sensorNode})</span>
+                        </div>
+                        <div class="strategy-info-row">
+                            <span class="label">目标分组</span>
+                            <span class="value">分组 ${groupId}</span>
+                        </div>
+                        <div class="strategy-info-row">
+                            <span class="label">执行动作</span>
+                            <span class="value">${channel} → ${action}</span>
+                        </div>
+                    </div>
+                    <div class="strategy-card-trigger">
+                        <div class="strategy-trigger-label">触发条件</div>
+                        <div class="strategy-trigger-value">当数值 ${conditionDesc} ${threshold} 时</div>
+                        ${cooldown > 0 ? `<div style="font-size: 11px; color: #666; margin-top: 4px;">冷却时间: ${cooldown}秒</div>` : ''}
+                    </div>
+                </div>
+                <div class="strategy-card-actions" onclick="event.stopPropagation()">
                     <button onclick="toggleSensorStrategyEnabled(${id}, ${!enabled})" 
-                            class="${enabled ? 'warning' : 'success'}"
-                            title="${enabled ? '点击禁用此策略' : '点击启用此策略'}">
+                            class="${enabled ? 'warning' : 'success'}">
                         ${enabled ? '⏸️ 禁用' : '▶️ 启用'}
                     </button>
-                    <button class="danger" onclick="deleteSensorStrategy(${id})" title="永久删除此策略">
+                    <button class="danger" onclick="deleteSensorStrategy(${id})">
                         🗑️ 删除
                     </button>
                 </div>
@@ -2390,4 +2449,152 @@ function submitWizardSensorStrategy() {
             }
         });
     });
+}
+
+/* ========================================================
+ * 设备通道管理功能 - 支持按通道绑定到分组
+ * ======================================================== */
+
+/**
+ * 打开管理设备通道弹窗
+ */
+function openManageChannelModal() {
+    openModal('manageChannelModal');
+}
+
+/**
+ * 添加通道到分组
+ */
+function addChannelToGroup() {
+    const groupId = parseInt(document.getElementById('channelGroupId').value);
+    const nodeId = parseInt(document.getElementById('channelNodeId').value);
+    const channel = parseInt(document.getElementById('channelNumber').value);
+    
+    if (!groupId || groupId <= 0) {
+        alert('请输入有效的分组ID');
+        return;
+    }
+    if (!nodeId || nodeId <= 0 || nodeId > 255) {
+        alert('请输入有效的设备节点ID (1-255)');
+        return;
+    }
+    
+    callMethod('group.addChannel', {
+        groupId: groupId,
+        node: nodeId,
+        channel: channel
+    }, function(response) {
+        if (response.result && response.result.ok) {
+            log('info', `通道 节点${nodeId}:通道${channel} 已添加到分组 ${groupId}`);
+            viewGroupChannels();
+            refreshGroupList();
+        } else if (response.error) {
+            log('error', `添加通道失败: ${response.error.message || '未知错误'}`);
+            alert(`添加通道失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 从分组移除通道
+ */
+function removeChannelFromGroup() {
+    const groupId = parseInt(document.getElementById('channelGroupId').value);
+    const nodeId = parseInt(document.getElementById('channelNodeId').value);
+    const channel = parseInt(document.getElementById('channelNumber').value);
+    
+    if (!groupId || groupId <= 0) {
+        alert('请输入有效的分组ID');
+        return;
+    }
+    if (!nodeId || nodeId <= 0 || nodeId > 255) {
+        alert('请输入有效的设备节点ID (1-255)');
+        return;
+    }
+    
+    if (confirm(`确定要从分组 ${groupId} 移除 节点${nodeId}:通道${channel} 吗？`)) {
+        callMethod('group.removeChannel', {
+            groupId: groupId,
+            node: nodeId,
+            channel: channel
+        }, function(response) {
+            if (response.result && response.result.ok) {
+                log('info', `通道 节点${nodeId}:通道${channel} 已从分组 ${groupId} 移除`);
+                viewGroupChannels();
+                refreshGroupList();
+            } else if (response.error) {
+                log('error', `移除通道失败: ${response.error.message || '未知错误'}`);
+                alert(`移除通道失败: ${response.error.message || '未知错误'}`);
+            }
+        });
+    }
+}
+
+/**
+ * 查看分组的通道列表
+ */
+function viewGroupChannels() {
+    const groupId = parseInt(document.getElementById('channelGroupId').value);
+    
+    if (!groupId || groupId <= 0) {
+        alert('请输入有效的分组ID');
+        return;
+    }
+    
+    callMethod('group.getChannels', { groupId: groupId }, function(response) {
+        const displayEl = document.getElementById('channelListDisplay');
+        const contentEl = document.getElementById('channelListContent');
+        
+        if (response.result && response.result.channels) {
+            const channels = response.result.channels;
+            if (channels.length === 0) {
+                contentEl.innerHTML = '<span style="color: #999;">暂无通道</span>';
+            } else {
+                let html = '';
+                channels.forEach(ch => {
+                    html += `<span class="group-device-tag channel">📡 节点${ch.node} 通道${ch.channel}</span>`;
+                });
+                contentEl.innerHTML = html;
+            }
+            displayEl.style.display = 'block';
+        } else if (response.error) {
+            contentEl.innerHTML = `<span style="color: #e74c3c;">获取失败: ${response.error.message || '未知错误'}</span>`;
+            displayEl.style.display = 'block';
+        }
+    });
+}
+
+/**
+ * 打开编辑分组弹窗（点击分组卡片时调用）
+ */
+function openEditGroupModal(groupId) {
+    // 设置分组ID并打开管理设备通道弹窗
+    document.getElementById('channelGroupId').value = groupId;
+    openManageChannelModal();
+    // 自动加载该分组的通道列表
+    setTimeout(() => viewGroupChannels(), 100);
+}
+
+/**
+ * 打开编辑策略弹窗（点击策略卡片时调用）
+ */
+function openEditStrategyModal(strategyId) {
+    // 目前简单实现：显示策略信息
+    const strategy = strategyListCache.find(s => s.id === strategyId);
+    if (strategy) {
+        log('info', `查看策略 ${strategyId}: ${JSON.stringify(strategy, null, 2)}`);
+        alert(`策略详情:\n\nID: ${strategy.id}\n名称: ${strategy.name || '未命名'}\n分组: ${strategy.groupId}\n通道: ${strategy.channel === -1 ? '全部' : strategy.channel}\n动作: ${strategy.action}\n间隔: ${strategy.intervalSec}秒\n状态: ${strategy.enabled ? '启用' : '禁用'}`);
+    }
+}
+
+/**
+ * 打开编辑传感器策略弹窗（点击传感器策略卡片时调用）
+ */
+function openEditSensorStrategyModal(strategyId) {
+    // 目前简单实现：显示策略信息
+    const strategy = sensorStrategyListCache.find(s => s.id === strategyId);
+    if (strategy) {
+        log('info', `查看传感器策略 ${strategyId}: ${JSON.stringify(strategy, null, 2)}`);
+        alert(`传感器策略详情:\n\nID: ${strategy.id}\n名称: ${strategy.name || '未命名'}\n传感器类型: ${strategy.sensorType}\n传感器节点: ${strategy.sensorNode}\n条件: ${strategy.condition} ${strategy.threshold}\n分组: ${strategy.groupId}\n动作: ${strategy.action}\n状态: ${strategy.enabled ? '启用' : '禁用'}`);
+    }
 }

@@ -165,6 +165,16 @@ public:
     // 配置文件路径（用于保存配置）
     QString configFilePath;
 
+    // MQTT云平台配置
+    bool mqttEnabled = false;
+    QString mqttBroker;
+    int mqttPort = 1883;
+    QString mqttClientId;
+    QString mqttUsername;
+    QString mqttPassword;
+    QString mqttTopic;
+    bool mqttConnected = false;
+
     // 配置管理
     /**
      * @brief 将当前运行时配置保存到文件

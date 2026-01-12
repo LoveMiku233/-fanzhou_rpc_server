@@ -273,6 +273,46 @@ QString SystemSettings::getNetworkInfo(const QString &interface)
     return runCommand(QStringLiteral("ifconfig"), args);
 }
 
+QJsonObject SystemSettings::getNetworkInfoDetailed(const QString &interface)
+{
+    QJsonObject result;
+    
+    // 获取IP地址信息
+    QString ipOutput = runCommand(QStringLiteral("ip"),
+        {QStringLiteral("addr"), QStringLiteral("show")});
+    result[QStringLiteral("ipAddr")] = ipOutput;
+    
+    // 获取路由信息
+    QString routeOutput = runCommand(QStringLiteral("ip"),
+        {QStringLiteral("route"), QStringLiteral("show")});
+    result[QStringLiteral("routes")] = routeOutput;
+    
+    // 获取DNS信息
+    QString dnsOutput = runCommand(QStringLiteral("cat"),
+        {QStringLiteral("/etc/resolv.conf")});
+    result[QStringLiteral("dns")] = dnsOutput;
+    
+    // 获取接口列表
+    QString interfaceList = runCommand(QStringLiteral("ls"),
+        {QStringLiteral("/sys/class/net/")});
+    result[QStringLiteral("interfaces")] = interfaceList;
+    
+    // 如果指定了接口，获取该接口的详细信息
+    if (!interface.isEmpty()) {
+        // 获取接口状态
+        QString stateOutput = runCommand(QStringLiteral("cat"),
+            {QStringLiteral("/sys/class/net/%1/operstate").arg(interface)});
+        result[QStringLiteral("state")] = stateOutput;
+        
+        // 获取MAC地址
+        QString macOutput = runCommand(QStringLiteral("cat"),
+            {QStringLiteral("/sys/class/net/%1/address").arg(interface)});
+        result[QStringLiteral("mac")] = macOutput;
+    }
+    
+    return result;
+}
+
 bool SystemSettings::pingTest(const QString &host, int count, int timeoutSec)
 {
     if (host.isEmpty()) {
@@ -326,6 +366,42 @@ bool SystemSettings::setStaticIp(const QString &interface,
     }
 
     return success;
+}
+
+bool SystemSettings::enableDhcp(const QString &interface)
+{
+    if (interface.isEmpty()) {
+        emit errorOccurred(QStringLiteral("enableDhcp: interface is empty"));
+        return false;
+    }
+
+    // 先释放现有的DHCP租约
+    runCommand(QStringLiteral("dhclient"),
+               {QStringLiteral("-r"), interface});
+
+    // 使用dhclient获取DHCP地址
+    return runCommandWithStatus(QStringLiteral("dhclient"),
+                                 {interface}, 30000);
+}
+
+bool SystemSettings::setDns(const QString &primary, const QString &secondary)
+{
+    if (primary.isEmpty()) {
+        emit errorOccurred(QStringLiteral("setDns: primary DNS is empty"));
+        return false;
+    }
+
+    // 构建resolv.conf内容
+    QString content = QStringLiteral("nameserver %1\n").arg(primary);
+    if (!secondary.isEmpty()) {
+        content += QStringLiteral("nameserver %1\n").arg(secondary);
+    }
+
+    // 写入/etc/resolv.conf
+    // 使用bash -c来执行写入操作
+    return runCommandWithStatus(QStringLiteral("bash"),
+        {QStringLiteral("-c"),
+         QStringLiteral("echo '%1' > /etc/resolv.conf").arg(content)});
 }
 
 }  // namespace config

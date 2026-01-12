@@ -356,6 +356,124 @@ void RpcRegistry::registerSystem()
             {QStringLiteral("address"), address}
         };
     });
+
+    // 启用DHCP
+    dispatcher_->registerMethod(QStringLiteral("sys.network.enableDhcp"),
+                                 [this](const QJsonObject &params) {
+        QString interface;
+
+        if (!rpc::RpcHelpers::getString(params, "interface", interface))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing interface"));
+
+        if (!context_->systemSettings)
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, QStringLiteral("SystemSettings not ready"));
+
+        const bool ok = context_->systemSettings->enableDhcp(interface);
+        return QJsonObject{
+            {QStringLiteral("ok"), ok},
+            {QStringLiteral("interface"), interface},
+            {QStringLiteral("mode"), QStringLiteral("dhcp")}
+        };
+    });
+
+    // 获取详细网络信息
+    dispatcher_->registerMethod(QStringLiteral("sys.network.infoDetailed"),
+                                 [this](const QJsonObject &params) {
+        QString interface;
+        rpc::RpcHelpers::getString(params, "interface", interface);
+
+        if (!context_->systemSettings)
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, QStringLiteral("SystemSettings not ready"));
+
+        QJsonObject info = context_->systemSettings->getNetworkInfoDetailed(interface);
+        info[QStringLiteral("ok")] = true;
+        return info;
+    });
+
+    // 设置DNS服务器
+    dispatcher_->registerMethod(QStringLiteral("sys.network.setDns"),
+                                 [this](const QJsonObject &params) {
+        QString primary;
+        QString secondary;
+
+        if (!rpc::RpcHelpers::getString(params, "primary", primary))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing primary DNS"));
+
+        rpc::RpcHelpers::getString(params, "secondary", secondary);
+
+        if (!context_->systemSettings)
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, QStringLiteral("SystemSettings not ready"));
+
+        const bool ok = context_->systemSettings->setDns(primary, secondary);
+        return QJsonObject{
+            {QStringLiteral("ok"), ok},
+            {QStringLiteral("primary"), primary},
+            {QStringLiteral("secondary"), secondary}
+        };
+    });
+
+    // ===================== 云平台配置RPC方法 =====================
+
+    // 获取MQTT配置
+    dispatcher_->registerMethod(QStringLiteral("cloud.mqtt.get"),
+                                 [this](const QJsonObject &) {
+        return QJsonObject{
+            {QStringLiteral("ok"), true},
+            {QStringLiteral("enabled"), context_->mqttEnabled},
+            {QStringLiteral("broker"), context_->mqttBroker},
+            {QStringLiteral("port"), context_->mqttPort},
+            {QStringLiteral("clientId"), context_->mqttClientId},
+            {QStringLiteral("username"), context_->mqttUsername},
+            {QStringLiteral("topic"), context_->mqttTopic},
+            {QStringLiteral("connected"), context_->mqttConnected}
+        };
+    });
+
+    // 设置MQTT配置
+    dispatcher_->registerMethod(QStringLiteral("cloud.mqtt.set"),
+                                 [this](const QJsonObject &params) {
+        QString broker;
+        qint32 port = 1883;
+        QString clientId;
+        QString username;
+        QString password;
+        QString topic;
+        bool enabled = true;
+
+        rpc::RpcHelpers::getString(params, "broker", broker);
+        rpc::RpcHelpers::getI32(params, "port", port);
+        rpc::RpcHelpers::getString(params, "clientId", clientId);
+        rpc::RpcHelpers::getString(params, "username", username);
+        rpc::RpcHelpers::getString(params, "password", password);
+        rpc::RpcHelpers::getString(params, "topic", topic);
+        rpc::RpcHelpers::getBool(params, "enabled", enabled, true);
+
+        // 更新配置
+        if (!broker.isEmpty()) context_->mqttBroker = broker;
+        if (port > 0) context_->mqttPort = port;
+        if (!clientId.isEmpty()) context_->mqttClientId = clientId;
+        if (!username.isEmpty()) context_->mqttUsername = username;
+        if (!password.isEmpty()) context_->mqttPassword = password;
+        if (!topic.isEmpty()) context_->mqttTopic = topic;
+        context_->mqttEnabled = enabled;
+
+        return QJsonObject{
+            {QStringLiteral("ok"), true},
+            {QStringLiteral("message"), QStringLiteral("MQTT configuration updated")}
+        };
+    });
+
+    // 测试MQTT连接
+    dispatcher_->registerMethod(QStringLiteral("cloud.mqtt.test"),
+                                 [this](const QJsonObject &) {
+        // 暂时返回模拟结果，实际需要实现MQTT客户端
+        return QJsonObject{
+            {QStringLiteral("ok"), true},
+            {QStringLiteral("message"), QStringLiteral("MQTT connection test - feature pending implementation")},
+            {QStringLiteral("broker"), context_->mqttBroker},
+            {QStringLiteral("port"), context_->mqttPort}
+        };
+    });
 }
 
 void RpcRegistry::registerCan()
