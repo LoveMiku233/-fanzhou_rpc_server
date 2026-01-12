@@ -13,11 +13,12 @@
 #include <QLabel>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QSlider>
 
 class RpcClient;
 
 /**
- * @brief 设置页面 - 包含连接设置、网络设置和MQTT云平台设置
+ * @brief 设置页面 - 包含连接设置、网络设置、MQTT云平台设置和系统控制
  */
 class SettingsWidget : public QWidget
 {
@@ -56,6 +57,12 @@ private slots:
     void onGetMqttConfig();
     void onSetMqttConfig();
     void onTestMqtt();
+    
+    // 系统控制槽函数
+    void onGetBrightness();
+    void onSetBrightness();
+    void onRebootSystem();
+    void onShutdownSystem();
 
 private:
     void setupUi();
@@ -95,6 +102,9 @@ private:
     QLineEdit *mqttTopicEdit_;
     QCheckBox *mqttEnabledCheckBox_;
     QLabel *mqttStatusLabel_;
+    
+    // 系统控制组件
+    QSlider *brightnessSlider_;
 };
 
 #endif // SETTINGS_WIDGET_H

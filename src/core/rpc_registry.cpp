@@ -1227,7 +1227,7 @@ void RpcRegistry::registerAuto()
         qint32 id = 0;
         QString name;
         qint32 groupId = 0;
-        qint32 channel = 0;
+        qint32 channel = -1;  // 默认-1表示使用分组绑定的通道
         QString action;
         qint32 intervalSec = 60;
         bool enabled = true;
@@ -1241,9 +1241,10 @@ void RpcRegistry::registerAuto()
             return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing name"));
         if (!rpc::RpcHelpers::getI32(params, "groupId", groupId) || groupId <= 0)
             return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid groupId"));
-        // channel=-1 表示控制所有通道，0-3 表示单个通道
-        if (!rpc::RpcHelpers::getI32(params, "channel", channel) || channel < -1 || channel > kMaxChannelId)
-            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("invalid channel (-1 for all, or 0-%1)").arg(kMaxChannelId));
+        // channel是可选参数，默认-1表示使用分组绑定的通道
+        rpc::RpcHelpers::getI32(params, "channel", channel);
+        if (channel < -1 || channel > kMaxChannelId)
+            channel = -1;  // 无效值重置为-1
         if (!rpc::RpcHelpers::getString(params, "action", action))
             return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing action"));
 
@@ -1320,7 +1321,7 @@ void RpcRegistry::registerAuto()
         QString condition;
         double threshold = 0.0;
         qint32 groupId = 0;
-        qint32 channel = 0;
+        qint32 channel = -1;  // 默认-1表示使用分组绑定的通道
         QString action;
         qint32 cooldownSec = 60;
         bool enabled = true;
@@ -1346,8 +1347,10 @@ void RpcRegistry::registerAuto()
         if (!rpc::RpcHelpers::getString(params, "action", action))
             return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing action"));
 
-        // 可选参数
+        // 可选参数 - channel默认-1表示使用分组绑定的通道
         rpc::RpcHelpers::getI32(params, "channel", channel);
+        if (channel < -1 || channel > kMaxChannelId)
+            channel = -1;  // 无效值重置为-1
         rpc::RpcHelpers::getI32(params, "cooldownSec", cooldownSec);
         rpc::RpcHelpers::getBool(params, "enabled", enabled, true);
 
