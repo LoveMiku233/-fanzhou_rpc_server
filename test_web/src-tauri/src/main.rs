@@ -11,8 +11,9 @@
 )]
 
 use std::sync::{Arc, Mutex};
-use tauri::api::process::{Command, CommandChild, CommandEvent};
-use tauri::{Manager, State};
+use tauri::Manager;
+use tauri_plugin_shell::process::{CommandChild, CommandEvent};
+use tauri_plugin_shell::ShellExt;
 
 /// 存储websocat进程的状态
 struct WebsocatState {
@@ -31,7 +32,8 @@ struct WebsocatState {
 /// - 失败返回错误信息
 #[tauri::command]
 async fn start_websocat(
-    state: State<'_, WebsocatState>,
+    app: tauri::AppHandle,
+    state: tauri::State<'_, WebsocatState>,
     ws_port: Option<u16>,
     tcp_host: Option<String>,
     tcp_port: Option<u16>,
@@ -53,7 +55,9 @@ async fn start_websocat(
     let ws_listen = format!("ws-l:0.0.0.0:{}", ws_port);
     let tcp_target = format!("tcp:{}:{}", tcp_host, tcp_port);
 
-    let (mut rx, child) = Command::new_sidecar("websocat")
+    let shell = app.shell();
+    let (mut rx, child) = shell
+        .sidecar("websocat")
         .map_err(|e| format!("创建sidecar失败: {}", e))?
         .args(["--text", &ws_listen, &tcp_target])
         .spawn()
@@ -72,10 +76,10 @@ async fn start_websocat(
         while let Some(event) = rx.recv().await {
             match event {
                 CommandEvent::Stdout(line) => {
-                    println!("[websocat stdout] {}", line);
+                    println!("[websocat stdout] {:?}", line);
                 }
                 CommandEvent::Stderr(line) => {
-                    eprintln!("[websocat stderr] {}", line);
+                    eprintln!("[websocat stderr] {:?}", line);
                 }
                 CommandEvent::Terminated(payload) => {
                     println!(
@@ -94,7 +98,7 @@ async fn start_websocat(
 
 /// 停止websocat代理
 #[tauri::command]
-async fn stop_websocat(state: State<'_, WebsocatState>) -> Result<(), String> {
+async fn stop_websocat(state: tauri::State<'_, WebsocatState>) -> Result<(), String> {
     let mut child_guard = state.child.lock().map_err(|e| e.to_string())?;
     
     if let Some(child) = child_guard.take() {
@@ -107,20 +111,21 @@ async fn stop_websocat(state: State<'_, WebsocatState>) -> Result<(), String> {
 
 /// 检查websocat是否在运行
 #[tauri::command]
-async fn is_websocat_running(state: State<'_, WebsocatState>) -> Result<bool, String> {
+async fn is_websocat_running(state: tauri::State<'_, WebsocatState>) -> Result<bool, String> {
     let child_guard = state.child.lock().map_err(|e| e.to_string())?;
     Ok(child_guard.is_some())
 }
 
 /// 获取websocat进程的PID
 #[tauri::command]
-async fn get_websocat_pid(state: State<'_, WebsocatState>) -> Result<Option<u32>, String> {
+async fn get_websocat_pid(state: tauri::State<'_, WebsocatState>) -> Result<Option<u32>, String> {
     let child_guard = state.child.lock().map_err(|e| e.to_string())?;
     Ok(child_guard.as_ref().map(|c| c.pid()))
 }
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
         .manage(WebsocatState {
             child: Arc::new(Mutex::new(None)),
         })

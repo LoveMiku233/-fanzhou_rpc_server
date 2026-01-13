@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>泛舟RPC调试工具 - 启动页</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            overflow: hidden;
+        }
+        
+        /* 动态背景 */
+        .bg-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            overflow: hidden;
+        }
+        
+        .bg-animation span {
+            position: absolute;
+            display: block;
+            width: 20px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            animation: animate 25s linear infinite;
+            bottom: -150px;
+            border-radius: 50%;
+        }
+        
+        .bg-animation span:nth-child(1) { left: 25%; width: 80px; height: 80px; animation-delay: 0s; }
+        .bg-animation span:nth-child(2) { left: 10%; width: 20px; height: 20px; animation-delay: 2s; animation-duration: 12s; }
+        .bg-animation span:nth-child(3) { left: 70%; width: 20px; height: 20px; animation-delay: 4s; }
+        .bg-animation span:nth-child(4) { left: 40%; width: 60px; height: 60px; animation-delay: 0s; animation-duration: 18s; }
+        .bg-animation span:nth-child(5) { left: 65%; width: 20px; height: 20px; animation-delay: 0s; }
+        .bg-animation span:nth-child(6) { left: 75%; width: 110px; height: 110px; animation-delay: 3s; }
+        .bg-animation span:nth-child(7) { left: 35%; width: 150px; height: 150px; animation-delay: 7s; }
+        .bg-animation span:nth-child(8) { left: 50%; width: 25px; height: 25px; animation-delay: 15s; animation-duration: 45s; }
+        .bg-animation span:nth-child(9) { left: 20%; width: 15px; height: 15px; animation-delay: 2s; animation-duration: 35s; }
+        .bg-animation span:nth-child(10) { left: 85%; width: 150px; height: 150px; animation-delay: 0s; animation-duration: 11s; }
+        
+        @keyframes animate {
+            0% {
+                transform: translateY(0) rotate(0deg);
+                opacity: 1;
+                border-radius: 0;
+            }
+            100% {
+                transform: translateY(-1000px) rotate(720deg);
+                opacity: 0;
+                border-radius: 50%;
+            }
+        }
+        
+        .launch-container {
+            position: relative;
+            z-index: 1;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 50px;
+            width: 100%;
+            max-width: 500px;
+            margin: 20px;
+            box-shadow: 0 25px 45px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .logo {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .logo-icon {
+            font-size: 72px;
+            margin-bottom: 15px;
+            display: block;
+        }
+        
+        .logo h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+        
+        .logo p {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 14px;
+        }
+        
+        .form-group {
+            margin-bottom: 25px;
+        }
+        
+        .form-group label {
+            display: block;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 10px;
+        }
+        
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 16px 20px;
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+        
+        .form-group input::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+        
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            background: rgba(255, 255, 255, 0.12);
+            box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        .form-group select option {
+            background: #1a1a2e;
+            color: #fff;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 15px;
+        }
+        
+        .remember-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+        
+        .remember-row input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+        
+        .remember-row label {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        .btn-enter {
+            width: 100%;
+            padding: 18px;
+            border: none;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn-enter:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-enter:active {
+            transform: translateY(0);
+        }
+        
+        .btn-enter:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .error-message {
+            background: rgba(231, 76, 60, 0.2);
+            border: 1px solid rgba(231, 76, 60, 0.5);
+            color: #e74c3c;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .error-message.show {
+            display: block;
+            animation: shake 0.5s ease;
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+            20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+        
+        .version-info {
+            text-align: center;
+            margin-top: 30px;
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 12px;
+        }
+        
+        /* 加载动画 */
+        .loading {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+        
+        .loading.show {
+            display: flex;
+        }
+        
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            margin-top: 20px;
+            color: #fff;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 动态背景 -->
+    <div class="bg-animation">
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+    </div>
+    
+    <!-- 加载动画 -->
+    <div class="loading" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">正在连接设备...</div>
+    </div>
+    
+    <!-- 启动页容器 -->
+    <div class="launch-container">
+        <div class="logo">
+            <span class="logo-icon">🚀</span>
+            <h1>泛舟RPC调试工具</h1>
+            <p>农业物联网控制系统</p>
+        </div>
+        
+        <div class="error-message" id="errorMessage">
+            密码错误，请重新输入
+        </div>
+        
+        <form id="loginForm" onsubmit="handleSubmit(event)">
+            <div class="form-group">
+                <label>📡 设备地址</label>
+                <div class="form-row">
+                    <input type="text" id="deviceHost" placeholder="例如: 192.168.1.100" value="localhost">
+                    <input type="number" id="devicePort" placeholder="端口" value="12346" min="1" max="65535">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>🔐 访问密码</label>
+                <input type="password" id="accessPassword" placeholder="请输入访问密码" autocomplete="current-password">
+            </div>
+            
+            <div class="remember-row">
+                <input type="checkbox" id="rememberSettings">
+                <label for="rememberSettings">记住设置</label>
+            </div>
+            
+            <button type="submit" class="btn-enter" id="btnEnter">
+                🚀 进入系统
+            </button>
+        </form>
+        
+        <div class="version-info">
+            泛舟RPC调试工具 v1.0.0
+        </div>
+    </div>
+
+    <script>
+        // 默认密码（简单实现，生产环境应使用更安全的方式）
+        const DEFAULT_PASSWORD = 'fanzhou2024';
+        
+        // 存储键名
+        const STORAGE_KEY = 'fanzhou_rpc_settings';
+        
+        // 页面加载时恢复设置
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSavedSettings();
+        });
+        
+        /**
+         * 加载保存的设置
+         */
+        function loadSavedSettings() {
+            try {
+                const savedSettings = localStorage.getItem(STORAGE_KEY);
+                if (savedSettings) {
+                    const settings = JSON.parse(savedSettings);
+                    document.getElementById('deviceHost').value = settings.host || 'localhost';
+                    document.getElementById('devicePort').value = settings.port || 12346;
+                    document.getElementById('rememberSettings').checked = true;
+                    
+                    // 如果保存了密码验证状态，直接进入
+                    if (settings.authenticated) {
+                        enterMainApp(settings.host, settings.port);
+                    }
+                }
+            } catch (e) {
+                console.error('加载设置失败:', e);
+            }
+        }
+        
+        /**
+         * 保存设置
+         */
+        function saveSettings(host, port, authenticated) {
+            const settings = {
+                host: host,
+                port: port,
+                authenticated: authenticated
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+        }
+        
+        /**
+         * 处理表单提交
+         */
+        function handleSubmit(event) {
+            event.preventDefault();
+            
+            const host = document.getElementById('deviceHost').value.trim();
+            const port = parseInt(document.getElementById('devicePort').value) || 12346;
+            const password = document.getElementById('accessPassword').value;
+            const remember = document.getElementById('rememberSettings').checked;
+            
+            const errorEl = document.getElementById('errorMessage');
+            
+            // 验证地址
+            if (!host) {
+                errorEl.textContent = '请输入设备地址';
+                errorEl.classList.add('show');
+                return;
+            }
+            
+            // 验证密码
+            if (password !== DEFAULT_PASSWORD) {
+                errorEl.textContent = '密码错误，请重新输入';
+                errorEl.classList.add('show');
+                document.getElementById('accessPassword').value = '';
+                document.getElementById('accessPassword').focus();
+                return;
+            }
+            
+            // 隐藏错误信息
+            errorEl.classList.remove('show');
+            
+            // 如果选择记住设置，保存到本地存储
+            if (remember) {
+                saveSettings(host, port, true);
+            } else {
+                localStorage.removeItem(STORAGE_KEY);
+            }
+            
+            // 显示加载动画
+            document.getElementById('loadingOverlay').classList.add('show');
+            document.getElementById('btnEnter').disabled = true;
+            
+            // 延迟后跳转到主页面
+            setTimeout(function() {
+                enterMainApp(host, port);
+            }, 800);
+        }
+        
+        /**
+         * 进入主应用
+         */
+        function enterMainApp(host, port) {
+            // 将设置存储到 sessionStorage，供主页面使用
+            sessionStorage.setItem('rpc_host', host);
+            sessionStorage.setItem('rpc_port', port);
+            sessionStorage.setItem('rpc_authenticated', 'true');
+            
+            // 跳转到主页面
+            window.location.href = 'index.html';
+        }
+        
+        // 按下回车键时提交表单
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                document.getElementById('loginForm').dispatchEvent(new Event('submit'));
+            }
+        });
+    </script>
+</body>
+</html>
