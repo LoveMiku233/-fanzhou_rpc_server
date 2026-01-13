@@ -148,6 +148,8 @@ body {
     padding: 20px;
     line-height: 1.6;
     position: relative;
+    /* 确保 body 创建一个新的堆叠上下文，使所有子元素可点击 */
+    z-index: 0;
 }
 
 /* ==================== 主布局容器 - 三栏布局（导航-日志-内容） ==================== */
@@ -167,6 +169,7 @@ body {
     top: 20px;
     height: fit-content;
     order: 1;
+    z-index: 10;
 }
 
 /* 中间通信日志面板 */
@@ -178,6 +181,7 @@ body {
     height: fit-content;
     max-height: calc(100vh - 40px);
     order: 2;
+    z-index: 10;
 }
 
 /* 右侧内容区 */
@@ -185,6 +189,8 @@ body {
     flex: 1;
     min-width: 0;
     order: 3;
+    position: relative;
+    z-index: 10;
 }
 
 .log-sidebar .log-card {
@@ -424,6 +430,8 @@ button:disabled {
 .page-content {
     display: none;
     animation: fadeIn 0.3s ease-in-out;
+    position: relative;
+    z-index: 10;
 }
 
 .page-content.active {
@@ -1536,7 +1544,20 @@ button:active {
 .header,
 .main-layout {
     position: relative;
-    z-index: 1;
+    z-index: 10;
+}
+
+/* 确保卡片内容可以点击 */
+.card {
+    position: relative;
+    z-index: 10;
+}
+
+/* 确保侧边栏可以点击 */
+.sidebar,
+.sidebar-nav {
+    position: relative;
+    z-index: 10;
 }
 
 /* 优化桌面端的按钮点击体验 */
@@ -1549,6 +1570,8 @@ button,
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
+    position: relative;
+    z-index: 11;
 }
 
 /* 优化表单元素的交互 */
@@ -1556,6 +1579,8 @@ input,
 select,
 textarea {
     cursor: text;
+    position: relative;
+    z-index: 11;
 }
 
 input[type="number"],
