@@ -68,33 +68,54 @@ function checkAuthentication() {
 }
 
 /**
+ * 检查是否应该自动连接
+ * 检查sessionStorage和URL参数
+ * @returns {boolean} 是否应该自动连接
+ */
+function shouldAutoConnect() {
+    const autoConnect = sessionStorage.getItem('rpc_authenticated') === 'true';
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlAutoConnect = urlParams.get('autoconnect') === 'true';
+    return autoConnect || urlAutoConnect;
+}
+
+/**
  * 从启动页加载保存的设置
- * 自动填充服务器地址和端口
+ * 自动填充服务器地址和端口，并自动连接
  */
 function loadLaunchSettings() {
     const savedHost = sessionStorage.getItem('rpc_host');
     const savedPort = sessionStorage.getItem('rpc_port');
     
-    if (savedHost) {
+    // 也检查URL参数（用于通过Python脚本启动的场景）
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlHost = urlParams.get('host');
+    const urlPort = urlParams.get('port');
+    
+    // 优先使用URL参数，其次使用sessionStorage的值
+    const finalHost = urlHost || savedHost;
+    const finalPort = urlPort || savedPort;
+    
+    if (finalHost) {
         const hostInput = document.getElementById('serverHost');
         if (hostInput) {
-            hostInput.value = savedHost;
+            hostInput.value = finalHost;
         }
     }
     
-    if (savedPort) {
+    if (finalPort) {
         const portInput = document.getElementById('serverPort');
         if (portInput) {
-            portInput.value = savedPort;
+            portInput.value = finalPort;
         }
     }
     
-    // 如果有保存的设置，可以选择自动连接
-    if (savedHost && savedPort) {
+    // 如果有保存的设置或URL参数指定自动连接，则自动连接
+    if (finalHost && finalPort && shouldAutoConnect()) {
         // 延迟一点执行自动连接，让页面完全加载
         setTimeout(function() {
-            // 可以在这里添加自动连接逻辑
-            // connect();
+            log('info', '检测到已保存的连接设置，正在自动连接...');
+            connect();
         }, 500);
     }
 }
@@ -271,6 +292,14 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 从启动页获取保存的设置并自动填充
     loadLaunchSettings();
+    
+    // 显示初始化完成信息
+    log('info', '🚀 泛舟RPC调试工具已就绪');
+    
+    // 如果没有自动连接，提示用户手动连接
+    if (!shouldAutoConnect()) {
+        log('info', '请输入服务器地址并点击"连接"按钮');
+    }
 });
 
 /* ========================================================
