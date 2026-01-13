@@ -541,6 +541,88 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                 <div class="mqtt-channels" id="mqttChannelsContainer">
                     <!-- 通道卡片将由JavaScript动态生成 -->
                 </div>
+
+                <!-- MQTT调试面板 -->
+                <div style="margin-top: 25px;">
+                    <h4 style="color: #333; margin-bottom: 15px;">🔧 MQTT调试</h4>
+                    
+                    <!-- 发布消息 -->
+                    <details open style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-bottom: 15px;">
+                        <summary style="cursor: pointer; font-weight: 600; color: #333;">📤 发布消息</summary>
+                        <div class="form-row" style="margin-top: 15px;">
+                            <div class="form-group">
+                                <label>通道ID</label>
+                                <input type="number" id="mqttDebugChannelId" value="1" min="1">
+                            </div>
+                            <div class="form-group" style="flex: 2;">
+                                <label>主题</label>
+                                <input type="text" id="mqttDebugTopic" placeholder="例如: test/topic">
+                            </div>
+                            <div class="form-group">
+                                <label>QoS</label>
+                                <select id="mqttDebugQos">
+                                    <option value="0">0</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>消息内容</label>
+                            <textarea id="mqttDebugPayload" placeholder='{"message": "Hello MQTT"}'>{}</textarea>
+                        </div>
+                        <button class="success" onclick="mqttPublish()">📤 发布消息</button>
+                    </details>
+                    
+                    <!-- 订阅管理 -->
+                    <details open style="background: #fff3e0; padding: 20px; border-radius: 12px; margin-bottom: 15px;">
+                        <summary style="cursor: pointer; font-weight: 600; color: #333;">📥 订阅管理</summary>
+                        <div style="background: #fff8e1; padding: 12px 15px; border-radius: 8px; margin: 15px 0; font-size: 13px; color: #f57c00;">
+                            💡 <strong>提示：</strong>添加订阅后，收到的消息将显示在下方消息列表中，并触发回调函数。
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>通道ID</label>
+                                <input type="number" id="mqttSubChannelId" value="1" min="1">
+                            </div>
+                            <div class="form-group" style="flex: 2;">
+                                <label>订阅主题</label>
+                                <input type="text" id="mqttSubTopic" placeholder="例如: sensor/+/data 或 device/#">
+                            </div>
+                            <div class="form-group">
+                                <label>QoS</label>
+                                <select id="mqttSubQos">
+                                    <option value="0">0</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="btn-group" style="margin-bottom: 15px;">
+                            <button class="success" onclick="mqttSubscribe()">➕ 添加订阅</button>
+                            <button class="danger" onclick="mqttUnsubscribe()">➖ 取消订阅</button>
+                            <button onclick="mqttListSubscriptions()">📋 查看订阅列表</button>
+                        </div>
+                        
+                        <!-- 订阅列表 -->
+                        <div id="mqttSubscriptionsList" style="display: none; background: white; padding: 15px; border-radius: 8px; margin-top: 10px;">
+                            <div style="font-size: 12px; color: #666; margin-bottom: 10px;">当前订阅列表：</div>
+                            <div id="mqttSubscriptionsContent" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+                        </div>
+                    </details>
+                    
+                    <!-- 接收到的消息 -->
+                    <details open style="background: #e8f5e9; padding: 20px; border-radius: 12px;">
+                        <summary style="cursor: pointer; font-weight: 600; color: #333;">📬 接收到的消息</summary>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin: 15px 0 10px 0;">
+                            <span style="font-size: 13px; color: #666;">消息将在触发订阅时自动显示</span>
+                            <button class="secondary" onclick="clearMqttMessages()" style="padding: 6px 12px; font-size: 12px;">🗑️ 清空</button>
+                        </div>
+                        <div id="mqttMessagesContainer" style="background: #1e1e1e; border-radius: 8px; padding: 15px; max-height: 300px; overflow-y: auto; font-family: 'Fira Code', 'Consolas', monospace; font-size: 13px;">
+                            <div style="color: #666; text-align: center; padding: 20px;">等待消息...</div>
+                        </div>
+                    </details>
+                </div>
             </div>
 
             <!-- ==================== 系统监控页面 ==================== -->
@@ -577,23 +659,8 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                     </div>
                 </div>
 
-                <!-- 图表区域 -->
+                <!-- 网络和存储详情区域 -->
                 <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 20px;">
-                    <!-- CPU使用率图表 -->
-                    <div style="background: #f8f9fa; padding: 20px; border-radius: 12px;">
-                        <h4 style="margin-bottom: 15px; color: #333;">📈 CPU 使用率历史</h4>
-                        <canvas id="cpuChart" height="200"></canvas>
-                    </div>
-                    <!-- 内存使用图表 -->
-                    <div style="background: #f8f9fa; padding: 20px; border-radius: 12px;">
-                        <h4 style="margin-bottom: 15px; color: #333;">📈 内存使用历史</h4>
-                        <canvas id="memChart" height="200"></canvas>
-                    </div>
-                    <!-- 网络流量图表 -->
-                    <div style="background: #f8f9fa; padding: 20px; border-radius: 12px;">
-                        <h4 style="margin-bottom: 15px; color: #333;">📈 网络流量</h4>
-                        <canvas id="networkChart" height="200"></canvas>
-                    </div>
                     <!-- 网络接口详情 -->
                     <div style="background: #f8f9fa; padding: 20px; border-radius: 12px;">
                         <h4 style="margin-bottom: 15px; color: #333;">🌐 网络接口</h4>
@@ -601,13 +668,12 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                             <p style="color: #999;">加载中...</p>
                         </div>
                     </div>
-                </div>
-
-                <!-- 存储详情 -->
-                <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-top: 20px;">
-                    <h4 style="margin-bottom: 15px; color: #333;">💾 存储详情</h4>
-                    <div id="storageDetailsList">
-                        <p style="color: #999;">加载中...</p>
+                    <!-- 存储详情 -->
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 12px;">
+                        <h4 style="margin-bottom: 15px; color: #333;">💾 存储详情</h4>
+                        <div id="storageDetailsList">
+                            <p style="color: #999;">加载中...</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1228,9 +1294,6 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
             </div>
         </div>
     </div>
-
-    <!-- Chart.js 用于图表显示 -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 
     <!-- 引入外部JavaScript -->
     <script src="js/app.js"></script>
