@@ -1,7 +1,7 @@
 # FanZhou RPC Server
 # Qt project file for greenhouse control system core service
 
-QT += core network
+QT += core network mqtt
 QT -= gui
 
 CONFIG += c++11 console
@@ -16,6 +16,7 @@ INCLUDEPATH += $$PWD/src
 
 SOURCES += \
     main.cpp \
+    src/cloud/mqtt/mqtt_client.cpp \
     src/utils/utils.cpp \
     src/utils/logger.cpp \
     src/config/system_settings.cpp \
@@ -39,6 +40,7 @@ SOURCES += \
     src/core/rpc_registry.cpp
 
 HEADERS += \
+    src/cloud/mqtt/mqtt_client.h \
     src/utils/utils.h \
     src/utils/logger.h \
     src/config/system_settings.h \
