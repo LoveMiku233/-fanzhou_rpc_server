@@ -1,5 +1,6 @@
 #include "mqtt_client.h"
 #include <QtMqtt/qmqttclient.h>
+#include <QDebug>
 
 namespace fanzhou {
 namespace cloud {
@@ -16,13 +17,39 @@ MqttClient::MqttClient(QObject *parent)
 
     connect(m_client, &QMqttClient::messageReceived,
             this, &MqttClient::onMessageReceived);
-}
 
+    connect(m_client, &QMqttClient::errorChanged,
+            this, &MqttClient::onError);
+}
 
 void MqttClient::setBroker(const QString &host, quint16 port)
 {
     m_client->setHostname(host);
     m_client->setPort(port);
+}
+
+void MqttClient::setCredentials(const QString &username, const QString &password)
+{
+    if (!username.isEmpty()) {
+        m_client->setUsername(username);
+    }
+    if (!password.isEmpty()) {
+        m_client->setPassword(password);
+    }
+}
+
+void MqttClient::setClientId(const QString &clientId)
+{
+    if (!clientId.isEmpty()) {
+        m_client->setClientId(clientId);
+    }
+}
+
+void MqttClient::setKeepAlive(int seconds)
+{
+    if (seconds > 0) {
+        m_client->setKeepAlive(seconds);
+    }
 }
 
 void MqttClient::connectToBroker()
@@ -54,14 +81,31 @@ void MqttClient::subscribe(const QString &topic, int qos)
     }
 }
 
+bool MqttClient::isConnected() const
+{
+    return m_client->state() == QMqttClient::Connected;
+}
+
+QString MqttClient::hostname() const
+{
+    return m_client->hostname();
+}
+
+quint16 MqttClient::port() const
+{
+    return m_client->port();
+}
+
 void MqttClient::onConnected()
 {
     qDebug() << "MQTT connected";
+    emit connected();
 }
 
 void MqttClient::onDisconnected()
 {
     qDebug() << "MQTT disconnected";
+    emit disconnected();
 }
 
 void MqttClient::onMessageReceived(const QByteArray &message,
@@ -70,10 +114,46 @@ void MqttClient::onMessageReceived(const QByteArray &message,
     qDebug() << "MQTT message:"
              << topic.name()
              << message;
+    emit messageReceived(message, topic.name());
 }
 
+void MqttClient::onError(QMqttClient::ClientError error)
+{
+    if (error != QMqttClient::NoError) {
+        QString errorStr;
+        switch (error) {
+        case QMqttClient::InvalidProtocolVersion:
+            errorStr = QStringLiteral("Invalid protocol version");
+            break;
+        case QMqttClient::IdRejected:
+            errorStr = QStringLiteral("Client ID rejected");
+            break;
+        case QMqttClient::ServerUnavailable:
+            errorStr = QStringLiteral("Server unavailable");
+            break;
+        case QMqttClient::BadUsernameOrPassword:
+            errorStr = QStringLiteral("Bad username or password");
+            break;
+        case QMqttClient::NotAuthorized:
+            errorStr = QStringLiteral("Not authorized");
+            break;
+        case QMqttClient::TransportInvalid:
+            errorStr = QStringLiteral("Transport invalid");
+            break;
+        case QMqttClient::ProtocolViolation:
+            errorStr = QStringLiteral("Protocol violation");
+            break;
+        case QMqttClient::UnknownError:
+        default:
+            errorStr = QStringLiteral("Unknown error");
+            break;
+        }
+        qDebug() << "MQTT error:" << errorStr;
+        emit errorOccurred(errorStr);
+    }
+}
 
-}
-}
+}  // namespace cloud
+}  // namespace fanzhou
 
 

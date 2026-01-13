@@ -17,9 +17,11 @@ INCLUDEPATH += $$PWD/src
 SOURCES += \
     main.cpp \
     src/cloud/mqtt/mqtt_client.cpp \
+    src/cloud/mqtt/mqtt_channel_manager.cpp \
     src/utils/utils.cpp \
     src/utils/logger.cpp \
     src/config/system_settings.cpp \
+    src/config/system_monitor.cpp \
     src/comm/base/comm_adapter.cpp \
     src/comm/serial_comm.cpp \
     src/comm/can_comm.cpp \
@@ -41,9 +43,11 @@ SOURCES += \
 
 HEADERS += \
     src/cloud/mqtt/mqtt_client.h \
+    src/cloud/mqtt/mqtt_channel_manager.h \
     src/utils/utils.h \
     src/utils/logger.h \
     src/config/system_settings.h \
+    src/config/system_monitor.h \
     src/comm/base/comm_adapter.h \
     src/comm/serial_comm.h \
     src/comm/can_comm.h \

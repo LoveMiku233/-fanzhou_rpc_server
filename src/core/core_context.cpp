@@ -6,6 +6,8 @@
 #include "core_context.h"
 #include "comm/can_comm.h"
 #include "config/system_settings.h"
+#include "config/system_monitor.h"
+#include "cloud/mqtt/mqtt_channel_manager.h"
 #include "device/can/can_device_manager.h"
 #include "device/can/relay_gd427.h"
 #include "utils/logger.h"
@@ -75,6 +77,43 @@ bool CoreContext::init(const CoreConfig &config)
         LOG_ERROR(kLogSource, QStringLiteral("Failed to initialize system settings"));
         return false;
     }
+
+    // 初始化系统资源监控器
+    systemMonitor = new config::SystemMonitor(this);
+    systemMonitor->start(1000);  // 每秒采样一次
+    LOG_INFO(kLogSource, QStringLiteral("System monitor started"));
+
+    // 初始化MQTT多通道管理器
+    mqttManager = new cloud::MqttChannelManager(this);
+    // 加载MQTT通道配置
+    for (const auto &mqttConfig : config.mqttChannels) {
+        cloud::MqttChannelConfig cloudConfig;
+        cloudConfig.channelId = mqttConfig.channelId;
+        cloudConfig.name = mqttConfig.name;
+        cloudConfig.enabled = mqttConfig.enabled;
+        cloudConfig.broker = mqttConfig.broker;
+        cloudConfig.port = mqttConfig.port;
+        cloudConfig.clientId = mqttConfig.clientId;
+        cloudConfig.username = mqttConfig.username;
+        cloudConfig.password = mqttConfig.password;
+        cloudConfig.topicPrefix = mqttConfig.topicPrefix;
+        cloudConfig.keepAliveSec = mqttConfig.keepAliveSec;
+        cloudConfig.autoReconnect = mqttConfig.autoReconnect;
+        cloudConfig.reconnectIntervalSec = mqttConfig.reconnectIntervalSec;
+        cloudConfig.qos = mqttConfig.qos;
+
+        QString error;
+        if (!mqttManager->addChannel(cloudConfig, &error)) {
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("Failed to add MQTT channel %1: %2")
+                            .arg(mqttConfig.channelId)
+                            .arg(error));
+        }
+    }
+    LOG_INFO(kLogSource,
+             QStringLiteral("MQTT manager initialized with %1 channels")
+                 .arg(mqttManager->channelCount()));
+
     if (!initCan()) {
         LOG_ERROR(kLogSource, QStringLiteral("Failed to initialize CAN bus"));
         return false;
@@ -205,6 +244,22 @@ bool CoreContext::initDevices(const CoreConfig &config)
                 canManager->addDevice(dev);
                 relays.insert(node, dev);
                 deviceConfigs.insert(node, devConfig);
+
+                // 连接状态变化信号用于MQTT上报
+                if (mqttManager) {
+                    connect(dev, &device::RelayGd427::statusUpdated,
+                            this, [this, node](quint8 channel, device::RelayProtocol::Status status) {
+                        // 构建设备值变化的JSON
+                        QJsonObject value;
+                        value[QStringLiteral("statusByte")] = static_cast<int>(status.statusByte);
+                        value[QStringLiteral("mode")] = static_cast<int>(status.mode);
+                        value[QStringLiteral("modeStr")] =
+                            status.mode == 0 ? QStringLiteral("stop") :
+                            status.mode == 1 ? QStringLiteral("fwd") : QStringLiteral("rev");
+
+                        mqttManager->reportDeviceValueChange(node, channel, value);
+                    });
+                }
 
                 LOG_INFO(kLogSource,
                          QStringLiteral("RelayGd427 added: node=0x%1, name=%2")

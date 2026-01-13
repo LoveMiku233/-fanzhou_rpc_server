@@ -72,6 +72,12 @@
                 <button class="nav-btn" onclick="showPage('strategy')" data-page="strategy">
                     ⏱️ 策略
                 </button>
+                <button class="nav-btn" onclick="showPage('mqtt')" data-page="mqtt">
+                    ☁️ MQTT
+                </button>
+                <button class="nav-btn" onclick="showPage('monitor')" data-page="monitor">
+                    📊 监控
+                </button>
                 <button class="nav-btn" onclick="showPage('blueprint')" data-page="blueprint">
                     🎨 蓝图
                 </button>
@@ -507,6 +513,103 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                         <li><code>config.save</code> - 保存配置</li>
                     </ul>
                 </details>
+            </div>
+
+            <!-- ==================== MQTT配置页面 ==================== -->
+            <div class="page-content" id="page-mqtt">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="color: #333;">☁️ MQTT多通道管理</h3>
+                    <div class="btn-group">
+                        <button onclick="refreshMqttChannels()">🔄 刷新</button>
+                        <button class="success" onclick="openAddMqttChannelModal()">➕ 添加通道</button>
+                    </div>
+                </div>
+
+                <!-- 说明信息 -->
+                <div style="background: #e3f2fd; padding: 15px 20px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
+                    <strong style="color: #1565c0;">💡 MQTT多通道功能</strong>
+                    <p style="color: #666; font-size: 13px; margin-top: 5px;">
+                        支持同时连接多个MQTT Broker，每个通道可配置不同的地址、认证和主题前缀。当设备状态变化时，自动向所有已连接通道推送消息。
+                    </p>
+                </div>
+
+                <!-- MQTT通道列表 -->
+                <div id="mqttChannelsEmpty" class="data-list-empty" style="display: none; background: #f8f9fa; border-radius: 12px; padding: 40px 20px;">
+                    <p>📭 暂无MQTT通道</p>
+                    <p style="font-size: 12px; margin-top: 10px;">点击"➕ 添加通道"创建新的MQTT连接</p>
+                </div>
+                <div class="mqtt-channels" id="mqttChannelsContainer">
+                    <!-- 通道卡片将由JavaScript动态生成 -->
+                </div>
+            </div>
+
+            <!-- ==================== 系统监控页面 ==================== -->
+            <div class="page-content" id="page-monitor">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="color: #333;">📊 系统资源监控</h3>
+                    <div class="btn-group">
+                        <button onclick="refreshSystemMonitor()">🔄 刷新</button>
+                        <button class="secondary" id="autoRefreshBtn" onclick="toggleAutoRefresh()">⏯️ 自动刷新</button>
+                    </div>
+                </div>
+
+                <!-- 概览卡片 -->
+                <div class="monitor-overview" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px;">
+                    <div class="monitor-card cpu" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 12px; color: white;">
+                        <div style="font-size: 13px; opacity: 0.9;">CPU 使用率</div>
+                        <div style="font-size: 32px; font-weight: bold; margin: 10px 0;" id="cpuUsageValue">--</div>
+                        <div style="font-size: 12px; opacity: 0.8;" id="cpuCoreInfo">-- 核心</div>
+                    </div>
+                    <div class="monitor-card memory" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); padding: 20px; border-radius: 12px; color: white;">
+                        <div style="font-size: 13px; opacity: 0.9;">内存使用</div>
+                        <div style="font-size: 32px; font-weight: bold; margin: 10px 0;" id="memUsageValue">--</div>
+                        <div style="font-size: 12px; opacity: 0.8;" id="memDetailInfo">-- / -- MB</div>
+                    </div>
+                    <div class="monitor-card storage" style="background: linear-gradient(135deg, #e67e22 0%, #f39c12 100%); padding: 20px; border-radius: 12px; color: white;">
+                        <div style="font-size: 13px; opacity: 0.9;">存储使用</div>
+                        <div style="font-size: 32px; font-weight: bold; margin: 10px 0;" id="storageUsageValue">--</div>
+                        <div style="font-size: 12px; opacity: 0.8;" id="storageDetailInfo">-- / -- GB</div>
+                    </div>
+                    <div class="monitor-card load" style="background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%); padding: 20px; border-radius: 12px; color: white;">
+                        <div style="font-size: 13px; opacity: 0.9;">系统负载</div>
+                        <div style="font-size: 32px; font-weight: bold; margin: 10px 0;" id="loadAvgValue">--</div>
+                        <div style="font-size: 12px; opacity: 0.8;" id="uptimeInfo">运行时间: --</div>
+                    </div>
+                </div>
+
+                <!-- 图表区域 -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 20px;">
+                    <!-- CPU使用率图表 -->
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 12px;">
+                        <h4 style="margin-bottom: 15px; color: #333;">📈 CPU 使用率历史</h4>
+                        <canvas id="cpuChart" height="200"></canvas>
+                    </div>
+                    <!-- 内存使用图表 -->
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 12px;">
+                        <h4 style="margin-bottom: 15px; color: #333;">📈 内存使用历史</h4>
+                        <canvas id="memChart" height="200"></canvas>
+                    </div>
+                    <!-- 网络流量图表 -->
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 12px;">
+                        <h4 style="margin-bottom: 15px; color: #333;">📈 网络流量</h4>
+                        <canvas id="networkChart" height="200"></canvas>
+                    </div>
+                    <!-- 网络接口详情 -->
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 12px;">
+                        <h4 style="margin-bottom: 15px; color: #333;">🌐 网络接口</h4>
+                        <div id="networkInterfacesList">
+                            <p style="color: #999;">加载中...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 存储详情 -->
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-top: 20px;">
+                    <h4 style="margin-bottom: 15px; color: #333;">💾 存储详情</h4>
+                    <div id="storageDetailsList">
+                        <p style="color: #999;">加载中...</p>
+                    </div>
+                </div>
             </div>
 
             <!-- ==================== 蓝图编辑器页面 ==================== -->
@@ -1040,6 +1143,94 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
             </div>
         </div>
     </div>
+
+    <!-- 添加MQTT通道弹窗 -->
+    <div class="modal-overlay" id="mqttChannelModal" onclick="closeModalOnBackground(event, 'mqttChannelModal')">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>☁️ 添加MQTT通道</h3>
+                <button class="modal-close" onclick="closeModal('mqttChannelModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div style="background: #e3f2fd; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; font-size: 13px; color: #1565c0;">
+                    💡 <strong>提示：</strong>MQTT通道用于连接云平台，当设备状态变化时自动推送消息。支持多个通道同时连接不同的Broker。
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>通道ID <span style="color: #c62828;">*</span></label>
+                        <input type="number" id="mqttChannelId" value="1" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>通道名称</label>
+                        <input type="text" id="mqttChannelName" placeholder="例如：阿里云IoT">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group" style="flex: 2;">
+                        <label>Broker地址 <span style="color: #c62828;">*</span></label>
+                        <input type="text" id="mqttBroker" placeholder="例如：mqtt.example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>端口</label>
+                        <input type="number" id="mqttPort" value="1883" min="1" max="65535">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>客户端ID</label>
+                        <input type="text" id="mqttClientId" placeholder="留空自动生成">
+                    </div>
+                    <div class="form-group">
+                        <label>主题前缀</label>
+                        <input type="text" id="mqttTopicPrefix" placeholder="例如：fanzhou/device/">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>用户名（可选）</label>
+                        <input type="text" id="mqttUsername" placeholder="MQTT认证用户名">
+                    </div>
+                    <div class="form-group">
+                        <label>密码（可选）</label>
+                        <input type="password" id="mqttPassword" placeholder="MQTT认证密码">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>心跳间隔（秒）</label>
+                        <input type="number" id="mqttKeepAlive" value="60" min="10" max="3600">
+                    </div>
+                    <div class="form-group">
+                        <label>QoS级别</label>
+                        <select id="mqttQos">
+                            <option value="0">0 - 最多一次</option>
+                            <option value="1">1 - 至少一次</option>
+                            <option value="2">2 - 恰好一次</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>自动重连</label>
+                        <select id="mqttAutoReconnect">
+                            <option value="true">✅ 是</option>
+                            <option value="false">❌ 否</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="secondary" onclick="closeModal('mqttChannelModal')">取消</button>
+                <button class="success" onclick="addMqttChannel()">➕ 添加通道</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart.js 用于图表显示 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 
     <!-- 引入外部JavaScript -->
     <script src="js/app.js"></script>

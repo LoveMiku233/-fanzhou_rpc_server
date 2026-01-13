@@ -180,5 +180,22 @@
       "cooldownSec": 300,
       "enabled": true
     }
+  ],
+  "mqttChannels": [
+    {
+      "channelId": 1,
+      "name": "云平台主通道",
+      "enabled": true,
+      "broker": "mqtt.example.com",
+      "port": 1883,
+      "clientId": "fanzhou-device-001",
+      "username": "",
+      "password": "",
+      "topicPrefix": "fanzhou/greenhouse/",
+      "keepAliveSec": 60,
+      "autoReconnect": true,
+      "reconnectIntervalSec": 5,
+      "qos": 1
+    }
   ]
 }

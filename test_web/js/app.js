@@ -2653,3 +2653,458 @@ function openEditSensorStrategyModal(strategyId) {
         alert(`传感器策略详情:\n\nID: ${strategy.id}\n名称: ${strategy.name || '未命名'}\n传感器类型: ${strategy.sensorType}\n传感器节点: ${strategy.sensorNode}\n条件: ${strategy.condition} ${strategy.threshold}\n分组: ${strategy.groupId}\n动作: ${strategy.action}\n状态: ${strategy.enabled ? '启用' : '禁用'}`);
     }
 }
+
+/* ========================================================
+ * MQTT多通道管理功能
+ * 
+ * 支持多个MQTT通道同时连接不同的Broker
+ * 当设备状态变化时，自动向所有已连接通道推送消息
+ * ======================================================== */
+
+// MQTT通道列表缓存
+let mqttChannelsCache = [];
+
+/**
+ * 刷新MQTT通道列表
+ */
+function refreshMqttChannels() {
+    callMethod('mqtt.channels.list', {}, function(response) {
+        if (response.result && response.result.ok) {
+            mqttChannelsCache = response.result.channels || [];
+            renderMqttChannels();
+        } else if (response.error) {
+            log('error', `获取MQTT通道失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 渲染MQTT通道列表
+ */
+function renderMqttChannels() {
+    const container = document.getElementById('mqttChannelsContainer');
+    const emptyEl = document.getElementById('mqttChannelsEmpty');
+    
+    if (!mqttChannelsCache || mqttChannelsCache.length === 0) {
+        if (container) container.innerHTML = '';
+        if (emptyEl) emptyEl.style.display = 'block';
+        return;
+    }
+    
+    if (emptyEl) emptyEl.style.display = 'none';
+    
+    let html = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 15px;">';
+    
+    mqttChannelsCache.forEach(channel => {
+        const connected = channel.connected === true;
+        const enabled = channel.enabled !== false;
+        const statusClass = connected ? 'connected' : (enabled ? 'disconnected' : 'disabled');
+        const statusText = connected ? '🟢 已连接' : (enabled ? '🔴 未连接' : '⚪ 已禁用');
+        
+        html += `
+            <div class="mqtt-channel-card" style="background: #f8f9fa; border-radius: 12px; padding: 20px; border: 2px solid ${connected ? '#4caf50' : '#e0e0e0'};">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <div style="font-size: 16px; font-weight: 600; color: #333;">
+                        ☁️ ${escapeHtml(channel.name || 'MQTT通道 ' + channel.channelId)}
+                    </div>
+                    <span style="font-size: 12px; padding: 4px 10px; border-radius: 10px; background: ${connected ? '#c8e6c9' : '#f5f5f5'}; color: ${connected ? '#2e7d32' : '#666'};">
+                        ${statusText}
+                    </span>
+                </div>
+                <div style="font-size: 13px; color: #666; margin-bottom: 15px;">
+                    <div style="margin-bottom: 5px;">🌐 <strong>Broker:</strong> ${escapeHtml(channel.broker)}:${channel.port}</div>
+                    <div style="margin-bottom: 5px;">📨 <strong>已发送:</strong> ${channel.messagesSent || 0} 条</div>
+                    <div>📥 <strong>已接收:</strong> ${channel.messagesReceived || 0} 条</div>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    ${connected 
+                        ? `<button onclick="disconnectMqttChannel(${channel.channelId})" class="danger" style="flex: 1;">断开</button>`
+                        : `<button onclick="connectMqttChannel(${channel.channelId})" class="success" style="flex: 1;">连接</button>`
+                    }
+                    <button onclick="removeMqttChannel(${channel.channelId})" class="secondary" style="flex: 1;">删除</button>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    if (container) container.innerHTML = html;
+}
+
+/**
+ * 打开添加MQTT通道弹窗
+ */
+function openAddMqttChannelModal() {
+    // 设置默认值
+    let nextId = 1;
+    if (mqttChannelsCache.length > 0) {
+        const maxId = Math.max(...mqttChannelsCache.map(c => c.channelId || 0));
+        nextId = maxId + 1;
+    }
+    
+    document.getElementById('mqttChannelId').value = nextId;
+    document.getElementById('mqttChannelName').value = '';
+    document.getElementById('mqttBroker').value = '';
+    document.getElementById('mqttPort').value = '1883';
+    document.getElementById('mqttClientId').value = '';
+    document.getElementById('mqttTopicPrefix').value = 'fanzhou/device/';
+    document.getElementById('mqttUsername').value = '';
+    document.getElementById('mqttPassword').value = '';
+    document.getElementById('mqttKeepAlive').value = '60';
+    document.getElementById('mqttQos').value = '0';
+    document.getElementById('mqttAutoReconnect').value = 'true';
+    
+    openModal('mqttChannelModal');
+}
+
+/**
+ * 添加MQTT通道
+ */
+function addMqttChannel() {
+    const channelId = parseInt(document.getElementById('mqttChannelId').value);
+    const name = document.getElementById('mqttChannelName').value.trim();
+    const broker = document.getElementById('mqttBroker').value.trim();
+    const port = parseInt(document.getElementById('mqttPort').value) || 1883;
+    const clientId = document.getElementById('mqttClientId').value.trim();
+    const topicPrefix = document.getElementById('mqttTopicPrefix').value.trim();
+    const username = document.getElementById('mqttUsername').value.trim();
+    const password = document.getElementById('mqttPassword').value;
+    const keepAliveSec = parseInt(document.getElementById('mqttKeepAlive').value) || 60;
+    const qos = parseInt(document.getElementById('mqttQos').value) || 0;
+    const autoReconnect = document.getElementById('mqttAutoReconnect').value === 'true';
+    
+    if (!broker) {
+        alert('请输入Broker地址');
+        return;
+    }
+    
+    callMethod('mqtt.channels.add', {
+        channelId: channelId,
+        name: name || `MQTT通道${channelId}`,
+        broker: broker,
+        port: port,
+        clientId: clientId,
+        topicPrefix: topicPrefix,
+        username: username,
+        password: password,
+        keepAliveSec: keepAliveSec,
+        qos: qos,
+        autoReconnect: autoReconnect,
+        enabled: true
+    }, function(response) {
+        if (response.result && response.result.ok) {
+            log('info', `✅ MQTT通道 ${channelId} 添加成功`);
+            closeModal('mqttChannelModal');
+            refreshMqttChannels();
+        } else if (response.error) {
+            log('error', `添加失败: ${response.error.message || '未知错误'}`);
+            alert(`添加失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 连接MQTT通道
+ */
+function connectMqttChannel(channelId) {
+    callMethod('mqtt.channels.connect', { channelId: channelId }, function(response) {
+        if (response.result && response.result.ok) {
+            log('info', `正在连接MQTT通道 ${channelId}...`);
+            // 延迟刷新状态
+            setTimeout(refreshMqttChannels, 1000);
+        } else if (response.error) {
+            log('error', `连接失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 断开MQTT通道
+ */
+function disconnectMqttChannel(channelId) {
+    callMethod('mqtt.channels.disconnect', { channelId: channelId }, function(response) {
+        if (response.result && response.result.ok) {
+            log('info', `已断开MQTT通道 ${channelId}`);
+            refreshMqttChannels();
+        } else if (response.error) {
+            log('error', `断开失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 删除MQTT通道
+ */
+function removeMqttChannel(channelId) {
+    if (!confirm(`确定要删除MQTT通道 ${channelId} 吗？`)) return;
+    
+    callMethod('mqtt.channels.remove', { channelId: channelId }, function(response) {
+        if (response.result && response.result.ok) {
+            log('info', `MQTT通道 ${channelId} 已删除`);
+            refreshMqttChannels();
+        } else if (response.error) {
+            log('error', `删除失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/* ========================================================
+ * 系统资源监控功能
+ * 
+ * 显示CPU、内存、存储、网络等系统资源使用情况
+ * 支持图表实时展示历史数据
+ * ======================================================== */
+
+// 自动刷新定时器
+let monitorAutoRefreshTimer = null;
+let monitorAutoRefreshEnabled = false;
+
+// 图表实例
+let cpuChart = null;
+let memChart = null;
+let networkChart = null;
+
+/**
+ * 刷新系统监控数据
+ */
+function refreshSystemMonitor() {
+    callMethod('sys.monitor.current', {}, function(response) {
+        if (response.result && response.result.ok) {
+            updateMonitorDisplay(response.result);
+        } else if (response.error) {
+            log('error', `获取系统监控数据失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+    
+    // 获取历史数据用于图表
+    callMethod('sys.monitor.history', { count: 60 }, function(response) {
+        if (response.result && response.result.ok) {
+            updateMonitorCharts(response.result);
+        }
+    });
+}
+
+/**
+ * 更新监控显示
+ */
+function updateMonitorDisplay(data) {
+    // CPU使用率
+    const cpuUsage = data.cpu ? data.cpu.total : 0;
+    document.getElementById('cpuUsageValue').textContent = cpuUsage.toFixed(1) + '%';
+    document.getElementById('cpuCoreInfo').textContent = (data.cpu ? data.cpu.coreCount : '--') + ' 核心';
+    
+    // 内存使用
+    const memUsage = data.memory ? data.memory.usagePercent : 0;
+    const memUsed = data.memory ? data.memory.usedMB : 0;
+    const memTotal = data.memory ? data.memory.totalMB : 0;
+    document.getElementById('memUsageValue').textContent = memUsage.toFixed(1) + '%';
+    document.getElementById('memDetailInfo').textContent = `${memUsed.toFixed(0)} / ${memTotal.toFixed(0)} MB`;
+    
+    // 存储使用（取第一个分区）
+    if (data.storages && data.storages.length > 0) {
+        const storage = data.storages.find(s => s.mount === '/') || data.storages[0];
+        document.getElementById('storageUsageValue').textContent = storage.usagePercent.toFixed(1) + '%';
+        document.getElementById('storageDetailInfo').textContent = 
+            `${storage.usedGB.toFixed(1)} / ${storage.totalGB.toFixed(1)} GB`;
+        
+        // 渲染存储详情列表
+        let storageHtml = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px;">';
+        data.storages.forEach(st => {
+            const usageColor = st.usagePercent > 80 ? '#e53935' : (st.usagePercent > 60 ? '#fb8c00' : '#43a047');
+            storageHtml += `
+                <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0;">
+                    <div style="font-weight: 600; margin-bottom: 8px;">💾 ${escapeHtml(st.mount)}</div>
+                    <div style="font-size: 12px; color: #666; margin-bottom: 8px;">文件系统: ${escapeHtml(st.fs)}</div>
+                    <div style="background: #e0e0e0; border-radius: 4px; height: 8px; overflow: hidden;">
+                        <div style="background: ${usageColor}; height: 100%; width: ${st.usagePercent}%;"></div>
+                    </div>
+                    <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                        ${st.usedGB.toFixed(1)} / ${st.totalGB.toFixed(1)} GB (${st.usagePercent.toFixed(1)}%)
+                    </div>
+                </div>
+            `;
+        });
+        storageHtml += '</div>';
+        document.getElementById('storageDetailsList').innerHTML = storageHtml;
+    }
+    
+    // 系统负载
+    if (data.load) {
+        document.getElementById('loadAvgValue').textContent = data.load.avg1.toFixed(2);
+    }
+    
+    // 运行时间
+    if (data.uptimeSec) {
+        const hours = Math.floor(data.uptimeSec / 3600);
+        const days = Math.floor(hours / 24);
+        const remainingHours = hours % 24;
+        document.getElementById('uptimeInfo').textContent = 
+            days > 0 ? `运行 ${days} 天 ${remainingHours} 小时` : `运行 ${hours} 小时`;
+    }
+    
+    // 网络接口列表
+    if (data.networks && data.networks.length > 0) {
+        let netHtml = '';
+        data.networks.forEach(net => {
+            netHtml += `
+                <div style="background: white; padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #e0e0e0;">
+                    <div style="font-weight: 600; margin-bottom: 8px;">🌐 ${escapeHtml(net.interface)}</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px;">
+                        <div>
+                            <span style="color: #4caf50;">⬇️</span> 下载: ${net.rxKBps ? net.rxKBps.toFixed(1) : '0.0'} KB/s
+                            <div style="color: #999;">总计: ${net.rxMB ? net.rxMB.toFixed(1) : '0.0'} MB</div>
+                        </div>
+                        <div>
+                            <span style="color: #2196f3;">⬆️</span> 上传: ${net.txKBps ? net.txKBps.toFixed(1) : '0.0'} KB/s
+                            <div style="color: #999;">总计: ${net.txMB ? net.txMB.toFixed(1) : '0.0'} MB</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        document.getElementById('networkInterfacesList').innerHTML = netHtml;
+    }
+}
+
+/**
+ * 更新监控图表
+ */
+function updateMonitorCharts(data) {
+    const labels = data.timestamps ? data.timestamps.map((t, i) => i + 's') : [];
+    
+    // CPU图表
+    const cpuCtx = document.getElementById('cpuChart');
+    if (cpuCtx) {
+        if (cpuChart) {
+            cpuChart.data.labels = labels;
+            cpuChart.data.datasets[0].data = data.cpuUsage || [];
+            cpuChart.update('none');
+        } else {
+            cpuChart = new Chart(cpuCtx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'CPU %',
+                        data: data.cpuUsage || [],
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { min: 0, max: 100 }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+    }
+    
+    // 内存图表
+    const memCtx = document.getElementById('memChart');
+    if (memCtx) {
+        if (memChart) {
+            memChart.data.labels = labels;
+            memChart.data.datasets[0].data = data.memUsage || [];
+            memChart.update('none');
+        } else {
+            memChart = new Chart(memCtx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '内存 %',
+                        data: data.memUsage || [],
+                        borderColor: '#11998e',
+                        backgroundColor: 'rgba(17, 153, 142, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { min: 0, max: 100 }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+    }
+    
+    // 网络流量图表
+    const netCtx = document.getElementById('networkChart');
+    if (netCtx && data.rxKBps && data.txKBps) {
+        if (networkChart) {
+            networkChart.data.labels = labels;
+            networkChart.data.datasets[0].data = data.rxKBps;
+            networkChart.data.datasets[1].data = data.txKBps;
+            networkChart.update('none');
+        } else {
+            networkChart = new Chart(netCtx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '下载 KB/s',
+                            data: data.rxKBps,
+                            borderColor: '#4caf50',
+                            backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: '上传 KB/s',
+                            data: data.txKBps,
+                            borderColor: '#2196f3',
+                            backgroundColor: 'rgba(33, 150, 243, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { min: 0 }
+                    }
+                }
+            });
+        }
+    }
+}
+
+/**
+ * 切换自动刷新
+ */
+function toggleAutoRefresh() {
+    monitorAutoRefreshEnabled = !monitorAutoRefreshEnabled;
+    const btn = document.getElementById('autoRefreshBtn');
+    
+    if (monitorAutoRefreshEnabled) {
+        btn.textContent = '⏸️ 停止刷新';
+        btn.classList.add('success');
+        monitorAutoRefreshTimer = setInterval(refreshSystemMonitor, 2000);
+        log('info', '自动刷新已开启（每2秒）');
+    } else {
+        btn.textContent = '⏯️ 自动刷新';
+        btn.classList.remove('success');
+        if (monitorAutoRefreshTimer) {
+            clearInterval(monitorAutoRefreshTimer);
+            monitorAutoRefreshTimer = null;
+        }
+        log('info', '自动刷新已停止');
+    }
+}

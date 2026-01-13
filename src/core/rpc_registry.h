@@ -53,6 +53,8 @@ private:
     void registerDevice();
     void registerScreen();
     void registerConfig();  ///< 配置保存/加载相关方法
+    void registerMqtt();    ///< MQTT多通道管理相关方法
+    void registerMonitor(); ///< 系统资源监控相关方法
 
     CoreContext *context_;
     rpc::JsonRpcDispatcher *dispatcher_;
