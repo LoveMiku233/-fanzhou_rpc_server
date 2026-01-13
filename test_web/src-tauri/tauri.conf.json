@@ -36,7 +36,7 @@
     "externalBin": [
       "bin/websocat"
     ],
-    "icon": ["icons/icon.ico"],
+    "icon": [],
     "longDescription": "泛舟RPC服务器调试工具",
     "macOS": {
       "entitlements": null,

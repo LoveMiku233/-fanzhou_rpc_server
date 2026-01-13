@@ -437,10 +437,11 @@
             if (window.__TAURI__) {
                 try {
                     const { getCurrentWindow } = window.__TAURI__.window;
+                    const { LogicalSize } = window.__TAURI__.dpi;
                     const appWindow = getCurrentWindow();
                     
-                    // 设置窗口大小为主应用的大小
-                    await appWindow.setSize({ width: 1400, height: 900 });
+                    // 设置窗口大小为主应用的大小（使用 LogicalSize）
+                    await appWindow.setSize(new LogicalSize(1400, 900));
                     // 居中窗口
                     await appWindow.center();
                     // 更新窗口标题

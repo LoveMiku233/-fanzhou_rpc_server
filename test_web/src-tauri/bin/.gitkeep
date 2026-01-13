@@ -1,0 +1,25 @@
+# 此目录用于存放 websocat 可执行文件
+# 请从 https://github.com/vi/websocat/releases 下载对应平台的文件
+
+# Windows (MSVC):
+#   下载 websocat.x86_64-pc-windows-msvc.exe
+#   重命名为 websocat-x86_64-pc-windows-msvc.exe
+
+# Windows (GNU):
+#   下载 websocat.x86_64-pc-windows-gnu.exe
+#   重命名为 websocat-x86_64-pc-windows-gnu.exe
+
+# Linux:
+#   下载 websocat.x86_64-unknown-linux-musl
+#   重命名为 websocat-x86_64-unknown-linux-gnu
+#   执行 chmod +x websocat-x86_64-unknown-linux-gnu
+
+# macOS Intel:
+#   下载 websocat.x86_64-apple-darwin
+#   重命名为 websocat-x86_64-apple-darwin
+#   执行 chmod +x websocat-x86_64-apple-darwin
+
+# macOS Apple Silicon:
+#   下载 websocat.aarch64-apple-darwin
+#   重命名为 websocat-aarch64-apple-darwin
+#   执行 chmod +x websocat-aarch64-apple-darwin
