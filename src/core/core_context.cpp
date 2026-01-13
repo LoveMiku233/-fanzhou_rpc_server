@@ -252,10 +252,11 @@ bool CoreContext::initDevices(const CoreConfig &config)
                         // 构建设备值变化的JSON
                         QJsonObject value;
                         value[QStringLiteral("statusByte")] = static_cast<int>(status.statusByte);
-                        value[QStringLiteral("mode")] = static_cast<int>(status.mode);
+                        quint8 mode = device::RelayProtocol::modeBits(status.statusByte);
+                        value[QStringLiteral("mode")] = static_cast<int>(mode);
                         value[QStringLiteral("modeStr")] =
-                            status.mode == 0 ? QStringLiteral("stop") :
-                            status.mode == 1 ? QStringLiteral("fwd") : QStringLiteral("rev");
+                            mode == 0 ? QStringLiteral("stop") :
+                            mode == 1 ? QStringLiteral("fwd") : QStringLiteral("rev");
 
                         mqttManager->reportDeviceValueChange(node, channel, value);
                     });

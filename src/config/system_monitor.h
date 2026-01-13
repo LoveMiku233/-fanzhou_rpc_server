@@ -13,6 +13,7 @@
 #include <QTimer>
 #include <QList>
 #include <QPair>
+#include <QHash>
 
 namespace fanzhou {
 namespace config {
