@@ -131,5 +131,9 @@ fn main() {
             get_websocat_pid,
         ])
         .run(tauri::generate_context!())
-        .expect("运行Tauri应用失败");
+        .unwrap_or_else(|e| {
+            eprintln!("Tauri应用启动失败: {}", e);
+            eprintln!("请检查: 1) tauri.conf.json配置是否正确 2) 资源文件是否存在");
+            std::process::exit(1);
+        });
 }

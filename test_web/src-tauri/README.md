@@ -43,25 +43,32 @@ cargo install tauri-cli
 
 #### Windows
 ```bash
-# 下载 websocat.x86_64-pc-windows-gnu.exe
-# 重命名为 websocat-x86_64-pc-windows-msvc.exe
+# 下载 websocat.x86_64-pc-windows-gnu.exe 或 websocat.x86_64-pc-windows-msvc.exe
+# 重命名为与您的Rust工具链匹配的目标三元组
+# 如果使用MSVC工具链（默认）: websocat-x86_64-pc-windows-msvc.exe
+# 如果使用GNU工具链: websocat-x86_64-pc-windows-gnu.exe
 # 放置到 src-tauri/bin/ 目录
 ```
 
 #### Linux
 ```bash
-# 下载 websocat.x86_64-unknown-linux-musl
+# 下载适合您系统的版本
+# 对于大多数Linux发行版: websocat.x86_64-unknown-linux-musl（静态链接，兼容性更好）
 # 重命名为 websocat-x86_64-unknown-linux-gnu
 # 放置到 src-tauri/bin/ 目录
+# 注意: musl版本是静态链接的，可以在glibc系统上运行
 chmod +x src-tauri/bin/websocat-x86_64-unknown-linux-gnu
 ```
 
 #### macOS
 ```bash
-# 下载 websocat.x86_64-apple-darwin
-# 重命名为 websocat-x86_64-apple-darwin
+# 下载 websocat.x86_64-apple-darwin（Intel Mac）
+# 或 websocat.aarch64-apple-darwin（Apple Silicon Mac）
+# 重命名为对应架构的文件名
 # 放置到 src-tauri/bin/ 目录
 chmod +x src-tauri/bin/websocat-x86_64-apple-darwin
+# 或
+chmod +x src-tauri/bin/websocat-aarch64-apple-darwin
 ```
 
 > **注意**: Tauri会自动根据目标平台选择正确的可执行文件。文件名格式为 `{name}-{target-triple}[.exe]`
