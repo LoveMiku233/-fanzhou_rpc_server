@@ -36,6 +36,9 @@ public:
     // 订阅主题
     void subscribe(const QString &topic, int qos = 0);
 
+    // 取消订阅主题
+    void unsubscribe(const QString &topic);
+
     // 获取连接状态
     bool isConnected() const;
 

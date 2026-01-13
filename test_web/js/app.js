@@ -8,6 +8,7 @@
  * 4. 继电器控制功能 - 单节点和分组控制
  * 5. 设备和分组管理功能
  * 6. 日志记录功能
+ * 7. Tauri Sidecar集成 - 自动启动websocat代理
  */
 
 /* ========================================================
@@ -37,6 +38,175 @@ const DEFAULT_CHANNEL_COUNT = 4;
 
 // 使用分组绑定的通道（ch=-1表示控制分组通过addChannel添加的特定通道）
 const BOUND_CHANNELS = -1;
+
+// 检测是否运行在Tauri环境中
+const isTauri = window.__TAURI__ !== undefined;
+
+// websocat代理是否正在运行
+let websocatRunning = false;
+
+/* ========================================================
+ * Tauri Sidecar 集成 - websocat代理管理
+ * ======================================================== */
+
+/**
+ * 启动websocat代理（仅在Tauri环境中可用）
+ * @param {number} wsPort - WebSocket监听端口（默认12346）
+ * @param {string} tcpHost - TCP目标地址（默认127.0.0.1）
+ * @param {number} tcpPort - TCP目标端口（默认12345）
+ * @returns {Promise<number|null>} 成功返回PID，失败返回null
+ */
+async function startWebsocatProxy(wsPort = 12346, tcpHost = '127.0.0.1', tcpPort = 12345) {
+    if (!isTauri) {
+        log('info', '不是Tauri环境，请手动启动websocat代理：\nwebsocat --text ws-l:0.0.0.0:' + wsPort + ' tcp:' + tcpHost + ':' + tcpPort);
+        return null;
+    }
+    
+    try {
+        const { invoke } = window.__TAURI__.tauri;
+        const pid = await invoke('start_websocat', {
+            wsPort: wsPort,
+            tcpHost: tcpHost,
+            tcpPort: tcpPort
+        });
+        websocatRunning = true;
+        log('info', `✅ websocat代理已启动，PID: ${pid}`);
+        updateWebsocatStatus(true);
+        return pid;
+    } catch (error) {
+        log('error', `启动websocat失败: ${error}`);
+        return null;
+    }
+}
+
+/**
+ * 停止websocat代理
+ * @returns {Promise<boolean>} 成功返回true
+ */
+async function stopWebsocatProxy() {
+    if (!isTauri) {
+        log('info', '不是Tauri环境，请手动停止websocat进程');
+        return false;
+    }
+    
+    try {
+        const { invoke } = window.__TAURI__.tauri;
+        await invoke('stop_websocat');
+        websocatRunning = false;
+        log('info', '✅ websocat代理已停止');
+        updateWebsocatStatus(false);
+        return true;
+    } catch (error) {
+        log('error', `停止websocat失败: ${error}`);
+        return false;
+    }
+}
+
+/**
+ * 检查websocat是否在运行
+ * @returns {Promise<boolean>}
+ */
+async function checkWebsocatStatus() {
+    if (!isTauri) return false;
+    
+    try {
+        const { invoke } = window.__TAURI__.tauri;
+        const running = await invoke('is_websocat_running');
+        websocatRunning = running;
+        updateWebsocatStatus(running);
+        return running;
+    } catch (error) {
+        console.error('检查websocat状态失败:', error);
+        return false;
+    }
+}
+
+/**
+ * 获取websocat进程PID
+ * @returns {Promise<number|null>}
+ */
+async function getWebsocatPid() {
+    if (!isTauri) return null;
+    
+    try {
+        const { invoke } = window.__TAURI__.tauri;
+        return await invoke('get_websocat_pid');
+    } catch (error) {
+        console.error('获取websocat PID失败:', error);
+        return null;
+    }
+}
+
+/**
+ * 切换websocat代理状态
+ */
+async function toggleWebsocatProxy() {
+    if (websocatRunning) {
+        await stopWebsocatProxy();
+    } else {
+        const port = parseInt(document.getElementById('serverPort').value) || 12346;
+        await startWebsocatProxy(port);
+    }
+}
+
+/**
+ * 更新websocat状态显示
+ * @param {boolean} running - 是否正在运行
+ */
+function updateWebsocatStatus(running) {
+    const btn = document.getElementById('websocatToggleBtn');
+    if (btn) {
+        if (running) {
+            btn.textContent = '🛑 停止代理';
+            btn.classList.add('danger');
+            btn.classList.remove('success');
+        } else {
+            btn.textContent = '🚀 启动代理';
+            btn.classList.add('success');
+            btn.classList.remove('danger');
+        }
+    }
+}
+
+/**
+ * 初始化Tauri功能
+ */
+async function initTauri() {
+    if (!isTauri) {
+        console.log('非Tauri环境，跳过Tauri初始化');
+        return;
+    }
+    
+    console.log('检测到Tauri环境，初始化Tauri功能...');
+    
+    // 显示Tauri相关的UI元素
+    const websocatBtn = document.getElementById('websocatToggleBtn');
+    if (websocatBtn) {
+        websocatBtn.style.display = 'inline-block';
+    }
+    
+    const tauriHint = document.getElementById('tauriHint');
+    if (tauriHint) {
+        tauriHint.style.display = 'block';
+    }
+    
+    // 隐藏手动代理说明（Tauri环境下不需要）
+    const manualHelp = document.getElementById('manualProxyHelp');
+    if (manualHelp) {
+        manualHelp.style.display = 'none';
+    }
+    
+    // 检查websocat状态
+    await checkWebsocatStatus();
+    
+    // 页面加载时自动启动websocat（可选）
+    // await startWebsocatProxy();
+}
+
+// 页面加载完成后初始化Tauri
+document.addEventListener('DOMContentLoaded', function() {
+    initTauri();
+});
 
 /* ========================================================
  * 页面导航功能
