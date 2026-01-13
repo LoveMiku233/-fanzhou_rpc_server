@@ -112,6 +112,8 @@
                     <div style="display: flex; align-items: center; gap: 20px; margin-top: 20px; flex-wrap: wrap;">
                         <!-- 连接/断开按钮 -->
                         <button id="connectBtn" onclick="toggleConnection()" style="min-width: 150px;">🔌 连接</button>
+                        <!-- Tauri环境下显示代理控制按钮 -->
+                        <button id="websocatToggleBtn" onclick="toggleWebsocatProxy()" class="success" style="min-width: 150px; display: none;">🚀 启动代理</button>
                         <!-- 连接状态显示 -->
                         <span class="status-badge disconnected" id="connectionStatus">
                             <span class="status-dot"></span>
@@ -120,8 +122,16 @@
                     </div>
                 </div>
                 
+                <!-- Tauri桌面应用提示 -->
+                <div id="tauriHint" style="display: none; background: #e8f5e9; padding: 15px 20px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #4caf50;">
+                    <strong style="color: #2e7d32;">🖥️ Tauri桌面应用模式</strong>
+                    <p style="color: #666; font-size: 13px; margin-top: 5px;">
+                        检测到Tauri环境！点击"启动代理"按钮自动启动websocat代理，无需手动执行命令。
+                    </p>
+                </div>
+                
                 <!-- 连接说明 -->
-                <div class="help-section">
+                <div class="help-section" id="manualProxyHelp">
                     <h4>📋 连接说明</h4>
                     <p style="margin-bottom: 10px; color: #666;">由于浏览器安全限制，需要在设备上运行WebSocket代理。请执行以下命令：</p>
                     <pre>

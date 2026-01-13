@@ -158,6 +158,14 @@ public:
     bool subscribe(int channelId, const QString &topic, int qos = 0);
 
     /**
+     * @brief 在指定通道取消订阅主题
+     * @param channelId 通道ID
+     * @param topic 主题（相对于topicPrefix）
+     * @return 成功返回true
+     */
+    bool unsubscribe(int channelId, const QString &topic);
+
+    /**
      * @brief 上报设备值变化
      * @param deviceNode 设备节点ID
      * @param channel 通道号

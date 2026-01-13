@@ -302,6 +302,22 @@ bool MqttChannelManager::subscribe(int channelId, const QString &topic, int qos)
     return true;
 }
 
+bool MqttChannelManager::unsubscribe(int channelId, const QString &topic)
+{
+    if (!channels_.contains(channelId)) {
+        return false;
+    }
+
+    auto &data = channels_[channelId];
+    if (!data.status.connected) {
+        return false;
+    }
+
+    const QString fullTopic = buildFullTopic(data.config.topicPrefix, topic);
+    data.client->unsubscribe(fullTopic);
+    return true;
+}
+
 void MqttChannelManager::reportDeviceValueChange(quint8 deviceNode, quint8 channel,
                                                    const QJsonObject &value,
                                                    const QJsonObject &oldValue)

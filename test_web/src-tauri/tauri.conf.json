@@ -1,0 +1,77 @@
+{
+  "build": {
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "",
+    "devPath": "..",
+    "distDir": ".."
+  },
+  "package": {
+    "productName": "泛舟RPC调试工具",
+    "version": "1.0.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "shell": {
+        "all": false,
+        "execute": true,
+        "sidecar": true,
+        "scope": [
+          {
+            "name": "bin/websocat",
+            "sidecar": true,
+            "args": true
+          }
+        ]
+      },
+      "window": {
+        "all": true
+      }
+    },
+    "bundle": {
+      "active": true,
+      "category": "DeveloperTool",
+      "copyright": "",
+      "deb": {
+        "depends": []
+      },
+      "externalBin": [
+        "bin/websocat"
+      ],
+      "icon": [],
+      "identifier": "com.fanzhou.rpc-debug-tool",
+      "longDescription": "泛舟RPC服务器调试工具 - 支持WebSocket代理和设备控制",
+      "macOS": {
+        "entitlements": null,
+        "exceptionDomain": "",
+        "frameworks": [],
+        "providerShortName": null,
+        "signingIdentity": null
+      },
+      "resources": [],
+      "shortDescription": "泛舟RPC调试工具",
+      "targets": "all",
+      "windows": {
+        "certificateThumbprint": null,
+        "digestAlgorithm": "sha256",
+        "timestampUrl": ""
+      }
+    },
+    "security": {
+      "csp": null
+    },
+    "updater": {
+      "active": false
+    },
+    "windows": [
+      {
+        "fullscreen": false,
+        "height": 900,
+        "resizable": true,
+        "title": "泛舟RPC服务器调试工具",
+        "width": 1400,
+        "center": true
+      }
+    ]
+  }
+}

@@ -2151,6 +2151,74 @@ void RpcRegistry::registerMqtt()
             };
         }
     });
+
+    // 订阅MQTT主题
+    dispatcher_->registerMethod(QStringLiteral("mqtt.subscribe"),
+                                 [this](const QJsonObject &params) {
+        if (!context_->mqttManager) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, QStringLiteral("MQTT manager not available"));
+        }
+
+        qint32 channelId = 0;
+        QString topic;
+        qint32 qos = 0;
+
+        if (!rpc::RpcHelpers::getI32(params, "channelId", channelId)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing channelId"));
+        }
+        if (!rpc::RpcHelpers::getString(params, "topic", topic) || topic.isEmpty()) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing topic"));
+        }
+        rpc::RpcHelpers::getI32(params, "qos", qos);
+
+        if (!context_->mqttManager->hasChannel(channelId)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("channel not found"));
+        }
+
+        if (!context_->mqttManager->subscribe(channelId, topic, qos)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, QStringLiteral("subscribe failed - channel may not be connected"));
+        }
+
+        return QJsonObject{
+            {kKeyOk, true},
+            {QStringLiteral("channelId"), channelId},
+            {QStringLiteral("topic"), topic},
+            {kKeyMessage, QStringLiteral("订阅成功")}
+        };
+    });
+
+    // 取消订阅MQTT主题
+    dispatcher_->registerMethod(QStringLiteral("mqtt.unsubscribe"),
+                                 [this](const QJsonObject &params) {
+        if (!context_->mqttManager) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, QStringLiteral("MQTT manager not available"));
+        }
+
+        qint32 channelId = 0;
+        QString topic;
+
+        if (!rpc::RpcHelpers::getI32(params, "channelId", channelId)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing channelId"));
+        }
+        if (!rpc::RpcHelpers::getString(params, "topic", topic) || topic.isEmpty()) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing topic"));
+        }
+
+        if (!context_->mqttManager->hasChannel(channelId)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("channel not found"));
+        }
+
+        if (!context_->mqttManager->unsubscribe(channelId, topic)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, QStringLiteral("unsubscribe failed - channel may not be connected"));
+        }
+
+        return QJsonObject{
+            {kKeyOk, true},
+            {QStringLiteral("channelId"), channelId},
+            {QStringLiteral("topic"), topic},
+            {kKeyMessage, QStringLiteral("取消订阅成功")}
+        };
+    });
 }
 
 // ===================== 系统资源监控RPC方法 =====================

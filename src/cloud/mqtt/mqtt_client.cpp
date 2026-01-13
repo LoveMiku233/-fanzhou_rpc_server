@@ -81,6 +81,13 @@ void MqttClient::subscribe(const QString &topic, int qos)
     }
 }
 
+void MqttClient::unsubscribe(const QString &topic)
+{
+    if (m_client->state() == QMqttClient::Connected) {
+        m_client->unsubscribe(topic);
+    }
+}
+
 bool MqttClient::isConnected() const
 {
     return m_client->state() == QMqttClient::Connected;
