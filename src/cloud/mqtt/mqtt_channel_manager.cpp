@@ -10,6 +10,7 @@
 #include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QTimer>
 
 namespace fanzhou {
 namespace cloud {
@@ -411,7 +412,20 @@ void MqttChannelManager::onClientDisconnected()
                  QStringLiteral("MQTT channel %1 will reconnect in %2 seconds")
                      .arg(channelId)
                      .arg(data.config.reconnectIntervalSec));
-        // TODO: 实现延迟重连逻辑
+
+        // 使用QTimer实现延迟重连
+        QTimer::singleShot(data.config.reconnectIntervalSec * 1000, this, [this, channelId]() {
+            if (channels_.contains(channelId)) {
+                auto &channelData = channels_[channelId];
+                if (channelData.config.enabled && channelData.config.autoReconnect &&
+                    !channelData.status.connected) {
+                    LOG_INFO(kLogSource,
+                             QStringLiteral("Attempting to reconnect MQTT channel %1...")
+                                 .arg(channelId));
+                    connectChannel(channelId);
+                }
+            }
+        });
     }
 }
 
