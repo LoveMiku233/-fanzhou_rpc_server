@@ -258,25 +258,29 @@ async function initTauri() {
     
     console.log('检测到Tauri环境，初始化Tauri功能...');
     
-    // 显示Tauri相关的UI元素
-    const websocatBtn = document.getElementById('websocatToggleBtn');
-    if (websocatBtn) {
-        websocatBtn.style.display = 'inline-block';
+    try {
+        // 显示Tauri相关的UI元素
+        const websocatBtn = document.getElementById('websocatToggleBtn');
+        if (websocatBtn) {
+            websocatBtn.style.display = 'inline-block';
+        }
+        
+        const tauriHint = document.getElementById('tauriHint');
+        if (tauriHint) {
+            tauriHint.style.display = 'block';
+        }
+        
+        // 隐藏手动代理说明（Tauri环境下不需要）
+        const manualHelp = document.getElementById('manualProxyHelp');
+        if (manualHelp) {
+            manualHelp.style.display = 'none';
+        }
+        
+        // 检查websocat状态
+        await checkWebsocatStatus();
+    } catch (error) {
+        console.error('Tauri初始化失败:', error);
     }
-    
-    const tauriHint = document.getElementById('tauriHint');
-    if (tauriHint) {
-        tauriHint.style.display = 'block';
-    }
-    
-    // 隐藏手动代理说明（Tauri环境下不需要）
-    const manualHelp = document.getElementById('manualProxyHelp');
-    if (manualHelp) {
-        manualHelp.style.display = 'none';
-    }
-    
-    // 检查websocat状态
-    await checkWebsocatStatus();
     
     // 页面加载时自动启动websocat（可选）
     // await startWebsocatProxy();
@@ -284,21 +288,27 @@ async function initTauri() {
 
 // 页面加载完成后初始化Tauri
 document.addEventListener('DOMContentLoaded', function() {
-    // 首先检查认证状态
-    checkAuthentication();
-    
-    // 初始化 Tauri 功能
-    initTauri();
-    
-    // 从启动页获取保存的设置并自动填充
-    loadLaunchSettings();
-    
-    // 显示初始化完成信息
-    log('info', '🚀 泛舟RPC调试工具已就绪');
-    
-    // 如果没有自动连接，提示用户手动连接
-    if (!shouldAutoConnect()) {
-        log('info', '请输入服务器地址并点击"连接"按钮');
+    try {
+        // 首先检查认证状态
+        checkAuthentication();
+        
+        // 初始化 Tauri 功能（异步，但不阻塞后续执行）
+        initTauri().catch(function(error) {
+            console.error('Tauri初始化异常:', error);
+        });
+        
+        // 从启动页获取保存的设置并自动填充
+        loadLaunchSettings();
+        
+        // 显示初始化完成信息
+        log('info', '🚀 泛舟RPC调试工具已就绪');
+        
+        // 如果没有自动连接，提示用户手动连接
+        if (!shouldAutoConnect()) {
+            log('info', '请输入服务器地址并点击"连接"按钮');
+        }
+    } catch (error) {
+        console.error('页面初始化失败:', error);
     }
 });
 
