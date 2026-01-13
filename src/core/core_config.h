@@ -79,6 +79,26 @@ struct DeviceGroupConfig {
 };
 
 /**
+ * @brief MQTT通道配置
+ * 支持多MQTT通道连接
+ */
+struct MqttChannelConfig {
+    int channelId = 0;              ///< 通道ID
+    QString name;                    ///< 通道名称
+    bool enabled = true;             ///< 是否启用
+    QString broker;                  ///< Broker地址
+    quint16 port = 1883;            ///< Broker端口
+    QString clientId;               ///< 客户端ID
+    QString username;               ///< 用户名（可选）
+    QString password;               ///< 密码（可选）
+    QString topicPrefix;            ///< 主题前缀
+    int keepAliveSec = 60;          ///< 心跳间隔（秒）
+    bool autoReconnect = true;      ///< 是否自动重连
+    int reconnectIntervalSec = 5;   ///< 重连间隔（秒）
+    int qos = 0;                    ///< 默认QoS级别
+};
+
+/**
  * @brief 设备通道配置（用于分组）
  */
 struct DeviceChannelRef {
@@ -183,6 +203,7 @@ public:
     QList<DeviceGroupConfig> groups;
     QList<AutoStrategyConfig> strategies;
     QList<SensorStrategyConfig> sensorStrategies;  ///< 传感器触发策略列表
+    QList<MqttChannelConfig> mqttChannels;  ///< MQTT多通道配置列表
 
     /**
      * @brief 从文件加载配置

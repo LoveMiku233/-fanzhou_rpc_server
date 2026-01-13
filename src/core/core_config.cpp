@@ -307,6 +307,34 @@ bool CoreConfig::loadFromFile(const QString &path, QString *error)
         }
     }
 
+    // MQTT多通道配置
+    mqttChannels.clear();
+    if (root.contains(QStringLiteral("mqttChannels")) &&
+        root[QStringLiteral("mqttChannels")].isArray()) {
+        const auto arr = root[QStringLiteral("mqttChannels")].toArray();
+        for (const auto &value : arr) {
+            if (!value.isObject()) continue;
+            const auto obj = value.toObject();
+
+            MqttChannelConfig mqtt;
+            mqtt.channelId = obj.value(QStringLiteral("channelId")).toInt(0);
+            mqtt.name = obj.value(QStringLiteral("name")).toString();
+            mqtt.enabled = obj.value(QStringLiteral("enabled")).toBool(true);
+            mqtt.broker = obj.value(QStringLiteral("broker")).toString();
+            mqtt.port = static_cast<quint16>(obj.value(QStringLiteral("port")).toInt(1883));
+            mqtt.clientId = obj.value(QStringLiteral("clientId")).toString();
+            mqtt.username = obj.value(QStringLiteral("username")).toString();
+            mqtt.password = obj.value(QStringLiteral("password")).toString();
+            mqtt.topicPrefix = obj.value(QStringLiteral("topicPrefix")).toString();
+            mqtt.keepAliveSec = obj.value(QStringLiteral("keepAliveSec")).toInt(60);
+            mqtt.autoReconnect = obj.value(QStringLiteral("autoReconnect")).toBool(true);
+            mqtt.reconnectIntervalSec = obj.value(QStringLiteral("reconnectIntervalSec")).toInt(5);
+            mqtt.qos = obj.value(QStringLiteral("qos")).toInt(0);
+
+            mqttChannels.append(mqtt);
+        }
+    }
+
     return true;
 }
 
@@ -429,6 +457,32 @@ bool CoreConfig::saveToFile(const QString &path, QString *error) const
         sensorStratArr.append(obj);
     }
     root[QStringLiteral("sensorStrategies")] = sensorStratArr;
+
+    // MQTT多通道配置
+    QJsonArray mqttArr;
+    for (const auto &mqtt : mqttChannels) {
+        QJsonObject obj;
+        obj[QStringLiteral("channelId")] = mqtt.channelId;
+        obj[QStringLiteral("name")] = mqtt.name;
+        obj[QStringLiteral("enabled")] = mqtt.enabled;
+        obj[QStringLiteral("broker")] = mqtt.broker;
+        obj[QStringLiteral("port")] = static_cast<int>(mqtt.port);
+        obj[QStringLiteral("clientId")] = mqtt.clientId;
+        if (!mqtt.username.isEmpty()) {
+            obj[QStringLiteral("username")] = mqtt.username;
+        }
+        // 注意：密码可选择是否保存，出于安全考虑可以不保存
+        if (!mqtt.password.isEmpty()) {
+            obj[QStringLiteral("password")] = mqtt.password;
+        }
+        obj[QStringLiteral("topicPrefix")] = mqtt.topicPrefix;
+        obj[QStringLiteral("keepAliveSec")] = mqtt.keepAliveSec;
+        obj[QStringLiteral("autoReconnect")] = mqtt.autoReconnect;
+        obj[QStringLiteral("reconnectIntervalSec")] = mqtt.reconnectIntervalSec;
+        obj[QStringLiteral("qos")] = mqtt.qos;
+        mqttArr.append(obj);
+    }
+    root[QStringLiteral("mqttChannels")] = mqttArr;
 
     QJsonDocument doc(root);
     const QByteArray data = doc.toJson(QJsonDocument::Indented);

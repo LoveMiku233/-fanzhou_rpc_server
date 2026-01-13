@@ -21,6 +21,11 @@ namespace fanzhou {
 
 namespace config {
 class SystemSettings;
+class SystemMonitor;
+}
+
+namespace cloud {
+class MqttChannelManager;
 }
 
 namespace comm {
@@ -137,8 +142,10 @@ public:
 
     // 组件指针
     config::SystemSettings *systemSettings = nullptr;
+    config::SystemMonitor *systemMonitor = nullptr;      ///< 系统资源监控器
     comm::CanComm *canBus = nullptr;
     device::CanDeviceManager *canManager = nullptr;
+    cloud::MqttChannelManager *mqttManager = nullptr;    ///< MQTT多通道管理器
 
     // 设备注册表：节点ID -> 设备
     QHash<quint8, device::RelayGd427 *> relays;

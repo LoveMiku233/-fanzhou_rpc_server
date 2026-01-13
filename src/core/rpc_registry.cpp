@@ -6,7 +6,9 @@
 #include "rpc_registry.h"
 #include "core_context.h"
 
+#include "cloud/mqtt/mqtt_channel_manager.h"
 #include "comm/can_comm.h"
+#include "config/system_monitor.h"
 #include "config/system_settings.h"
 #include "device/can/relay_gd427.h"
 #include "device/device_types.h"
@@ -144,6 +146,8 @@ void RpcRegistry::registerAll()
     registerDevice();
     registerScreen();
     registerConfig();  // 添加配置保存/加载RPC方法
+    registerMqtt();    // 添加MQTT多通道管理RPC方法
+    registerMonitor(); // 添加系统资源监控RPC方法
 }
 
 void RpcRegistry::registerBase()
@@ -1933,6 +1937,250 @@ void RpcRegistry::registerConfig()
             {kKeyOk, true},
             {kKeyMessage, QStringLiteral("配置已重新加载")}
         };
+    });
+}
+
+// ===================== MQTT多通道管理RPC方法 =====================
+
+void RpcRegistry::registerMqtt()
+{
+    // 获取MQTT通道列表
+    dispatcher_->registerMethod(QStringLiteral("mqtt.channels.list"),
+                                 [this](const QJsonObject &) {
+        if (!context_->mqttManager) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, QStringLiteral("MQTT manager not available"));
+        }
+
+        QJsonArray channels;
+        const auto statusList = context_->mqttManager->channelStatusList();
+        for (const auto &status : statusList) {
+            QJsonObject obj;
+            obj[QStringLiteral("channelId")] = status.channelId;
+            obj[kKeyName] = status.name;
+            obj[kKeyEnabled] = status.enabled;
+            obj[QStringLiteral("connected")] = status.connected;
+            obj[QStringLiteral("broker")] = status.broker;
+            obj[QStringLiteral("port")] = static_cast<int>(status.port);
+            obj[QStringLiteral("messagesSent")] = static_cast<double>(status.messagesSent);
+            obj[QStringLiteral("messagesReceived")] = static_cast<double>(status.messagesReceived);
+            if (status.lastConnectedMs > 0) {
+                obj[QStringLiteral("lastConnectedMs")] = static_cast<double>(status.lastConnectedMs);
+            }
+            channels.append(obj);
+        }
+
+        return QJsonObject{
+            {kKeyOk, true},
+            {QStringLiteral("channels"), channels},
+            {kKeyTotal, channels.size()}
+        };
+    });
+
+    // 添加MQTT通道
+    dispatcher_->registerMethod(QStringLiteral("mqtt.channels.add"),
+                                 [this](const QJsonObject &params) {
+        if (!context_->mqttManager) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, QStringLiteral("MQTT manager not available"));
+        }
+
+        qint32 channelId = 0;
+        QString name, broker, clientId, username, password, topicPrefix;
+        qint32 port = 1883;
+        bool enabled = true;
+        qint32 keepAliveSec = 60;
+        bool autoReconnect = true;
+        qint32 reconnectIntervalSec = 5;
+        qint32 qos = 0;
+
+        if (!rpc::RpcHelpers::getI32(params, "channelId", channelId) || channelId <= 0) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid channelId"));
+        }
+        if (!rpc::RpcHelpers::getString(params, "broker", broker) || broker.isEmpty()) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing broker"));
+        }
+
+        rpc::RpcHelpers::getString(params, "name", name);
+        rpc::RpcHelpers::getI32(params, "port", port);
+        rpc::RpcHelpers::getString(params, "clientId", clientId);
+        rpc::RpcHelpers::getString(params, "username", username);
+        rpc::RpcHelpers::getString(params, "password", password);
+        rpc::RpcHelpers::getString(params, "topicPrefix", topicPrefix);
+        rpc::RpcHelpers::getBool(params, "enabled", enabled, true);
+        rpc::RpcHelpers::getI32(params, "keepAliveSec", keepAliveSec);
+        rpc::RpcHelpers::getBool(params, "autoReconnect", autoReconnect, true);
+        rpc::RpcHelpers::getI32(params, "reconnectIntervalSec", reconnectIntervalSec);
+        rpc::RpcHelpers::getI32(params, "qos", qos);
+
+        cloud::MqttChannelConfig config;
+        config.channelId = channelId;
+        config.name = name.isEmpty() ? QStringLiteral("mqtt-%1").arg(channelId) : name;
+        config.enabled = enabled;
+        config.broker = broker;
+        config.port = static_cast<quint16>(port);
+        config.clientId = clientId;
+        config.username = username;
+        config.password = password;
+        config.topicPrefix = topicPrefix;
+        config.keepAliveSec = keepAliveSec;
+        config.autoReconnect = autoReconnect;
+        config.reconnectIntervalSec = reconnectIntervalSec;
+        config.qos = qos;
+
+        QString error;
+        if (!context_->mqttManager->addChannel(config, &error)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, error);
+        }
+
+        return QJsonObject{
+            {kKeyOk, true},
+            {QStringLiteral("channelId"), channelId},
+            {kKeyMessage, QStringLiteral("MQTT通道添加成功")}
+        };
+    });
+
+    // 删除MQTT通道
+    dispatcher_->registerMethod(QStringLiteral("mqtt.channels.remove"),
+                                 [this](const QJsonObject &params) {
+        if (!context_->mqttManager) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, QStringLiteral("MQTT manager not available"));
+        }
+
+        qint32 channelId = 0;
+        if (!rpc::RpcHelpers::getI32(params, "channelId", channelId)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing channelId"));
+        }
+
+        QString error;
+        if (!context_->mqttManager->removeChannel(channelId, &error)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, error);
+        }
+
+        return QJsonObject{
+            {kKeyOk, true},
+            {kKeyMessage, QStringLiteral("MQTT通道已删除")}
+        };
+    });
+
+    // 连接MQTT通道
+    dispatcher_->registerMethod(QStringLiteral("mqtt.channels.connect"),
+                                 [this](const QJsonObject &params) {
+        if (!context_->mqttManager) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, QStringLiteral("MQTT manager not available"));
+        }
+
+        qint32 channelId = 0;
+        if (!rpc::RpcHelpers::getI32(params, "channelId", channelId)) {
+            // 如果没有指定channelId，连接所有通道
+            context_->mqttManager->connectAll();
+            return QJsonObject{
+                {kKeyOk, true},
+                {kKeyMessage, QStringLiteral("正在连接所有MQTT通道")}
+            };
+        }
+
+        if (!context_->mqttManager->hasChannel(channelId)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("channel not found"));
+        }
+
+        context_->mqttManager->connectChannel(channelId);
+        return QJsonObject{
+            {kKeyOk, true},
+            {kKeyMessage, QStringLiteral("正在连接MQTT通道 %1").arg(channelId)}
+        };
+    });
+
+    // 断开MQTT通道
+    dispatcher_->registerMethod(QStringLiteral("mqtt.channels.disconnect"),
+                                 [this](const QJsonObject &params) {
+        if (!context_->mqttManager) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, QStringLiteral("MQTT manager not available"));
+        }
+
+        qint32 channelId = 0;
+        if (!rpc::RpcHelpers::getI32(params, "channelId", channelId)) {
+            context_->mqttManager->disconnectAll();
+            return QJsonObject{
+                {kKeyOk, true},
+                {kKeyMessage, QStringLiteral("已断开所有MQTT通道")}
+            };
+        }
+
+        context_->mqttManager->disconnectChannel(channelId);
+        return QJsonObject{
+            {kKeyOk, true},
+            {kKeyMessage, QStringLiteral("已断开MQTT通道 %1").arg(channelId)}
+        };
+    });
+
+    // 发布消息到MQTT通道
+    dispatcher_->registerMethod(QStringLiteral("mqtt.publish"),
+                                 [this](const QJsonObject &params) {
+        if (!context_->mqttManager) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, QStringLiteral("MQTT manager not available"));
+        }
+
+        qint32 channelId = 0;
+        QString topic, payload;
+        qint32 qos = 0;
+
+        if (!rpc::RpcHelpers::getString(params, "topic", topic) || topic.isEmpty()) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing topic"));
+        }
+        if (!rpc::RpcHelpers::getString(params, "payload", payload)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing payload"));
+        }
+        rpc::RpcHelpers::getI32(params, "qos", qos);
+
+        const QByteArray payloadBytes = payload.toUtf8();
+
+        if (rpc::RpcHelpers::getI32(params, "channelId", channelId)) {
+            // 发布到指定通道
+            if (!context_->mqttManager->publish(channelId, topic, payloadBytes, qos)) {
+                return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, QStringLiteral("publish failed"));
+            }
+            return QJsonObject{
+                {kKeyOk, true},
+                {QStringLiteral("channelId"), channelId}
+            };
+        } else {
+            // 发布到所有通道
+            const int count = context_->mqttManager->publishToAll(topic, payloadBytes, qos);
+            return QJsonObject{
+                {kKeyOk, true},
+                {QStringLiteral("sentCount"), count}
+            };
+        }
+    });
+}
+
+// ===================== 系统资源监控RPC方法 =====================
+
+void RpcRegistry::registerMonitor()
+{
+    // 获取当前系统资源快照
+    dispatcher_->registerMethod(QStringLiteral("sys.monitor.current"),
+                                 [this](const QJsonObject &) {
+        if (!context_->systemMonitor) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, QStringLiteral("System monitor not available"));
+        }
+
+        context_->systemMonitor->refresh();
+        return context_->systemMonitor->currentSnapshotJson();
+    });
+
+    // 获取历史数据（用于图表）
+    dispatcher_->registerMethod(QStringLiteral("sys.monitor.history"),
+                                 [this](const QJsonObject &params) {
+        if (!context_->systemMonitor) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, QStringLiteral("System monitor not available"));
+        }
+
+        qint32 count = 60;
+        rpc::RpcHelpers::getI32(params, "count", count);
+        if (count <= 0) count = 60;
+        if (count > 300) count = 300;
+
+        return context_->systemMonitor->historySnapshotsJson(count);
     });
 }
 
