@@ -60,6 +60,7 @@
     background-size: 400% 400%;
     animation: gradientAnimation 15s ease infinite;
     z-index: -2;
+    pointer-events: none;
 }
 
 /* 浮动装饰元素容器 - 启用动画 */
@@ -82,6 +83,7 @@
     background: rgba(255, 255, 255, 0.1);
     border-radius: 50%;
     animation: floatAnimation 6s ease-in-out infinite;
+    pointer-events: none;
 }
 
 /* 不同大小和位置的浮动形状 */
@@ -1525,4 +1527,155 @@ button:active {
     min-width: 70px;
     padding: 8px 12px;
     font-size: 12px;
+}
+
+/* ==================== 桌面端优化样式 ==================== */
+/* 确保所有交互元素可以正常点击 */
+
+/* 确保主要内容层在动态背景之上 */
+.header,
+.main-layout {
+    position: relative;
+    z-index: 1;
+}
+
+/* 优化桌面端的按钮点击体验 */
+button,
+.nav-btn,
+.quick-action-btn,
+.quick-strategy-card {
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+/* 优化表单元素的交互 */
+input,
+select,
+textarea {
+    cursor: text;
+}
+
+input[type="number"],
+input[type="checkbox"],
+select {
+    cursor: pointer;
+}
+
+/* 桌面端大屏幕优化 */
+@media (min-width: 1600px) {
+    .main-layout {
+        max-width: 1800px;
+    }
+    
+    .sidebar {
+        width: 220px;
+    }
+    
+    .log-sidebar {
+        width: 420px;
+    }
+    
+    /* 更大的按钮和更好的可读性 */
+    button {
+        padding: 14px 28px;
+        font-size: 15px;
+    }
+    
+    .nav-btn {
+        padding: 16px 18px;
+        font-size: 15px;
+    }
+    
+    .quick-actions-grid {
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    }
+    
+    .device-cards {
+        grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+    }
+    
+    .strategy-cards {
+        grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    }
+    
+    .group-cards {
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    }
+}
+
+/* 超大屏幕优化 (4K等) */
+@media (min-width: 2000px) {
+    .main-layout {
+        max-width: 2200px;
+    }
+    
+    .header h1 {
+        font-size: 2.5em;
+    }
+    
+    .card {
+        padding: 32px;
+    }
+    
+    .card h2 {
+        font-size: 1.6em;
+    }
+    
+    button {
+        padding: 16px 32px;
+        font-size: 16px;
+    }
+}
+
+/* 桌面端的连接状态提示优化 */
+.status-badge {
+    transition: all 0.3s ease;
+}
+
+.status-badge.disconnected:hover {
+    background: #f5c6cb;
+}
+
+.status-badge.connected:hover {
+    background: #c3e6cb;
+}
+
+/* 优化卡片的鼠标悬停效果 */
+.device-card,
+.strategy-card,
+.group-card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.device-card:hover,
+.strategy-card:hover,
+.group-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 30px rgba(102, 126, 234, 0.2);
+}
+
+/* 确保弹窗在最上层并可交互 */
+.modal-overlay {
+    z-index: 1000;
+}
+
+.modal-overlay.show {
+    display: flex !important;
+}
+
+/* 优化导航按钮的激活状态反馈 */
+.nav-btn:focus {
+    outline: 2px solid #667eea;
+    outline-offset: 2px;
+}
+
+/* 优化输入框聚焦状态 */
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.15);
 }
