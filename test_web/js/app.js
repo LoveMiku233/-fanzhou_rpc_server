@@ -46,6 +46,60 @@ const isTauri = window.__TAURI__ !== undefined;
 let websocatRunning = false;
 
 /* ========================================================
+ * 认证和启动页集成
+ * ======================================================== */
+
+/**
+ * 检查认证状态
+ * 如果未通过启动页认证，重定向到启动页
+ */
+function checkAuthentication() {
+    // 检查sessionStorage中的认证状态
+    const authenticated = sessionStorage.getItem('rpc_authenticated');
+    
+    // 在Tauri环境中，如果未认证，则重定向到启动页
+    if (!authenticated && isTauri) {
+        // 未认证，重定向到启动页
+        window.location.href = 'launch.html';
+        return;
+    }
+    
+    // 在浏览器环境中（非Tauri），允许直接访问以便于开发测试
+}
+
+/**
+ * 从启动页加载保存的设置
+ * 自动填充服务器地址和端口
+ */
+function loadLaunchSettings() {
+    const savedHost = sessionStorage.getItem('rpc_host');
+    const savedPort = sessionStorage.getItem('rpc_port');
+    
+    if (savedHost) {
+        const hostInput = document.getElementById('serverHost');
+        if (hostInput) {
+            hostInput.value = savedHost;
+        }
+    }
+    
+    if (savedPort) {
+        const portInput = document.getElementById('serverPort');
+        if (portInput) {
+            portInput.value = savedPort;
+        }
+    }
+    
+    // 如果有保存的设置，可以选择自动连接
+    if (savedHost && savedPort) {
+        // 延迟一点执行自动连接，让页面完全加载
+        setTimeout(function() {
+            // 可以在这里添加自动连接逻辑
+            // connect();
+        }, 500);
+    }
+}
+
+/* ========================================================
  * Tauri Sidecar 集成 - websocat代理管理
  * ======================================================== */
 
@@ -63,7 +117,8 @@ async function startWebsocatProxy(wsPort = 12346, tcpHost = '127.0.0.1', tcpPort
     }
     
     try {
-        const { invoke } = window.__TAURI__.tauri;
+        // Tauri v2.x API: invoke is accessed from window.__TAURI__.core
+        const { invoke } = window.__TAURI__.core;
         const pid = await invoke('start_websocat', {
             wsPort: wsPort,
             tcpHost: tcpHost,
@@ -90,7 +145,8 @@ async function stopWebsocatProxy() {
     }
     
     try {
-        const { invoke } = window.__TAURI__.tauri;
+        // Tauri v2.x API: invoke is accessed from window.__TAURI__.core
+        const { invoke } = window.__TAURI__.core;
         await invoke('stop_websocat');
         websocatRunning = false;
         log('info', '✅ websocat代理已停止');
@@ -110,7 +166,8 @@ async function checkWebsocatStatus() {
     if (!isTauri) return false;
     
     try {
-        const { invoke } = window.__TAURI__.tauri;
+        // Tauri v2.x API: invoke is accessed from window.__TAURI__.core
+        const { invoke } = window.__TAURI__.core;
         const running = await invoke('is_websocat_running');
         websocatRunning = running;
         updateWebsocatStatus(running);
@@ -129,7 +186,8 @@ async function getWebsocatPid() {
     if (!isTauri) return null;
     
     try {
-        const { invoke } = window.__TAURI__.tauri;
+        // Tauri v2.x API: invoke is accessed from window.__TAURI__.core
+        const { invoke } = window.__TAURI__.core;
         return await invoke('get_websocat_pid');
     } catch (error) {
         console.error('获取websocat PID失败:', error);
@@ -205,7 +263,14 @@ async function initTauri() {
 
 // 页面加载完成后初始化Tauri
 document.addEventListener('DOMContentLoaded', function() {
+    // 首先检查认证状态
+    checkAuthentication();
+    
+    // 初始化 Tauri 功能
     initTauri();
+    
+    // 从启动页获取保存的设置并自动填充
+    loadLaunchSettings();
 });
 
 /* ========================================================
