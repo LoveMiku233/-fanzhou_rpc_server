@@ -427,11 +427,28 @@
         /**
          * 进入主应用
          */
-        function enterMainApp(host, port) {
+        async function enterMainApp(host, port) {
             // 将设置存储到 sessionStorage，供主页面使用
             sessionStorage.setItem('rpc_host', host);
             sessionStorage.setItem('rpc_port', port);
             sessionStorage.setItem('rpc_authenticated', 'true');
+            
+            // 如果在Tauri环境中，调整窗口大小和标题
+            if (window.__TAURI__) {
+                try {
+                    const { getCurrentWindow } = window.__TAURI__.window;
+                    const appWindow = getCurrentWindow();
+                    
+                    // 设置窗口大小为主应用的大小
+                    await appWindow.setSize({ width: 1400, height: 900 });
+                    // 居中窗口
+                    await appWindow.center();
+                    // 更新窗口标题
+                    await appWindow.setTitle('泛舟RPC服务器调试工具');
+                } catch (e) {
+                    console.error('调整窗口失败:', e);
+                }
+            }
             
             // 跳转到主页面
             window.location.href = 'index.html';

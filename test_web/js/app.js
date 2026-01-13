@@ -54,20 +54,17 @@ let websocatRunning = false;
  * 如果未通过启动页认证，重定向到启动页
  */
 function checkAuthentication() {
-    // 在Tauri环境中检查认证状态
+    // 检查sessionStorage中的认证状态
     const authenticated = sessionStorage.getItem('rpc_authenticated');
     
-    // 如果在浏览器中直接打开index.html且未认证，跳转到启动页
-    // 但如果是开发环境（非Tauri）或已认证，则允许访问
+    // 在Tauri环境中，如果未认证，则重定向到启动页
     if (!authenticated && isTauri) {
-        // 检查是否从启动页跳转过来
-        const referrer = document.referrer;
-        if (!referrer.includes('launch.html')) {
-            // 未认证且非从启动页跳转，重定向到启动页
-            window.location.href = 'launch.html';
-            return;
-        }
+        // 未认证，重定向到启动页
+        window.location.href = 'launch.html';
+        return;
     }
+    
+    // 在浏览器环境中（非Tauri），允许直接访问以便于开发测试
 }
 
 /**

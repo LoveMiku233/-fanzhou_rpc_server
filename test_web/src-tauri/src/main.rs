@@ -76,10 +76,12 @@ async fn start_websocat(
         while let Some(event) = rx.recv().await {
             match event {
                 CommandEvent::Stdout(line) => {
-                    println!("[websocat stdout] {:?}", line);
+                    let line_str = String::from_utf8_lossy(&line);
+                    println!("[websocat stdout] {}", line_str);
                 }
                 CommandEvent::Stderr(line) => {
-                    eprintln!("[websocat stderr] {:?}", line);
+                    let line_str = String::from_utf8_lossy(&line);
+                    eprintln!("[websocat stderr] {}", line_str);
                 }
                 CommandEvent::Terminated(payload) => {
                     println!(
