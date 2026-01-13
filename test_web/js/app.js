@@ -2852,17 +2852,12 @@ function removeMqttChannel(channelId) {
  * 系统资源监控功能
  * 
  * 显示CPU、内存、存储、网络等系统资源使用情况
- * 支持图表实时展示历史数据
+ * 简化版本 - 无图表，更轻量级
  * ======================================================== */
 
 // 自动刷新定时器
 let monitorAutoRefreshTimer = null;
 let monitorAutoRefreshEnabled = false;
-
-// 图表实例
-let cpuChart = null;
-let memChart = null;
-let networkChart = null;
 
 /**
  * 刷新系统监控数据
@@ -2873,13 +2868,6 @@ function refreshSystemMonitor() {
             updateMonitorDisplay(response.result);
         } else if (response.error) {
             log('error', `获取系统监控数据失败: ${response.error.message || '未知错误'}`);
-        }
-    });
-    
-    // 获取历史数据用于图表
-    callMethod('sys.monitor.history', { count: 60 }, function(response) {
-        if (response.result && response.result.ok) {
-            updateMonitorCharts(response.result);
         }
     });
 }
@@ -2908,11 +2896,11 @@ function updateMonitorDisplay(data) {
             `${storage.usedGB.toFixed(1)} / ${storage.totalGB.toFixed(1)} GB`;
         
         // 渲染存储详情列表
-        let storageHtml = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px;">';
+        let storageHtml = '';
         data.storages.forEach(st => {
             const usageColor = st.usagePercent > 80 ? '#e53935' : (st.usagePercent > 60 ? '#fb8c00' : '#43a047');
             storageHtml += `
-                <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0;">
+                <div style="background: white; padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #e0e0e0;">
                     <div style="font-weight: 600; margin-bottom: 8px;">💾 ${escapeHtml(st.mount)}</div>
                     <div style="font-size: 12px; color: #666; margin-bottom: 8px;">文件系统: ${escapeHtml(st.fs)}</div>
                     <div style="background: #e0e0e0; border-radius: 4px; height: 8px; overflow: hidden;">
@@ -2924,7 +2912,6 @@ function updateMonitorDisplay(data) {
                 </div>
             `;
         });
-        storageHtml += '</div>';
         document.getElementById('storageDetailsList').innerHTML = storageHtml;
     }
     
@@ -2967,126 +2954,6 @@ function updateMonitorDisplay(data) {
 }
 
 /**
- * 更新监控图表
- */
-function updateMonitorCharts(data) {
-    const labels = data.timestamps ? data.timestamps.map((t, i) => i + 's') : [];
-    
-    // CPU图表
-    const cpuCtx = document.getElementById('cpuChart');
-    if (cpuCtx) {
-        if (cpuChart) {
-            cpuChart.data.labels = labels;
-            cpuChart.data.datasets[0].data = data.cpuUsage || [];
-            cpuChart.update('none');
-        } else {
-            cpuChart = new Chart(cpuCtx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'CPU %',
-                        data: data.cpuUsage || [],
-                        borderColor: '#667eea',
-                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                        fill: true,
-                        tension: 0.4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: { min: 0, max: 100 }
-                    },
-                    plugins: {
-                        legend: { display: false }
-                    }
-                }
-            });
-        }
-    }
-    
-    // 内存图表
-    const memCtx = document.getElementById('memChart');
-    if (memCtx) {
-        if (memChart) {
-            memChart.data.labels = labels;
-            memChart.data.datasets[0].data = data.memUsage || [];
-            memChart.update('none');
-        } else {
-            memChart = new Chart(memCtx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: '内存 %',
-                        data: data.memUsage || [],
-                        borderColor: '#11998e',
-                        backgroundColor: 'rgba(17, 153, 142, 0.1)',
-                        fill: true,
-                        tension: 0.4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: { min: 0, max: 100 }
-                    },
-                    plugins: {
-                        legend: { display: false }
-                    }
-                }
-            });
-        }
-    }
-    
-    // 网络流量图表
-    const netCtx = document.getElementById('networkChart');
-    if (netCtx && data.rxKBps && data.txKBps) {
-        if (networkChart) {
-            networkChart.data.labels = labels;
-            networkChart.data.datasets[0].data = data.rxKBps;
-            networkChart.data.datasets[1].data = data.txKBps;
-            networkChart.update('none');
-        } else {
-            networkChart = new Chart(netCtx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        {
-                            label: '下载 KB/s',
-                            data: data.rxKBps,
-                            borderColor: '#4caf50',
-                            backgroundColor: 'rgba(76, 175, 80, 0.1)',
-                            fill: true,
-                            tension: 0.4
-                        },
-                        {
-                            label: '上传 KB/s',
-                            data: data.txKBps,
-                            borderColor: '#2196f3',
-                            backgroundColor: 'rgba(33, 150, 243, 0.1)',
-                            fill: true,
-                            tension: 0.4
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: { min: 0 }
-                    }
-                }
-            });
-        }
-    }
-}
-
-/**
  * 切换自动刷新
  */
 function toggleAutoRefresh() {
@@ -3096,8 +2963,8 @@ function toggleAutoRefresh() {
     if (monitorAutoRefreshEnabled) {
         btn.textContent = '⏸️ 停止刷新';
         btn.classList.add('success');
-        monitorAutoRefreshTimer = setInterval(refreshSystemMonitor, 2000);
-        log('info', '自动刷新已开启（每2秒）');
+        monitorAutoRefreshTimer = setInterval(refreshSystemMonitor, 3000);
+        log('info', '自动刷新已开启（每3秒）');
     } else {
         btn.textContent = '⏯️ 自动刷新';
         btn.classList.remove('success');
@@ -3107,4 +2974,325 @@ function toggleAutoRefresh() {
         }
         log('info', '自动刷新已停止');
     }
+}
+
+/* ========================================================
+ * MQTT调试功能
+ * 
+ * 支持发布消息、订阅管理、消息接收和回调
+ * ======================================================== */
+
+// MQTT消息列表（最多保存100条）
+let mqttMessages = [];
+const MAX_MQTT_MESSAGES = 100;
+
+// MQTT订阅列表缓存
+let mqttSubscriptionsCache = [];
+
+// MQTT消息回调函数映射（主题 -> 回调函数）
+const mqttMessageCallbacks = new Map();
+
+/**
+ * 发布MQTT消息
+ */
+function mqttPublish() {
+    const channelId = parseInt(document.getElementById('mqttDebugChannelId').value);
+    const topic = document.getElementById('mqttDebugTopic').value.trim();
+    const qos = parseInt(document.getElementById('mqttDebugQos').value);
+    const payload = document.getElementById('mqttDebugPayload').value.trim();
+    
+    if (!topic) {
+        alert('请输入主题');
+        return;
+    }
+    
+    callMethod('mqtt.publish', {
+        channelId: channelId,
+        topic: topic,
+        payload: payload,
+        qos: qos
+    }, function(response) {
+        if (response.result && response.result.ok) {
+            log('info', `✅ 消息已发布到 ${topic}`);
+        } else if (response.error) {
+            log('error', `发布失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 添加MQTT订阅
+ */
+function mqttSubscribe() {
+    const channelId = parseInt(document.getElementById('mqttSubChannelId').value);
+    const topic = document.getElementById('mqttSubTopic').value.trim();
+    const qos = parseInt(document.getElementById('mqttSubQos').value);
+    
+    if (!topic) {
+        alert('请输入订阅主题');
+        return;
+    }
+    
+    callMethod('mqtt.subscribe', {
+        channelId: channelId,
+        topic: topic,
+        qos: qos
+    }, function(response) {
+        if (response.result && response.result.ok) {
+            log('info', `✅ 已订阅主题: ${topic}`);
+            
+            // 注册默认回调函数（显示消息）
+            registerMqttCallback(topic, function(message) {
+                addMqttMessage(message);
+            });
+            
+            // 刷新订阅列表
+            mqttListSubscriptions();
+        } else if (response.error) {
+            log('error', `订阅失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 取消MQTT订阅
+ */
+function mqttUnsubscribe() {
+    const channelId = parseInt(document.getElementById('mqttSubChannelId').value);
+    const topic = document.getElementById('mqttSubTopic').value.trim();
+    
+    if (!topic) {
+        alert('请输入要取消的订阅主题');
+        return;
+    }
+    
+    callMethod('mqtt.unsubscribe', {
+        channelId: channelId,
+        topic: topic
+    }, function(response) {
+        if (response.result && response.result.ok) {
+            log('info', `✅ 已取消订阅: ${topic}`);
+            
+            // 移除回调函数
+            unregisterMqttCallback(topic);
+            
+            // 刷新订阅列表
+            mqttListSubscriptions();
+        } else if (response.error) {
+            log('error', `取消订阅失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 获取MQTT订阅列表
+ */
+function mqttListSubscriptions() {
+    const channelId = parseInt(document.getElementById('mqttSubChannelId').value);
+    
+    callMethod('mqtt.subscriptions', {
+        channelId: channelId
+    }, function(response) {
+        if (response.result && response.result.ok) {
+            mqttSubscriptionsCache = response.result.subscriptions || [];
+            renderMqttSubscriptions();
+        } else if (response.error) {
+            log('error', `获取订阅列表失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 渲染MQTT订阅列表
+ */
+function renderMqttSubscriptions() {
+    const displayEl = document.getElementById('mqttSubscriptionsList');
+    const contentEl = document.getElementById('mqttSubscriptionsContent');
+    
+    if (mqttSubscriptionsCache.length === 0) {
+        contentEl.innerHTML = '<span style="color: #999;">暂无订阅</span>';
+    } else {
+        // 清空内容
+        contentEl.innerHTML = '';
+        
+        mqttSubscriptionsCache.forEach((sub, index) => {
+            const span = document.createElement('span');
+            span.className = 'mqtt-sub-tag';
+            span.style.cssText = 'background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); color: #1565c0; padding: 6px 12px; border-radius: 20px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;';
+            span.textContent = `📥 ${sub.topic} (QoS ${sub.qos}) `;
+            
+            const btn = document.createElement('button');
+            btn.style.cssText = 'background: none; border: none; color: #e53935; cursor: pointer; padding: 0; font-size: 14px; min-width: auto;';
+            btn.textContent = '✕';
+            btn.dataset.topic = sub.topic;
+            btn.addEventListener('click', function() {
+                quickUnsubscribe(this.dataset.topic);
+            });
+            
+            span.appendChild(btn);
+            contentEl.appendChild(span);
+        });
+    }
+    displayEl.style.display = 'block';
+}
+
+/**
+ * 快速取消订阅
+ */
+function quickUnsubscribe(topic) {
+    const channelId = parseInt(document.getElementById('mqttSubChannelId').value);
+    
+    callMethod('mqtt.unsubscribe', {
+        channelId: channelId,
+        topic: topic
+    }, function(response) {
+        if (response.result && response.result.ok) {
+            log('info', `✅ 已取消订阅: ${topic}`);
+            unregisterMqttCallback(topic);
+            mqttListSubscriptions();
+        }
+    });
+}
+
+/**
+ * 注册MQTT消息回调函数
+ * @param {string} topic - 订阅主题（支持通配符匹配）
+ * @param {function} callback - 回调函数，参数为消息对象
+ */
+function registerMqttCallback(topic, callback) {
+    mqttMessageCallbacks.set(topic, callback);
+    log('info', `已注册回调: ${topic}`);
+}
+
+/**
+ * 取消注册MQTT消息回调
+ * @param {string} topic - 订阅主题
+ */
+function unregisterMqttCallback(topic) {
+    mqttMessageCallbacks.delete(topic);
+}
+
+/**
+ * 触发MQTT消息回调
+ * @param {object} message - MQTT消息对象
+ */
+function triggerMqttCallback(message) {
+    const topic = message.topic;
+    
+    // 精确匹配
+    if (mqttMessageCallbacks.has(topic)) {
+        mqttMessageCallbacks.get(topic)(message);
+        return;
+    }
+    
+    // 通配符匹配
+    for (const [pattern, callback] of mqttMessageCallbacks) {
+        if (matchMqttTopic(pattern, topic)) {
+            callback(message);
+            return;
+        }
+    }
+}
+
+/**
+ * MQTT主题通配符匹配
+ * 根据MQTT规范实现通配符匹配：
+ * - '#' 必须是最后一个字符，匹配剩余所有层级
+ * - '+' 匹配单个层级
+ * @param {string} pattern - 订阅主题模式
+ * @param {string} topic - 实际主题
+ * @returns {boolean} 是否匹配
+ */
+function matchMqttTopic(pattern, topic) {
+    const patternParts = pattern.split('/');
+    const topicParts = topic.split('/');
+    
+    for (let i = 0; i < patternParts.length; i++) {
+        // '#' 必须是最后一个部分，匹配剩余所有层级
+        if (patternParts[i] === '#') {
+            // 根据MQTT规范，'#'必须是最后一个字符
+            if (i === patternParts.length - 1) {
+                return true;
+            }
+            // '#'不在最后位置是无效的模式
+            return false;
+        }
+        
+        // 检查是否还有topic层级可以匹配
+        if (i >= topicParts.length) {
+            return false;
+        }
+        
+        // '+' 匹配单个层级
+        if (patternParts[i] === '+') {
+            continue;
+        }
+        
+        // 精确匹配
+        if (patternParts[i] !== topicParts[i]) {
+            return false;
+        }
+    }
+    
+    // 模式和主题必须有相同的层级数（除非使用了'#'）
+    return patternParts.length === topicParts.length;
+}
+
+/**
+ * 添加MQTT消息到显示列表
+ * @param {object} message - MQTT消息对象
+ */
+function addMqttMessage(message) {
+    const now = new Date();
+    const time = now.toLocaleTimeString();
+    
+    mqttMessages.unshift({
+        time: time,
+        topic: message.topic,
+        payload: message.payload,
+        qos: message.qos || 0
+    });
+    
+    // 限制消息数量
+    if (mqttMessages.length > MAX_MQTT_MESSAGES) {
+        mqttMessages.pop();
+    }
+    
+    renderMqttMessages();
+}
+
+/**
+ * 渲染MQTT消息列表
+ */
+function renderMqttMessages() {
+    const container = document.getElementById('mqttMessagesContainer');
+    
+    if (mqttMessages.length === 0) {
+        container.innerHTML = '<div style="color: #666; text-align: center; padding: 20px;">等待消息...</div>';
+        return;
+    }
+    
+    let html = '';
+    mqttMessages.forEach(msg => {
+        html += `
+            <div style="padding: 10px 0; border-bottom: 1px solid #333;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                    <span style="color: #888; font-size: 11px;">[${msg.time}]</span>
+                    <span style="background: #264f78; color: #6cb6ff; padding: 2px 8px; border-radius: 4px; font-size: 11px;">QoS ${msg.qos}</span>
+                    <span style="color: #f0c674;">${escapeHtml(msg.topic)}</span>
+                </div>
+                <div style="color: #d4d4d4; white-space: pre-wrap; word-break: break-all; padding-left: 10px; border-left: 2px solid #444;">${escapeHtml(typeof msg.payload === 'object' ? JSON.stringify(msg.payload, null, 2) : msg.payload)}</div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+/**
+ * 清空MQTT消息
+ */
+function clearMqttMessages() {
+    mqttMessages = [];
+    renderMqttMessages();
 }
