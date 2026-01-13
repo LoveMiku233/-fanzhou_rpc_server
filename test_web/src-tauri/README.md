@@ -73,14 +73,25 @@ chmod +x src-tauri/bin/websocat-aarch64-apple-darwin
 
 > **注意**: Tauri会自动根据目标平台选择正确的可执行文件。文件名格式为 `{name}-{target-triple}[.exe]`
 
-### 4. 构建应用
+### 4. 生成应用图标（可选）
+
+如果需要自定义图标，请准备一个 1024x1024 的 PNG 图片，然后运行：
+
+```bash
+cd test_web/src-tauri
+cargo tauri icon path/to/your/icon.png
+```
+
+这会自动生成所有平台需要的图标格式。
+
+### 5. 构建应用
 
 ```bash
 cd test_web
 cargo tauri build
 ```
 
-### 5. 开发模式
+### 6. 开发模式
 
 ```bash
 cd test_web
