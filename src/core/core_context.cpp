@@ -15,6 +15,7 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QJsonArray>
+#include <QRandomGenerator>
 
 #include <algorithm>
 
@@ -69,6 +70,7 @@ bool CoreContext::init(const CoreConfig &config)
                   .arg(config.can.bitrate));
 
     rpcPort = config.main.rpcPort;
+    authConfig = config.main.auth;
     canInterface = config.can.interface;
     canBitrate = config.can.bitrate;
     tripleSampling = config.can.tripleSampling;
@@ -1326,6 +1328,7 @@ bool CoreContext::saveConfig(const QString &path, QString *error)
     
     // 主配置
     config.main.rpcPort = rpcPort;
+    config.main.auth = authConfig;  // 保存认证配置
     
     // CAN配置
     config.can.interface = canInterface;
@@ -1451,6 +1454,16 @@ QJsonObject CoreContext::exportConfig() const
     // 主配置
     QJsonObject mainObj;
     mainObj[QStringLiteral("rpcPort")] = static_cast<int>(rpcPort);
+    
+    // 认证状态（不包含敏感信息）
+    QJsonObject authObj;
+    authObj[QStringLiteral("enabled")] = authConfig.enabled;
+    authObj[QStringLiteral("tokenExpireSec")] = authConfig.tokenExpireSec;
+    authObj[QStringLiteral("whitelistCount")] = authConfig.whitelist.size();
+    authObj[QStringLiteral("publicMethodsCount")] = authConfig.publicMethods.size();
+    authObj[QStringLiteral("allowedTokensCount")] = authConfig.allowedTokens.size();
+    mainObj[QStringLiteral("auth")] = authObj;
+    
     root[QStringLiteral("main")] = mainObj;
     
     // CAN配置
@@ -1528,6 +1541,133 @@ QJsonObject CoreContext::exportConfig() const
     root[QStringLiteral("configFilePath")] = configFilePath;
     
     return root;
+}
+
+// ===================== 认证管理实现 =====================
+
+bool CoreContext::verifyToken(const QString &token) const
+{
+    // 如果认证未启用，所有token都视为有效
+    if (!authConfig.enabled) {
+        return true;
+    }
+    
+    // 空token无效
+    if (token.isEmpty()) {
+        return false;
+    }
+    
+    // 检查预设的静态token列表
+    if (authConfig.allowedTokens.contains(token)) {
+        return true;
+    }
+    
+    // 检查动态生成的token
+    if (validTokens.contains(token)) {
+        const qint64 expireMs = validTokens.value(token);
+        // 0表示永不过期
+        if (expireMs == 0) {
+            return true;
+        }
+        // 检查是否过期
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        return now < expireMs;
+    }
+    
+    return false;
+}
+
+bool CoreContext::generateToken(const QString &username, const QString &password,
+                                 QString *outToken, QString *error)
+{
+    // 如果认证未启用，不需要生成token
+    if (!authConfig.enabled) {
+        if (error) *error = QStringLiteral("authentication not enabled");
+        return false;
+    }
+    
+    // 验证密码（简单实现：使用secret作为密码）
+    // 注意：生产环境应该使用更安全的验证方式，如bcrypt/scrypt hash
+    // 当前实现适用于内网/受信环境的基本防护
+    if (password != authConfig.secret) {
+        LOG_WARNING(kLogSource,
+                    QStringLiteral("Authentication failed for user: %1").arg(username));
+        if (error) *error = QStringLiteral("invalid credentials");
+        return false;
+    }
+    
+    // 生成token（使用QRandomGenerator获得更好的随机性）
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const quint32 random1 = QRandomGenerator::global()->generate();
+    const quint32 random2 = QRandomGenerator::global()->generate();
+    const QString token = QString::number(now, 16) +
+                          QStringLiteral("-") +
+                          QString::number(random1, 16) +
+                          QString::number(random2, 16);
+    
+    // 计算过期时间
+    qint64 expireMs = 0;  // 0表示永不过期
+    if (authConfig.tokenExpireSec > 0) {
+        expireMs = now + authConfig.tokenExpireSec * 1000LL;
+    }
+    
+    // 保存token（非const方法，可以直接修改成员变量）
+    validTokens.insert(token, expireMs);
+    
+    LOG_INFO(kLogSource,
+             QStringLiteral("Token generated for user: %1, expires: %2")
+                 .arg(username)
+                 .arg(expireMs > 0 ? QDateTime::fromMSecsSinceEpoch(expireMs).toString() : QStringLiteral("never")));
+    
+    if (outToken) *outToken = token;
+    return true;
+}
+
+bool CoreContext::methodRequiresAuth(const QString &method) const
+{
+    // 如果认证未启用，所有方法都不需要认证
+    if (!authConfig.enabled) {
+        return false;
+    }
+    
+    // 检查是否是公共方法
+    for (const auto &publicMethod : authConfig.publicMethods) {
+        if (publicMethod == method) {
+            return false;
+        }
+        // 支持通配符匹配，如 "rpc.*"
+        if (publicMethod.endsWith(QStringLiteral(".*"))) {
+            const QString prefix = publicMethod.left(publicMethod.length() - 1);
+            if (method.startsWith(prefix)) {
+                return false;
+            }
+        }
+    }
+    
+    return true;
+}
+
+bool CoreContext::isIpWhitelisted(const QString &ip) const
+{
+    // 如果认证未启用，不需要检查白名单
+    if (!authConfig.enabled) {
+        return true;
+    }
+    
+    // 检查是否在白名单中
+    for (const auto &whitelistedIp : authConfig.whitelist) {
+        if (whitelistedIp == ip) {
+            return true;
+        }
+        // 支持CIDR格式，如 "192.168.1.0/24"（简单实现）
+        // 这里只实现了精确匹配和"127.0.0.1"、"localhost"等常见情况
+        if (whitelistedIp == QStringLiteral("localhost") &&
+            (ip == QStringLiteral("127.0.0.1") || ip == QStringLiteral("::1"))) {
+            return true;
+        }
+    }
+    
+    return false;
 }
 
 }  // namespace core

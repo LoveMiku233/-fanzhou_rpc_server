@@ -134,6 +134,40 @@ bool CoreConfig::loadFromFile(const QString &path, QString *error)
             main.rpcPort =
                 static_cast<quint16>(mainObj[QStringLiteral("rpcPort")].toInt(main.rpcPort));
         }
+        
+        // 认证配置
+        if (mainObj.contains(QStringLiteral("auth")) &&
+            mainObj[QStringLiteral("auth")].isObject()) {
+            const auto authObj = mainObj[QStringLiteral("auth")].toObject();
+            main.auth.enabled = authObj.value(QStringLiteral("enabled")).toBool(false);
+            main.auth.secret = authObj.value(QStringLiteral("secret")).toString();
+            main.auth.tokenExpireSec = authObj.value(QStringLiteral("tokenExpireSec")).toInt(3600);
+            
+            if (authObj.contains(QStringLiteral("allowedTokens")) &&
+                authObj[QStringLiteral("allowedTokens")].isArray()) {
+                const auto arr = authObj[QStringLiteral("allowedTokens")].toArray();
+                for (const auto &val : arr) {
+                    main.auth.allowedTokens.append(val.toString());
+                }
+            }
+            
+            if (authObj.contains(QStringLiteral("whitelist")) &&
+                authObj[QStringLiteral("whitelist")].isArray()) {
+                const auto arr = authObj[QStringLiteral("whitelist")].toArray();
+                for (const auto &val : arr) {
+                    main.auth.whitelist.append(val.toString());
+                }
+            }
+            
+            if (authObj.contains(QStringLiteral("publicMethods")) &&
+                authObj[QStringLiteral("publicMethods")].isArray()) {
+                main.auth.publicMethods.clear();
+                const auto arr = authObj[QStringLiteral("publicMethods")].toArray();
+                for (const auto &val : arr) {
+                    main.auth.publicMethods.append(val.toString());
+                }
+            }
+        }
     }
 
     // 日志配置
@@ -345,6 +379,45 @@ bool CoreConfig::saveToFile(const QString &path, QString *error) const
     // 主配置
     QJsonObject mainObj;
     mainObj[QStringLiteral("rpcPort")] = static_cast<int>(main.rpcPort);
+    
+    // 认证配置
+    if (main.auth.enabled || !main.auth.secret.isEmpty() ||
+        !main.auth.allowedTokens.isEmpty() || !main.auth.whitelist.isEmpty()) {
+        QJsonObject authObj;
+        authObj[QStringLiteral("enabled")] = main.auth.enabled;
+        if (!main.auth.secret.isEmpty()) {
+            authObj[QStringLiteral("secret")] = main.auth.secret;
+        }
+        authObj[QStringLiteral("tokenExpireSec")] = main.auth.tokenExpireSec;
+        
+        if (!main.auth.allowedTokens.isEmpty()) {
+            QJsonArray arr;
+            for (const auto &token : main.auth.allowedTokens) {
+                arr.append(token);
+            }
+            authObj[QStringLiteral("allowedTokens")] = arr;
+        }
+        
+        if (!main.auth.whitelist.isEmpty()) {
+            QJsonArray arr;
+            for (const auto &ip : main.auth.whitelist) {
+                arr.append(ip);
+            }
+            authObj[QStringLiteral("whitelist")] = arr;
+        }
+        
+        // 只有在修改过时才保存publicMethods
+        if (main.auth.publicMethods != AuthConfig().publicMethods) {
+            QJsonArray arr;
+            for (const auto &method : main.auth.publicMethods) {
+                arr.append(method);
+            }
+            authObj[QStringLiteral("publicMethods")] = arr;
+        }
+        
+        mainObj[QStringLiteral("auth")] = authObj;
+    }
+    
     root[QStringLiteral("main")] = mainObj;
 
     // 日志配置

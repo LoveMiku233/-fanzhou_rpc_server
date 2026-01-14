@@ -169,6 +169,10 @@ public:
     // 服务器配置
     quint16 rpcPort = 12345;
 
+    // 认证配置
+    AuthConfig authConfig;
+    QHash<QString, qint64> validTokens;  ///< Token -> 过期时间戳(ms)，0表示永不过期
+
     // 配置文件路径（用于保存配置）
     QString configFilePath;
 
@@ -287,6 +291,39 @@ public:
     bool createSensorRelayStrategy(const SensorRelayStrategyConfig &config, QString *error = nullptr);
     bool deleteSensorRelayStrategy(int strategyId, QString *error = nullptr);
     bool setSensorRelayStrategyEnabled(int strategyId, bool enabled);
+
+    // 认证管理
+    /**
+     * @brief 验证token是否有效
+     * @param token 要验证的token
+     * @return 有效返回true
+     */
+    bool verifyToken(const QString &token) const;
+
+    /**
+     * @brief 生成新的认证token
+     * @param username 用户名（用于日志记录）
+     * @param password 密码
+     * @param outToken 输出生成的token
+     * @param error 错误信息输出
+     * @return 成功返回true
+     */
+    bool generateToken(const QString &username, const QString &password,
+                       QString *outToken, QString *error = nullptr);
+
+    /**
+     * @brief 检查方法是否需要认证
+     * @param method 方法名
+     * @return 需要认证返回true
+     */
+    bool methodRequiresAuth(const QString &method) const;
+
+    /**
+     * @brief 检查IP地址是否在白名单中
+     * @param ip IP地址
+     * @return 在白名单中返回true
+     */
+    bool isIpWhitelisted(const QString &ip) const;
 
 private:
     bool initSystemSettings();
