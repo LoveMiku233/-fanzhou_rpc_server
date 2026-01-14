@@ -1436,6 +1436,9 @@ bool CoreContext::reloadConfig(const QString &path, QString *error)
     // 更新屏幕配置
     screenConfig = config.screen;
     
+    // 更新云数据上传配置
+    cloudUploadConfig = config.cloudUpload;
+    
     LOG_INFO(kLogSource, QStringLiteral("配置已重新加载: %1").arg(targetPath));
     return true;
 }

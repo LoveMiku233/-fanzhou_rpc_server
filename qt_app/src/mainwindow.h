@@ -44,6 +44,8 @@ private slots:
     void onAutoRefreshTimeout();
     void onLogMessage(const QString &message, const QString &level = QStringLiteral("INFO"));
     void updateStatusBarTime();
+    void attemptAutoConnect();
+    void updateCloudStatus();
 
 private:
     void setupUi();
@@ -63,6 +65,7 @@ private:
     
     // 状态栏组件
     QLabel *connectionStatusLabel_;
+    QLabel *cloudStatusLabel_;
     QLabel *timeLabel_;
     QLabel *alertLabel_;
 
@@ -80,6 +83,7 @@ private:
     // 定时器
     QTimer *autoRefreshTimer_;
     QTimer *statusBarTimer_;
+    QTimer *cloudStatusTimer_;
 
     // 当前页面索引
     int currentPageIndex_;

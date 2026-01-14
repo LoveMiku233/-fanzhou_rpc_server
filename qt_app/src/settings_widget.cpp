@@ -331,6 +331,112 @@ void SettingsWidget::setupUi()
 
     tabWidget->addTab(mqttTab, QStringLiteral("云平台"));
 
+    // ==================== 云数据上传标签页 ====================
+    QWidget *uploadTab = new QWidget();
+    QVBoxLayout *uploadLayout = new QVBoxLayout(uploadTab);
+    uploadLayout->setContentsMargins(10, 10, 10, 10);
+    uploadLayout->setSpacing(10);
+
+    // 上传配置组
+    QGroupBox *uploadConfigBox = new QGroupBox(QStringLiteral("云数据上传配置"), uploadTab);
+    QFormLayout *uploadFormLayout = new QFormLayout(uploadConfigBox);
+    uploadFormLayout->setSpacing(8);
+    uploadFormLayout->setContentsMargins(10, 14, 10, 10);
+
+    uploadEnabledCheckBox_ = new QCheckBox(QStringLiteral("启用云数据上传"), uploadTab);
+    uploadEnabledCheckBox_->setMinimumHeight(28);
+    uploadFormLayout->addRow(uploadEnabledCheckBox_);
+
+    uploadModeComboBox_ = new QComboBox(uploadTab);
+    uploadModeComboBox_->addItem(QStringLiteral("变化上传"), QStringLiteral("change"));
+    uploadModeComboBox_->addItem(QStringLiteral("定时上传"), QStringLiteral("interval"));
+    uploadModeComboBox_->setMinimumHeight(32);
+    uploadFormLayout->addRow(QStringLiteral("上传模式:"), uploadModeComboBox_);
+
+    uploadIntervalSpinBox_ = new QSpinBox(uploadTab);
+    uploadIntervalSpinBox_->setRange(1, 3600);
+    uploadIntervalSpinBox_->setValue(60);
+    uploadIntervalSpinBox_->setSuffix(QStringLiteral(" 秒"));
+    uploadIntervalSpinBox_->setMinimumHeight(32);
+    uploadFormLayout->addRow(QStringLiteral("上传间隔:"), uploadIntervalSpinBox_);
+
+    // 上传属性选择组
+    QGroupBox *uploadPropsBox = new QGroupBox(QStringLiteral("上传数据属性"), uploadTab);
+    QVBoxLayout *propsLayout = new QVBoxLayout(uploadPropsBox);
+    propsLayout->setSpacing(6);
+    propsLayout->setContentsMargins(10, 14, 10, 10);
+
+    uploadChannelStatusCheckBox_ = new QCheckBox(QStringLiteral("通道状态（开/关/停止）"), uploadTab);
+    uploadChannelStatusCheckBox_->setChecked(true);
+    uploadChannelStatusCheckBox_->setMinimumHeight(28);
+    propsLayout->addWidget(uploadChannelStatusCheckBox_);
+
+    uploadPhaseLossCheckBox_ = new QCheckBox(QStringLiteral("缺相状态"), uploadTab);
+    uploadPhaseLossCheckBox_->setChecked(true);
+    uploadPhaseLossCheckBox_->setMinimumHeight(28);
+    propsLayout->addWidget(uploadPhaseLossCheckBox_);
+
+    uploadCurrentCheckBox_ = new QCheckBox(QStringLiteral("电流值"), uploadTab);
+    uploadCurrentCheckBox_->setChecked(true);
+    uploadCurrentCheckBox_->setMinimumHeight(28);
+    propsLayout->addWidget(uploadCurrentCheckBox_);
+
+    uploadOnlineStatusCheckBox_ = new QCheckBox(QStringLiteral("设备在线状态"), uploadTab);
+    uploadOnlineStatusCheckBox_->setChecked(true);
+    uploadOnlineStatusCheckBox_->setMinimumHeight(28);
+    propsLayout->addWidget(uploadOnlineStatusCheckBox_);
+
+    uploadLayout->addWidget(uploadConfigBox);
+    uploadLayout->addWidget(uploadPropsBox);
+
+    // 变化阈值设置组
+    QGroupBox *thresholdBox = new QGroupBox(QStringLiteral("变化检测阈值"), uploadTab);
+    QFormLayout *thresholdLayout = new QFormLayout(thresholdBox);
+    thresholdLayout->setSpacing(8);
+    thresholdLayout->setContentsMargins(10, 14, 10, 10);
+
+    currentThresholdSpinBox_ = new QDoubleSpinBox(uploadTab);
+    currentThresholdSpinBox_->setRange(0.0, 100.0);
+    currentThresholdSpinBox_->setValue(0.1);
+    currentThresholdSpinBox_->setSingleStep(0.1);
+    currentThresholdSpinBox_->setSuffix(QStringLiteral(" A"));
+    currentThresholdSpinBox_->setMinimumHeight(32);
+    thresholdLayout->addRow(QStringLiteral("电流阈值:"), currentThresholdSpinBox_);
+
+    statusChangeOnlyCheckBox_ = new QCheckBox(QStringLiteral("仅状态改变时上传"), uploadTab);
+    statusChangeOnlyCheckBox_->setChecked(true);
+    statusChangeOnlyCheckBox_->setMinimumHeight(28);
+    thresholdLayout->addRow(statusChangeOnlyCheckBox_);
+
+    minUploadIntervalSpinBox_ = new QSpinBox(uploadTab);
+    minUploadIntervalSpinBox_->setRange(0, 3600);
+    minUploadIntervalSpinBox_->setValue(5);
+    minUploadIntervalSpinBox_->setSuffix(QStringLiteral(" 秒"));
+    minUploadIntervalSpinBox_->setMinimumHeight(32);
+    thresholdLayout->addRow(QStringLiteral("最小上传间隔:"), minUploadIntervalSpinBox_);
+
+    uploadLayout->addWidget(thresholdBox);
+
+    // 按钮组
+    QHBoxLayout *uploadBtnLayout = new QHBoxLayout();
+    uploadBtnLayout->setSpacing(8);
+
+    QPushButton *getUploadConfigBtn = new QPushButton(QStringLiteral("获取配置"), uploadTab);
+    getUploadConfigBtn->setMinimumHeight(40);
+    connect(getUploadConfigBtn, &QPushButton::clicked, this, &SettingsWidget::onGetUploadConfig);
+    uploadBtnLayout->addWidget(getUploadConfigBtn);
+
+    QPushButton *setUploadConfigBtn = new QPushButton(QStringLiteral("保存配置"), uploadTab);
+    setUploadConfigBtn->setProperty("type", QStringLiteral("success"));
+    setUploadConfigBtn->setMinimumHeight(40);
+    connect(setUploadConfigBtn, &QPushButton::clicked, this, &SettingsWidget::onSetUploadConfig);
+    uploadBtnLayout->addWidget(setUploadConfigBtn);
+
+    uploadLayout->addLayout(uploadBtnLayout);
+    uploadLayout->addStretch();
+
+    tabWidget->addTab(uploadTab, QStringLiteral("数据上传"));
+
     // ==================== 系统控制标签页 ====================
     QWidget *systemTab = new QWidget();
     QVBoxLayout *sysLayout = new QVBoxLayout(systemTab);
@@ -906,5 +1012,90 @@ void SettingsWidget::onShutdownSystem()
     } else {
         QString error = result.toObject().value(QStringLiteral("error")).toString();
         QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("关机失败: %1").arg(error));
+    }
+}
+
+// ==================== 云数据上传槽函数 ====================
+
+void SettingsWidget::onGetUploadConfig()
+{
+    if (!rpcClient_ || !rpcClient_->isConnected()) {
+        QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先连接服务器"));
+        return;
+    }
+
+    QJsonValue result = rpcClient_->call(QStringLiteral("cloud.upload.get"));
+
+    if (result.isObject()) {
+        QJsonObject obj = result.toObject();
+        if (obj.value(QStringLiteral("ok")).toBool()) {
+            // 更新UI
+            uploadEnabledCheckBox_->setChecked(obj.value(QStringLiteral("enabled")).toBool());
+            
+            QString uploadMode = obj.value(QStringLiteral("uploadMode")).toString();
+            int modeIndex = uploadModeComboBox_->findData(uploadMode);
+            if (modeIndex >= 0) {
+                uploadModeComboBox_->setCurrentIndex(modeIndex);
+            }
+            
+            uploadIntervalSpinBox_->setValue(obj.value(QStringLiteral("intervalSec")).toInt());
+            uploadChannelStatusCheckBox_->setChecked(obj.value(QStringLiteral("uploadChannelStatus")).toBool());
+            uploadPhaseLossCheckBox_->setChecked(obj.value(QStringLiteral("uploadPhaseLoss")).toBool());
+            uploadCurrentCheckBox_->setChecked(obj.value(QStringLiteral("uploadCurrent")).toBool());
+            uploadOnlineStatusCheckBox_->setChecked(obj.value(QStringLiteral("uploadOnlineStatus")).toBool());
+            currentThresholdSpinBox_->setValue(obj.value(QStringLiteral("currentThreshold")).toDouble());
+            statusChangeOnlyCheckBox_->setChecked(obj.value(QStringLiteral("statusChangeOnly")).toBool());
+            minUploadIntervalSpinBox_->setValue(obj.value(QStringLiteral("minUploadIntervalSec")).toInt());
+            
+            emit logMessage(QStringLiteral("云数据上传配置获取成功"));
+            QMessageBox::information(this, QStringLiteral("成功"), QStringLiteral("配置获取成功"));
+        } else {
+            QString error = obj.value(QStringLiteral("error")).toString();
+            emit logMessage(QStringLiteral("获取配置失败: %1").arg(error), QStringLiteral("ERROR"));
+            QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("获取配置失败: %1").arg(error));
+        }
+    }
+}
+
+void SettingsWidget::onSetUploadConfig()
+{
+    if (!rpcClient_ || !rpcClient_->isConnected()) {
+        QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先连接服务器"));
+        return;
+    }
+
+    // 构建参数
+    QJsonObject params;
+    params[QStringLiteral("enabled")] = uploadEnabledCheckBox_->isChecked();
+    params[QStringLiteral("uploadMode")] = uploadModeComboBox_->currentData().toString();
+    params[QStringLiteral("intervalSec")] = uploadIntervalSpinBox_->value();
+    params[QStringLiteral("uploadChannelStatus")] = uploadChannelStatusCheckBox_->isChecked();
+    params[QStringLiteral("uploadPhaseLoss")] = uploadPhaseLossCheckBox_->isChecked();
+    params[QStringLiteral("uploadCurrent")] = uploadCurrentCheckBox_->isChecked();
+    params[QStringLiteral("uploadOnlineStatus")] = uploadOnlineStatusCheckBox_->isChecked();
+    params[QStringLiteral("currentThreshold")] = currentThresholdSpinBox_->value();
+    params[QStringLiteral("statusChangeOnly")] = statusChangeOnlyCheckBox_->isChecked();
+    params[QStringLiteral("minUploadIntervalSec")] = minUploadIntervalSpinBox_->value();
+
+    QJsonValue result = rpcClient_->call(QStringLiteral("cloud.upload.set"), params);
+
+    if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
+        emit logMessage(QStringLiteral("云数据上传配置已保存"));
+        
+        // 自动持久化配置到文件
+        QJsonValue saveResult = rpcClient_->call(QStringLiteral("config.save"));
+        if (saveResult.isObject() && saveResult.toObject().value(QStringLiteral("ok")).toBool()) {
+            emit logMessage(QStringLiteral("配置已持久化到文件"));
+            QMessageBox::information(this, QStringLiteral("成功"), 
+                QStringLiteral("配置保存成功并已持久化到文件！"));
+        } else {
+            emit logMessage(QStringLiteral("配置持久化失败，请手动调用 config.save"), QStringLiteral("WARN"));
+            QMessageBox::warning(this, QStringLiteral("警告"), 
+                QStringLiteral("配置保存成功，但持久化失败。\n请在连接设置中点击'保存配置到文件'按钮。"));
+        }
+    } else {
+        QString error = result.toObject().value(QStringLiteral("error")).toString();
+        emit logMessage(QStringLiteral("保存配置失败: %1").arg(error), QStringLiteral("ERROR"));
+        QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("保存配置失败: %1").arg(error));
     }
 }

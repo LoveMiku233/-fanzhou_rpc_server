@@ -137,6 +137,27 @@ struct ScreenConfig {
 };
 
 /**
+ * @brief 云数据上传配置
+ * 配置哪些数据上传到云端，以及上传模式
+ */
+struct CloudUploadConfig {
+    bool enabled = false;                    ///< 是否启用云数据上传
+    QString uploadMode = QStringLiteral("change");  ///< 上传模式: "interval"(定时上传) 或 "change"(变化上传)
+    int intervalSec = 60;                    ///< 定时上传间隔（秒），仅当uploadMode为interval时使用
+    
+    // 上传的数据属性
+    bool uploadChannelStatus = true;         ///< 是否上传通道状态（开/关/停止）
+    bool uploadPhaseLoss = true;             ///< 是否上传缺相状态
+    bool uploadCurrent = true;               ///< 是否上传电流值
+    bool uploadOnlineStatus = true;          ///< 是否上传设备在线状态
+    
+    // 变化上传的阈值设置（仅当uploadMode为change时使用）
+    double currentThreshold = 0.1;           ///< 电流变化阈值（安培），超过此值才上传
+    bool statusChangeOnly = true;            ///< 状态变化时才上传（如开关状态改变）
+    int minUploadIntervalSec = 5;           ///< 最小上传间隔（秒），防止频繁上传
+};
+
+/**
  * @brief 自动控制策略配置
  * 定时策略，按间隔时间或每日固定时间自动触发分组控制
  */
@@ -218,6 +239,7 @@ public:
     CanConfig can;
     LogConfig log;
     ScreenConfig screen;  ///< 屏幕配置
+    CloudUploadConfig cloudUpload;  ///< 云数据上传配置
     QList<DeviceConfig> devices;
     QList<DeviceGroupConfig> groups;
     QList<AutoStrategyConfig> strategies;

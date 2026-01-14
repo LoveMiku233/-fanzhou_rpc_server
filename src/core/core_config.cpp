@@ -290,6 +290,22 @@ bool CoreConfig::loadFromFile(const QString &path, QString *error)
         }
     }
 
+    // 云数据上传配置
+    if (root.contains(QStringLiteral("cloudUpload")) &&
+        root[QStringLiteral("cloudUpload")].isObject()) {
+        const auto uploadObj = root[QStringLiteral("cloudUpload")].toObject();
+        cloudUpload.enabled = uploadObj.value(QStringLiteral("enabled")).toBool(cloudUpload.enabled);
+        cloudUpload.uploadMode = uploadObj.value(QStringLiteral("uploadMode")).toString(cloudUpload.uploadMode);
+        cloudUpload.intervalSec = uploadObj.value(QStringLiteral("intervalSec")).toInt(cloudUpload.intervalSec);
+        cloudUpload.uploadChannelStatus = uploadObj.value(QStringLiteral("uploadChannelStatus")).toBool(cloudUpload.uploadChannelStatus);
+        cloudUpload.uploadPhaseLoss = uploadObj.value(QStringLiteral("uploadPhaseLoss")).toBool(cloudUpload.uploadPhaseLoss);
+        cloudUpload.uploadCurrent = uploadObj.value(QStringLiteral("uploadCurrent")).toBool(cloudUpload.uploadCurrent);
+        cloudUpload.uploadOnlineStatus = uploadObj.value(QStringLiteral("uploadOnlineStatus")).toBool(cloudUpload.uploadOnlineStatus);
+        cloudUpload.currentThreshold = uploadObj.value(QStringLiteral("currentThreshold")).toDouble(cloudUpload.currentThreshold);
+        cloudUpload.statusChangeOnly = uploadObj.value(QStringLiteral("statusChangeOnly")).toBool(cloudUpload.statusChangeOnly);
+        cloudUpload.minUploadIntervalSec = uploadObj.value(QStringLiteral("minUploadIntervalSec")).toInt(cloudUpload.minUploadIntervalSec);
+    }
+
     // 控制策略
     strategies.clear();
     if (root.contains(QStringLiteral("strategies")) &&
@@ -491,6 +507,20 @@ bool CoreConfig::saveToFile(const QString &path, QString *error) const
     screenObj[QStringLiteral("sleepTimeoutSec")] = screen.sleepTimeoutSec;
     screenObj[QStringLiteral("orientation")] = screen.orientation;
     root[QStringLiteral("screen")] = screenObj;
+
+    // 云数据上传配置
+    QJsonObject cloudUploadObj;
+    cloudUploadObj[QStringLiteral("enabled")] = cloudUpload.enabled;
+    cloudUploadObj[QStringLiteral("uploadMode")] = cloudUpload.uploadMode;
+    cloudUploadObj[QStringLiteral("intervalSec")] = cloudUpload.intervalSec;
+    cloudUploadObj[QStringLiteral("uploadChannelStatus")] = cloudUpload.uploadChannelStatus;
+    cloudUploadObj[QStringLiteral("uploadPhaseLoss")] = cloudUpload.uploadPhaseLoss;
+    cloudUploadObj[QStringLiteral("uploadCurrent")] = cloudUpload.uploadCurrent;
+    cloudUploadObj[QStringLiteral("uploadOnlineStatus")] = cloudUpload.uploadOnlineStatus;
+    cloudUploadObj[QStringLiteral("currentThreshold")] = cloudUpload.currentThreshold;
+    cloudUploadObj[QStringLiteral("statusChangeOnly")] = cloudUpload.statusChangeOnly;
+    cloudUploadObj[QStringLiteral("minUploadIntervalSec")] = cloudUpload.minUploadIntervalSec;
+    root[QStringLiteral("cloudUpload")] = cloudUploadObj;
 
     // 控制策略
     QJsonArray stratArr;

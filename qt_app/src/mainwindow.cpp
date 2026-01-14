@@ -19,6 +19,10 @@
 #include <QScroller>
 #include <QSettings>
 #include <QFrame>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QJsonValue>
+#include <QJsonDocument>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -37,6 +41,7 @@ MainWindow::MainWindow(QWidget *parent)
     , rpcClient_(new RpcClient(this))
     , autoRefreshTimer_(new QTimer(this))
     , statusBarTimer_(new QTimer(this))
+    , cloudStatusTimer_(new QTimer(this))
     , currentPageIndex_(0)
 {
     setupUi();
@@ -48,12 +53,20 @@ MainWindow::MainWindow(QWidget *parent)
     connect(statusBarTimer_, &QTimer::timeout, this, &MainWindow::updateStatusBarTime);
     statusBarTimer_->start(1000);
     updateStatusBarTime();
+    
+    // 云状态检查定时器
+    connect(cloudStatusTimer_, &QTimer::timeout, this, &MainWindow::updateCloudStatus);
+    cloudStatusTimer_->start(5000);  // 每5秒检查一次云连接状态
+    
+    // 延迟执行自动连接（等待UI初始化完成）
+    QTimer::singleShot(500, this, &MainWindow::attemptAutoConnect);
 }
 
 MainWindow::~MainWindow()
 {
     autoRefreshTimer_->stop();
     statusBarTimer_->stop();
+    cloudStatusTimer_->stop();
 }
 
 void MainWindow::setupUi()
@@ -84,6 +97,19 @@ void MainWindow::setupStatusBar()
     sep1->setFrameShape(QFrame::VLine);
     sep1->setStyleSheet(QStringLiteral("color: #7f8c8d;"));
     statusBar->addWidget(sep1);
+    
+    // 云连接状态
+    cloudStatusLabel_ = new QLabel(QStringLiteral("[云] 未连接"));
+    cloudStatusLabel_->setStyleSheet(QStringLiteral(
+        "color: #95a5a6; padding: 2px 8px;"));
+    cloudStatusLabel_->setToolTip(QStringLiteral("云/MQTT连接状态"));
+    statusBar->addWidget(cloudStatusLabel_);
+
+    // 分隔符
+    QFrame *sep1a = new QFrame();
+    sep1a->setFrameShape(QFrame::VLine);
+    sep1a->setStyleSheet(QStringLiteral("color: #7f8c8d;"));
+    statusBar->addWidget(sep1a);
 
     // 时间
     timeLabel_ = new QLabel(QStringLiteral("--:--:--"));
@@ -385,4 +411,87 @@ void MainWindow::onLogMessage(const QString &message, const QString &level)
 void MainWindow::updateStatusBarTime()
 {
     timeLabel_->setText(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss")));
+}
+
+void MainWindow::attemptAutoConnect()
+{
+    QSettings settings;
+    bool autoConnect = settings.value(QStringLiteral("settings/autoConnect"), false).toBool();
+    
+    if (!autoConnect) {
+        onLogMessage(QStringLiteral("自动连接未启用"));
+        return;
+    }
+    
+    QString host = settings.value(QStringLiteral("connection/host"), QStringLiteral("127.0.0.1")).toString();
+    quint16 port = static_cast<quint16>(settings.value(QStringLiteral("connection/port"), 12345).toInt());
+    
+    onLogMessage(QStringLiteral("正在自动连接到 %1:%2...").arg(host).arg(port));
+    
+    rpcClient_->setEndpoint(host, port);
+    
+    if (rpcClient_->connectToServer(3000)) {
+        onLogMessage(QStringLiteral("自动连接成功"));
+        
+        // 尝试ping服务器验证连接
+        QJsonValue result = rpcClient_->call(QStringLiteral("rpc.ping"), QJsonObject(), 1000);
+        if (!result.isUndefined()) {
+            onLogMessage(QStringLiteral("服务器响应正常"));
+        }
+    } else {
+        onLogMessage(QStringLiteral("自动连接失败，请检查服务器是否运行"), QStringLiteral("WARN"));
+    }
+}
+
+void MainWindow::updateCloudStatus()
+{
+    if (!rpcClient_->isConnected()) {
+        cloudStatusLabel_->setText(QStringLiteral("[云] 未连接"));
+        cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #95a5a6; padding: 2px 8px;"));
+        return;
+    }
+    
+    // 调用RPC获取MQTT通道状态
+    QJsonValue result = rpcClient_->call(QStringLiteral("mqtt.channels.list"), QJsonObject(), 1000);
+    
+    if (result.isObject()) {
+        QJsonObject resultObj = result.toObject();
+        
+        // 检查是否成功
+        if (!resultObj.value(QStringLiteral("ok")).toBool()) {
+            cloudStatusLabel_->setText(QStringLiteral("[云] 未知"));
+            cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #95a5a6; padding: 2px 8px;"));
+            return;
+        }
+        
+        QJsonArray channels = resultObj.value(QStringLiteral("channels")).toArray();
+        
+        int totalChannels = channels.size();
+        int connectedChannels = 0;
+        
+        for (const QJsonValue &channelVal : channels) {
+            QJsonObject channel = channelVal.toObject();
+            if (channel.value(QStringLiteral("connected")).toBool()) {
+                connectedChannels++;
+            }
+        }
+        
+        if (totalChannels == 0) {
+            cloudStatusLabel_->setText(QStringLiteral("[云] 未配置"));
+            cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #95a5a6; padding: 2px 8px;"));
+        } else if (connectedChannels == 0) {
+            cloudStatusLabel_->setText(QStringLiteral("[云] 断开 (0/%1)").arg(totalChannels));
+            cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #e67e22; padding: 2px 8px;"));
+        } else if (connectedChannels == totalChannels) {
+            cloudStatusLabel_->setText(QStringLiteral("[云] 已连接 (%1)").arg(totalChannels));
+            cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #27ae60; font-weight: bold; padding: 2px 8px;"));
+        } else {
+            cloudStatusLabel_->setText(QStringLiteral("[云] 部分连接 (%1/%2)").arg(connectedChannels).arg(totalChannels));
+            cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #f39c12; padding: 2px 8px;"));
+        }
+    } else {
+        // RPC调用失败或方法不存在
+        cloudStatusLabel_->setText(QStringLiteral("[云] 未知"));
+        cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #95a5a6; padding: 2px 8px;"));
+    }
 }
