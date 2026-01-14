@@ -292,7 +292,10 @@
             // 使用 addEventListener 绑定表单提交事件（更可靠，尤其在 Tauri 环境中）
             const form = document.getElementById('loginForm');
             if (form) {
-                form.addEventListener('submit', handleSubmit);
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    handleSubmit(e);
+                });
             }
             
             // 绑定按钮点击事件

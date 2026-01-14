@@ -321,39 +321,39 @@ document.addEventListener('DOMContentLoaded', function() {
  * 初始化按钮点击处理（Tauri 环境下）
  * 在 Tauri 中，某些情况下 onclick 属性可能不会正常工作
  * 使用 addEventListener 可以确保事件被正确处理
+ * 
+ * @description 为导航按钮、连接按钮和代理按钮添加事件监听器
+ *              解决 Tauri 环境下 inline onclick 事件可能不触发的问题
  */
 function initButtonClickHandlers() {
+    /**
+     * 为按钮绑定点击事件的辅助函数
+     * @param {HTMLElement} element - 按钮元素
+     * @param {Function} handler - 事件处理函数
+     */
+    function bindClickHandler(element, handler) {
+        if (element) {
+            element.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                handler();
+            });
+        }
+    }
+    
     // 为导航按钮添加事件监听
     document.querySelectorAll('.nav-btn').forEach(function(btn) {
         const page = btn.getAttribute('data-page');
         if (page) {
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                showPage(page);
-            });
+            bindClickHandler(btn, function() { showPage(page); });
         }
     });
     
     // 为连接按钮添加事件监听
-    const connectBtn = document.getElementById('connectBtn');
-    if (connectBtn) {
-        connectBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            toggleConnection();
-        });
-    }
+    bindClickHandler(document.getElementById('connectBtn'), toggleConnection);
     
     // 为 websocat 代理按钮添加事件监听
-    const websocatBtn = document.getElementById('websocatToggleBtn');
-    if (websocatBtn) {
-        websocatBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            toggleWebsocatProxy();
-        });
-    }
+    bindClickHandler(document.getElementById('websocatToggleBtn'), toggleWebsocatProxy);
     
     console.log('Tauri 按钮点击处理已初始化');
 }
