@@ -9,6 +9,7 @@
 #include <QWidget>
 #include <QLineEdit>
 #include <QSpinBox>
+#include <QDoubleSpinBox>
 #include <QPushButton>
 #include <QLabel>
 #include <QCheckBox>
@@ -58,6 +59,10 @@ private slots:
     void onSetMqttConfig();
     void onTestMqtt();
     
+    // 云数据上传槽函数
+    void onGetUploadConfig();
+    void onSetUploadConfig();
+    
     // 系统控制槽函数
     void onGetBrightness();
     void onSetBrightness();
@@ -102,6 +107,18 @@ private:
     QLineEdit *mqttTopicEdit_;
     QCheckBox *mqttEnabledCheckBox_;
     QLabel *mqttStatusLabel_;
+    
+    // 云数据上传组件
+    QCheckBox *uploadEnabledCheckBox_;
+    QComboBox *uploadModeComboBox_;
+    QSpinBox *uploadIntervalSpinBox_;
+    QCheckBox *uploadChannelStatusCheckBox_;
+    QCheckBox *uploadPhaseLossCheckBox_;
+    QCheckBox *uploadCurrentCheckBox_;
+    QCheckBox *uploadOnlineStatusCheckBox_;
+    QDoubleSpinBox *currentThresholdSpinBox_;
+    QCheckBox *statusChangeOnlyCheckBox_;
+    QSpinBox *minUploadIntervalSpinBox_;
     
     // 系统控制组件
     QSlider *brightnessSlider_;
