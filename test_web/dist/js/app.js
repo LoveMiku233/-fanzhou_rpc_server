@@ -290,7 +290,11 @@ async function toggleWebsocatProxy() {
         await stopWebsocatProxy();
     } else {
         // 获取目标RPC服务器地址和端口
-        const tcpHost = document.getElementById('serverHost').value.trim() || '127.0.0.1';
+        const tcpHost = document.getElementById('serverHost').value.trim();
+        if (!tcpHost) {
+            log('error', '请先输入RPC服务器地址');
+            return;
+        }
         const tcpPort = parseInt(document.getElementById('rpcPort').value) || 12345;
         const wsPort = parseInt(document.getElementById('serverPort').value) || 12346;
         
@@ -559,6 +563,8 @@ function toggleConnection() {
 function connect() {
     const tcpHost = document.getElementById('serverHost').value.trim();
     const wsPort = parseInt(document.getElementById('serverPort').value) || 12346;
+    const rpcPortEl = document.getElementById('rpcPort');
+    const rpcPort = rpcPortEl ? (parseInt(rpcPortEl.value) || 12345) : 12345;
     
     if (!tcpHost) {
         log('error', '请输入RPC服务器地址');
@@ -574,7 +580,7 @@ function connect() {
     const wsUrl = `ws://${wsHost}:${wsPort}`;
     
     log('info', `正在通过本地代理连接到 ${wsUrl}...`);
-    log('info', `目标RPC服务器: ${tcpHost}:${document.getElementById('rpcPort').value || 12345}`);
+    log('info', `目标RPC服务器: ${tcpHost}:${rpcPort}`);
     
     try {
         ws = new WebSocket(wsUrl);
