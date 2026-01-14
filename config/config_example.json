@@ -1,6 +1,14 @@
 {
   "main": {
-    "rpcPort": 12345
+    "rpcPort": 12345,
+    "auth": {
+      "enabled": false,
+      "secret": "your_secret_password_here",
+      "tokenExpireSec": 3600,
+      "allowedTokens": [],
+      "whitelist": ["127.0.0.1", "::1", "localhost"],
+      "publicMethods": ["rpc.ping", "rpc.list", "auth.login", "auth.verify", "auth.status"]
+    }
   },
   "log": {
     "logToConsole": true,

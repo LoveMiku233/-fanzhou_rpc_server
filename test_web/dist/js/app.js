@@ -128,6 +128,34 @@ function loadLaunchSettings() {
  * ======================================================== */
 
 /**
+ * 获取Tauri invoke函数
+ * 兼容Tauri v1.x和v2.x的不同API结构
+ * @returns {function|null} invoke函数，如果不可用返回null
+ */
+function getTauriInvoke() {
+    if (!window.__TAURI__) {
+        return null;
+    }
+    
+    // Tauri v2.x: invoke is in window.__TAURI__.core
+    if (window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
+        return window.__TAURI__.core.invoke;
+    }
+    
+    // Tauri v1.x: invoke is in window.__TAURI__.tauri
+    if (window.__TAURI__.tauri && typeof window.__TAURI__.tauri.invoke === 'function') {
+        return window.__TAURI__.tauri.invoke;
+    }
+    
+    // Tauri v1.x alternative: invoke might be directly on window.__TAURI__
+    if (typeof window.__TAURI__.invoke === 'function') {
+        return window.__TAURI__.invoke;
+    }
+    
+    return null;
+}
+
+/**
  * 启动websocat代理（仅在Tauri环境中可用）
  * @param {number} wsPort - WebSocket监听端口（默认12346）
  * @param {string} tcpHost - TCP目标地址（默认127.0.0.1）
@@ -141,8 +169,11 @@ async function startWebsocatProxy(wsPort = 12346, tcpHost = '127.0.0.1', tcpPort
     }
     
     try {
-        // Tauri v2.x API: invoke is accessed from window.__TAURI__.core
-        const { invoke } = window.__TAURI__.core;
+        const invoke = getTauriInvoke();
+        if (!invoke) {
+            log('error', '启动websocat失败: Tauri invoke API不可用，请检查Tauri版本兼容性');
+            return null;
+        }
         const pid = await invoke('start_websocat', {
             wsPort: wsPort,
             tcpHost: tcpHost,
@@ -169,8 +200,11 @@ async function stopWebsocatProxy() {
     }
     
     try {
-        // Tauri v2.x API: invoke is accessed from window.__TAURI__.core
-        const { invoke } = window.__TAURI__.core;
+        const invoke = getTauriInvoke();
+        if (!invoke) {
+            log('error', '停止websocat失败: Tauri invoke API不可用');
+            return false;
+        }
         await invoke('stop_websocat');
         websocatRunning = false;
         log('info', '✅ websocat代理已停止');
@@ -190,8 +224,11 @@ async function checkWebsocatStatus() {
     if (!isTauri) return false;
     
     try {
-        // Tauri v2.x API: invoke is accessed from window.__TAURI__.core
-        const { invoke } = window.__TAURI__.core;
+        const invoke = getTauriInvoke();
+        if (!invoke) {
+            console.error('检查websocat状态失败: Tauri invoke API不可用');
+            return false;
+        }
         const running = await invoke('is_websocat_running');
         websocatRunning = running;
         updateWebsocatStatus(running);
@@ -210,8 +247,11 @@ async function getWebsocatPid() {
     if (!isTauri) return null;
     
     try {
-        // Tauri v2.x API: invoke is accessed from window.__TAURI__.core
-        const { invoke } = window.__TAURI__.core;
+        const invoke = getTauriInvoke();
+        if (!invoke) {
+            console.error('获取websocat PID失败: Tauri invoke API不可用');
+            return null;
+        }
         return await invoke('get_websocat_pid');
     } catch (error) {
         console.error('获取websocat PID失败:', error);

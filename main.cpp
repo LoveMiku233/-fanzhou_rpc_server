@@ -122,12 +122,21 @@ int main(int argc, char *argv[])
 
     // 5. 启动JSON-RPC服务器
     fanzhou::rpc::JsonRpcServer server(&dispatcher);
+    server.setCoreContext(&context);  // 设置核心上下文用于认证
     const quint16 port = context.rpcPort;
     LOG_INFO(kLogSource, QStringLiteral("Starting JSON-RPC server on port %1...").arg(port));
 
     if (!server.listen(QHostAddress::Any, port)) {
         LOG_CRITICAL(kLogSource, QStringLiteral("Listen failed: %1").arg(server.errorString()));
         return 1;
+    }
+
+    // 6. 记录认证状态
+    if (context.authConfig.enabled) {
+        LOG_INFO(kLogSource, QStringLiteral("Authentication enabled, whitelist: %1 IPs")
+                     .arg(context.authConfig.whitelist.size()));
+    } else {
+        LOG_INFO(kLogSource, QStringLiteral("Authentication disabled (open access)"));
     }
 
     LOG_INFO(kLogSource,

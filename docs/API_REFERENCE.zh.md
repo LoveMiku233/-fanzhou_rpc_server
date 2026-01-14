@@ -670,6 +670,90 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 | `rpc.list` | 无 | `["method1", "method2", ...]` | 列出所有方法 |
 | `echo` | 任意对象 | 原样返回 | 回显测试 |
 
+### 认证方法
+
+RPC服务器支持可选的Token认证机制，用于提高安全防护等级。
+
+**认证配置**：
+在配置文件的 `main.auth` 节点中配置：
+
+```json
+{
+  "main": {
+    "rpcPort": 12345,
+    "auth": {
+      "enabled": true,
+      "secret": "your_secret_password",
+      "tokenExpireSec": 3600,
+      "allowedTokens": ["static_token_1"],
+      "whitelist": ["127.0.0.1", "::1"],
+      "publicMethods": ["rpc.ping", "rpc.list", "auth.login", "auth.verify", "auth.status"]
+    }
+  }
+}
+```
+
+**认证方式**：
+1. **IP白名单**：在 `whitelist` 中的IP地址不需要认证
+2. **静态Token**：在 `allowedTokens` 中预设的Token
+3. **动态Token**：通过 `auth.login` 方法获取
+
+**使用Token**：
+在请求中添加 `auth_token` 字段：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "relay.control",
+  "params": {
+    "node": 1,
+    "ch": 0,
+    "action": "fwd",
+    "auth_token": "your_token_here"
+  }
+}
+```
+
+或在请求顶层添加：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "relay.control",
+  "auth_token": "your_token_here",
+  "params": {"node": 1, "ch": 0, "action": "fwd"}
+}
+```
+
+| 方法名 | 参数 | 返回值 | 说明 |
+|--------|------|--------|------|
+| `auth.status` | 无 | `{ok, enabled, tokenExpireSec, publicMethodsCount, whitelistCount}` | 获取认证状态（公开方法） |
+| `auth.login` | `{username, password}` | `{ok, token, expiresIn}` | 登录获取Token（公开方法） |
+| `auth.verify` | `{token}` | `{ok, valid}` | 验证Token是否有效（公开方法） |
+| `auth.configure` | `{enabled?, secret?, tokenExpireSec?}` | `{ok}` | 配置认证设置 |
+| `auth.addToken` | `{token}` | `{ok, totalTokens}` | 添加允许的静态Token |
+| `auth.removeToken` | `{token}` | `{ok, totalTokens}` | 移除静态Token |
+| `auth.addWhitelist` | `{ip}` | `{ok, totalWhitelist}` | 添加IP白名单 |
+| `auth.removeWhitelist` | `{ip}` | `{ok, totalWhitelist}` | 移除IP白名单 |
+
+**使用示例**：
+
+```bash
+# 1. 检查认证状态
+{"jsonrpc":"2.0","id":1,"method":"auth.status","params":{}}
+
+# 2. 登录获取Token
+{"jsonrpc":"2.0","id":2,"method":"auth.login","params":{"username":"admin","password":"your_secret"}}
+
+# 3. 使用Token调用需要认证的方法
+{"jsonrpc":"2.0","id":3,"method":"relay.control","params":{"node":1,"ch":0,"action":"fwd","auth_token":"your_token"}}
+
+# 4. 验证Token
+{"jsonrpc":"2.0","id":4,"method":"auth.verify","params":{"token":"your_token"}}
+```
+
 ### 系统方法
 
 | 方法名 | 参数 | 返回值 | 说明 |
@@ -986,6 +1070,7 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 
 | 错误码 | 说明 |
 |--------|------|
+| -32001 | 认证失败（需要认证或Token无效） |
 | -60000 | 功能未实现 |
 | -60001 | 服务器忙 |
 | -60002 | 操作超时 |

@@ -61,10 +61,28 @@ struct LogConfig {
 };
 
 /**
+ * @brief 认证配置
+ */
+struct AuthConfig {
+    bool enabled = false;                ///< 是否启用认证
+    QString secret;                       ///< 认证密钥（用于生成token）
+    QStringList allowedTokens;           ///< 预设的有效token列表
+    int tokenExpireSec = 3600;           ///< Token过期时间（秒），0表示永不过期
+    QStringList whitelist;               ///< IP白名单，在此列表中的IP不需要认证
+    QStringList publicMethods = {        ///< 无需认证即可访问的公共方法
+        QStringLiteral("rpc.ping"),
+        QStringLiteral("rpc.list"),
+        QStringLiteral("auth.login"),
+        QStringLiteral("auth.verify")
+    };
+};
+
+/**
  * @brief 主配置
  */
 struct MainConfig {
     quint16 rpcPort = 12345;
+    AuthConfig auth;                     ///< 认证配置
 };
 
 /**

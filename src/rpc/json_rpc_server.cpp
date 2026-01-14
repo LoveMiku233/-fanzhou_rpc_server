@@ -5,6 +5,7 @@
 
 #include "json_rpc_server.h"
 #include "json_rpc_dispatcher.h"
+#include "core/core_context.h"
 #include "utils/logger.h"
 
 #include <QJsonDocument>
@@ -23,6 +24,14 @@ JsonRpcServer::JsonRpcServer(JsonRpcDispatcher *dispatcher, QObject *parent)
 {
     connect(this, &QTcpServer::newConnection, this, &JsonRpcServer::onNewConnection);
     LOG_DEBUG(kLogSource, QStringLiteral("RPC server initialized"));
+}
+
+void JsonRpcServer::setCoreContext(core::CoreContext *context)
+{
+    context_ = context;
+    if (context_ && context_->authConfig.enabled) {
+        LOG_INFO(kLogSource, QStringLiteral("Authentication enabled for RPC server"));
+    }
 }
 
 void JsonRpcServer::onNewConnection()
@@ -49,6 +58,57 @@ void JsonRpcServer::onReadyRead()
 
     buffers_[socket].append(socket->readAll());
     processLines(socket);
+}
+
+bool JsonRpcServer::checkAuth(const QJsonObject &request, QTcpSocket *socket) const
+{
+    // 如果没有设置context或认证未启用，跳过认证检查
+    if (!context_ || !context_->authConfig.enabled) {
+        return true;
+    }
+    
+    // 获取方法名
+    const QString method = request.value(QStringLiteral("method")).toString();
+    
+    // 检查是否是公共方法（不需要认证）
+    if (!context_->methodRequiresAuth(method)) {
+        return true;
+    }
+    
+    // 检查IP白名单
+    if (socket) {
+        const QString clientIp = socket->peerAddress().toString();
+        if (context_->isIpWhitelisted(clientIp)) {
+            return true;
+        }
+    }
+    
+    // 检查token认证
+    // Token可以通过以下方式提供：
+    // 1. 在请求的params中包含 "auth_token" 字段
+    // 2. 在请求的顶层包含 "auth_token" 字段
+    QString token;
+    
+    // 检查params中的token
+    if (request.contains(QStringLiteral("params")) && request.value(QStringLiteral("params")).isObject()) {
+        const auto params = request.value(QStringLiteral("params")).toObject();
+        if (params.contains(QStringLiteral("auth_token"))) {
+            token = params.value(QStringLiteral("auth_token")).toString();
+        }
+    }
+    
+    // 检查顶层的token
+    if (token.isEmpty() && request.contains(QStringLiteral("auth_token"))) {
+        token = request.value(QStringLiteral("auth_token")).toString();
+    }
+    
+    // 检查socket是否已经通过认证（会话级别的认证）
+    if (token.isEmpty() && socket && authenticatedTokens_.contains(socket)) {
+        token = authenticatedTokens_.value(socket);
+    }
+    
+    // 验证token
+    return context_->verifyToken(token);
 }
 
 void JsonRpcServer::processLines(QTcpSocket *socket)
@@ -97,6 +157,25 @@ void JsonRpcServer::processLines(QTcpSocket *socket)
                                           : QString::number(reqId.toInt()))
                       .arg(method));
 
+        // 检查认证
+        if (!checkAuth(request, socket)) {
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("Authentication failed for method: %1 from %2")
+                            .arg(method)
+                            .arg(socket->peerAddress().toString()));
+            
+            QJsonObject response{
+                {QStringLiteral("jsonrpc"), QStringLiteral("2.0")},
+                {QStringLiteral("id"), reqId.isUndefined() ? QJsonValue(QJsonValue::Null) : reqId},
+                {QStringLiteral("error"), QJsonObject{
+                    {QStringLiteral("code"), -32001},
+                    {QStringLiteral("message"), QStringLiteral("Authentication required")}
+                }}
+            };
+            socket->write(toLine(response));
+            continue;
+        }
+
         const QJsonObject response = dispatcher_->handle(request);
         if (!response.isEmpty()) {
             socket->write(toLine(response));
@@ -115,6 +194,20 @@ void JsonRpcServer::processLines(QTcpSocket *socket)
                           QStringLiteral("RPC success response [id=%1]")
                               .arg(reqId.isNull() ? QStringLiteral("null")
                                                   : QString::number(reqId.toInt())));
+                
+                // 如果是auth.login方法成功，保存token到会话
+                if (method == QStringLiteral("auth.login") && 
+                    response.contains(QStringLiteral("result"))) {
+                    const auto result = response.value(QStringLiteral("result")).toObject();
+                    if (result.value(QStringLiteral("ok")).toBool() && 
+                        result.contains(QStringLiteral("token"))) {
+                        const QString token = result.value(QStringLiteral("token")).toString();
+                        authenticatedTokens_.insert(socket, token);
+                        LOG_DEBUG(kLogSource,
+                                  QStringLiteral("Session authenticated for %1")
+                                      .arg(socket->peerAddress().toString()));
+                    }
+                }
             }
         }
     }
@@ -138,6 +231,7 @@ void JsonRpcServer::onDisconnected()
                  .arg(socket->peerPort()));
 
     buffers_.remove(socket);
+    authenticatedTokens_.remove(socket);
     socket->deleteLater();
 }
 
