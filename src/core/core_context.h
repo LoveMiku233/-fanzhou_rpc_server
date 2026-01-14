@@ -160,6 +160,9 @@ public:
 
     // 屏幕配置
     ScreenConfig screenConfig;
+    
+    // 云数据上传配置
+    CloudUploadConfig cloudUploadConfig;
 
     // CAN配置
     QString canInterface = QStringLiteral("can0");

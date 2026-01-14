@@ -1872,6 +1872,113 @@ void RpcRegistry::registerScreen()
 
         return QJsonObject{{kKeyOk, true}};
     });
+    
+    // ==================== 云数据上传配置 ====================
+    
+    // 获取云数据上传配置
+    dispatcher_->registerMethod(QStringLiteral("cloud.upload.get"),
+                                 [this](const QJsonObject &) {
+        const auto &config = context_->cloudUploadConfig;
+        return QJsonObject{
+            {kKeyOk, true},
+            {kKeyEnabled, config.enabled},
+            {QStringLiteral("uploadMode"), config.uploadMode},
+            {QStringLiteral("intervalSec"), config.intervalSec},
+            {QStringLiteral("uploadChannelStatus"), config.uploadChannelStatus},
+            {QStringLiteral("uploadPhaseLoss"), config.uploadPhaseLoss},
+            {QStringLiteral("uploadCurrent"), config.uploadCurrent},
+            {QStringLiteral("uploadOnlineStatus"), config.uploadOnlineStatus},
+            {QStringLiteral("currentThreshold"), config.currentThreshold},
+            {QStringLiteral("statusChangeOnly"), config.statusChangeOnly},
+            {QStringLiteral("minUploadIntervalSec"), config.minUploadIntervalSec}
+        };
+    });
+    
+    // 设置云数据上传配置
+    dispatcher_->registerMethod(QStringLiteral("cloud.upload.set"),
+                                 [this](const QJsonObject &params) {
+        auto &config = context_->cloudUploadConfig;
+        
+        // 更新提供的参数
+        if (params.contains(kKeyEnabled)) {
+            bool enabled = true;
+            if (!rpc::RpcHelpers::getBool(params, "enabled", enabled, true))
+                return rpc::RpcHelpers::err(rpc::RpcError::BadParameterType, QStringLiteral("invalid enabled"));
+            config.enabled = enabled;
+        }
+        if (params.contains(QStringLiteral("uploadMode"))) {
+            QString mode;
+            if (!rpc::RpcHelpers::getString(params, "uploadMode", mode))
+                return rpc::RpcHelpers::err(rpc::RpcError::BadParameterType, QStringLiteral("invalid uploadMode"));
+            if (mode != QStringLiteral("interval") && mode != QStringLiteral("change")) {
+                return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, 
+                    QStringLiteral("uploadMode must be 'interval' or 'change'"));
+            }
+            config.uploadMode = mode;
+        }
+        if (params.contains(QStringLiteral("intervalSec"))) {
+            qint32 interval = 0;
+            if (!rpc::RpcHelpers::getI32(params, "intervalSec", interval))
+                return rpc::RpcHelpers::err(rpc::RpcError::BadParameterType, QStringLiteral("invalid intervalSec"));
+            if (interval < 1) {
+                return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, 
+                    QStringLiteral("intervalSec must be >= 1"));
+            }
+            config.intervalSec = interval;
+        }
+        if (params.contains(QStringLiteral("uploadChannelStatus"))) {
+            bool val = true;
+            if (!rpc::RpcHelpers::getBool(params, "uploadChannelStatus", val, true))
+                return rpc::RpcHelpers::err(rpc::RpcError::BadParameterType, QStringLiteral("invalid uploadChannelStatus"));
+            config.uploadChannelStatus = val;
+        }
+        if (params.contains(QStringLiteral("uploadPhaseLoss"))) {
+            bool val = true;
+            if (!rpc::RpcHelpers::getBool(params, "uploadPhaseLoss", val, true))
+                return rpc::RpcHelpers::err(rpc::RpcError::BadParameterType, QStringLiteral("invalid uploadPhaseLoss"));
+            config.uploadPhaseLoss = val;
+        }
+        if (params.contains(QStringLiteral("uploadCurrent"))) {
+            bool val = true;
+            if (!rpc::RpcHelpers::getBool(params, "uploadCurrent", val, true))
+                return rpc::RpcHelpers::err(rpc::RpcError::BadParameterType, QStringLiteral("invalid uploadCurrent"));
+            config.uploadCurrent = val;
+        }
+        if (params.contains(QStringLiteral("uploadOnlineStatus"))) {
+            bool val = true;
+            if (!rpc::RpcHelpers::getBool(params, "uploadOnlineStatus", val, true))
+                return rpc::RpcHelpers::err(rpc::RpcError::BadParameterType, QStringLiteral("invalid uploadOnlineStatus"));
+            config.uploadOnlineStatus = val;
+        }
+        if (params.contains(QStringLiteral("currentThreshold"))) {
+            double threshold = 0.0;
+            if (!rpc::RpcHelpers::getDouble(params, "currentThreshold", threshold))
+                return rpc::RpcHelpers::err(rpc::RpcError::BadParameterType, QStringLiteral("invalid currentThreshold"));
+            if (threshold < 0.0) {
+                return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, 
+                    QStringLiteral("currentThreshold must be >= 0"));
+            }
+            config.currentThreshold = threshold;
+        }
+        if (params.contains(QStringLiteral("statusChangeOnly"))) {
+            bool val = true;
+            if (!rpc::RpcHelpers::getBool(params, "statusChangeOnly", val, true))
+                return rpc::RpcHelpers::err(rpc::RpcError::BadParameterType, QStringLiteral("invalid statusChangeOnly"));
+            config.statusChangeOnly = val;
+        }
+        if (params.contains(QStringLiteral("minUploadIntervalSec"))) {
+            qint32 interval = 0;
+            if (!rpc::RpcHelpers::getI32(params, "minUploadIntervalSec", interval))
+                return rpc::RpcHelpers::err(rpc::RpcError::BadParameterType, QStringLiteral("invalid minUploadIntervalSec"));
+            if (interval < 0) {
+                return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, 
+                    QStringLiteral("minUploadIntervalSec must be >= 0"));
+            }
+            config.minUploadIntervalSec = interval;
+        }
+        
+        return QJsonObject{{kKeyOk, true}};
+    });
 }
 
 // ===================== 配置管理RPC方法 =====================
