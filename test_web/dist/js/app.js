@@ -88,16 +88,19 @@ function shouldAutoConnect() {
  */
 function loadLaunchSettings() {
     const savedHost = sessionStorage.getItem('rpc_host');
-    const savedPort = sessionStorage.getItem('rpc_port');
+    const savedRpcPort = sessionStorage.getItem('rpc_port');
+    const savedWsPort = sessionStorage.getItem('ws_port');
     
     // 也检查URL参数（用于通过Python脚本启动的场景）
     const urlParams = new URLSearchParams(window.location.search);
     const urlHost = urlParams.get('host');
-    const urlPort = urlParams.get('port');
+    const urlRpcPort = urlParams.get('rpcPort') || urlParams.get('port');
+    const urlWsPort = urlParams.get('wsPort');
     
     // 优先使用URL参数，其次使用sessionStorage的值
     const finalHost = urlHost || savedHost;
-    const finalPort = urlPort || savedPort;
+    const finalRpcPort = urlRpcPort || savedRpcPort;
+    const finalWsPort = urlWsPort || savedWsPort;
     
     if (finalHost) {
         const hostInput = document.getElementById('serverHost');
@@ -106,18 +109,26 @@ function loadLaunchSettings() {
         }
     }
     
-    if (finalPort) {
-        const portInput = document.getElementById('serverPort');
-        if (portInput) {
-            portInput.value = finalPort;
+    if (finalRpcPort) {
+        const rpcPortInput = document.getElementById('rpcPort');
+        if (rpcPortInput) {
+            rpcPortInput.value = finalRpcPort;
+        }
+    }
+    
+    if (finalWsPort) {
+        const wsPortInput = document.getElementById('serverPort');
+        if (wsPortInput) {
+            wsPortInput.value = finalWsPort;
         }
     }
     
     // 如果有保存的设置或URL参数指定自动连接，则自动连接
-    if (finalHost && finalPort && shouldAutoConnect()) {
+    if (finalHost && finalWsPort && shouldAutoConnect()) {
         // 延迟一点执行自动连接，让页面完全加载
         setTimeout(function() {
             log('info', '检测到已保存的连接设置，正在自动连接...');
+            log('info', `目标RPC服务器: ${finalHost}:${finalRpcPort || 12345}`);
             connect();
         }, 500);
     }
@@ -157,8 +168,13 @@ function getTauriInvoke() {
 
 /**
  * 启动websocat代理（仅在Tauri环境中可用）
+ * 
+ * 工作原理：
+ * websocat在本地监听WebSocket连接，并将数据转发到远程TCP服务器
+ * 浏览器 → WebSocket(localhost:wsPort) → websocat → TCP(tcpHost:tcpPort)
+ * 
  * @param {number} wsPort - WebSocket监听端口（默认12346）
- * @param {string} tcpHost - TCP目标地址（默认127.0.0.1）
+ * @param {string} tcpHost - TCP目标地址（远程RPC服务器IP）
  * @param {number} tcpPort - TCP目标端口（默认12345）
  * @returns {Promise<number|null>} 成功返回PID，失败返回null
  */
@@ -172,8 +188,12 @@ async function startWebsocatProxy(wsPort = 12346, tcpHost = '127.0.0.1', tcpPort
         const invoke = getTauriInvoke();
         if (!invoke) {
             log('error', '启动websocat失败: Tauri invoke API不可用，请检查Tauri版本兼容性');
+            log('error', '可能的原因：\n1. Tauri shell插件未正确配置\n2. tauri.conf.json中缺少shell权限配置\n3. Tauri版本不兼容');
             return null;
         }
+        
+        log('info', `正在启动代理：本机:${wsPort} → ${tcpHost}:${tcpPort}`);
+        
         const pid = await invoke('start_websocat', {
             wsPort: wsPort,
             tcpHost: tcpHost,
@@ -181,10 +201,12 @@ async function startWebsocatProxy(wsPort = 12346, tcpHost = '127.0.0.1', tcpPort
         });
         websocatRunning = true;
         log('info', `✅ websocat代理已启动，PID: ${pid}`);
-        updateWebsocatStatus(true);
+        log('info', `数据流向：浏览器 → WebSocket(localhost:${wsPort}) → websocat → TCP(${tcpHost}:${tcpPort})`);
+        updateWebsocatStatus(true, tcpHost, tcpPort);
         return pid;
     } catch (error) {
         log('error', `启动websocat失败: ${error}`);
+        log('error', '请检查：\n1. websocat可执行文件是否存在于bin目录\n2. 目标RPC服务器是否可达\n3. 端口是否被占用');
         return null;
     }
 }
@@ -261,25 +283,37 @@ async function getWebsocatPid() {
 
 /**
  * 切换websocat代理状态
+ * 从UI中读取目标RPC服务器地址和端口
  */
 async function toggleWebsocatProxy() {
     if (websocatRunning) {
         await stopWebsocatProxy();
     } else {
-        const port = parseInt(document.getElementById('serverPort').value) || 12346;
-        await startWebsocatProxy(port);
+        // 获取目标RPC服务器地址和端口
+        const tcpHost = document.getElementById('serverHost').value.trim();
+        if (!tcpHost) {
+            log('error', '请先输入RPC服务器地址');
+            return;
+        }
+        const tcpPort = parseInt(document.getElementById('rpcPort').value) || 12345;
+        const wsPort = parseInt(document.getElementById('serverPort').value) || 12346;
+        
+        await startWebsocatProxy(wsPort, tcpHost, tcpPort);
     }
 }
 
 /**
  * 更新websocat状态显示
  * @param {boolean} running - 是否正在运行
+ * @param {string} tcpHost - 目标TCP主机（可选）
+ * @param {number} tcpPort - 目标TCP端口（可选）
  */
-function updateWebsocatStatus(running) {
+function updateWebsocatStatus(running, tcpHost, tcpPort) {
     const btn = document.getElementById('websocatToggleBtn');
     if (btn) {
         if (running) {
-            btn.textContent = '🛑 停止代理';
+            const hostInfo = tcpHost ? ` (→${tcpHost}:${tcpPort})` : '';
+            btn.textContent = '🛑 停止代理' + hostInfo;
             btn.classList.add('danger');
             btn.classList.remove('success');
         } else {
@@ -518,22 +552,35 @@ function toggleConnection() {
 
 /**
  * 建立WebSocket连接
+ * 
+ * 连接原理：
+ * 1. 浏览器通过WebSocket连接到本地的websocat代理（localhost:wsPort）
+ * 2. websocat代理将数据转发到远程RPC服务器（tcpHost:tcpPort）
+ * 
+ * 注意：serverHost字段现在表示目标RPC服务器地址，不是WebSocket连接地址
+ * WebSocket始终连接到localhost，因为websocat代理运行在本机
  */
 function connect() {
-    const host = document.getElementById('serverHost').value.trim();
-    const port = parseInt(document.getElementById('serverPort').value) || 12346;
+    const tcpHost = document.getElementById('serverHost').value.trim();
+    const wsPort = parseInt(document.getElementById('serverPort').value) || 12346;
+    const rpcPortEl = document.getElementById('rpcPort');
+    const rpcPort = rpcPortEl ? (parseInt(rpcPortEl.value) || 12345) : 12345;
     
-    if (!host) {
-        log('error', '请输入服务器地址');
+    if (!tcpHost) {
+        log('error', '请输入RPC服务器地址');
         return;
     }
     
     // 更新连接状态为"连接中"
     updateConnectionStatus('connecting');
     
-    // 构建WebSocket URL
-    const wsUrl = `ws://${host}:${port}`;
-    log('info', `正在连接到 ${wsUrl}...`);
+    // WebSocket连接到本地代理（localhost），而不是远程服务器
+    // 远程连接由websocat代理处理
+    const wsHost = 'localhost';
+    const wsUrl = `ws://${wsHost}:${wsPort}`;
+    
+    log('info', `正在通过本地代理连接到 ${wsUrl}...`);
+    log('info', `目标RPC服务器: ${tcpHost}:${rpcPort}`);
     
     try {
         ws = new WebSocket(wsUrl);
@@ -541,6 +588,7 @@ function connect() {
         // 连接成功回调
         ws.onopen = function() {
             log('info', '✅ WebSocket连接成功');
+            log('info', `已通过代理连接到目标: ${tcpHost}`);
             updateConnectionStatus('connected');
             
             // 连接成功后自动发送ping测试
@@ -561,7 +609,11 @@ function connect() {
         
         // 连接错误回调
         ws.onerror = function(error) {
-            log('error', '⚠️ WebSocket连接错误，请检查：\n1. 服务器地址是否正确\n2. WebSocket代理是否运行\n3. 防火墙是否允许连接');
+            log('error', '⚠️ WebSocket连接错误，请检查：');
+            log('error', '1. websocat代理是否已启动（先点击"启动代理"按钮）');
+            log('error', '2. 本地代理端口是否正确（默认12346）');
+            log('error', '3. 目标RPC服务器是否可达');
+            log('error', '4. 防火墙是否允许连接');
             updateConnectionStatus('disconnected');
         };
         

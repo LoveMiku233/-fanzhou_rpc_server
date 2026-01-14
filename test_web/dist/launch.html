@@ -337,11 +337,16 @@
         
         <form id="loginForm">
             <div class="form-group">
-                <label>📡 设备地址</label>
+                <label>📡 RPC服务器地址 <span style="font-weight: normal; font-size: 12px; color: rgba(255,255,255,0.6);">（目标设备IP）</span></label>
                 <div class="form-row">
-                    <input type="text" id="deviceHost" placeholder="例如: 192.168.1.100" value="localhost">
-                    <input type="number" id="devicePort" placeholder="端口" value="12346" min="1" max="65535">
+                    <input type="text" id="deviceHost" placeholder="例如: 192.168.1.100" value="">
+                    <input type="number" id="devicePort" placeholder="RPC端口" value="12345" min="1" max="65535">
                 </div>
+            </div>
+            
+            <div class="form-group">
+                <label>🔌 本地代理端口 <span style="font-weight: normal; font-size: 12px; color: rgba(255,255,255,0.6);">（WebSocket）</span></label>
+                <input type="number" id="wsPort" placeholder="本地WS端口" value="12346" min="1" max="65535">
             </div>
             
             <div class="form-group">
@@ -483,7 +488,8 @@
                 if (savedSettings) {
                     const settings = JSON.parse(savedSettings);
                     document.getElementById('deviceHost').value = settings.host || 'localhost';
-                    document.getElementById('devicePort').value = settings.port || 12346;
+                    document.getElementById('devicePort').value = settings.rpcPort || settings.port || 12345;
+                    document.getElementById('wsPort').value = settings.wsPort || 12346;
                     document.getElementById('rememberSettings').checked = true;
                     
                     // 不再自动跳过登录页 - 让用户有机会确认或修改设置
@@ -498,10 +504,11 @@
         /**
          * 保存设置
          */
-        function saveSettings(host, port, authenticated) {
+        function saveSettings(host, rpcPort, wsPort, authenticated) {
             const settings = {
                 host: host,
-                port: port,
+                rpcPort: rpcPort,
+                wsPort: wsPort,
                 authenticated: authenticated
             };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
@@ -514,7 +521,8 @@
             event.preventDefault();
             
             const host = document.getElementById('deviceHost').value.trim();
-            const port = parseInt(document.getElementById('devicePort').value) || 12346;
+            const rpcPort = parseInt(document.getElementById('devicePort').value) || 12345;
+            const wsPort = parseInt(document.getElementById('wsPort').value) || 12346;
             const password = document.getElementById('accessPassword').value;
             const remember = document.getElementById('rememberSettings').checked;
             
@@ -522,7 +530,7 @@
             
             // 验证地址
             if (!host) {
-                errorEl.textContent = '请输入设备地址';
+                errorEl.textContent = '请输入RPC服务器地址';
                 errorEl.classList.add('show');
                 return;
             }
@@ -541,7 +549,7 @@
             
             // 如果选择记住设置，保存到本地存储
             if (remember) {
-                saveSettings(host, port, true);
+                saveSettings(host, rpcPort, wsPort, true);
             } else {
                 localStorage.removeItem(STORAGE_KEY);
             }
@@ -552,17 +560,18 @@
             
             // 延迟后跳转到主页面
             setTimeout(function() {
-                enterMainApp(host, port);
+                enterMainApp(host, rpcPort, wsPort);
             }, 800);
         }
         
         /**
          * 进入主应用
          */
-        async function enterMainApp(host, port) {
+        async function enterMainApp(host, rpcPort, wsPort) {
             // 将设置存储到 sessionStorage，供主页面使用
             sessionStorage.setItem('rpc_host', host);
-            sessionStorage.setItem('rpc_port', port);
+            sessionStorage.setItem('rpc_port', rpcPort);
+            sessionStorage.setItem('ws_port', wsPort);
             sessionStorage.setItem('rpc_authenticated', 'true');
             
             // 如果在Tauri环境中，调整窗口大小和标题
