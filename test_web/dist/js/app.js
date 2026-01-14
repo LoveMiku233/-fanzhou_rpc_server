@@ -40,7 +40,10 @@ const DEFAULT_CHANNEL_COUNT = 4;
 const BOUND_CHANNELS = -1;
 
 // 检测是否运行在Tauri环境中
-const isTauri = window.__TAURI__ !== undefined;
+// 使用 window.isTauri 存储状态，避免重复加载脚本时出现重复声明错误
+// 注意：必须使用 var 而不是 const，因为 const 重复声明会抛出 SyntaxError
+window.isTauri = window.isTauri ?? (window.__TAURI__ !== undefined);
+var isTauri = window.isTauri;
 
 // websocat代理是否正在运行
 let websocatRunning = false;
