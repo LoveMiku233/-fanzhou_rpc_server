@@ -111,8 +111,6 @@ void MainWindow::setupStatusBar()
     sep1a->setStyleSheet(QStringLiteral("color: #7f8c8d;"));
     statusBar->addWidget(sep1a);
 
-    statusBar->addWidget(sep1a);
-
     // 时间
     timeLabel_ = new QLabel(QStringLiteral("--:--:--"));
     timeLabel_->setStyleSheet(QStringLiteral(

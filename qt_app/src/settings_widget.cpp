@@ -1081,8 +1081,18 @@ void SettingsWidget::onSetUploadConfig()
 
     if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
         emit logMessage(QStringLiteral("云数据上传配置已保存"));
-        QMessageBox::information(this, QStringLiteral("成功"), 
-            QStringLiteral("配置保存成功！\n\n记得调用 config.save 持久化到文件。"));
+        
+        // 自动持久化配置到文件
+        QJsonValue saveResult = rpcClient_->call(QStringLiteral("config.save"));
+        if (saveResult.isObject() && saveResult.toObject().value(QStringLiteral("ok")).toBool()) {
+            emit logMessage(QStringLiteral("配置已持久化到文件"));
+            QMessageBox::information(this, QStringLiteral("成功"), 
+                QStringLiteral("配置保存成功并已持久化到文件！"));
+        } else {
+            emit logMessage(QStringLiteral("配置持久化失败，请手动调用 config.save"), QStringLiteral("WARN"));
+            QMessageBox::warning(this, QStringLiteral("警告"), 
+                QStringLiteral("配置保存成功，但持久化失败。\n请在连接设置中点击'保存配置到文件'按钮。"));
+        }
     } else {
         QString error = result.toObject().value(QStringLiteral("error")).toString();
         emit logMessage(QStringLiteral("保存配置失败: %1").arg(error), QStringLiteral("ERROR"));
