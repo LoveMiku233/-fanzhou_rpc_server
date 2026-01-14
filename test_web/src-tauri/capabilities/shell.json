@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schemas.tauri.app/capability/2.0.0/schema.json",
+  "identifier": "shell",
+  "description": "Allow shell execution for websocat sidecar",
+  "windows": ["main"],
+  "permissions": [
+    "shell:allow-execute",
+    "shell:allow-kill",
+    "shell:allow-open",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "websocat",
+          "sidecar": true,
+          "args": true
+        }
+      ]
+    }
+  ]
+}

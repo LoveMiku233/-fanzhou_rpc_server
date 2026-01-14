@@ -144,23 +144,39 @@ function loadLaunchSettings() {
  * @returns {function|null} invoke函数，如果不可用返回null
  */
 function getTauriInvoke() {
+    // 调试：输出 __TAURI__ 对象结构
+    console.log('[DEBUG] 检查 Tauri API...');
+    console.log('[DEBUG] window.__TAURI__ 存在:', !!window.__TAURI__);
+    
     if (!window.__TAURI__) {
+        console.log('[DEBUG] __TAURI__ 对象不存在，非 Tauri 环境');
         return null;
     }
     
+    // 输出 __TAURI__ 对象的所有键
+    console.log('[DEBUG] __TAURI__ 对象键:', Object.keys(window.__TAURI__));
+    
     // Tauri v2.x: invoke is in window.__TAURI__.core
     if (window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
+        console.log('[DEBUG] 找到 Tauri v2.x invoke API (core.invoke)');
         return window.__TAURI__.core.invoke;
     }
     
     // Tauri v1.x: invoke is in window.__TAURI__.tauri
     if (window.__TAURI__.tauri && typeof window.__TAURI__.tauri.invoke === 'function') {
+        console.log('[DEBUG] 找到 Tauri v1.x invoke API (tauri.invoke)');
         return window.__TAURI__.tauri.invoke;
     }
     
     // Tauri v1.x alternative: invoke might be directly on window.__TAURI__
     if (typeof window.__TAURI__.invoke === 'function') {
+        console.log('[DEBUG] 找到 Tauri v1.x invoke API (直接在 __TAURI__ 上)');
         return window.__TAURI__.invoke;
+    }
+    
+    console.error('[DEBUG] 未找到 invoke 函数！__TAURI__ 结构:', JSON.stringify(Object.keys(window.__TAURI__)));
+    if (window.__TAURI__.core) {
+        console.error('[DEBUG] __TAURI__.core 键:', Object.keys(window.__TAURI__.core));
     }
     
     return null;
@@ -179,19 +195,26 @@ function getTauriInvoke() {
  * @returns {Promise<number|null>} 成功返回PID，失败返回null
  */
 async function startWebsocatProxy(wsPort = 12346, tcpHost = '127.0.0.1', tcpPort = 12345) {
+    console.log('[DEBUG] startWebsocatProxy 被调用');
+    console.log('[DEBUG] 参数: wsPort=' + wsPort + ', tcpHost=' + tcpHost + ', tcpPort=' + tcpPort);
+    
     if (!isTauri) {
         log('info', '不是Tauri环境，请手动启动websocat代理：\nwebsocat --text ws-l:0.0.0.0:' + wsPort + ' tcp:' + tcpHost + ':' + tcpPort);
         return null;
     }
     
     try {
+        console.log('[DEBUG] 正在获取 invoke API...');
         const invoke = getTauriInvoke();
         if (!invoke) {
+            console.error('[DEBUG] invoke API 不可用！');
             log('error', '启动websocat失败: Tauri invoke API不可用，请检查Tauri版本兼容性');
-            log('error', '可能的原因：\n1. Tauri shell插件未正确配置\n2. tauri.conf.json中缺少shell权限配置\n3. Tauri版本不兼容');
+            log('error', '可能的原因：\n1. Tauri shell插件未正确配置\n2. capabilities/shell.json 缺失\n3. Tauri版本不兼容');
+            log('error', '请按F12打开开发者工具查看详细调试信息');
             return null;
         }
         
+        console.log('[DEBUG] invoke API 可用，准备调用 start_websocat...');
         log('info', `正在启动代理：本机:${wsPort} → ${tcpHost}:${tcpPort}`);
         
         const pid = await invoke('start_websocat', {
@@ -199,12 +222,16 @@ async function startWebsocatProxy(wsPort = 12346, tcpHost = '127.0.0.1', tcpPort
             tcpHost: tcpHost,
             tcpPort: tcpPort
         });
+        console.log('[DEBUG] start_websocat 调用成功，PID=' + pid);
         websocatRunning = true;
         log('info', `✅ websocat代理已启动，PID: ${pid}`);
         log('info', `数据流向：浏览器 → WebSocket(localhost:${wsPort}) → websocat → TCP(${tcpHost}:${tcpPort})`);
         updateWebsocatStatus(true, tcpHost, tcpPort);
         return pid;
     } catch (error) {
+        console.error('[DEBUG] startWebsocatProxy 出错:', error);
+        console.error('[DEBUG] 错误详情:', error.message);
+        console.error('[DEBUG] 错误堆栈:', error.stack);
         log('error', `启动websocat失败: ${error}`);
         log('error', '请检查：\n1. websocat可执行文件是否存在于bin目录\n2. 目标RPC服务器是否可达\n3. 端口是否被占用');
         return null;
@@ -328,18 +355,44 @@ function updateWebsocatStatus(running, tcpHost, tcpPort) {
  * 初始化Tauri功能
  */
 async function initTauri() {
+    console.log('[DEBUG] ========== Tauri 初始化开始 ==========');
+    console.log('[DEBUG] isTauri 变量:', isTauri);
+    console.log('[DEBUG] window.__TAURI__ 存在:', !!window.__TAURI__);
+    
     if (!isTauri) {
-        console.log('非Tauri环境，跳过Tauri初始化');
+        console.log('[DEBUG] 非Tauri环境，跳过Tauri初始化');
         return;
     }
     
-    console.log('检测到Tauri环境，初始化Tauri功能...');
+    console.log('[DEBUG] 检测到Tauri环境，开始初始化...');
+    
+    // 输出详细的 Tauri API 信息
+    if (window.__TAURI__) {
+        console.log('[DEBUG] __TAURI__ 对象结构:');
+        for (const key of Object.keys(window.__TAURI__)) {
+            const value = window.__TAURI__[key];
+            const type = typeof value;
+            if (type === 'object' && value !== null) {
+                console.log(`[DEBUG]   ${key}: [object] 键=${Object.keys(value).join(', ')}`);
+            } else {
+                console.log(`[DEBUG]   ${key}: [${type}]`);
+            }
+        }
+        
+        // 检查 shell 插件
+        if (window.__TAURI__.shell) {
+            console.log('[DEBUG] shell 插件已加载:', Object.keys(window.__TAURI__.shell));
+        } else {
+            console.warn('[DEBUG] shell 插件未加载！请检查 tauri-plugin-shell 是否正确配置');
+        }
+    }
     
     try {
         // 显示Tauri相关的UI元素
         const websocatBtn = document.getElementById('websocatToggleBtn');
         if (websocatBtn) {
             websocatBtn.style.display = 'inline-block';
+            console.log('[DEBUG] websocatToggleBtn 已显示');
         }
         
         const tauriHint = document.getElementById('tauriHint');
@@ -353,11 +406,27 @@ async function initTauri() {
             manualHelp.style.display = 'none';
         }
         
+        // 测试 invoke API
+        const invoke = getTauriInvoke();
+        if (invoke) {
+            console.log('[DEBUG] invoke API 可用，正在测试...');
+        } else {
+            console.error('[DEBUG] invoke API 不可用！');
+            console.error('[DEBUG] 可能的原因：');
+            console.error('[DEBUG]   1. Tauri shell插件未正确配置');
+            console.error('[DEBUG]   2. capabilities/shell.json 缺失或配置错误');
+            console.error('[DEBUG]   3. Tauri 版本不兼容');
+        }
+        
         // 检查websocat状态
         await checkWebsocatStatus();
+        console.log('[DEBUG] websocat 状态检查完成');
     } catch (error) {
-        console.error('Tauri初始化失败:', error);
+        console.error('[DEBUG] Tauri初始化失败:', error);
+        console.error('[DEBUG] 错误堆栈:', error.stack);
     }
+    
+    console.log('[DEBUG] ========== Tauri 初始化结束 ==========');
     
     // 页面加载时自动启动websocat（可选）
     // await startWebsocatProxy();
