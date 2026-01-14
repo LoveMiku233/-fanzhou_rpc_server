@@ -286,7 +286,7 @@ async function initTauri() {
     // await startWebsocatProxy();
 }
 
-// 页面加载完成后初始化Tauri
+// 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
     try {
         // 首先检查认证状态
@@ -297,10 +297,10 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Tauri初始化异常:', error);
         });
         
-        // 在 Tauri 环境中，为所有按钮添加额外的事件处理，确保点击事件正常工作
-        if (isTauri) {
-            initButtonClickHandlers();
-        }
+        // 初始化按钮点击处理
+        // - 为导航按钮、连接按钮等添加 addEventListener（所有环境）
+        // - 在 Tauri 环境中启用事件委托，解决 inline onclick 不触发的问题
+        initButtonClickHandlers();
         
         // 从启动页获取保存的设置并自动填充
         loadLaunchSettings();
@@ -318,12 +318,22 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 /**
- * 初始化按钮点击处理（Tauri 环境下）
- * 在 Tauri 中，某些情况下 onclick 属性可能不会正常工作
- * 使用 addEventListener 可以确保事件被正确处理
+ * 初始化按钮点击处理
+ * 使用事件委托处理所有按钮点击事件
  * 
- * @description 为导航按钮、连接按钮和代理按钮添加事件监听器
- *              解决 Tauri 环境下 inline onclick 事件可能不触发的问题
+ * 问题背景：
+ * 在 Tauri WebView 中，HTML 元素上的 inline onclick 属性
+ * 可能不会正确触发点击事件。用户看到鼠标悬停有动画效果，但点击没有反应。
+ * 
+ * 解决方案：
+ * 使用事件委托在 document.body 上监听所有点击事件，
+ * 当检测到被点击的元素有 onclick 属性时，手动执行该属性中的代码。
+ * 
+ * 安全说明：
+ * 此应用的 HTML 内容完全由开发者控制，不接受用户输入的 HTML。
+ * onclick 属性中的代码都是开发者自己编写的可信代码。
+ * 
+ * @description 解决 Tauri 中 inline onclick 事件不触发的问题
  */
 function initButtonClickHandlers() {
     /**
@@ -355,7 +365,63 @@ function initButtonClickHandlers() {
     // 为 websocat 代理按钮添加事件监听
     bindClickHandler(document.getElementById('websocatToggleBtn'), toggleWebsocatProxy);
     
-    console.log('Tauri 按钮点击处理已初始化');
+    // 只在 Tauri 环境中启用事件委托，避免普通浏览器的性能影响
+    if (!isTauri) {
+        console.log('非 Tauri 环境，跳过事件委托初始化');
+        return;
+    }
+    
+    // 定义常量：向上查找 onclick 属性的最大层级数
+    var MAX_ONCLICK_SEARCH_DEPTH = 10;
+    
+    /**
+     * 使用事件委托处理所有按钮和可点击元素的点击事件
+     * 这解决了 Tauri WebView 中 inline onclick 属性不触发的问题
+     * 
+     * 工作原理：
+     * 1. 在 document.body 上监听 click 事件（捕获阶段）
+     * 2. 当点击发生时，检查目标元素是否有 onclick 属性
+     * 3. 如果有，使用 Function 构造器执行 onclick 代码
+     * 4. 这样可以让所有使用 onclick 属性的元素正常工作
+     * 
+     * 使用捕获阶段的原因：
+     * 在 Tauri 中 inline onclick 可能根本不触发，我们需要在事件传播的最早阶段拦截
+     */
+    document.body.addEventListener('click', function(e) {
+        // 获取被点击的元素（向上查找到有 onclick 属性的元素）
+        var target = e.target;
+        var depth = 0;
+        
+        while (target && target !== document.body && depth < MAX_ONCLICK_SEARCH_DEPTH) {
+            // 检查元素是否有 onclick 属性
+            var onclickAttr = target.getAttribute('onclick');
+            
+            if (onclickAttr) {
+                try {
+                    // 使用 Function 构造器执行 onclick 代码
+                    // 安全说明：onclick 属性中的代码都是开发者自己编写的可信代码
+                    // 使用 with(window) 确保可以访问全局函数如 showPage、refreshDeviceList 等
+                    var clickHandler = new Function('event', 'with(window){return (' + onclickAttr + ');}');
+                    var result = clickHandler.call(target, e);
+                    
+                    // 只有当 onclick 处理程序明确返回 false 时才阻止默认行为
+                    // 这遵循了传统 onclick 的行为规范
+                    if (result === false) {
+                        e.preventDefault();
+                    }
+                } catch (error) {
+                    console.error('Tauri onclick 执行失败:', error, onclickAttr);
+                }
+                
+                return; // 已处理，退出
+            }
+            
+            target = target.parentElement;
+            depth++;
+        }
+    }, true); // 使用捕获阶段，在 Tauri 中 inline onclick 不触发时仍能拦截事件
+    
+    console.log('Tauri 按钮点击处理已初始化（事件委托模式）');
 }
 
 /* ========================================================
