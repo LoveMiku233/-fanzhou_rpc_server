@@ -3725,3 +3725,392 @@ function clearMqttMessages() {
     mqttMessages = [];
     renderMqttMessages();
 }
+
+/* ========================================================
+ * Token管理功能
+ * 
+ * 支持创建、查看、删除访问Token
+ * Token用于API认证和设备授权
+ * ======================================================== */
+
+// Token列表缓存
+let tokenListCache = [];
+
+/**
+ * 刷新Token列表
+ */
+function refreshTokenList() {
+    // 先获取认证状态
+    callMethod('auth.status', {}, function(response) {
+        if (response.result) {
+            updateAuthStatusDisplay(response.result);
+        }
+    });
+    
+    // 获取Token列表
+    callMethod('auth.tokens.list', {}, function(response) {
+        if (response.result && response.result.ok) {
+            tokenListCache = response.result.tokens || [];
+            renderTokenList();
+        } else if (response.error) {
+            log('error', `获取Token列表失败: ${response.error.message || '未知错误'}`);
+            // 如果获取失败，可能是认证功能未启用
+            document.getElementById('tokenListEmpty').style.display = 'block';
+            document.getElementById('tokenListContainer').innerHTML = '';
+        }
+    });
+}
+
+/**
+ * 更新认证状态显示
+ */
+function updateAuthStatusDisplay(authStatus) {
+    const enabledEl = document.getElementById('authEnabledStatus');
+    const currentTokenEl = document.getElementById('currentTokenStatus');
+    const expireEl = document.getElementById('tokenExpireStatus');
+    
+    if (enabledEl) {
+        if (authStatus.enabled) {
+            enabledEl.textContent = '✅ 已启用';
+            enabledEl.style.color = '#2e7d32';
+        } else {
+            enabledEl.textContent = '❌ 未启用';
+            enabledEl.style.color = '#e53935';
+        }
+    }
+    
+    if (currentTokenEl) {
+        if (authStatus.currentToken) {
+            // 显示Token的前几位
+            const tokenPreview = authStatus.currentToken.substring(0, 8) + '...';
+            currentTokenEl.textContent = tokenPreview;
+            currentTokenEl.style.color = '#2e7d32';
+        } else {
+            currentTokenEl.textContent = '未登录';
+            currentTokenEl.style.color = '#666';
+        }
+    }
+    
+    if (expireEl) {
+        if (authStatus.tokenExpireSec) {
+            const hours = Math.floor(authStatus.tokenExpireSec / 3600);
+            if (hours > 24) {
+                expireEl.textContent = `${Math.floor(hours / 24)} 天`;
+            } else {
+                expireEl.textContent = `${hours} 小时`;
+            }
+        } else {
+            expireEl.textContent = '--';
+        }
+    }
+}
+
+/**
+ * 渲染Token列表
+ */
+function renderTokenList() {
+    const container = document.getElementById('tokenListContainer');
+    const emptyEl = document.getElementById('tokenListEmpty');
+    
+    if (!tokenListCache || tokenListCache.length === 0) {
+        if (container) container.innerHTML = '';
+        if (emptyEl) emptyEl.style.display = 'block';
+        return;
+    }
+    
+    if (emptyEl) emptyEl.style.display = 'none';
+    
+    let html = '';
+    tokenListCache.forEach((token, index) => {
+        const createdAt = token.createdAt ? new Date(token.createdAt).toLocaleString() : '--';
+        const expiresAt = token.expiresAt ? new Date(token.expiresAt).toLocaleString() : '永不过期';
+        const isExpired = token.expiresAt && new Date(token.expiresAt) < new Date();
+        const tokenPreview = token.token ? (token.token.substring(0, 12) + '...') : token.id;
+        
+        html += `
+            <div style="background: ${isExpired ? '#ffebee' : '#f8f9fa'}; border-radius: 12px; padding: 20px; border: 2px solid ${isExpired ? '#e53935' : '#e0e0e0'};">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <div style="font-size: 14px; font-weight: 600; color: #333;">
+                        🔑 ${escapeHtml(token.name || 'Token ' + (index + 1))}
+                    </div>
+                    <span style="font-size: 12px; padding: 4px 10px; border-radius: 10px; background: ${isExpired ? '#ffcdd2' : '#c8e6c9'}; color: ${isExpired ? '#c62828' : '#2e7d32'};">
+                        ${isExpired ? '已过期' : '有效'}
+                    </span>
+                </div>
+                <div style="font-size: 13px; color: #666; margin-bottom: 15px;">
+                    <div style="margin-bottom: 5px; font-family: monospace; background: #e0e0e0; padding: 8px; border-radius: 4px; word-break: break-all;">
+                        ${escapeHtml(tokenPreview)}
+                    </div>
+                    <div style="margin-bottom: 3px;">📅 创建时间: ${createdAt}</div>
+                    <div>⏰ 过期时间: ${expiresAt}</div>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="copyToken('${escapeHtml(token.token || token.id)}')" class="secondary" style="flex: 1;">📋 复制</button>
+                    <button onclick="revokeToken('${escapeHtml(token.token || token.id)}')" class="danger" style="flex: 1;">🗑️ 撤销</button>
+                </div>
+            </div>
+        `;
+    });
+    
+    if (container) container.innerHTML = html;
+}
+
+/**
+ * 打开创建Token弹窗
+ * 简化版本：直接调用创建API
+ */
+function openCreateTokenModal() {
+    const tokenName = prompt('请输入Token名称（可选）：', 'API Token');
+    if (tokenName === null) return; // 用户取消
+    
+    const expireHours = prompt('Token有效期（小时，留空为默认）：', '24');
+    if (expireHours === null) return;
+    
+    const params = {
+        name: tokenName || 'API Token'
+    };
+    
+    if (expireHours && !isNaN(parseInt(expireHours))) {
+        params.expireSec = parseInt(expireHours) * 3600;
+    }
+    
+    callMethod('auth.tokens.create', params, function(response) {
+        if (response.result && response.result.ok) {
+            const newToken = response.result.token;
+            log('info', `✅ Token创建成功！`);
+            
+            // 显示新Token并提示复制
+            const copyConfirm = confirm(`Token创建成功！\n\n${newToken}\n\n请立即复制保存，此Token只会显示一次！\n\n点击"确定"复制到剪贴板。`);
+            if (copyConfirm) {
+                copyToken(newToken);
+            }
+            
+            refreshTokenList();
+        } else if (response.error) {
+            log('error', `创建Token失败: ${response.error.message || '未知错误'}`);
+            alert(`创建Token失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 复制Token到剪贴板
+ */
+function copyToken(token) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(token).then(function() {
+            log('info', '✅ Token已复制到剪贴板');
+        }).catch(function(err) {
+            log('error', '复制失败: ' + err);
+            fallbackCopy(token);
+        });
+    } else {
+        fallbackCopy(token);
+    }
+}
+
+/**
+ * 回退复制方法
+ */
+function fallbackCopy(text) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+        document.execCommand('copy');
+        log('info', '✅ Token已复制到剪贴板');
+    } catch (err) {
+        log('error', '复制失败，请手动复制');
+    }
+    document.body.removeChild(textarea);
+}
+
+/**
+ * 撤销Token
+ */
+function revokeToken(token) {
+    if (!confirm('确定要撤销此Token吗？撤销后将无法恢复。')) return;
+    
+    callMethod('auth.tokens.revoke', { token: token }, function(response) {
+        if (response.result && response.result.ok) {
+            log('info', '✅ Token已撤销');
+            refreshTokenList();
+        } else if (response.error) {
+            log('error', `撤销失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 使用密码登录获取Token
+ */
+function performLogin() {
+    const password = document.getElementById('loginPassword').value;
+    
+    if (!password) {
+        alert('请输入密码');
+        return;
+    }
+    
+    callMethod('auth.login', { secret: password }, function(response) {
+        if (response.result && response.result.ok) {
+            const token = response.result.token;
+            log('info', '✅ 登录成功！');
+            
+            // 保存Token到sessionStorage
+            sessionStorage.setItem('auth_token', token);
+            
+            alert(`登录成功！\n\nToken: ${token.substring(0, 20)}...\n\n已自动保存到会话中。`);
+            
+            refreshTokenList();
+        } else if (response.error) {
+            log('error', `登录失败: ${response.error.message || '未知错误'}`);
+            alert(`登录失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/* ========================================================
+ * 连接设备管理功能
+ * 
+ * 显示和管理当前连接到RPC服务器的所有客户端
+ * ======================================================== */
+
+// 连接列表缓存
+let connectionListCache = [];
+
+/**
+ * 刷新连接列表
+ */
+function refreshConnectionList() {
+    callMethod('rpc.connections', {}, function(response) {
+        if (response.result && response.result.ok) {
+            connectionListCache = response.result.connections || [];
+            updateConnectionStats(response.result);
+            renderConnectionList();
+        } else if (response.error) {
+            log('error', `获取连接列表失败: ${response.error.message || '未知错误'}`);
+            // 显示空状态
+            document.getElementById('connectionListEmpty').style.display = 'block';
+            document.getElementById('connectionListContainer').innerHTML = '';
+        }
+    });
+}
+
+/**
+ * 更新连接统计信息
+ */
+function updateConnectionStats(data) {
+    const totalEl = document.getElementById('totalConnectionsCount');
+    const authedEl = document.getElementById('authedConnectionsCount');
+    const wsEl = document.getElementById('wsConnectionsCount');
+    const tcpEl = document.getElementById('tcpConnectionsCount');
+    
+    const connections = data.connections || [];
+    const total = connections.length;
+    const authed = connections.filter(c => c.authenticated === true).length;
+    const wsCount = connections.filter(c => c.type === 'websocket' || c.type === 'ws').length;
+    const tcpCount = connections.filter(c => c.type === 'tcp').length;
+    
+    if (totalEl) totalEl.textContent = total;
+    if (authedEl) authedEl.textContent = authed;
+    if (wsEl) wsEl.textContent = wsCount;
+    if (tcpEl) tcpEl.textContent = tcpCount;
+}
+
+/**
+ * 渲染连接列表
+ */
+function renderConnectionList() {
+    const container = document.getElementById('connectionListContainer');
+    const emptyEl = document.getElementById('connectionListEmpty');
+    
+    if (!connectionListCache || connectionListCache.length === 0) {
+        if (container) container.innerHTML = '';
+        if (emptyEl) emptyEl.style.display = 'block';
+        return;
+    }
+    
+    if (emptyEl) emptyEl.style.display = 'none';
+    
+    let html = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 15px;">';
+    
+    connectionListCache.forEach((conn, index) => {
+        const isAuthed = conn.authenticated === true;
+        const connType = conn.type || 'unknown';
+        const connTime = conn.connectedAt ? new Date(conn.connectedAt).toLocaleString() : '--';
+        const lastActivity = conn.lastActivityAt ? new Date(conn.lastActivityAt).toLocaleString() : '--';
+        const remoteAddr = conn.remoteAddress || conn.ip || 'unknown';
+        const connId = conn.id || conn.connectionId || index;
+        
+        // 根据连接类型选择图标
+        const typeIcon = connType === 'websocket' || connType === 'ws' ? '🌐' : '🔌';
+        const typeLabel = connType === 'websocket' || connType === 'ws' ? 'WebSocket' : 'TCP';
+        
+        html += `
+            <div style="background: #f8f9fa; border-radius: 12px; padding: 20px; border: 2px solid ${isAuthed ? '#4caf50' : '#ff9800'};">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <div style="font-size: 14px; font-weight: 600; color: #333;">
+                        ${typeIcon} ${escapeHtml(remoteAddr)}
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <span style="font-size: 11px; padding: 3px 8px; border-radius: 8px; background: #e3f2fd; color: #1565c0;">
+                            ${typeLabel}
+                        </span>
+                        <span style="font-size: 11px; padding: 3px 8px; border-radius: 8px; background: ${isAuthed ? '#c8e6c9' : '#fff3e0'}; color: ${isAuthed ? '#2e7d32' : '#e65100'};">
+                            ${isAuthed ? '🔓 已认证' : '🔒 未认证'}
+                        </span>
+                    </div>
+                </div>
+                <div style="font-size: 13px; color: #666; margin-bottom: 15px;">
+                    <div style="margin-bottom: 3px;">🆔 连接ID: ${escapeHtml(String(connId))}</div>
+                    <div style="margin-bottom: 3px;">📅 连接时间: ${connTime}</div>
+                    <div style="margin-bottom: 3px;">⏱️ 最后活动: ${lastActivity}</div>
+                    ${conn.requestCount ? `<div>📊 请求次数: ${conn.requestCount}</div>` : ''}
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="disconnectClient('${escapeHtml(String(connId))}')" class="danger" style="flex: 1;">断开连接</button>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    if (container) container.innerHTML = html;
+}
+
+/**
+ * 断开指定客户端连接
+ */
+function disconnectClient(connectionId) {
+    if (!confirm(`确定要断开连接 ${connectionId} 吗？`)) return;
+    
+    callMethod('rpc.disconnect', { connectionId: connectionId }, function(response) {
+        if (response.result && response.result.ok) {
+            log('info', `✅ 已断开连接 ${connectionId}`);
+            refreshConnectionList();
+        } else if (response.error) {
+            log('error', `断开失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 断开所有客户端连接
+ */
+function disconnectAllClients() {
+    if (!confirm('确定要断开所有客户端连接吗？这将中断所有当前会话。')) return;
+    
+    callMethod('rpc.disconnectAll', {}, function(response) {
+        if (response.result && response.result.ok) {
+            const count = response.result.disconnectedCount || 0;
+            log('info', `✅ 已断开 ${count} 个连接`);
+            refreshConnectionList();
+        } else if (response.error) {
+            log('error', `断开失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}

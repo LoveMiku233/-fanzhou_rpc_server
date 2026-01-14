@@ -191,6 +191,63 @@
             font-size: 12px;
         }
         
+        /* 环境检测样式 */
+        .env-check {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .env-check-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .env-check-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 13px;
+        }
+        
+        .env-check-item:last-child {
+            border-bottom: none;
+        }
+        
+        .env-check-label {
+            color: rgba(255, 255, 255, 0.7);
+        }
+        
+        .env-check-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .env-check-status.ok {
+            color: #2ecc71;
+        }
+        
+        .env-check-status.warning {
+            color: #f39c12;
+        }
+        
+        .env-check-status.error {
+            color: #e74c3c;
+        }
+        
+        .env-check-icon {
+            font-size: 14px;
+        }
+        
         /* 加载动画 */
         .loading {
             display: none;
@@ -245,6 +302,35 @@
             <p>农业物联网控制系统</p>
         </div>
         
+        <!-- 环境检测区域 -->
+        <div class="env-check" id="envCheckPanel">
+            <div class="env-check-title">
+                <span>🔍</span>
+                <span>环境检测</span>
+            </div>
+            <div class="env-check-item">
+                <span class="env-check-label">WebSocket支持</span>
+                <span class="env-check-status" id="wsStatus">
+                    <span class="env-check-icon">⏳</span>
+                    <span>检测中...</span>
+                </span>
+            </div>
+            <div class="env-check-item">
+                <span class="env-check-label">运行环境</span>
+                <span class="env-check-status" id="envStatus">
+                    <span class="env-check-icon">⏳</span>
+                    <span>检测中...</span>
+                </span>
+            </div>
+            <div class="env-check-item">
+                <span class="env-check-label">本地存储</span>
+                <span class="env-check-status" id="storageStatus">
+                    <span class="env-check-icon">⏳</span>
+                    <span>检测中...</span>
+                </span>
+            </div>
+        </div>
+        
         <div class="error-message" id="errorMessage">
             密码错误，请重新输入
         </div>
@@ -280,13 +366,92 @@
 
     <script>
         // 默认密码（简单实现，生产环境应使用更安全的方式）
-        const DEFAULT_PASSWORD = 'fanzhou2024';
+        const DEFAULT_PASSWORD = 'fanzhou';
         
         // 存储键名
         const STORAGE_KEY = 'fanzhou_rpc_settings';
         
+        // 环境检测结果
+        let envCheckResults = {
+            websocket: false,
+            tauri: false,
+            storage: false
+        };
+        
+        /**
+         * 检测WebSocket支持
+         */
+        function checkWebSocketSupport() {
+            const statusEl = document.getElementById('wsStatus');
+            if (!statusEl) return;
+            
+            if (typeof WebSocket !== 'undefined') {
+                envCheckResults.websocket = true;
+                statusEl.className = 'env-check-status ok';
+                statusEl.innerHTML = '<span class="env-check-icon">✅</span><span>支持</span>';
+            } else {
+                envCheckResults.websocket = false;
+                statusEl.className = 'env-check-status error';
+                statusEl.innerHTML = '<span class="env-check-icon">❌</span><span>不支持</span>';
+            }
+        }
+        
+        /**
+         * 检测运行环境（Tauri/浏览器）
+         */
+        function checkRunningEnvironment() {
+            const statusEl = document.getElementById('envStatus');
+            if (!statusEl) return;
+            
+            if (window.__TAURI__) {
+                envCheckResults.tauri = true;
+                statusEl.className = 'env-check-status ok';
+                statusEl.innerHTML = '<span class="env-check-icon">🖥️</span><span>Tauri桌面应用</span>';
+            } else {
+                envCheckResults.tauri = false;
+                statusEl.className = 'env-check-status warning';
+                statusEl.innerHTML = '<span class="env-check-icon">🌐</span><span>浏览器环境</span>';
+            }
+        }
+        
+        /**
+         * 检测本地存储支持
+         */
+        function checkStorageSupport() {
+            const statusEl = document.getElementById('storageStatus');
+            if (!statusEl) return;
+            
+            try {
+                const testKey = '__test__';
+                localStorage.setItem(testKey, testKey);
+                localStorage.removeItem(testKey);
+                envCheckResults.storage = true;
+                statusEl.className = 'env-check-status ok';
+                statusEl.innerHTML = '<span class="env-check-icon">✅</span><span>支持</span>';
+            } catch (e) {
+                envCheckResults.storage = false;
+                statusEl.className = 'env-check-status warning';
+                statusEl.innerHTML = '<span class="env-check-icon">⚠️</span><span>不支持</span>';
+            }
+        }
+        
+        /**
+         * 运行所有环境检测
+         */
+        function runEnvironmentChecks() {
+            // 延迟一小段时间执行，以便页面完全加载
+            setTimeout(function() {
+                checkWebSocketSupport();
+                checkRunningEnvironment();
+                checkStorageSupport();
+            }, 100);
+        }
+        
         // 页面加载时恢复设置并绑定事件
         document.addEventListener('DOMContentLoaded', function() {
+            // 运行环境检测
+            runEnvironmentChecks();
+            
             loadSavedSettings();
             
             // 使用 addEventListener 绑定表单提交事件（更可靠，尤其在 Tauri 环境中）

@@ -64,6 +64,12 @@
                 <button class="nav-btn" onclick="showPage('mqtt')" data-page="mqtt">
                     ☁️ MQTT
                 </button>
+                <button class="nav-btn" onclick="showPage('tokens')" data-page="tokens">
+                    🔑 Token
+                </button>
+                <button class="nav-btn" onclick="showPage('connections')" data-page="connections">
+                    🔗 连接管理
+                </button>
                 <button class="nav-btn" onclick="showPage('monitor')" data-page="monitor">
                     📊 监控
                 </button>
@@ -621,6 +627,120 @@ websocat --text ws-l:0.0.0.0:12346 tcp:127.0.0.1:12345</pre>
                             <div style="color: #666; text-align: center; padding: 20px;">等待消息...</div>
                         </div>
                     </details>
+                </div>
+            </div>
+
+            <!-- ==================== Token管理页面 ==================== -->
+            <div class="page-content" id="page-tokens">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="color: #333;">🔑 Token管理</h3>
+                    <div class="btn-group">
+                        <button onclick="refreshTokenList()">🔄 刷新</button>
+                        <button class="success" onclick="openCreateTokenModal()">➕ 创建Token</button>
+                    </div>
+                </div>
+
+                <!-- 说明信息 -->
+                <div style="background: #e3f2fd; padding: 15px 20px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
+                    <strong style="color: #1565c0;">💡 Token认证</strong>
+                    <p style="color: #666; font-size: 13px; margin-top: 5px;">
+                        Token用于API认证和设备授权。每个Token可以设置不同的权限级别和过期时间。使用Token可以避免频繁输入密码，同时提供更细粒度的访问控制。
+                    </p>
+                </div>
+
+                <!-- 认证状态 -->
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                    <h4 style="margin-bottom: 15px; color: #333;">🔐 认证状态</h4>
+                    <div id="authStatusPanel">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px;">
+                            <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0;">
+                                <div style="font-size: 12px; color: #666;">认证功能</div>
+                                <div style="font-size: 18px; font-weight: bold; color: #333; margin-top: 5px;" id="authEnabledStatus">--</div>
+                            </div>
+                            <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0;">
+                                <div style="font-size: 12px; color: #666;">当前Token</div>
+                                <div style="font-size: 14px; font-weight: bold; color: #333; margin-top: 5px;" id="currentTokenStatus">--</div>
+                            </div>
+                            <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0;">
+                                <div style="font-size: 12px; color: #666;">Token有效期</div>
+                                <div style="font-size: 18px; font-weight: bold; color: #333; margin-top: 5px;" id="tokenExpireStatus">--</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Token列表 -->
+                <h4 style="margin-bottom: 15px; color: #333;">📋 已授权Token列表</h4>
+                <div id="tokenListEmpty" class="data-list-empty" style="display: none; background: #f8f9fa; border-radius: 12px; padding: 40px 20px;">
+                    <p>📭 暂无Token</p>
+                    <p style="font-size: 12px; margin-top: 10px;">点击"➕ 创建Token"添加新的访问令牌</p>
+                </div>
+                <div id="tokenListContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 15px;">
+                    <!-- Token卡片将由JavaScript动态生成 -->
+                </div>
+
+                <!-- 登录功能 -->
+                <details style="background: #fff3e0; padding: 20px; border-radius: 12px; margin-top: 20px;">
+                    <summary style="cursor: pointer; font-weight: 600; color: #333;">🔓 手动登录</summary>
+                    <div class="form-row" style="margin-top: 15px;">
+                        <div class="form-group" style="flex: 2;">
+                            <label>密码</label>
+                            <input type="password" id="loginPassword" placeholder="输入访问密码">
+                        </div>
+                        <div class="form-group">
+                            <label>&nbsp;</label>
+                            <button class="success" onclick="performLogin()">🔑 登录获取Token</button>
+                        </div>
+                    </div>
+                </details>
+            </div>
+
+            <!-- ==================== 连接设备管理页面 ==================== -->
+            <div class="page-content" id="page-connections">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="color: #333;">🔗 连接设备管理</h3>
+                    <div class="btn-group">
+                        <button onclick="refreshConnectionList()">🔄 刷新</button>
+                        <button class="warning" onclick="disconnectAllClients()">⚠️ 断开所有</button>
+                    </div>
+                </div>
+
+                <!-- 说明信息 -->
+                <div style="background: #e8f5e9; padding: 15px 20px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #4caf50;">
+                    <strong style="color: #2e7d32;">💡 连接管理</strong>
+                    <p style="color: #666; font-size: 13px; margin-top: 5px;">
+                        显示当前通过WebSocket或TCP连接到RPC服务器的所有客户端。可以查看每个连接的详细信息，包括IP地址、连接时间、认证状态等，并可以手动断开特定连接。
+                    </p>
+                </div>
+
+                <!-- 连接统计 -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px;">
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 12px; color: white;">
+                        <div style="font-size: 13px; opacity: 0.9;">总连接数</div>
+                        <div style="font-size: 32px; font-weight: bold; margin: 10px 0;" id="totalConnectionsCount">--</div>
+                    </div>
+                    <div style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); padding: 20px; border-radius: 12px; color: white;">
+                        <div style="font-size: 13px; opacity: 0.9;">已认证连接</div>
+                        <div style="font-size: 32px; font-weight: bold; margin: 10px 0;" id="authedConnectionsCount">--</div>
+                    </div>
+                    <div style="background: linear-gradient(135deg, #e67e22 0%, #f39c12 100%); padding: 20px; border-radius: 12px; color: white;">
+                        <div style="font-size: 13px; opacity: 0.9;">WebSocket连接</div>
+                        <div style="font-size: 32px; font-weight: bold; margin: 10px 0;" id="wsConnectionsCount">--</div>
+                    </div>
+                    <div style="background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); padding: 20px; border-radius: 12px; color: white;">
+                        <div style="font-size: 13px; opacity: 0.9;">TCP连接</div>
+                        <div style="font-size: 32px; font-weight: bold; margin: 10px 0;" id="tcpConnectionsCount">--</div>
+                    </div>
+                </div>
+
+                <!-- 连接列表 -->
+                <h4 style="margin-bottom: 15px; color: #333;">📋 活动连接列表</h4>
+                <div id="connectionListEmpty" class="data-list-empty" style="display: none; background: #f8f9fa; border-radius: 12px; padding: 40px 20px;">
+                    <p>📭 暂无活动连接</p>
+                    <p style="font-size: 12px; margin-top: 10px;">当有客户端连接时会显示在这里</p>
+                </div>
+                <div id="connectionListContainer">
+                    <!-- 连接卡片将由JavaScript动态生成 -->
                 </div>
             </div>
 
