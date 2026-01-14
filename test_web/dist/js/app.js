@@ -297,6 +297,11 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Tauri初始化异常:', error);
         });
         
+        // 在 Tauri 环境中，为所有按钮添加额外的事件处理，确保点击事件正常工作
+        if (isTauri) {
+            initButtonClickHandlers();
+        }
+        
         // 从启动页获取保存的设置并自动填充
         loadLaunchSettings();
         
@@ -311,6 +316,47 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('页面初始化失败:', error);
     }
 });
+
+/**
+ * 初始化按钮点击处理（Tauri 环境下）
+ * 在 Tauri 中，某些情况下 onclick 属性可能不会正常工作
+ * 使用 addEventListener 可以确保事件被正确处理
+ */
+function initButtonClickHandlers() {
+    // 为导航按钮添加事件监听
+    document.querySelectorAll('.nav-btn').forEach(function(btn) {
+        const page = btn.getAttribute('data-page');
+        if (page) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                showPage(page);
+            });
+        }
+    });
+    
+    // 为连接按钮添加事件监听
+    const connectBtn = document.getElementById('connectBtn');
+    if (connectBtn) {
+        connectBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleConnection();
+        });
+    }
+    
+    // 为 websocat 代理按钮添加事件监听
+    const websocatBtn = document.getElementById('websocatToggleBtn');
+    if (websocatBtn) {
+        websocatBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleWebsocatProxy();
+        });
+    }
+    
+    console.log('Tauri 按钮点击处理已初始化');
+}
 
 /* ========================================================
  * 页面导航功能

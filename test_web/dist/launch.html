@@ -14,60 +14,14 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             min-height: 100vh;
+            /* 使用静态渐变背景代替动态背景 */
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            background-attachment: fixed;
             display: flex;
             align-items: center;
             justify-content: center;
             color: #fff;
             overflow: hidden;
-        }
-        
-        /* 动态背景 */
-        .bg-animation {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 0;
-            overflow: hidden;
-            pointer-events: none;
-        }
-        
-        .bg-animation span {
-            position: absolute;
-            display: block;
-            width: 20px;
-            height: 20px;
-            background: rgba(255, 255, 255, 0.05);
-            animation: animate 25s linear infinite;
-            bottom: -150px;
-            border-radius: 50%;
-            pointer-events: none;
-        }
-        
-        .bg-animation span:nth-child(1) { left: 25%; width: 80px; height: 80px; animation-delay: 0s; }
-        .bg-animation span:nth-child(2) { left: 10%; width: 20px; height: 20px; animation-delay: 2s; animation-duration: 12s; }
-        .bg-animation span:nth-child(3) { left: 70%; width: 20px; height: 20px; animation-delay: 4s; }
-        .bg-animation span:nth-child(4) { left: 40%; width: 60px; height: 60px; animation-delay: 0s; animation-duration: 18s; }
-        .bg-animation span:nth-child(5) { left: 65%; width: 20px; height: 20px; animation-delay: 0s; }
-        .bg-animation span:nth-child(6) { left: 75%; width: 110px; height: 110px; animation-delay: 3s; }
-        .bg-animation span:nth-child(7) { left: 35%; width: 150px; height: 150px; animation-delay: 7s; }
-        .bg-animation span:nth-child(8) { left: 50%; width: 25px; height: 25px; animation-delay: 15s; animation-duration: 45s; }
-        .bg-animation span:nth-child(9) { left: 20%; width: 15px; height: 15px; animation-delay: 2s; animation-duration: 35s; }
-        .bg-animation span:nth-child(10) { left: 85%; width: 150px; height: 150px; animation-delay: 0s; animation-duration: 11s; }
-        
-        @keyframes animate {
-            0% {
-                transform: translateY(0) rotate(0deg);
-                opacity: 1;
-                border-radius: 0;
-            }
-            100% {
-                transform: translateY(-1000px) rotate(720deg);
-                opacity: 0;
-                border-radius: 50%;
-            }
         }
         
         .launch-container {
@@ -277,20 +231,6 @@
     </style>
 </head>
 <body>
-    <!-- 动态背景 -->
-    <div class="bg-animation">
-        <span></span>
-        <span></span>
-        <span></span>
-        <span></span>
-        <span></span>
-        <span></span>
-        <span></span>
-        <span></span>
-        <span></span>
-        <span></span>
-    </div>
-    
     <!-- 加载动画 -->
     <div class="loading" id="loadingOverlay">
         <div class="loading-spinner"></div>
@@ -309,7 +249,7 @@
             密码错误，请重新输入
         </div>
         
-        <form id="loginForm" onsubmit="handleSubmit(event)">
+        <form id="loginForm">
             <div class="form-group">
                 <label>📡 设备地址</label>
                 <div class="form-row">
@@ -345,9 +285,24 @@
         // 存储键名
         const STORAGE_KEY = 'fanzhou_rpc_settings';
         
-        // 页面加载时恢复设置
+        // 页面加载时恢复设置并绑定事件
         document.addEventListener('DOMContentLoaded', function() {
             loadSavedSettings();
+            
+            // 使用 addEventListener 绑定表单提交事件（更可靠，尤其在 Tauri 环境中）
+            const form = document.getElementById('loginForm');
+            if (form) {
+                form.addEventListener('submit', handleSubmit);
+            }
+            
+            // 绑定按钮点击事件
+            const btnEnter = document.getElementById('btnEnter');
+            if (btnEnter) {
+                btnEnter.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    handleSubmit(e);
+                });
+            }
         });
         
         /**
@@ -467,7 +422,8 @@
         // 按下回车键时提交表单
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
-                document.getElementById('loginForm').dispatchEvent(new Event('submit'));
+                // 调用 handleSubmit 函数，传入事件对象
+                handleSubmit(e);
             }
         });
     </script>
