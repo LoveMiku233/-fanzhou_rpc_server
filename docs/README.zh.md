@@ -397,16 +397,70 @@ echo '{"jsonrpc":"2.0","id":4,"method":"relay.statusAll","params":{"node":1}}' |
 
 ### Web调试工具
 
-项目提供了Web调试工具，位于 `test_web/index.html`。可以使用任何HTTP服务器打开：
+项目提供了Web调试工具，位于 `test_web/dist/` 目录。可以使用任何HTTP服务器打开：
 
 ```bash
 # 使用Python启动简单HTTP服务器
-cd test_web
+cd test_web/dist
 python3 -m http.server 8080
 
 # 在浏览器中访问
 # http://localhost:8080
 ```
+
+#### 连接原理
+
+由于浏览器安全限制，无法直接通过TCP连接到RPC服务器。需要使用websocat作为WebSocket到TCP的代理：
+
+```
+浏览器 → WebSocket(localhost:12346) → websocat代理 → TCP(目标设备:12345)
+```
+
+**数据流向说明：**
+- **浏览器**：通过WebSocket协议连接到本地代理（localhost:12346）
+- **websocat代理**：运行在本机，负责协议转换（WebSocket ↔ TCP）
+- **RPC服务器**：运行在目标设备上，监听TCP端口（默认12345）
+
+#### 使用Tauri桌面应用
+
+如果使用编译好的Tauri桌面应用，可以自动管理websocat代理：
+
+1. 在启动页填写目标设备的RPC服务器地址（如 `192.168.0.104`）和端口（默认 `12345`）
+2. 进入主界面后，点击"启动代理"按钮自动启动websocat
+3. 点击"连接"按钮通过WebSocket连接
+
+#### 手动启动代理（非Tauri环境）
+
+如果在普通浏览器中使用，需要手动启动websocat代理：
+
+```bash
+# 安装websocat
+# 下载地址: https://github.com/vi/websocat/releases
+
+# 在本机启动代理，连接到远程RPC服务器
+# 将 192.168.0.104 替换为目标设备的实际IP地址
+websocat --text ws-l:0.0.0.0:12346 tcp:192.168.0.104:12345
+
+# 然后在浏览器的连接设置中：
+# - RPC服务器地址: 192.168.0.104
+# - RPC端口: 12345
+# - WS端口: 12346
+# 点击"连接"按钮
+```
+
+#### 常见问题
+
+**Q: 连接时显示"WebSocket连接错误"？**
+
+A: 请检查：
+1. websocat代理是否已启动
+2. 本地WS端口是否正确（默认12346）
+3. 目标RPC服务器是否可达（可用 `ping` 测试）
+4. 目标设备的防火墙是否允许12345端口连接
+
+**Q: 为什么需要websocat代理？**
+
+A: 浏览器出于安全考虑，只允许使用WebSocket协议进行实时通信，不能直接使用TCP。websocat作为中间层，将WebSocket协议转换为TCP协议，从而实现浏览器与RPC服务器的通信。
 
 ## 错误码
 
