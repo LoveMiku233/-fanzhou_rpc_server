@@ -158,10 +158,8 @@ function loadLaunchSettings() {
  * @returns {function|null} invoke函数，如果不可用返回null
  */
 function getTauriInvoke(verbose = false) {
-    // 只在明确需要调试或在Tauri环境时输出详细日志
-    const shouldLog = verbose && isTauri;
-    
-    if (shouldLog) {
+    // verbose参数用于调试，设为true时输出详细日志（任何环境均可使用）
+    if (verbose) {
         console.log('[DEBUG] 检查 Tauri API...');
         console.log('[DEBUG] window.__TAURI__ 存在:', !!window.__TAURI__);
     }
@@ -171,14 +169,14 @@ function getTauriInvoke(verbose = false) {
         return null;
     }
     
-    if (shouldLog) {
+    if (verbose) {
         // 输出 __TAURI__ 对象的所有键
         console.log('[DEBUG] __TAURI__ 对象键:', Object.keys(window.__TAURI__));
     }
     
     // Tauri v2.x: invoke is in window.__TAURI__.core
     if (window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
-        if (shouldLog) {
+        if (verbose) {
             console.log('[DEBUG] 找到 Tauri v2.x invoke API (core.invoke)');
         }
         return window.__TAURI__.core.invoke;
@@ -186,7 +184,7 @@ function getTauriInvoke(verbose = false) {
     
     // Tauri v1.x: invoke is in window.__TAURI__.tauri
     if (window.__TAURI__.tauri && typeof window.__TAURI__.tauri.invoke === 'function') {
-        if (shouldLog) {
+        if (verbose) {
             console.log('[DEBUG] 找到 Tauri v1.x invoke API (tauri.invoke)');
         }
         return window.__TAURI__.tauri.invoke;
@@ -194,7 +192,7 @@ function getTauriInvoke(verbose = false) {
     
     // Tauri v1.x alternative: invoke might be directly on window.__TAURI__
     if (typeof window.__TAURI__.invoke === 'function') {
-        if (shouldLog) {
+        if (verbose) {
             console.log('[DEBUG] 找到 Tauri v1.x invoke API (直接在 __TAURI__ 上)');
         }
         return window.__TAURI__.invoke;
@@ -226,7 +224,7 @@ function getTauriInvoke(verbose = false) {
 async function startWebsocatProxy(wsPort = 12346, tcpHost = '127.0.0.1', tcpPort = 12345) {
     // 非Tauri环境下提示用户手动启动websocat
     if (!isTauri) {
-        log('info', '当前为浏览器环境，请手动启动websocat代理：\nwebsocat --text ws-l:0.0.0.0:' + wsPort + ' tcp:' + tcpHost + ':' + tcpPort);
+        log('info', `当前为浏览器环境，请手动启动websocat代理：\nwebsocat --text ws-l:0.0.0.0:${wsPort} tcp:${tcpHost}:${tcpPort}`);
         return null;
     }
     
