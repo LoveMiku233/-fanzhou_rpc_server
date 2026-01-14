@@ -15,6 +15,7 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QJsonArray>
+#include <QRandomGenerator>
 
 #include <algorithm>
 
@@ -1586,7 +1587,8 @@ bool CoreContext::generateToken(const QString &username, const QString &password
     }
     
     // 验证密码（简单实现：使用secret作为密码）
-    // 生产环境应该使用更安全的验证方式，如bcrypt hash
+    // 注意：生产环境应该使用更安全的验证方式，如bcrypt/scrypt hash
+    // 当前实现适用于内网/受信环境的基本防护
     if (password != authConfig.secret) {
         LOG_WARNING(kLogSource,
                     QStringLiteral("Authentication failed for user: %1").arg(username));
@@ -1594,11 +1596,14 @@ bool CoreContext::generateToken(const QString &username, const QString &password
         return false;
     }
     
-    // 生成token（简单实现：使用时间戳和随机数）
+    // 生成token（使用QRandomGenerator获得更好的随机性）
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const quint32 random1 = QRandomGenerator::global()->generate();
+    const quint32 random2 = QRandomGenerator::global()->generate();
     const QString token = QString::number(now, 16) +
                           QStringLiteral("-") +
-                          QString::number(qrand() % 0xFFFFFF, 16);
+                          QString::number(random1, 16) +
+                          QString::number(random2, 16);
     
     // 计算过期时间
     qint64 expireMs = 0;  // 0表示永不过期
@@ -1606,8 +1611,8 @@ bool CoreContext::generateToken(const QString &username, const QString &password
         expireMs = now + authConfig.tokenExpireSec * 1000LL;
     }
     
-    // 保存token
-    const_cast<CoreContext*>(this)->validTokens.insert(token, expireMs);
+    // 保存token（非const方法，可以直接修改成员变量）
+    validTokens.insert(token, expireMs);
     
     LOG_INFO(kLogSource,
              QStringLiteral("Token generated for user: %1, expires: %2")

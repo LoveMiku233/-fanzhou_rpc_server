@@ -73,7 +73,8 @@ struct AuthConfig {
         QStringLiteral("rpc.ping"),
         QStringLiteral("rpc.list"),
         QStringLiteral("auth.login"),
-        QStringLiteral("auth.verify")
+        QStringLiteral("auth.verify"),
+        QStringLiteral("auth.status")
     };
 };
 
