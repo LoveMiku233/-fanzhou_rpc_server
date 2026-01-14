@@ -3807,6 +3807,7 @@ function updateAuthStatusDisplay(authStatus) {
 
 /**
  * 渲染Token列表
+ * 使用数据索引而非直接嵌入token值以提高安全性
  */
 function renderTokenList() {
     const container = document.getElementById('tokenListContainer');
@@ -3825,10 +3826,10 @@ function renderTokenList() {
         const createdAt = token.createdAt ? new Date(token.createdAt).toLocaleString() : '--';
         const expiresAt = token.expiresAt ? new Date(token.expiresAt).toLocaleString() : '永不过期';
         const isExpired = token.expiresAt && new Date(token.expiresAt) < new Date();
-        const tokenPreview = token.token ? (token.token.substring(0, 12) + '...') : token.id;
+        const tokenId = token.id || index;
         
         html += `
-            <div style="background: ${isExpired ? '#ffebee' : '#f8f9fa'}; border-radius: 12px; padding: 20px; border: 2px solid ${isExpired ? '#e53935' : '#e0e0e0'};">
+            <div style="background: ${isExpired ? '#ffebee' : '#f8f9fa'}; border-radius: 12px; padding: 20px; border: 2px solid ${isExpired ? '#e53935' : '#e0e0e0'};" data-token-index="${index}">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                     <div style="font-size: 14px; font-weight: 600; color: #333;">
                         🔑 ${escapeHtml(token.name || 'Token ' + (index + 1))}
@@ -3838,15 +3839,15 @@ function renderTokenList() {
                     </span>
                 </div>
                 <div style="font-size: 13px; color: #666; margin-bottom: 15px;">
-                    <div style="margin-bottom: 5px; font-family: monospace; background: #e0e0e0; padding: 8px; border-radius: 4px; word-break: break-all;">
-                        ${escapeHtml(tokenPreview)}
+                    <div style="margin-bottom: 5px; font-family: monospace; background: #e0e0e0; padding: 8px; border-radius: 4px;">
+                        ID: ${escapeHtml(String(tokenId))}
                     </div>
                     <div style="margin-bottom: 3px;">📅 创建时间: ${createdAt}</div>
                     <div>⏰ 过期时间: ${expiresAt}</div>
                 </div>
                 <div style="display: flex; gap: 8px;">
-                    <button onclick="copyToken('${escapeHtml(token.token || token.id)}')" class="secondary" style="flex: 1;">📋 复制</button>
-                    <button onclick="revokeToken('${escapeHtml(token.token || token.id)}')" class="danger" style="flex: 1;">🗑️ 撤销</button>
+                    <button onclick="copyTokenByIndex(${index})" class="secondary" style="flex: 1;">📋 复制</button>
+                    <button onclick="revokeTokenByIndex(${index})" class="danger" style="flex: 1;">🗑️ 撤销</button>
                 </div>
             </div>
         `;
@@ -3856,34 +3857,60 @@ function renderTokenList() {
 }
 
 /**
+ * 通过索引复制Token
+ */
+function copyTokenByIndex(index) {
+    if (tokenListCache && tokenListCache[index]) {
+        const token = tokenListCache[index].token || tokenListCache[index].id;
+        copyToken(token);
+    }
+}
+
+/**
+ * 通过索引撤销Token
+ */
+function revokeTokenByIndex(index) {
+    if (tokenListCache && tokenListCache[index]) {
+        const token = tokenListCache[index].token || tokenListCache[index].id;
+        revokeToken(token);
+    }
+}
+
+/**
  * 打开创建Token弹窗
- * 简化版本：直接调用创建API
+ * 使用模态框代替prompt()以提供更好的用户体验
  */
 function openCreateTokenModal() {
-    const tokenName = prompt('请输入Token名称（可选）：', 'API Token');
-    if (tokenName === null) return; // 用户取消
+    // 重置表单
+    document.getElementById('newTokenName').value = 'API Token';
+    document.getElementById('newTokenExpireHours').value = '24';
     
-    const expireHours = prompt('Token有效期（小时，留空为默认）：', '24');
-    if (expireHours === null) return;
+    // 打开弹窗
+    openModal('createTokenModal');
+}
+
+/**
+ * 从弹窗创建Token
+ */
+function createTokenFromModal() {
+    const tokenName = document.getElementById('newTokenName').value.trim() || 'API Token';
+    const expireHours = parseInt(document.getElementById('newTokenExpireHours').value) || 24;
     
     const params = {
-        name: tokenName || 'API Token'
+        name: tokenName,
+        expireSec: expireHours * 3600
     };
-    
-    if (expireHours && !isNaN(parseInt(expireHours))) {
-        params.expireSec = parseInt(expireHours) * 3600;
-    }
     
     callMethod('auth.tokens.create', params, function(response) {
         if (response.result && response.result.ok) {
             const newToken = response.result.token;
             log('info', `✅ Token创建成功！`);
             
-            // 显示新Token并提示复制
-            const copyConfirm = confirm(`Token创建成功！\n\n${newToken}\n\n请立即复制保存，此Token只会显示一次！\n\n点击"确定"复制到剪贴板。`);
-            if (copyConfirm) {
-                copyToken(newToken);
-            }
+            // 关闭创建弹窗
+            closeModal('createTokenModal');
+            
+            // 显示Token在安全的弹窗中
+            showGeneratedToken(newToken);
             
             refreshTokenList();
         } else if (response.error) {
@@ -3891,6 +3918,61 @@ function openCreateTokenModal() {
             alert(`创建Token失败: ${response.error.message || '未知错误'}`);
         }
     });
+}
+
+/**
+ * 在安全的弹窗中显示生成的Token
+ */
+function showGeneratedToken(token) {
+    const displayEl = document.getElementById('generatedTokenDisplay');
+    const statusEl = document.getElementById('tokenCopyStatus');
+    
+    if (displayEl) {
+        displayEl.value = token;
+    }
+    if (statusEl) {
+        statusEl.style.display = 'none';
+    }
+    
+    openModal('showTokenModal');
+}
+
+/**
+ * 复制生成的Token
+ */
+function copyGeneratedToken() {
+    const displayEl = document.getElementById('generatedTokenDisplay');
+    const statusEl = document.getElementById('tokenCopyStatus');
+    
+    if (displayEl && displayEl.value) {
+        copyToken(displayEl.value);
+        
+        // 显示复制成功状态
+        if (statusEl) {
+            statusEl.style.display = 'block';
+            setTimeout(function() {
+                statusEl.style.display = 'none';
+            }, 3000);
+        }
+    }
+}
+
+/**
+ * 切换Token显示/隐藏
+ */
+function toggleTokenVisibility() {
+    const displayEl = document.getElementById('generatedTokenDisplay');
+    const toggleBtn = document.getElementById('toggleTokenBtn');
+    
+    if (displayEl && toggleBtn) {
+        if (displayEl.type === 'password') {
+            displayEl.type = 'text';
+            toggleBtn.textContent = '🙈 隐藏';
+        } else {
+            displayEl.type = 'password';
+            toggleBtn.textContent = '👁️ 显示';
+        }
+    }
 }
 
 /**
@@ -3963,7 +4045,8 @@ function performLogin() {
             // 保存Token到sessionStorage
             sessionStorage.setItem('auth_token', token);
             
-            alert(`登录成功！\n\nToken: ${token.substring(0, 20)}...\n\n已自动保存到会话中。`);
+            // 显示Token在安全的弹窗中，不在alert中显示敏感信息
+            showGeneratedToken(token);
             
             refreshTokenList();
         } else if (response.error) {
