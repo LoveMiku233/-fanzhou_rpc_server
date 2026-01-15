@@ -947,15 +947,25 @@ void RpcRegistry::registerRelay()
         if (!rpc::RpcHelpers::getI32(params, "ch", channel))
             return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing ch"));
 
+        // 验证channel参数：必须是0-3或-1/255表示所有通道
+        if (channel != -1 && channel != 255 && (channel < 0 || channel > kMaxChannelId))
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue,
+                QStringLiteral("invalid ch (0-3 for single channel, -1 or 255 for all channels)"));
+
         if (!rpc::RpcHelpers::getI32(params, "flag", flag))
             return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing flag"));
+
+        // 验证flag参数：必须在0-255范围内
+        if (flag < 0 || flag > 255)
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue,
+                QStringLiteral("invalid flag (must be 0-255)"));
 
         auto *dev = context_->relays.value(node, nullptr);
         if (!dev)
             return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("unknown node"));
 
         // 转换channel参数
-        quint8 channelParam = (channel == -1) ? 0xFF : static_cast<quint8>(channel);
+        quint8 channelParam = (channel == -1 || channel == 255) ? 0xFF : static_cast<quint8>(channel);
 
         const bool ok = dev->setOvercurrentFlag(channelParam, static_cast<quint8>(flag));
 

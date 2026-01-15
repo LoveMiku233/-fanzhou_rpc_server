@@ -245,6 +245,7 @@ inline bool decodeStatus(const QByteArray &data, Status &status)
     status.channel = static_cast<quint8>(data[0]);
     status.statusByte = static_cast<quint8>(data[1]);
     status.phaseLostFlag = static_cast<quint8>(data[2]);
+    status.overcurrent = false;  // 单通道响应不包含过流标志，默认为false
     const quint8 floatBytes[4] = {
         static_cast<quint8>(data[4]),
         static_cast<quint8>(data[5]),
