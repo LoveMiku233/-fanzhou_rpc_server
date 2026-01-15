@@ -925,7 +925,7 @@ void SettingsWidget::onGetBrightness()
         return;
     }
 
-    QJsonValue result = rpcClient_->call(QStringLiteral("screen.brightness.get"));
+    QJsonValue result = rpcClient_->call(QStringLiteral("screen.get"));
 
     if (result.isObject()) {
         QJsonObject obj = result.toObject();
@@ -952,7 +952,7 @@ void SettingsWidget::onSetBrightness()
     QJsonObject params;
     params[QStringLiteral("brightness")] = brightness;
 
-    QJsonValue result = rpcClient_->call(QStringLiteral("screen.brightness.set"), params);
+    QJsonValue result = rpcClient_->call(QStringLiteral("screen.set"), params);
 
     if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
         emit logMessage(QStringLiteral("设置亮度成功: %1%").arg(brightness));
