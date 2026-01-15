@@ -30,6 +30,7 @@ const QString kErrDeviceRejected = QStringLiteral("device rejected");
 constexpr int kMaxChannelId = 3;  ///< 最大通道ID（0-3表示4个通道）
 constexpr double kFloatCompareEpsilon = 0.001;  ///< 浮点数比较精度
 constexpr int kChannelKeyMultiplier = 256;  ///< 通道键编码乘数：channelKey = nodeId * 256 + channel
+constexpr int kMinChannelsForMultiControl = 2;  ///< 触发controlMulti合并的最小通道数
 }  // namespace
 
 CoreContext::CoreContext(QObject *parent)
@@ -552,8 +553,8 @@ GroupControlStats CoreContext::queueGroupControlOptimized(int groupId, int chann
             continue;
         }
         
-        // 判断是否需要合并：如果需要控制多个通道（>=2），使用controlMulti
-        if (channels.size() >= 2) {
+        // 判断是否需要合并：控制多个通道时使用controlMulti以节省CAN帧
+        if (channels.size() >= kMinChannelsForMultiControl) {
             // 使用controlMulti合并发送
             device::RelayProtocol::Action actions[4] = {
                 device::RelayProtocol::Action::Stop,
@@ -562,9 +563,9 @@ GroupControlStats CoreContext::queueGroupControlOptimized(int groupId, int chann
                 device::RelayProtocol::Action::Stop
             };
             
-            // 只设置需要控制的通道，其他通道保持Stop（不操作）
-            // 注意：这里有个问题 - controlMulti会同时设置所有4个通道
-            // 解决方案：对于未指定的通道，保留其当前状态
+            // controlMulti会同时设置所有4个通道的状态
+            // 对于需要控制的通道，设置为请求的动作
+            // 对于未指定的通道，保留其当前状态（从设备缓存读取）
             for (quint8 ch = 0; ch <= kMaxChannelId; ++ch) {
                 if (channels.contains(ch)) {
                     actions[ch] = action;
@@ -659,7 +660,7 @@ BatchControlResult CoreContext::batchControl(const QList<BatchControlItem> &item
             continue;
         }
         
-        if (channelActions.size() >= 2) {
+        if (channelActions.size() >= kMinChannelsForMultiControl) {
             // 合并为controlMulti
             device::RelayProtocol::Action actions[4];
             
@@ -1170,10 +1171,16 @@ void CoreContext::attachRelayStrategy(const RelayStrategyConfig &config)
             } else {
                 // channel=-1 表示控制所有通道 - 使用controlMulti优化，1帧代替4帧
                 device::RelayProtocol::Action actions[4] = {action, action, action, action};
-                dev->controlMulti(actions);
-                LOG_DEBUG(kLogSource, QStringLiteral("[优化] 继电器策略%1: 节点0x%2全通道控制合并为1帧")
-                    .arg(strategyId)
-                    .arg(targetNodeId, 2, 16, QChar('0')));
+                const bool ok = dev->controlMulti(actions);
+                if (ok) {
+                    LOG_DEBUG(kLogSource, QStringLiteral("[优化] 继电器策略%1: 节点0x%2全通道控制合并为1帧")
+                        .arg(strategyId)
+                        .arg(targetNodeId, 2, 16, QChar('0')));
+                } else {
+                    LOG_WARNING(kLogSource, QStringLiteral("[优化] 继电器策略%1: 节点0x%2全通道控制失败")
+                        .arg(strategyId)
+                        .arg(targetNodeId, 2, 16, QChar('0')));
+                }
             }
         });
         relayStrategyTimers_.insert(config.strategyId, timer);
