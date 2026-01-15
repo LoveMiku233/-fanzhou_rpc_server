@@ -481,6 +481,246 @@ GroupControlStats CoreContext::queueGroupBoundChannelsControl(int groupId,
     return stats;
 }
 
+/**
+ * @brief 分组控制优化版 - 合并同一节点的多通道控制为单条CAN帧
+ * 
+ * 优化逻辑：
+ * 1. 收集所有需要控制的(节点, 通道)对
+ * 2. 按节点分组，统计每个节点需要控制的通道
+ * 3. 如果一个节点需要控制多个通道，使用controlMulti发送单条CAN帧
+ * 4. 如果只控制单个通道，使用普通control发送
+ * 
+ * 例如：控制节点1的通道0,1,2,3，原本需要4条CAN帧，优化后只需1条。
+ */
+GroupControlStats CoreContext::queueGroupControlOptimized(int groupId, int channel,
+                                                           device::RelayProtocol::Action action,
+                                                           const QString &source)
+{
+    GroupControlStats stats;
+    
+    // 收集需要控制的(节点, 通道)对
+    // 使用 QHash<节点ID, QSet<通道ID>> 结构
+    QHash<quint8, QSet<quint8>> nodeChannels;
+    
+    if (channel >= 0 && channel <= kMaxChannelId) {
+        // 指定通道：对分组中所有设备的指定通道发送控制
+        const QList<quint8> nodes = deviceGroups.value(groupId);
+        for (quint8 node : nodes) {
+            if (!relays.contains(node)) continue;
+            nodeChannels[node].insert(static_cast<quint8>(channel));
+        }
+    } else {
+        // channel=-1：使用分组绑定的通道
+        const QList<int> channelKeys = groupChannels.value(groupId, {});
+        
+        if (channelKeys.isEmpty()) {
+            // 没有绑定通道，控制所有设备的所有通道
+            const QList<quint8> nodes = deviceGroups.value(groupId);
+            for (quint8 node : nodes) {
+                if (!relays.contains(node)) continue;
+                for (quint8 ch = 0; ch <= kMaxChannelId; ++ch) {
+                    nodeChannels[node].insert(ch);
+                }
+            }
+        } else {
+            // 只控制绑定的通道
+            for (int key : channelKeys) {
+                const quint8 node = static_cast<quint8>(key / kChannelKeyMultiplier);
+                const quint8 ch = static_cast<quint8>(key % kChannelKeyMultiplier);
+                if (!relays.contains(node)) continue;
+                nodeChannels[node].insert(ch);
+            }
+        }
+    }
+    
+    // 统计原始帧数（优化前）
+    stats.originalFrameCount = 0;
+    for (auto it = nodeChannels.begin(); it != nodeChannels.end(); ++it) {
+        stats.originalFrameCount += it.value().size();
+    }
+    stats.total = stats.originalFrameCount;
+    
+    // 优化发送：对每个节点使用最优方式发送
+    stats.optimizedFrameCount = 0;
+    for (auto it = nodeChannels.begin(); it != nodeChannels.end(); ++it) {
+        const quint8 node = it.key();
+        const QSet<quint8> &channels = it.value();
+        
+        auto *dev = relays.value(node, nullptr);
+        if (!dev) {
+            stats.missing += channels.size();
+            continue;
+        }
+        
+        // 判断是否需要合并：如果需要控制多个通道（>=2），使用controlMulti
+        if (channels.size() >= 2) {
+            // 使用controlMulti合并发送
+            device::RelayProtocol::Action actions[4] = {
+                device::RelayProtocol::Action::Stop,
+                device::RelayProtocol::Action::Stop,
+                device::RelayProtocol::Action::Stop,
+                device::RelayProtocol::Action::Stop
+            };
+            
+            // 只设置需要控制的通道，其他通道保持Stop（不操作）
+            // 注意：这里有个问题 - controlMulti会同时设置所有4个通道
+            // 解决方案：对于未指定的通道，保留其当前状态
+            for (quint8 ch = 0; ch <= kMaxChannelId; ++ch) {
+                if (channels.contains(ch)) {
+                    actions[ch] = action;
+                } else {
+                    // 保留当前状态：从设备读取最后状态
+                    const auto status = dev->lastStatus(ch);
+                    quint8 mode = device::RelayProtocol::modeBits(status.statusByte);
+                    if (mode == 1) {
+                        actions[ch] = device::RelayProtocol::Action::Forward;
+                    } else if (mode == 2) {
+                        actions[ch] = device::RelayProtocol::Action::Reverse;
+                    } else {
+                        actions[ch] = device::RelayProtocol::Action::Stop;
+                    }
+                }
+            }
+            
+            const bool ok = dev->controlMulti(actions);
+            stats.optimizedFrameCount++;
+            
+            if (ok) {
+                stats.accepted += channels.size();
+                // 记录一个任务ID表示这批操作
+                stats.jobIds.append(nextJobId_++);
+            } else {
+                stats.missing += channels.size();
+            }
+            
+            LOG_DEBUG(kLogSource, QStringLiteral("[优化] 节点0x%1: 合并%2通道为1帧CAN (来源: %3)")
+                .arg(node, 2, 16, QChar('0'))
+                .arg(channels.size())
+                .arg(source));
+        } else {
+            // 只有1个通道，使用普通control
+            for (quint8 ch : channels) {
+                const auto result = enqueueControl(node, ch, action, source, true);
+                stats.optimizedFrameCount++;
+                if (result.accepted) {
+                    stats.accepted++;
+                    stats.jobIds.append(result.jobId);
+                } else {
+                    stats.missing++;
+                }
+            }
+        }
+    }
+    
+    LOG_INFO(kLogSource, QStringLiteral("[优化] 分组%1控制: 原%2帧 -> 优化后%3帧 (节省%4帧)")
+        .arg(groupId)
+        .arg(stats.originalFrameCount)
+        .arg(stats.optimizedFrameCount)
+        .arg(stats.originalFrameCount - stats.optimizedFrameCount));
+    
+    return stats;
+}
+
+/**
+ * @brief 批量控制 - 支持一次调用控制多个节点/通道
+ * 
+ * 优化策略：
+ * 1. 按节点分组所有控制请求
+ * 2. 对于同一节点的多个通道控制，合并为单条controlMulti CAN帧
+ * 3. 返回优化统计，显示节省的帧数
+ */
+BatchControlResult CoreContext::batchControl(const QList<BatchControlItem> &items,
+                                              const QString &source)
+{
+    BatchControlResult result;
+    result.total = items.size();
+    result.originalFrames = items.size();
+    
+    if (items.isEmpty()) {
+        return result;
+    }
+    
+    // 按节点分组：QHash<节点ID, QHash<通道ID, Action>>
+    QHash<quint8, QHash<quint8, device::RelayProtocol::Action>> nodeChannelActions;
+    
+    for (const auto &item : items) {
+        if (item.channel > kMaxChannelId) continue;
+        nodeChannelActions[item.node][item.channel] = item.action;
+    }
+    
+    // 优化发送
+    for (auto nodeIt = nodeChannelActions.begin(); nodeIt != nodeChannelActions.end(); ++nodeIt) {
+        const quint8 node = nodeIt.key();
+        const QHash<quint8, device::RelayProtocol::Action> &channelActions = nodeIt.value();
+        
+        auto *dev = relays.value(node, nullptr);
+        if (!dev) {
+            result.failed += channelActions.size();
+            continue;
+        }
+        
+        if (channelActions.size() >= 2) {
+            // 合并为controlMulti
+            device::RelayProtocol::Action actions[4];
+            
+            // 首先获取所有通道的当前状态
+            for (quint8 ch = 0; ch <= kMaxChannelId; ++ch) {
+                const auto status = dev->lastStatus(ch);
+                quint8 mode = device::RelayProtocol::modeBits(status.statusByte);
+                if (mode == 1) {
+                    actions[ch] = device::RelayProtocol::Action::Forward;
+                } else if (mode == 2) {
+                    actions[ch] = device::RelayProtocol::Action::Reverse;
+                } else {
+                    actions[ch] = device::RelayProtocol::Action::Stop;
+                }
+            }
+            
+            // 应用请求的动作
+            for (auto chIt = channelActions.begin(); chIt != channelActions.end(); ++chIt) {
+                actions[chIt.key()] = chIt.value();
+            }
+            
+            const bool ok = dev->controlMulti(actions);
+            result.optimizedFrames++;
+            
+            if (ok) {
+                result.accepted += channelActions.size();
+                result.jobIds.append(nextJobId_++);
+            } else {
+                result.failed += channelActions.size();
+            }
+            
+            LOG_DEBUG(kLogSource, QStringLiteral("[批量] 节点0x%1: 合并%2通道为1帧")
+                .arg(node, 2, 16, QChar('0'))
+                .arg(channelActions.size()));
+        } else {
+            // 单个通道
+            for (auto chIt = channelActions.begin(); chIt != channelActions.end(); ++chIt) {
+                const auto enqResult = enqueueControl(node, chIt.key(), chIt.value(), source, true);
+                result.optimizedFrames++;
+                if (enqResult.accepted) {
+                    result.accepted++;
+                    result.jobIds.append(enqResult.jobId);
+                } else {
+                    result.failed++;
+                }
+            }
+        }
+    }
+    
+    result.ok = (result.failed == 0);
+    
+    LOG_INFO(kLogSource, QStringLiteral("[批量] 控制完成: 总%1项, 成功%2, 失败%3, 原%4帧->优化后%5帧")
+        .arg(result.total)
+        .arg(result.accepted)
+        .arg(result.failed)
+        .arg(result.originalFrames)
+        .arg(result.optimizedFrames));
+    
+    return result;
+}
+
 QueueSnapshot CoreContext::queueSnapshot() const
 {
     QueueSnapshot snapshot;
@@ -612,14 +852,8 @@ void CoreContext::attachStrategiesForGroup(int groupId)
                 const QString reason =
                     QStringLiteral("auto:%1")
                         .arg(strategyName.isEmpty() ? QString::number(strategyId) : strategyName);
-                // channel=-1 表示使用分组绑定的通道，0-kMaxChannelId 表示单个通道
-                if (channel >= 0 && channel <= kMaxChannelId) {
-                    // 指定通道：对分组中所有设备的指定通道发送控制命令
-                    queueGroupControl(targetGroupId, static_cast<quint8>(channel), action, reason);
-                } else {
-                    // channel=-1：只控制分组中绑定的特定通道
-                    queueGroupBoundChannelsControl(targetGroupId, action, reason);
-                }
+                // 使用优化版分组控制 - 自动合并同一节点的多通道控制
+                queueGroupControlOptimized(targetGroupId, channel, action, reason);
             });
             strategyTimers_.insert(config.strategyId, timer);
         } else {
@@ -696,17 +930,9 @@ bool CoreContext::triggerStrategy(int strategyId)
         const QString reason = QStringLiteral("manual-strategy:%1")
             .arg(config.name.isEmpty() ? QString::number(config.strategyId) : config.name);
         
-        // channel=-1 表示使用分组绑定的通道，0-kMaxChannelId 表示单个通道
-        if (config.channel >= 0 && config.channel <= kMaxChannelId) {
-            // 指定通道：对分组中所有设备的指定通道发送控制命令
-            const auto stats = queueGroupControl(
-                config.groupId, static_cast<quint8>(config.channel), action, reason);
-            return stats.accepted > 0;
-        } else {
-            // channel=-1：只控制分组中绑定的特定通道
-            const auto stats = queueGroupBoundChannelsControl(config.groupId, action, reason);
-            return stats.accepted > 0;
-        }
+        // 使用优化版分组控制 - 自动合并同一节点的多通道控制
+        const auto stats = queueGroupControlOptimized(config.groupId, config.channel, action, reason);
+        return stats.accepted > 0;
     }
     return false;
 }
@@ -874,25 +1100,21 @@ void CoreContext::checkSensorTriggers(const QString &sensorType, int sensorNode,
             .arg(sensorNode)
             .arg(value);
 
-        // channel=-1 表示使用分组绑定的通道，0-kMaxChannelId 表示单个通道
-        if (config.channel >= 0 && config.channel <= kMaxChannelId) {
-            // 指定通道：对分组中所有设备的指定通道发送控制命令
-            queueGroupControl(config.groupId, static_cast<quint8>(config.channel), action, reason);
-        } else {
-            // channel=-1：只控制分组中绑定的特定通道
-            queueGroupBoundChannelsControl(config.groupId, action, reason);
-        }
+        // 使用优化版分组控制 - 自动合并同一节点的多通道控制
+        const auto stats = queueGroupControlOptimized(config.groupId, config.channel, action, reason);
 
         // 更新触发时间
         config.lastTriggerMs = now;
 
         LOG_INFO(kLogSource,
-                 QStringLiteral("Sensor strategy triggered: id=%1, sensor=%2(%3)=%4, action=%5")
+                 QStringLiteral("Sensor strategy triggered: id=%1, sensor=%2(%3)=%4, action=%5, frames=%6->%7")
                      .arg(config.strategyId)
                      .arg(config.sensorType)
                      .arg(sensorNode)
                      .arg(value)
-                     .arg(config.action));
+                     .arg(config.action)
+                     .arg(stats.originalFrameCount)
+                     .arg(stats.optimizedFrameCount));
     }
 }
 
@@ -937,14 +1159,21 @@ void CoreContext::attachRelayStrategy(const RelayStrategyConfig &config)
             const QString reason =
                 QStringLiteral("auto-relay:%1")
                     .arg(strategyName.isEmpty() ? QString::number(strategyId) : strategyName);
-            // channel=-1 表示控制所有通道，0-kMaxChannelId 表示单个通道
+            
+            auto *dev = relays.value(static_cast<quint8>(targetNodeId), nullptr);
+            if (!dev) return;
+            
+            // channel=-1 表示控制所有通道（使用controlMulti优化），0-kMaxChannelId 表示单个通道
             if (channel >= 0 && channel <= kMaxChannelId) {
+                // 单个通道
                 enqueueControl(static_cast<quint8>(targetNodeId), static_cast<quint8>(channel), action, reason);
             } else {
-                // channel=-1 表示控制所有通道
-                for (quint8 ch = 0; ch <= kMaxChannelId; ++ch) {
-                    enqueueControl(static_cast<quint8>(targetNodeId), ch, action, reason);
-                }
+                // channel=-1 表示控制所有通道 - 使用controlMulti优化，1帧代替4帧
+                device::RelayProtocol::Action actions[4] = {action, action, action, action};
+                dev->controlMulti(actions);
+                LOG_DEBUG(kLogSource, QStringLiteral("[优化] 继电器策略%1: 节点0x%2全通道控制合并为1帧")
+                    .arg(strategyId)
+                    .arg(targetNodeId, 2, 16, QChar('0')));
             }
         });
         relayStrategyTimers_.insert(config.strategyId, timer);
