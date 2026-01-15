@@ -79,6 +79,33 @@ struct GroupControlStats {
     int accepted = 0;
     int missing = 0;
     QList<quint64> jobIds;
+    // 优化统计
+    int originalFrameCount = 0;  ///< 优化前的CAN帧数
+    int optimizedFrameCount = 0; ///< 优化后的CAN帧数
+};
+
+/**
+ * @brief 批量控制请求项
+ * 用于一次RPC调用控制多个节点/通道
+ */
+struct BatchControlItem {
+    quint8 node = 0;
+    quint8 channel = 0;
+    device::RelayProtocol::Action action = device::RelayProtocol::Action::Stop;
+};
+
+/**
+ * @brief 批量控制结果
+ */
+struct BatchControlResult {
+    bool ok = true;
+    int total = 0;           ///< 请求的总控制数
+    int accepted = 0;        ///< 成功接受的控制数
+    int failed = 0;          ///< 失败的控制数
+    int originalFrames = 0;  ///< 优化前需要的CAN帧数
+    int optimizedFrames = 0; ///< 优化后实际发送的CAN帧数
+    QList<quint64> jobIds;
+    QString error;
 };
 
 /**
@@ -265,6 +292,36 @@ public:
     GroupControlStats queueGroupBoundChannelsControl(int groupId,
                                                       device::RelayProtocol::Action action,
                                                       const QString &source);
+    
+    /**
+     * @brief 分组控制优化版 - 合并同一节点的多通道控制为单条CAN帧
+     * 
+     * 此方法会将同一节点的多个通道控制合并为一条 controlMulti CAN帧发送，
+     * 显著减少CAN总线带宽占用。例如：控制4个通道原本需要4帧，现在只需1帧。
+     * 
+     * @param groupId 分组ID
+     * @param channel 通道号（-1表示使用分组绑定的通道）
+     * @param action 控制动作
+     * @param source 命令来源
+     * @return 控制统计信息（包含优化效果）
+     */
+    GroupControlStats queueGroupControlOptimized(int groupId, int channel,
+                                                  device::RelayProtocol::Action action,
+                                                  const QString &source);
+    
+    /**
+     * @brief 批量控制 - 支持一次调用控制多个节点/通道
+     * 
+     * 此方法会自动将同一节点的多个通道控制合并为 controlMulti CAN帧，
+     * 节约带宽，提高控制效率。
+     * 
+     * @param items 批量控制请求项列表
+     * @param source 命令来源
+     * @return 批量控制结果（包含优化统计）
+     */
+    BatchControlResult batchControl(const QList<BatchControlItem> &items,
+                                     const QString &source);
+    
     QueueSnapshot queueSnapshot() const;
     ControlJobResult jobResult(quint64 jobId) const;
     device::RelayProtocol::Action parseAction(const QString &str, bool *ok = nullptr) const;

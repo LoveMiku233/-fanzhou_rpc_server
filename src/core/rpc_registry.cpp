@@ -807,6 +807,179 @@ void RpcRegistry::registerRelay()
         return result;
     });
 
+    // 急停优化版 - 使用controlMulti合并多通道控制，减少CAN帧数
+    dispatcher_->registerMethod(QStringLiteral("relay.emergencyStopOptimized"),
+                                 [this](const QJsonObject &) {
+        int stoppedDevices = 0;
+        int stoppedChannels = 0;
+        int failedCount = 0;
+        int originalFrames = 0;
+        int optimizedFrames = 0;
+
+        // 所有通道全部停止
+        device::RelayProtocol::Action stopActions[4] = {
+            device::RelayProtocol::Action::Stop,
+            device::RelayProtocol::Action::Stop,
+            device::RelayProtocol::Action::Stop,
+            device::RelayProtocol::Action::Stop
+        };
+
+        // 遍历所有继电器设备
+        for (auto it = context_->relays.begin(); it != context_->relays.end(); ++it) {
+            auto *dev = it.value();
+            if (!dev) continue;
+
+            originalFrames += kDefaultChannelCount;  // 优化前需要4帧
+
+            // 使用controlMulti一次性停止所有通道
+            const bool ok = dev->controlMulti(stopActions);
+            optimizedFrames++;  // 优化后只需1帧
+
+            if (ok) {
+                stoppedDevices++;
+                stoppedChannels += kDefaultChannelCount;
+            } else {
+                failedCount++;
+            }
+        }
+
+        QJsonObject result{
+            {kKeyOk, true},
+            {QStringLiteral("stoppedDevices"), stoppedDevices},
+            {QStringLiteral("stoppedChannels"), stoppedChannels},
+            {QStringLiteral("failedDevices"), failedCount},
+            {QStringLiteral("deviceCount"), context_->relays.size()},
+            {QStringLiteral("originalFrames"), originalFrames},
+            {QStringLiteral("optimizedFrames"), optimizedFrames},
+            {QStringLiteral("framesSaved"), originalFrames - optimizedFrames}
+        };
+
+        if (context_->canBus) {
+            result[QStringLiteral("txQueueSize")] = context_->canBus->txQueueSize();
+        }
+
+        return result;
+    });
+
+    // 批量控制 - 一次调用控制多个节点/通道，自动合并优化
+    dispatcher_->registerMethod(QStringLiteral("relay.controlBatch"),
+                                 [this](const QJsonObject &params) {
+        // 参数格式：{"commands": [{"node": 1, "ch": 0, "action": "fwd"}, ...]}
+        if (!params.contains(QStringLiteral("commands")) || 
+            !params[QStringLiteral("commands")].isArray()) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, 
+                QStringLiteral("missing commands array"));
+        }
+
+        const QJsonArray commands = params[QStringLiteral("commands")].toArray();
+        QList<BatchControlItem> items;
+
+        for (const auto &cmdVal : commands) {
+            if (!cmdVal.isObject()) continue;
+            const QJsonObject cmd = cmdVal.toObject();
+
+            BatchControlItem item;
+            
+            // 获取节点ID
+            if (!cmd.contains(QStringLiteral("node"))) continue;
+            item.node = static_cast<quint8>(cmd[QStringLiteral("node")].toInt());
+            
+            // 获取通道号
+            if (!cmd.contains(QStringLiteral("ch"))) continue;
+            item.channel = static_cast<quint8>(cmd[QStringLiteral("ch")].toInt());
+            if (item.channel > kMaxChannelId) continue;
+            
+            // 获取动作
+            if (!cmd.contains(QStringLiteral("action"))) continue;
+            bool okAction = false;
+            item.action = context_->parseAction(cmd[QStringLiteral("action")].toString(), &okAction);
+            if (!okAction) continue;
+
+            items.append(item);
+        }
+
+        if (items.isEmpty()) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, 
+                QStringLiteral("no valid commands"));
+        }
+
+        // 执行批量控制
+        const auto result = context_->batchControl(items, QStringLiteral("rpc:relay.controlBatch"));
+
+        QJsonArray jobIds;
+        for (quint64 id : result.jobIds) {
+            jobIds.append(QString::number(id));
+        }
+
+        QJsonObject response{
+            {kKeyOk, result.ok},
+            {kKeyTotal, result.total},
+            {kKeyAccepted, result.accepted},
+            {QStringLiteral("failed"), result.failed},
+            {QStringLiteral("originalFrames"), result.originalFrames},
+            {QStringLiteral("optimizedFrames"), result.optimizedFrames},
+            {QStringLiteral("framesSaved"), result.originalFrames - result.optimizedFrames},
+            {kKeyJobIds, jobIds}
+        };
+
+        if (context_->canBus) {
+            response[QStringLiteral("txQueueSize")] = context_->canBus->txQueueSize();
+        }
+
+        return response;
+    });
+
+    // 分组控制优化版 - 自动合并同一节点的多通道控制
+    dispatcher_->registerMethod(QStringLiteral("group.controlOptimized"),
+                                 [this](const QJsonObject &params) {
+        qint32 groupId = 0;
+        qint32 channel = -1;  // 默认-1表示使用分组绑定的通道
+        QString actionStr;
+
+        if (!rpc::RpcHelpers::getI32(params, "groupId", groupId))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing groupId"));
+        rpc::RpcHelpers::getI32(params, "ch", channel);
+        if (channel < -1 || channel > kMaxChannelId)
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, 
+                QStringLiteral("invalid ch (-1 for bound channels, or 0-%1)").arg(kMaxChannelId));
+        if (!rpc::RpcHelpers::getString(params, "action", actionStr))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing action"));
+
+        bool okAction = false;
+        const auto action = context_->parseAction(actionStr, &okAction);
+        if (!okAction)
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("invalid action (stop/fwd/rev)"));
+
+        if (!context_->deviceGroups.contains(groupId))
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("group not found"));
+
+        // 使用优化版分组控制
+        const auto stats = context_->queueGroupControlOptimized(groupId, channel, action, 
+            QStringLiteral("rpc:group.controlOptimized"));
+
+        QJsonArray jobs;
+        for (quint64 id : stats.jobIds) {
+            jobs.append(QString::number(id));
+        }
+
+        QJsonObject result{
+            {kKeyOk, true},
+            {kKeyTotal, stats.total},
+            {kKeyAccepted, stats.accepted},
+            {kKeyMissing, stats.missing},
+            {kKeyJobIds, jobs},
+            {QStringLiteral("originalFrames"), stats.originalFrameCount},
+            {QStringLiteral("optimizedFrames"), stats.optimizedFrameCount},
+            {QStringLiteral("framesSaved"), stats.originalFrameCount - stats.optimizedFrameCount}
+        };
+
+        if (context_->canBus) {
+            result[QStringLiteral("txQueueSize")] = context_->canBus->txQueueSize();
+        }
+
+        return result;
+    });
+
     // ========================= 新协议v1.2 RPC方法 =========================
 
     // 多通道控制 - 同时控制所有4个通道

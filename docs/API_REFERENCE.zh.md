@@ -962,6 +962,107 @@ RPC服务器支持可选的Token认证机制，用于提高安全防护等级。
 }
 ```
 
+### 🆕 控制指令优化方法
+
+以下方法用于优化CAN总线带宽使用，通过合并多个控制指令为单条CAN帧来减少通信开销。
+
+| 方法名 | 参数 | 返回值 | 说明 |
+|--------|------|--------|------|
+| `relay.emergencyStopOptimized` | 无 | 优化后的急停结果 | **优化版急停** - 使用controlMulti合并，节省75%帧数 |
+| `relay.controlBatch` | `{commands}` | 批量控制结果 | **批量控制** - 一次调用控制多个节点/通道，自动合并优化 |
+| `group.controlOptimized` | `{groupId, ch?, action}` | 优化后的分组控制结果 | **优化版分组控制** - 自动合并同一节点的多通道控制 |
+
+**优化效果说明**：
+- 当控制同一节点的多个通道时，自动使用 `controlMulti` 协议将多条控制命令合并为1条CAN帧
+- 例如：控制节点1的4个通道，原本需要4条CAN帧，优化后只需1条
+- 返回值中包含 `originalFrames`、`optimizedFrames`、`framesSaved` 字段显示优化效果
+
+**relay.emergencyStopOptimized 示例**：
+```bash
+# 执行优化版急停
+{"jsonrpc":"2.0","id":1,"method":"relay.emergencyStopOptimized","params":{}}
+
+# 响应示例 - 3个设备，每个4通道
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "ok": true,
+    "stoppedDevices": 3,
+    "stoppedChannels": 12,
+    "failedDevices": 0,
+    "deviceCount": 3,
+    "originalFrames": 12,    // 原本需要12帧
+    "optimizedFrames": 3,     // 优化后只需3帧
+    "framesSaved": 9,         // 节省9帧 (75%)
+    "txQueueSize": 3
+  }
+}
+```
+
+**relay.controlBatch 示例**：
+```bash
+# 批量控制多个节点/通道
+{"jsonrpc":"2.0","id":1,"method":"relay.controlBatch","params":{
+  "commands": [
+    {"node": 1, "ch": 0, "action": "fwd"},
+    {"node": 1, "ch": 1, "action": "fwd"},
+    {"node": 1, "ch": 2, "action": "rev"},
+    {"node": 2, "ch": 0, "action": "stop"},
+    {"node": 2, "ch": 3, "action": "fwd"}
+  ]
+}}
+
+# 响应示例
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "ok": true,
+    "total": 5,
+    "accepted": 5,
+    "failed": 0,
+    "originalFrames": 5,      // 原本需要5帧
+    "optimizedFrames": 2,     // 节点1合并为1帧，节点2合并为1帧
+    "framesSaved": 3,
+    "jobIds": ["1001", "1002"],
+    "txQueueSize": 2
+  }
+}
+```
+
+**group.controlOptimized 示例**：
+```bash
+# 优化版分组控制
+{"jsonrpc":"2.0","id":1,"method":"group.controlOptimized","params":{
+  "groupId": 1,
+  "ch": -1,        // -1表示使用分组绑定的通道
+  "action": "stop"
+}}
+
+# 响应示例 - 分组包含2个节点，每个节点4个通道
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "ok": true,
+    "total": 8,
+    "accepted": 8,
+    "missing": 0,
+    "jobIds": ["1003", "1004"],
+    "originalFrames": 8,      // 原本需要8帧
+    "optimizedFrames": 2,     // 每个节点合并为1帧
+    "framesSaved": 6,         // 节省6帧 (75%)
+    "txQueueSize": 2
+  }
+}
+```
+
+**优化触发条件**：
+1. 同一节点需要控制2个或更多通道时，自动使用 `controlMulti` 合并
+2. 对于未指定动作的通道，会保留其当前状态（从设备缓存读取）
+3. 自动策略（定时策略、传感器触发策略）已默认使用优化版控制方法
+
 ### 传感器方法
 
 | 方法名 | 参数 | 返回值 | 说明 |
