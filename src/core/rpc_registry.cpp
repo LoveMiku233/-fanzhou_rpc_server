@@ -807,6 +807,175 @@ void RpcRegistry::registerRelay()
         return result;
     });
 
+    // ========================= 新协议v1.2 RPC方法 =========================
+
+    // 多通道控制 - 同时控制所有4个通道
+    dispatcher_->registerMethod(QStringLiteral("relay.controlMulti"),
+                                 [this](const QJsonObject &params) {
+        quint8 node = 0;
+        QString action0Str, action1Str, action2Str, action3Str;
+
+        if (!rpc::RpcHelpers::getU8(params, "node", node))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid node"));
+
+        auto *dev = context_->relays.value(node, nullptr);
+        if (!dev)
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("unknown node"));
+
+        // 获取每个通道的动作（可选，默认为当前状态）
+        device::RelayProtocol::Action actions[4] = {
+            device::RelayProtocol::Action::Stop,
+            device::RelayProtocol::Action::Stop,
+            device::RelayProtocol::Action::Stop,
+            device::RelayProtocol::Action::Stop
+        };
+
+        // 支持两种参数格式：
+        // 1. actions: ["stop", "fwd", "rev", "stop"]
+        // 2. action0, action1, action2, action3
+        if (params.contains(QStringLiteral("actions")) && params[QStringLiteral("actions")].isArray()) {
+            const QJsonArray arr = params[QStringLiteral("actions")].toArray();
+            for (int i = 0; i < 4 && i < arr.size(); ++i) {
+                bool okAction = false;
+                const auto action = context_->parseAction(arr[i].toString(), &okAction);
+                if (okAction) {
+                    actions[i] = action;
+                }
+            }
+        } else {
+            // 逐个获取
+            for (int i = 0; i < 4; ++i) {
+                QString actionStr;
+                if (rpc::RpcHelpers::getString(params, QStringLiteral("action%1").arg(i), actionStr)) {
+                    bool okAction = false;
+                    const auto action = context_->parseAction(actionStr, &okAction);
+                    if (okAction) {
+                        actions[i] = action;
+                    }
+                }
+            }
+        }
+
+        const bool ok = dev->controlMulti(actions);
+
+        QJsonObject result{
+            {kKeyOk, ok}
+        };
+
+        if (context_->canBus) {
+            result[QStringLiteral("txQueueSize")] = context_->canBus->txQueueSize();
+        }
+
+        return result;
+    });
+
+    // 查询所有通道状态 - 使用新协议0x16x
+    dispatcher_->registerMethod(QStringLiteral("relay.queryAllChannels"),
+                                 [this](const QJsonObject &params) {
+        quint8 node = 0;
+
+        if (!rpc::RpcHelpers::getU8(params, "node", node))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid node"));
+
+        auto *dev = context_->relays.value(node, nullptr);
+        if (!dev)
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("unknown node"));
+
+        const bool ok = dev->queryAll();
+
+        QJsonObject result{
+            {kKeyOk, ok}
+        };
+
+        if (context_->canBus) {
+            result[QStringLiteral("txQueueSize")] = context_->canBus->txQueueSize();
+        }
+
+        return result;
+    });
+
+    // 获取自动状态上报数据
+    dispatcher_->registerMethod(QStringLiteral("relay.autoStatus"),
+                                 [this](const QJsonObject &params) {
+        quint8 node = 0;
+
+        if (!rpc::RpcHelpers::getU8(params, "node", node))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid node"));
+
+        auto *dev = context_->relays.value(node, nullptr);
+        if (!dev)
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("unknown node"));
+
+        const auto report = dev->lastAutoStatus();
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        const qint64 lastSeen = dev->lastSeenMs();
+        qint64 ageMs = 0;
+        bool online = false;
+        calcDeviceOnlineStatus(lastSeen, now, ageMs, online);
+
+        QJsonArray channels;
+        for (int i = 0; i < 4; ++i) {
+            QJsonObject ch;
+            ch[kKeyCh] = i;
+            ch[QStringLiteral("status")] = static_cast<int>(report.status[i]);
+            ch[kKeyPhaseLost] = report.phaseLost[i];
+            ch[QStringLiteral("overcurrent")] = report.overcurrent[i];
+            ch[kKeyCurrentA] = static_cast<double>(report.currentA[i]);
+            channels.append(ch);
+        }
+
+        return QJsonObject{
+            {kKeyOk, true},
+            {kKeyNode, static_cast<int>(node)},
+            {kKeyOnline, online},
+            {kKeyAgeMs, (ageMs >= 0) ? static_cast<double>(ageMs) : QJsonValue()},
+            {kKeyChannels, channels}
+        };
+    });
+
+    // 设置过流标志
+    dispatcher_->registerMethod(QStringLiteral("relay.setOvercurrent"),
+                                 [this](const QJsonObject &params) {
+        quint8 node = 0;
+        qint32 channel = 0;
+        qint32 flag = 0;
+
+        if (!rpc::RpcHelpers::getU8(params, "node", node))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid node"));
+
+        // channel: 0-3 表示单个通道，-1 或 255 表示所有通道
+        if (!rpc::RpcHelpers::getI32(params, "ch", channel))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing ch"));
+
+        // 验证channel参数：必须是0-3或-1/255表示所有通道
+        if (channel != -1 && channel != 255 && (channel < 0 || channel > kMaxChannelId))
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue,
+                QStringLiteral("invalid ch (0-3 for single channel, -1 or 255 for all channels)"));
+
+        if (!rpc::RpcHelpers::getI32(params, "flag", flag))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing flag"));
+
+        // 验证flag参数：必须在0-255范围内
+        if (flag < 0 || flag > 255)
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue,
+                QStringLiteral("invalid flag (must be 0-255)"));
+
+        auto *dev = context_->relays.value(node, nullptr);
+        if (!dev)
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("unknown node"));
+
+        // 转换channel参数
+        quint8 channelParam = (channel == -1 || channel == 255) ? 0xFF : static_cast<quint8>(channel);
+
+        const bool ok = dev->setOvercurrentFlag(channelParam, static_cast<quint8>(flag));
+
+        return QJsonObject{
+            {kKeyOk, ok},
+            {kKeyChannel, channel},
+            {QStringLiteral("flag"), flag}
+        };
+    });
+
     // 传感器读取 - 读取指定传感器的当前数值
     dispatcher_->registerMethod(QStringLiteral("sensor.read"),
                                  [this](const QJsonObject &params) {

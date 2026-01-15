@@ -8,6 +8,12 @@
  * 3. CoreContext::executeJob() 执行命令，调用 RelayGd427::control()
  * 4. control() 通过 CanComm::sendFrame() 发送CAN帧
  * 
+ * 协议版本：v1.2
+ * - 支持单通道控制（0x10x）和多通道控制（0x12x）
+ * - 支持单通道查询（0x14x）和全通道查询（0x16x）
+ * - 支持单通道状态响应（0x20x）和自动状态上报（0x22x）
+ * - 支持设置命令（0x30x）和设置响应（0x38x）
+ * 
  * 如果设备无法控制，请检查：
  * 1. CAN总线是否打开 - 调用 can.status RPC 检查
  * 2. CAN接口是否启动 - 执行 ip link show can0
@@ -36,20 +42,13 @@ RelayGd427::RelayGd427(quint8 nodeId, comm::CanComm *bus, QObject *parent)
 bool RelayGd427::init()
 {
     // 初始化时查询所有通道状态
-    // Query all channels on initialization
-    for (quint8 ch = 0; ch <= kMaxChannel; ++ch) {
-        query(ch);
-    }
-    return true;
+    return queryAll();
 }
 
 void RelayGd427::poll()
 {
-    // 简单轮询：每次轮询查询一个通道
-    // Simple polling: query one channel per poll cycle
-    static quint8 currentChannel = 0;
-    query(currentChannel);
-    currentChannel = (currentChannel + 1) % (kMaxChannel + 1);
+    // 使用全通道查询替代逐个通道查询，减少CAN总线负载
+    queryAll();
 }
 
 QString RelayGd427::name() const
@@ -70,12 +69,9 @@ qint64 RelayGd427::lastSeenMs() const
 }
 
 /**
- * @brief 控制继电器通道
+ * @brief 控制单个继电器通道
  * 
- * 发送控制命令到CAN总线。如果命令发送失败，可能的原因：
- * 1. bus_ 为空 - CAN总线未初始化
- * 2. 通道号超出范围 - 有效范围 0-3
- * 3. CAN发送队列满 - 检查 CanComm::sendFrame() 返回值
+ * 发送单通道控制命令到CAN总线（0x10x）。
  * 
  * @param channel 通道号 (0-3)
  * @param action 动作 (Stop/Forward/Reverse)
@@ -83,43 +79,111 @@ qint64 RelayGd427::lastSeenMs() const
  */
 bool RelayGd427::control(quint8 channel, RelayProtocol::Action action)
 {
-    // 检查参数有效性
     if (!bus_ || channel > kMaxChannel) {
         return false;
     }
 
-    // 构建控制命令
     RelayProtocol::CtrlCmd cmd;
     cmd.type = RelayProtocol::CmdType::ControlRelay;
     cmd.channel = channel;
     cmd.action = action;
 
-    // 计算CAN ID并发送帧
-    // CAN ID = 控制基地址 + 节点ID
-    const quint32 canId = RelayProtocol::kCtrlBaseId + nodeId_;
+    // CAN ID = 单通道控制基地址 + 节点ID
+    const quint32 canId = RelayProtocol::kSingleCtrlBaseId + nodeId_;
     return bus_->sendFrame(canId, RelayProtocol::encodeCtrl(cmd), false, false);
 }
 
+/**
+ * @brief 同时控制多个继电器通道
+ * 
+ * 发送多通道控制命令到CAN总线（0x12x）。
+ * 一次性控制所有4个通道。
+ * 
+ * @param actions 4个通道的动作数组
+ * @return 命令是否成功入队发送
+ */
+bool RelayGd427::controlMulti(const RelayProtocol::Action actions[4])
+{
+    if (!bus_) {
+        return false;
+    }
+
+    RelayProtocol::MultiCtrlCmd cmd;
+    cmd.type = RelayProtocol::CmdType::MultiControlRelay;
+    for (int i = 0; i < 4; ++i) {
+        cmd.actions[i] = actions[i];
+    }
+
+    // CAN ID = 多通道控制基地址 + 节点ID
+    const quint32 canId = RelayProtocol::kMultiCtrlBaseId + nodeId_;
+    return bus_->sendFrame(canId, RelayProtocol::encodeMultiCtrl(cmd), false, false);
+}
+
+/**
+ * @brief 查询单个通道状态
+ * 
+ * 发送单通道查询命令到CAN总线（0x14x）。
+ * 
+ * @param channel 通道号 (0-3)
+ * @return 查询是否成功入队发送
+ */
 bool RelayGd427::query(quint8 channel)
 {
     if (!bus_ || channel > kMaxChannel) {
         return false;
     }
 
-    RelayProtocol::CtrlCmd cmd;
-    cmd.type = RelayProtocol::CmdType::QueryStatus;
-    cmd.channel = channel;
-    cmd.action = RelayProtocol::Action::Stop;
-
-    const quint32 canId = RelayProtocol::kCtrlBaseId + nodeId_;
-    return bus_->sendFrame(canId, RelayProtocol::encodeCtrl(cmd), false, false);
+    // CAN ID = 单通道查询基地址 + 节点ID
+    const quint32 canId = RelayProtocol::kSingleQueryBaseId + nodeId_;
+    return bus_->sendFrame(canId, RelayProtocol::encodeSingleQuery(channel), false, false);
 }
 
-void RelayGd427::onStatusFrame(quint32 canId, const QByteArray &payload)
+/**
+ * @brief 查询所有通道状态
+ * 
+ * 发送全通道查询命令到CAN总线（0x16x）。
+ * 设备会依次响应4个单通道状态帧（0x20x）。
+ * 
+ * @return 查询是否成功入队发送
+ */
+bool RelayGd427::queryAll()
+{
+    if (!bus_) {
+        return false;
+    }
+
+    // CAN ID = 全通道查询基地址 + 节点ID
+    const quint32 canId = RelayProtocol::kAllQueryBaseId + nodeId_;
+    return bus_->sendFrame(canId, RelayProtocol::encodeAllQuery(), false, false);
+}
+
+/**
+ * @brief 设置过流标志
+ * 
+ * 发送设置过流标志命令到CAN总线（0x30x，命令类型0x17）。
+ * 
+ * @param channel 通道号（0-3，或0xFF表示所有通道）
+ * @param flag 过流标志值
+ * @return 命令是否成功入队发送
+ */
+bool RelayGd427::setOvercurrentFlag(quint8 channel, quint8 flag)
+{
+    if (!bus_) {
+        return false;
+    }
+
+    // CAN ID = 设置命令基地址 + 节点ID
+    const quint32 canId = RelayProtocol::kSettingsCmdBaseId + nodeId_;
+    return bus_->sendFrame(canId, RelayProtocol::encodeSetOvercurrentFlag(channel, flag), false, false);
+}
+
+/**
+ * @brief 处理单通道状态响应帧（0x20x）
+ */
+void RelayGd427::onSingleStatusFrame(quint32 canId, const QByteArray &payload)
 {
     Q_UNUSED(canId);
 
-    // 收到任何来自该节点的CAN帧都更新lastSeenMs，表示节点在线
     markSeen();
     lastRxTimer_.restart();
 
@@ -138,6 +202,54 @@ void RelayGd427::onStatusFrame(quint32 canId, const QByteArray &payload)
     emit updated();
 }
 
+/**
+ * @brief 处理自动状态上报帧（0x22x）
+ */
+void RelayGd427::onAutoStatusFrame(quint32 canId, const QByteArray &payload)
+{
+    Q_UNUSED(canId);
+
+    markSeen();
+    lastRxTimer_.restart();
+
+    RelayProtocol::AutoStatusReport report;
+    if (!RelayProtocol::decodeAutoStatus(payload, report)) {
+        return;
+    }
+
+    // 保存自动状态上报
+    autoStatus_ = report;
+
+    // 同步更新各通道状态
+    for (int i = 0; i < 4; ++i) {
+        status_[i].channel = static_cast<quint8>(i);
+        status_[i].statusByte = static_cast<quint8>(report.status[i]);
+        status_[i].phaseLostFlag = report.phaseLost[i] ? 1 : 0;
+        status_[i].currentA = report.currentA[i];
+        status_[i].overcurrent = report.overcurrent[i];
+    }
+
+    emit autoStatusReceived(report);
+    emit updated();
+}
+
+/**
+ * @brief 处理设置响应帧（0x38x）
+ */
+void RelayGd427::onSettingsRespFrame(quint32 canId, const QByteArray &payload)
+{
+    Q_UNUSED(canId);
+
+    markSeen();
+
+    RelayProtocol::SettingsResp resp;
+    if (!RelayProtocol::decodeSettingsResp(payload, resp)) {
+        return;
+    }
+
+    emit settingsResponseReceived(static_cast<quint8>(resp.cmdType), static_cast<quint8>(resp.status));
+}
+
 RelayProtocol::Status RelayGd427::lastStatus(quint8 channel) const
 {
     if (channel > kMaxChannel) {
@@ -151,8 +263,14 @@ bool RelayGd427::canAccept(quint32 canId, bool extended, bool rtr) const
     if (extended || rtr) {
         return false;
     }
-    const quint32 expectedId = RelayProtocol::kStatusBaseId + nodeId_;
-    return canId == expectedId;
+
+    // 计算期望的CAN ID
+    const quint32 singleStatusId = RelayProtocol::kSingleStatusBaseId + nodeId_;
+    const quint32 autoStatusId = RelayProtocol::kAutoStatusBaseId + nodeId_;
+    const quint32 settingsRespId = RelayProtocol::kSettingsRespBaseId + nodeId_;
+
+    // 接受单通道状态响应、自动状态上报和设置响应
+    return canId == singleStatusId || canId == autoStatusId || canId == settingsRespId;
 }
 
 void RelayGd427::canOnFrame(quint32 canId, const QByteArray &payload,
@@ -160,7 +278,18 @@ void RelayGd427::canOnFrame(quint32 canId, const QByteArray &payload,
 {
     Q_UNUSED(extended);
     Q_UNUSED(rtr);
-    onStatusFrame(canId, payload);
+
+    const quint32 singleStatusId = RelayProtocol::kSingleStatusBaseId + nodeId_;
+    const quint32 autoStatusId = RelayProtocol::kAutoStatusBaseId + nodeId_;
+    const quint32 settingsRespId = RelayProtocol::kSettingsRespBaseId + nodeId_;
+
+    if (canId == singleStatusId) {
+        onSingleStatusFrame(canId, payload);
+    } else if (canId == autoStatusId) {
+        onAutoStatusFrame(canId, payload);
+    } else if (canId == settingsRespId) {
+        onSettingsRespFrame(canId, payload);
+    }
 }
 
 }  // namespace device

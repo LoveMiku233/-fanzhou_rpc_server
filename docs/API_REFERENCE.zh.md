@@ -470,33 +470,62 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 
 ### can/relay_protocol.h
 
-**文件说明**：CAN继电器协议定义。
+**文件说明**：CAN继电器协议定义（协议版本 v1.2）。
 
 #### 命名空间：`RelayProtocol`
 
-**常量**：
+**CAN ID 基地址常量**：
 
 | 常量 | 值 | 说明 |
 |------|-----|------|
-| `kCtrlBaseId` | 0x100 | 控制命令基地址 |
-| `kStatusBaseId` | 0x200 | 状态响应基地址 |
+| `kSingleCtrlBaseId` | 0x100 | 单通道控制命令基地址 (0x100-0x11F) |
+| `kMultiCtrlBaseId` | 0x120 | 多通道控制命令基地址 (0x120-0x13F) |
+| `kSingleQueryBaseId` | 0x140 | 单通道查询命令基地址 (0x140-0x15F) |
+| `kAllQueryBaseId` | 0x160 | 全通道查询命令基地址 (0x160-0x17F) |
+| `kSingleStatusBaseId` | 0x200 | 单通道状态响应基地址 (0x200-0x21F) |
+| `kAutoStatusBaseId` | 0x220 | 自动状态上报基地址 (0x220-0x23F) |
+| `kSettingsCmdBaseId` | 0x300 | 设置命令基地址 (0x300-0x37F) |
+| `kSettingsRespBaseId` | 0x380 | 设置响应基地址 (0x380-0x3FF) |
+| `kCtrlBaseId` | 0x100 | @deprecated 使用 kSingleCtrlBaseId |
+| `kStatusBaseId` | 0x200 | @deprecated 使用 kSingleStatusBaseId |
 
 **枚举**：
 
 | 枚举 | 值 | 说明 |
 |------|-----|------|
-| `CmdType::ControlRelay` | 0x01 | 控制继电器 |
-| `CmdType::QueryStatus` | 0x02 | 查询状态 |
+| `CmdType::ControlRelay` | 0x01 | 单通道继电器控制 |
+| `CmdType::QueryStatus` | 0x02 | 单通道状态查询 |
+| `CmdType::MultiControlRelay` | 0x03 | 多通道继电器控制 |
+| `CmdType::QueryAllStatus` | 0x04 | 全通道状态查询 |
 | `Action::Stop` | 0x00 | 停止 |
 | `Action::Forward` | 0x01 | 正转 |
 | `Action::Reverse` | 0x02 | 反转 |
+
+**设置命令类型枚举 `SettingsCmdType`**：
+
+| 枚举 | 值 | 说明 |
+|------|-----|------|
+| `SetDeviceAddress` | 0x10 | 设置设备地址 |
+| `SetCommMode` | 0x11 | 设置通信模式 |
+| `SetCanBitrate` | 0x13 | 设置CAN波特率 |
+| `SetLedStatus` | 0x14 | 设置LED状态 |
+| `SetCurrentThreshold` | 0x16 | 设置电流阈值 |
+| `SetOvercurrentFlag` | 0x17 | 设置过流标志 |
+| `GetSystemStatus` | 0x20 | 获取系统状态 |
+| `GetSystemConfig` | 0x21 | 获取系统配置 |
+| `SaveConfig` | 0x30 | 保存配置到EEPROM |
+| `SystemReboot` | 0x3F | 系统重启 |
 
 **结构体**：
 
 | 结构体 | 说明 |
 |--------|------|
-| `CtrlCmd` | 控制命令 |
-| `Status` | 状态响应 |
+| `CtrlCmd` | 单通道控制命令 |
+| `MultiCtrlCmd` | 多通道控制命令（同时控制4个通道） |
+| `Status` | 单通道状态响应（含overcurrent标志） |
+| `AutoStatusReport` | 自动状态上报（压缩格式，含缺相和过流标志） |
+| `SettingsCmd` | 设置命令 |
+| `SettingsResp` | 设置响应 |
 
 **函数**：
 
@@ -506,14 +535,21 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 | `phaseLost()` | 检查缺相标志 |
 | `leFloat()` | 解码小端浮点数 |
 | `putLeFloat()` | 编码小端浮点数 |
-| `encodeCtrl()` | 编码控制命令 |
-| `decodeStatus()` | 解码状态响应 |
+| `encodeCtrl()` | 编码单通道控制命令 |
+| `encodeMultiCtrl()` | 编码多通道控制命令 |
+| `encodeSingleQuery()` | 编码单通道查询命令 |
+| `encodeAllQuery()` | 编码全通道查询命令 |
+| `decodeStatus()` | 解码单通道状态响应 |
+| `decodeAutoStatus()` | 解码自动状态上报（压缩格式） |
+| `encodeSettingsCmd()` | 编码设置命令 |
+| `encodeSetOvercurrentFlag()` | 编码设置过流标志命令 |
+| `decodeSettingsResp()` | 解码设置响应 |
 
 ---
 
 ### can/relay_gd427.h / relay_gd427.cpp
 
-**文件说明**：GD427 CAN继电器设备控制器。
+**文件说明**：GD427 CAN继电器设备控制器（支持协议 v1.2）。
 
 #### 类：`RelayGd427`
 
@@ -522,16 +558,22 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 | 方法 | 参数 | 返回值 | 说明 |
 |------|------|--------|------|
 | `nodeId()` | 无 | `quint8` | 获取节点ID |
-| `control()` | `channel, action` | `bool` | 控制继电器通道 |
-| `query()` | `channel` | `bool` | 查询通道状态 |
-| `lastStatus()` | `channel` | `Status` | 获取最后状态 |
+| `control()` | `channel, action` | `bool` | 控制单个继电器通道（0x10x） |
+| `controlMulti()` | `actions[4]` | `bool` | 同时控制多个通道（0x12x） |
+| `query()` | `channel` | `bool` | 查询单个通道状态（0x14x） |
+| `queryAll()` | 无 | `bool` | 查询所有通道状态（0x16x） |
+| `setOvercurrentFlag()` | `channel, flag` | `bool` | 设置过流标志（0x30x） |
+| `lastStatus()` | `channel` | `Status` | 获取通道最后状态 |
+| `lastAutoStatus()` | 无 | `AutoStatusReport` | 获取最后自动状态上报 |
 | `lastSeenMs()` | 无 | `qint64` | 获取最后响应时间 |
 
 **信号**：
 
 | 信号 | 参数 | 说明 |
 |------|------|------|
-| `statusUpdated()` | `channel, status` | 状态更新 |
+| `statusUpdated()` | `channel, status` | 单通道状态更新（0x20x） |
+| `autoStatusReceived()` | `report` | 自动状态上报接收（0x22x） |
+| `settingsResponseReceived()` | `cmdType, status` | 设置响应接收（0x38x） |
 
 ---
 
@@ -839,18 +881,56 @@ RPC服务器支持可选的Token认证机制，用于提高安全防护等级。
 
 | 方法名 | 参数 | 返回值 | 说明 |
 |--------|------|--------|------|
-| `relay.control` | `{node, ch, action}` | `{ok, jobId, queued, txQueueSize, warning?}` | 控制继电器 |
-| `relay.query` | `{node, ch}` | `{ok}` | 查询状态 |
+| `relay.control` | `{node, ch, action}` | `{ok, jobId, queued, txQueueSize, warning?}` | 控制单个继电器通道 |
+| `relay.controlMulti` | `{node, actions/action0-3}` | `{ok, txQueueSize}` | **新** 同时控制多个通道（协议v1.2） |
+| `relay.query` | `{node, ch}` | `{ok}` | 查询单个通道状态 |
+| `relay.queryAllChannels` | `{node}` | `{ok, txQueueSize}` | **新** 查询所有通道状态（协议v1.2） |
 | `relay.status` | `{node, ch}` | 通道状态对象（包含online、ageMs、diagnostic?） | 获取通道详情 |
 | `relay.statusAll` | `{node}` | 所有通道状态（包含online、ageMs、diagnostic?、txQueueSize?） | 获取节点所有通道 |
+| `relay.autoStatus` | `{node}` | 自动状态上报数据（含overcurrent） | **新** 获取自动状态上报（协议v1.2） |
 | `relay.nodes` | 无 | 节点列表 | 获取所有节点 |
 | `relay.queryAll` | 无 | `{ok, queriedDevices, txQueueSize, warning?}` | 批量查询所有设备 |
 | `relay.emergencyStop` | 无 | `{ok, stoppedChannels, failedChannels, deviceCount}` | **急停** - 立即停止所有设备的所有通道 |
+| `relay.setOvercurrent` | `{node, ch, flag}` | `{ok}` | **新** 设置过流标志（协议v1.2） |
 
 **参数说明**：
 - `node`: 节点ID (1-255)，支持数字或字符串
-- `ch`: 通道号 (0-3)，支持数字或字符串
+- `ch`: 通道号 (0-3)，支持数字或字符串；`-1` 或 `255` 表示所有通道
 - `action`: 动作 ("stop" / "fwd" / "rev")
+- `actions`: 4个动作的数组 ["stop", "fwd", "rev", "stop"]
+- `action0` ~ `action3`: 单独指定每个通道的动作
+- `flag`: 过流标志值（0 或 1，全通道时为bit掩码）
+
+**新协议v1.2方法示例**：
+
+```bash
+# 多通道控制 - 使用actions数组
+{"jsonrpc":"2.0","id":1,"method":"relay.controlMulti","params":{
+  "node":1,
+  "actions":["fwd","rev","stop","fwd"]
+}}
+
+# 多通道控制 - 使用单独参数
+{"jsonrpc":"2.0","id":2,"method":"relay.controlMulti","params":{
+  "node":1,
+  "action0":"fwd",
+  "action1":"stop",
+  "action2":"rev",
+  "action3":"stop"
+}}
+
+# 查询所有通道状态
+{"jsonrpc":"2.0","id":3,"method":"relay.queryAllChannels","params":{"node":1}}
+
+# 获取自动状态上报数据（包含过流标志）
+{"jsonrpc":"2.0","id":4,"method":"relay.autoStatus","params":{"node":1}}
+
+# 设置单个通道过流标志
+{"jsonrpc":"2.0","id":5,"method":"relay.setOvercurrent","params":{"node":1,"ch":0,"flag":1}}
+
+# 设置所有通道过流标志（使用bit掩码）
+{"jsonrpc":"2.0","id":6,"method":"relay.setOvercurrent","params":{"node":1,"ch":-1,"flag":5}}
+```
 
 **诊断字段**：
 - `txQueueSize`: CAN发送队列中待发送的帧数，数值过大表示CAN总线拥堵
@@ -1184,6 +1264,7 @@ RPC服务器支持可选的Token认证机制，用于提高安全防护等级。
 | 1.0.5 | 2026-01 | 新增：配置管理RPC方法（config.get/save/reload），解决"Web页面修改无法保存"问题；改进CAN诊断信息 |
 | 1.0.6 | 2026-01 | 新增：急停功能（relay.emergencyStop）和传感器接口（sensor.list/read），支持串口和CAN通讯方式 |
 | 1.1.0 | 2026-01 | **重大更新**：增强设备层架构，新增Modbus/UART/CAN传感器支持，添加接口类型定义，新增device.commTypes和device.interfaceTypes方法 |
+| 1.2.0 | 2026-01 | **协议v1.2**：实现新版CAN通信协议，新增多通道控制（relay.controlMulti）、全通道查询（relay.queryAllChannels）、自动状态上报（relay.autoStatus）、过流标志设置（relay.setOvercurrent）等方法 |
 
 ---
 
