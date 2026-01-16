@@ -84,3 +84,4 @@ qt_app/.qmake.stash
 
 # Tauri build artifacts
 test_web/src-tauri/target/
+‎test_web/src-tauri/Cargo.lock
