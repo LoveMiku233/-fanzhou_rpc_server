@@ -73,6 +73,40 @@ bool getBool(const QJsonObject &params, const char *key, bool &out,
     return true;
 }
 
+
+/**
+ * @brief 从JSON对象提取Double整数
+ *
+ * 支持数字类型和字符串类型的值，字符串会尝试转换为Double。
+ *
+ * @param params JSON参数对象
+ * @param key 参数键
+ * @param out 输出值
+ * @return 成功返回true，失败（缺少键或类型不支持）返回false
+ */
+bool getDouble(const QJsonObject &params, const char *key, double &out)
+{
+    if (!params.contains(key)) {
+        return false;
+    }
+
+    const QJsonValue val = params.value(key);
+
+    // 支持数字类型
+    if (val.isDouble()) {
+        out = val.toDouble();
+        return true;
+    }
+    else if (val.isString()) {
+        bool ok = false;
+        out = val.toString().toDouble(&ok);
+        return ok;
+    }
+
+    return false;
+}
+
+
 /**
  * @brief 从JSON对象提取32位整数
  *
@@ -114,7 +148,7 @@ bool getI32(const QJsonObject &params, const char *key, qint32 &out)
  * @param out 输出值
  * @return 成功返回true，失败（缺少键或类型错误）返回false
  */
-bool getString(const QJsonObject &params, const char *key, QString &out)
+bool getString(const QJsonObject &params, const QString &key, QString &out)
 {
     if (!params.contains(key) || !params.value(key).isString()) {
         return false;

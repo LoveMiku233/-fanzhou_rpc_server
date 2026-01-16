@@ -42,6 +42,7 @@ SOURCES += \
     src/core/rpc_registry.cpp
 
 HEADERS += \
+    src/cloud/cloud_types.h \
     src/cloud/mqtt/mqtt_client.h \
     src/cloud/mqtt/mqtt_channel_manager.h \
     src/utils/utils.h \

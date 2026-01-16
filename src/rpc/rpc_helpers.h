@@ -45,6 +45,18 @@ bool getBool(const QJsonObject &params, const char *key, bool &out,
              bool defaultValue = false);
 
 /**
+ * @brief 从JSON对象提取Double整数
+ *
+ * 支持数字类型和字符串类型的值，字符串会尝试转换为Double。
+ *
+ * @param params JSON参数对象
+ * @param key 参数键
+ * @param out 输出值
+ * @return 成功返回true，失败（缺少键或类型不支持）返回false
+ */
+bool getDouble(const QJsonObject &params, const char *key, double &out);
+
+/**
  * @brief 从JSON对象提取32位整数
  *
  * 支持数字类型和字符串类型的值，字符串会尝试转换为整数。
@@ -63,7 +75,7 @@ bool getI32(const QJsonObject &params, const char *key, qint32 &out);
  * @param out 输出值
  * @return 成功返回true
  */
-bool getString(const QJsonObject &params, const char *key, QString &out);
+bool getString(const QJsonObject &params, const QString &key, QString &out);
 
 /**
  * @brief 从JSON对象提取十六进制编码字节

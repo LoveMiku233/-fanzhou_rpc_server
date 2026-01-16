@@ -52,7 +52,7 @@ QJsonObject MqttChannelConfig::toJson() const
     if (!username.isEmpty()) {
         obj[QStringLiteral("username")] = username;
     }
-    // 不保存密码到JSON（安全考虑）
+    // @TODO 不保存密码到JSON
     obj[QStringLiteral("topicPrefix")] = topicPrefix;
     obj[QStringLiteral("keepAliveSec")] = keepAliveSec;
     obj[QStringLiteral("autoReconnect")] = autoReconnect;

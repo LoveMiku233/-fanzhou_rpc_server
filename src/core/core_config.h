@@ -183,7 +183,7 @@ struct SensorStrategyConfig {
     QString name;                 ///< 策略名称
     QString sensorType;          ///< 传感器类型 (temperature/humidity/light/pressure/soil_moisture/co2)
     int sensorNode = 0;          ///< 传感器节点ID
-    QString condition;           ///< 阈值条件 (gt/lt/eq/gte/lte)
+    QString condition;           ///< 阈值条件 (gt/lt/eq/gte/lte)  @TODO:条件操作符  eq 等于 ne 不等于 gt 大于 lt 小于 egt 大等于 elt 小等于
     double threshold = 0.0;      ///< 阈值
     int groupId = 0;             ///< 绑定的分组ID
     int channel = 0;             ///< 控制通道，-1表示所有通道
