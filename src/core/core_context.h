@@ -26,6 +26,8 @@ class SystemMonitor;
 
 namespace cloud {
 class MqttChannelManager;
+class SceneManager;
+class CloudMessageHandler;
 }
 
 namespace comm {
@@ -173,6 +175,8 @@ public:
     comm::CanComm *canBus = nullptr;
     device::CanDeviceManager *canManager = nullptr;
     cloud::MqttChannelManager *mqttManager = nullptr;    ///< MQTT多通道管理器
+    cloud::SceneManager *sceneManager = nullptr;         ///< 场景管理器
+    cloud::CloudMessageHandler *cloudMessageHandler = nullptr; ///< 云平台消息处理器
 
     // 设备注册表：节点ID -> 设备
     QHash<quint8, device::RelayGd427 *> relays;
