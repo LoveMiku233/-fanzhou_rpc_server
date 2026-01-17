@@ -16,6 +16,9 @@ INCLUDEPATH += $$PWD/src
 
 SOURCES += \
     main.cpp \
+    src/cloud/scene_types.cpp \
+    src/cloud/scene_manager.cpp \
+    src/cloud/cloud_message_handler.cpp \
     src/cloud/mqtt/mqtt_client.cpp \
     src/cloud/mqtt/mqtt_channel_manager.cpp \
     src/utils/utils.cpp \
@@ -43,6 +46,9 @@ SOURCES += \
 
 HEADERS += \
     src/cloud/cloud_types.h \
+    src/cloud/scene_types.h \
+    src/cloud/scene_manager.h \
+    src/cloud/cloud_message_handler.h \
     src/cloud/mqtt/mqtt_client.h \
     src/cloud/mqtt/mqtt_channel_manager.h \
     src/utils/utils.h \

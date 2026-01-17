@@ -377,6 +377,20 @@ journalctl -u fanzhou-rpc -f
 | `auto.strategy.enable` | `{id, enabled}` | 启用/禁用策略 |
 | `auto.strategy.trigger` | `{id}` | 手动触发策略 |
 
+### 场景管理（泛舟云平台）
+
+| 方法 | 参数 | 说明 |
+|------|------|------|
+| `scene.list` | `{id?}` | 获取场景列表，id为0或省略获取全部 |
+| `scene.get` | `{id}` | 获取单个场景详情 |
+| `scene.save` | `{场景对象}` | 创建或更新场景 |
+| `scene.delete` | `{id}` | 删除场景 |
+| `scene.enable` | `{id, enabled}` | 启用/禁用场景 |
+| `scene.trigger` | `{id}` | 手动触发场景 |
+| `scene.syncFromCloud` | `{id?}` | 从云端拉取场景 |
+
+> **注意**：场景管理功能按照泛舟云平台大棚智能控制柜系统技术文档实现，支持通过MQTT与云端进行场景同步。详细协议请参考 [泛舟云平台协议文档](./FANZHOU_CLOUD_PROTOCOL.zh.md)。
+
 ## 使用示例
 
 ### 命令行测试

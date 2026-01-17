@@ -7,6 +7,9 @@
 #include "core_context.h"
 
 #include "cloud/mqtt/mqtt_channel_manager.h"
+#include "cloud/scene_manager.h"
+#include "cloud/scene_types.h"
+#include "cloud/cloud_message_handler.h"
 #include "comm/can_comm.h"
 #include "config/system_monitor.h"
 #include "config/system_settings.h"
@@ -149,6 +152,7 @@ void RpcRegistry::registerAll()
     registerMqtt();    // 添加MQTT多通道管理RPC方法
     registerMonitor(); // 添加系统资源监控RPC方法
     registerAuth();    // 添加认证RPC方法
+    registerScene();   // 添加场景管理RPC方法
 }
 
 void RpcRegistry::registerBase()
@@ -2863,6 +2867,238 @@ void RpcRegistry::registerAuth()
         return QJsonObject{
             {kKeyOk, true},
             {QStringLiteral("totalWhitelist"), context_->authConfig.whitelist.size()}
+        };
+    });
+}
+
+// ===================== 场景管理RPC方法 =====================
+
+void RpcRegistry::registerScene()
+{
+    // 获取场景列表
+    dispatcher_->registerMethod(QStringLiteral("scene.list"),
+                                 [this](const QJsonObject &params) {
+        if (!context_->sceneManager) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState,
+                                        QStringLiteral("Scene manager not available"));
+        }
+
+        qint32 sceneId = 0;
+        rpc::RpcHelpers::getI32(params, "id", sceneId);
+
+        QJsonArray scenesArr;
+        const auto scenes = context_->sceneManager->getScenes(sceneId);
+        for (const auto &scene : scenes) {
+            scenesArr.append(scene.toJson());
+        }
+
+        return QJsonObject{
+            {kKeyOk, true},
+            {QStringLiteral("scenes"), scenesArr},
+            {kKeyTotal, scenesArr.size()}
+        };
+    });
+
+    // 获取单个场景
+    dispatcher_->registerMethod(QStringLiteral("scene.get"),
+                                 [this](const QJsonObject &params) {
+        if (!context_->sceneManager) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState,
+                                        QStringLiteral("Scene manager not available"));
+        }
+
+        qint32 sceneId = 0;
+        if (!rpc::RpcHelpers::getI32(params, "id", sceneId) || sceneId <= 0) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter,
+                                        QStringLiteral("missing/invalid id"));
+        }
+
+        const auto scene = context_->sceneManager->getScene(sceneId);
+        if (scene.id == 0) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue,
+                                        QStringLiteral("scene not found"));
+        }
+
+        QJsonObject result = scene.toJson();
+        result[kKeyOk] = true;
+        return result;
+    });
+
+    // 创建/更新场景
+    dispatcher_->registerMethod(QStringLiteral("scene.save"),
+                                 [this](const QJsonObject &params) {
+        if (!context_->sceneManager) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState,
+                                        QStringLiteral("Scene manager not available"));
+        }
+
+        // 从参数构建场景配置
+        cloud::SceneConfig scene = cloud::SceneConfig::fromJson(params);
+
+        QString error;
+        cloud::SceneProcessResult result = context_->sceneManager->saveScene(scene, &error);
+
+        if (result.status == QStringLiteral("fail")) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, result.errorMsg);
+        }
+
+        return QJsonObject{
+            {kKeyOk, true},
+            {QStringLiteral("id"), result.id},
+            {kKeyName, result.sceneName},
+            {QStringLiteral("version"), result.version},
+            {QStringLiteral("status"), result.status}
+        };
+    });
+
+    // 删除场景
+    dispatcher_->registerMethod(QStringLiteral("scene.delete"),
+                                 [this](const QJsonObject &params) {
+        if (!context_->sceneManager) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState,
+                                        QStringLiteral("Scene manager not available"));
+        }
+
+        qint32 sceneId = 0;
+        if (!rpc::RpcHelpers::getI32(params, "id", sceneId) || sceneId <= 0) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter,
+                                        QStringLiteral("missing/invalid id"));
+        }
+
+        QString error;
+        cloud::SceneProcessResult result = context_->sceneManager->deleteScene(sceneId, &error);
+
+        if (result.status == QStringLiteral("fail")) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, result.errorMsg);
+        }
+
+        return QJsonObject{
+            {kKeyOk, true},
+            {QStringLiteral("id"), result.id},
+            {QStringLiteral("status"), result.status}
+        };
+    });
+
+    // 启用/禁用场景
+    dispatcher_->registerMethod(QStringLiteral("scene.enable"),
+                                 [this](const QJsonObject &params) {
+        if (!context_->sceneManager) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState,
+                                        QStringLiteral("Scene manager not available"));
+        }
+
+        qint32 sceneId = 0;
+        bool enabled = true;
+
+        if (!rpc::RpcHelpers::getI32(params, "id", sceneId) || sceneId <= 0) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter,
+                                        QStringLiteral("missing/invalid id"));
+        }
+        if (!params.contains(QStringLiteral("enabled"))) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter,
+                                        QStringLiteral("missing enabled"));
+        }
+        rpc::RpcHelpers::getBool(params, "enabled", enabled, true);
+
+        if (!context_->sceneManager->setSceneEnabled(sceneId, enabled)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue,
+                                        QStringLiteral("scene not found"));
+        }
+
+        return QJsonObject{
+            {kKeyOk, true},
+            {QStringLiteral("id"), sceneId},
+            {kKeyEnabled, enabled}
+        };
+    });
+
+    // 手动触发场景
+    dispatcher_->registerMethod(QStringLiteral("scene.trigger"),
+                                 [this](const QJsonObject &params) {
+        if (!context_->sceneManager) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState,
+                                        QStringLiteral("Scene manager not available"));
+        }
+
+        qint32 sceneId = 0;
+        if (!rpc::RpcHelpers::getI32(params, "id", sceneId) || sceneId <= 0) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter,
+                                        QStringLiteral("missing/invalid id"));
+        }
+
+        if (!context_->sceneManager->triggerScene(sceneId)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue,
+                                        QStringLiteral("scene not found or disabled"));
+        }
+
+        return QJsonObject{
+            {kKeyOk, true},
+            {QStringLiteral("id"), sceneId},
+            {kKeyMessage, QStringLiteral("场景已触发")}
+        };
+    });
+
+    // 从云端拉取场景
+    dispatcher_->registerMethod(QStringLiteral("scene.syncFromCloud"),
+                                 [this](const QJsonObject &params) {
+        if (!context_->cloudMessageHandler) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState,
+                                        QStringLiteral("Cloud message handler not available"));
+        }
+        if (!context_->mqttManager) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState,
+                                        QStringLiteral("MQTT manager not available"));
+        }
+
+        qint32 sceneId = 0;
+        rpc::RpcHelpers::getI32(params, "id", sceneId);
+
+        // 构建场景查询请求
+        QByteArray request = context_->cloudMessageHandler->buildGetScenesRequest(sceneId);
+
+        // 发送到所有MQTT通道
+        int sentCount = context_->mqttManager->publishToAll(
+            QStringLiteral("device/setting"), request, 1);
+
+        return QJsonObject{
+            {kKeyOk, true},
+            {QStringLiteral("sentToChannels"), sentCount},
+            {kKeyMessage, QStringLiteral("场景同步请求已发送")}
+        };
+    });
+
+    // 更新设备属性值（用于场景条件评估）
+    dispatcher_->registerMethod(QStringLiteral("scene.updateDeviceValue"),
+                                 [this](const QJsonObject &params) {
+        if (!context_->sceneManager) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState,
+                                        QStringLiteral("Scene manager not available"));
+        }
+
+        QString deviceCode;
+        QString identifier;
+        QVariant value;
+
+        if (!rpc::RpcHelpers::getString(params, "deviceCode", deviceCode) || deviceCode.isEmpty()) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter,
+                                        QStringLiteral("missing deviceCode"));
+        }
+        if (!rpc::RpcHelpers::getString(params, "identifier", identifier) || identifier.isEmpty()) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter,
+                                        QStringLiteral("missing identifier"));
+        }
+        if (!params.contains(QStringLiteral("value"))) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter,
+                                        QStringLiteral("missing value"));
+        }
+        value = params.value(QStringLiteral("value")).toVariant();
+
+        context_->sceneManager->updateDeviceValue(deviceCode, identifier, value);
+
+        return QJsonObject{
+            {kKeyOk, true},
+            {QStringLiteral("deviceCode"), deviceCode},
+            {QStringLiteral("identifier"), identifier}
         };
     });
 }
