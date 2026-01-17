@@ -13,6 +13,7 @@
 #include <QJsonObject>
 #include <QList>
 #include <QString>
+#include <QVariant>
 
 namespace fanzhou {
 namespace cloud {

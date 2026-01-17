@@ -19,6 +19,7 @@
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QRandomGenerator>
+#include <QDir>
 
 #include <algorithm>
 
