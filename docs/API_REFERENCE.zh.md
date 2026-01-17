@@ -882,7 +882,7 @@ RPC服务器支持可选的Token认证机制，用于提高安全防护等级。
 | 方法名 | 参数 | 返回值 | 说明 |
 |--------|------|--------|------|
 | `relay.control` | `{node, ch, action}` | `{ok, jobId, queued, txQueueSize, warning?}` | 控制单个继电器通道 |
-| `relay.controlMulti` | `{node, actions/action0-3}` | `{ok, txQueueSize}` | **新** 同时控制多个通道（协议v1.2） |
+| `relay.controlMulti` | `{node, actions/action0-3/ch+action}` | `{ok, txQueueSize}` | **新** 同时控制多个通道（协议v1.2） |
 | `relay.query` | `{node, ch}` | `{ok}` | 查询单个通道状态 |
 | `relay.queryAllChannels` | `{node}` | `{ok, txQueueSize}` | **新** 查询所有通道状态（协议v1.2） |
 | `relay.status` | `{node, ch}` | 通道状态对象（包含online、ageMs、diagnostic?） | 获取通道详情 |
@@ -904,13 +904,13 @@ RPC服务器支持可选的Token认证机制，用于提高安全防护等级。
 **新协议v1.2方法示例**：
 
 ```bash
-# 多通道控制 - 使用actions数组
+# 多通道控制 - 格式1: 使用actions数组
 {"jsonrpc":"2.0","id":1,"method":"relay.controlMulti","params":{
   "node":1,
   "actions":["fwd","rev","stop","fwd"]
 }}
 
-# 多通道控制 - 使用单独参数
+# 多通道控制 - 格式2: 使用单独参数
 {"jsonrpc":"2.0","id":2,"method":"relay.controlMulti","params":{
   "node":1,
   "action0":"fwd",
@@ -919,17 +919,25 @@ RPC服务器支持可选的Token认证机制，用于提高安全防护等级。
   "action3":"stop"
 }}
 
+# 多通道控制 - 格式3: 单通道控制（ch + action）
+# 只控制指定通道，其他通道保持stop
+{"jsonrpc":"2.0","id":3,"method":"relay.controlMulti","params":{
+  "node":1,
+  "ch":2,
+  "action":"fwd"
+}}
+
 # 查询所有通道状态
-{"jsonrpc":"2.0","id":3,"method":"relay.queryAllChannels","params":{"node":1}}
+{"jsonrpc":"2.0","id":4,"method":"relay.queryAllChannels","params":{"node":1}}
 
 # 获取自动状态上报数据（包含过流标志）
-{"jsonrpc":"2.0","id":4,"method":"relay.autoStatus","params":{"node":1}}
+{"jsonrpc":"2.0","id":5,"method":"relay.autoStatus","params":{"node":1}}
 
 # 设置单个通道过流标志
-{"jsonrpc":"2.0","id":5,"method":"relay.setOvercurrent","params":{"node":1,"ch":0,"flag":1}}
+{"jsonrpc":"2.0","id":6,"method":"relay.setOvercurrent","params":{"node":1,"ch":0,"flag":1}}
 
 # 设置所有通道过流标志（使用bit掩码）
-{"jsonrpc":"2.0","id":6,"method":"relay.setOvercurrent","params":{"node":1,"ch":-1,"flag":5}}
+{"jsonrpc":"2.0","id":7,"method":"relay.setOvercurrent","params":{"node":1,"ch":-1,"flag":5}}
 ```
 
 **诊断字段**：
