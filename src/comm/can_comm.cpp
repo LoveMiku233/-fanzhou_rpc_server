@@ -80,6 +80,13 @@ bool CanComm::open()
         return false;
     }
 
+
+    int sndbuf_size = 0;
+    socklen_t len = sizeof(sndbuf_size);
+    if (getsockopt(socket_, SOL_SOCKET, SO_SNDBUF, &sndbuf_size, &len) == 0) {
+        LOG_DEBUG(kLogSource, QStringLiteral("Actual socket SO_SNDBUF size: %1 bytes").arg(sndbuf_size));
+    }
+
     // 如果需要，启用CAN FD模式
     // Enable CAN FD if requested
     if (config_.canFd) {
