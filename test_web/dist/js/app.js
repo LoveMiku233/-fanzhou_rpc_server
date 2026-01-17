@@ -36,6 +36,9 @@ const MAX_LOG_ENTRIES = 100;
 // 默认通道数量（GD427继电器默认4通道）
 const DEFAULT_CHANNEL_COUNT = 4;
 
+// 状态查询延迟时间（毫秒）- 给设备响应时间
+const STATUS_QUERY_DELAY_MS = 200;
+
 // 使用分组绑定的通道（ch=-1表示控制分组通过addChannel添加的特定通道）
 const BOUND_CHANNELS = -1;
 
@@ -1332,8 +1335,8 @@ function controlSingleChannel(nodeId, channel, action) {
         }
         // 控制成功后刷新状态
         if (response.result && response.result.ok) {
-            // 延迟200ms后查询状态，给设备响应时间
-            setTimeout(() => queryDeviceStatus(nodeId), 200);
+            // 延迟后查询状态，给设备响应时间
+            setTimeout(() => queryDeviceStatus(nodeId), STATUS_QUERY_DELAY_MS);
         }
     });
 }
@@ -1428,34 +1431,36 @@ function updateDeviceOnlineStatus(nodeId, online) {
  * @param {string} action - 动作 (stop/fwd/rev)
  * 
  * 说明：
- * 这个函数会逐个向每个通道发送控制命令
+ * 使用 relay.controlMulti API 一次性控制所有通道，节省 CAN 总线带宽
+ * 相比逐个通道发送（4帧），这种方式只需要1帧CAN消息
  * 如果控制无效，请检查：
  * 1. CAN总线是否已打开（点击"CAN诊断"按钮）
  * 2. 设备是否正确连接
  * 3. 节点ID是否正确
  */
 function controlDeviceAll(nodeId, action) {
-    log('info', `控制设备 ${nodeId} 全部通道: ${action}`);
+    log('info', `控制设备 ${nodeId} 全部通道: ${action} (使用 controlMulti API)`);
     
-    // 从缓存中获取设备的通道数量
-    // 如果缓存中没有，使用默认值 DEFAULT_CHANNEL_COUNT
-    let channelCount = DEFAULT_CHANNEL_COUNT;
-    const device = deviceListCache.find(d => (d.nodeId || d.node || d) === nodeId);
-    if (device && device.channels) {
-        channelCount = device.channels;
-    }
+    // 使用 relay.controlMulti API 一次性控制所有通道
+    // 所有通道执行相同的动作，使用 DEFAULT_CHANNEL_COUNT 保持一致性
+    const actions = new Array(DEFAULT_CHANNEL_COUNT).fill(action);
     
-    // 逐个通道发送控制命令
-    for (let ch = 0; ch < channelCount; ch++) {
-        callMethod('relay.control', {
-            node: nodeId,
-            ch: ch,
-            action: action
-        });
-    }
-    
-    // 延迟后查询状态
-    setTimeout(() => queryDeviceStatus(nodeId), 300);
+    callMethod('relay.controlMulti', {
+        node: nodeId,
+        actions: actions
+    }, function(response) {
+        // 检查响应中是否有警告信息
+        if (response.result && response.result.warning) {
+            log('error', `⚠️ ${response.result.warning}`);
+        }
+        // 控制成功后刷新状态
+        if (response.result && response.result.ok) {
+            // 延迟后查询状态，给设备响应时间
+            setTimeout(() => queryDeviceStatus(nodeId), STATUS_QUERY_DELAY_MS);
+        } else if (response.error) {
+            log('error', `控制失败: ${response.error.message || '未知错误'}`);
+        }
+    });
 }
 
 /* ========================================================
