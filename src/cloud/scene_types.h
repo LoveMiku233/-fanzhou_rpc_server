@@ -235,6 +235,11 @@ QString conditionOpToString(SceneConditionOp op);
 QString generateRequestId();
 
 /**
+ * @brief 生成响应ID
+ */
+QString generateResponseId();
+
+/**
  * @brief 获取当前时间戳（毫秒）
  */
 qint64 currentTimestampMs();

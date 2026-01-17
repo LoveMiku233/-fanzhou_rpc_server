@@ -137,7 +137,6 @@ bool CoreContext::init(const CoreConfig &config)
     // 连接MQTT消息接收信号到消息处理器
     connect(mqttManager, &cloud::MqttChannelManager::messageReceived,
             this, [this](int channelId, const QString &topic, const QByteArray &message) {
-        Q_UNUSED(channelId);
         QByteArray response = cloudMessageHandler->handleMessage(topic, message);
         if (!response.isEmpty()) {
             // 回复消息到相同通道

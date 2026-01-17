@@ -287,8 +287,7 @@ QJsonObject CloudMessageHandler::handleSetRequest(const QJsonObject &data,
     if (!requestId.isEmpty()) {
         response[kKeyRequestId] = requestId;
     }
-    response[kKeyResponseId] = generateRequestId().replace(QStringLiteral("req_"),
-                                                            QStringLiteral("resp_"));
+    response[kKeyResponseId] = generateResponseId();
     response[kKeyTimestamp] = static_cast<double>(currentTimestampMs());
 
     emit scenesUpdated();
@@ -373,8 +372,7 @@ QJsonObject CloudMessageHandler::handleDeleteRequest(const QJsonObject &data,
     if (!requestId.isEmpty()) {
         response[kKeyRequestId] = requestId;
     }
-    response[kKeyResponseId] = generateRequestId().replace(QStringLiteral("req_"),
-                                                            QStringLiteral("resp_"));
+    response[kKeyResponseId] = generateResponseId();
     response[kKeyTimestamp] = static_cast<double>(currentTimestampMs());
 
     emit scenesUpdated();

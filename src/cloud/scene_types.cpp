@@ -42,20 +42,21 @@ bool SceneCondition::evaluate(const QVariant &currentValue) const
     double target = identifierValue.toDouble(&ok2);
 
     if (ok1 && ok2) {
-        // 数值比较
+        // 数值比较 - 使用epsilon比较以避免qFuzzyCompare对零值的问题
+        constexpr double epsilon = 0.0001;
         switch (op) {
         case SceneConditionOp::Equal:
-            return qFuzzyCompare(current, target);
+            return qAbs(current - target) < epsilon;
         case SceneConditionOp::NotEqual:
-            return !qFuzzyCompare(current, target);
+            return qAbs(current - target) >= epsilon;
         case SceneConditionOp::GreaterThan:
             return current > target;
         case SceneConditionOp::LessThan:
             return current < target;
         case SceneConditionOp::GreaterOrEqual:
-            return current >= target;
+            return current >= target - epsilon;
         case SceneConditionOp::LessOrEqual:
-            return current <= target;
+            return current <= target + epsilon;
         }
     } else {
         // 字符串比较
@@ -359,9 +360,18 @@ QString generateRequestId()
 {
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
     const quint32 random = QRandomGenerator::global()->generate();
-    return QStringLiteral("req_%1%2")
+    return QStringLiteral("req_%1_%2")
         .arg(QDateTime::fromMSecsSinceEpoch(now).toString(QStringLiteral("yyyyMMddHHmmss")))
-        .arg(random % 1000, 3, 10, QChar('0'));
+        .arg(random % 1000000, 6, 10, QChar('0'));  // 使用6位随机数提高唯一性
+}
+
+QString generateResponseId()
+{
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const quint32 random = QRandomGenerator::global()->generate();
+    return QStringLiteral("resp_%1_%2")
+        .arg(QDateTime::fromMSecsSinceEpoch(now).toString(QStringLiteral("yyyyMMddHHmmss")))
+        .arg(random % 1000000, 6, 10, QChar('0'));
 }
 
 qint64 currentTimestampMs()
