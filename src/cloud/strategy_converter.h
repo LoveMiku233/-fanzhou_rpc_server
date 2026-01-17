@@ -5,10 +5,35 @@
  * 提供云平台策略到RPC策略的转换接口。
  * 每个云平台实现自己的策略转换器，通过此接口转换为统一的RPC策略格式。
  *
- * 使用方式：
- * 1. 实现 IStrategyConverter 接口
+ * ## 策略转换架构
+ *
+ * 云平台使用的"场景动作"(SceneAction) 与本地RPC使用的"继电器控制"(relay.control)
+ * 之间需要进行格式转换。策略转换器负责这一转换过程：
+ *
+ * ```
+ * +-------------------+     +---------------------+     +----------------+
+ * | 云平台场景动作    | --> | 策略转换器          | --> | 本地RPC动作    |
+ * | (SceneAction)     |     | (StrategyConverter) |     | (RpcAction)    |
+ * +-------------------+     +---------------------+     +----------------+
+ *
+ * 示例：
+ * 云平台下发：{ deviceCode: "device001", identifier: "sw1", value: 1 }
+ *       ↓
+ * 转换后：   { method: "relay.controlMulti", params: {node: 1, ch: 0, action: "fwd"} }
+ * ```
+ *
+ * ## 泛舟云平台映射规则
+ *
+ * 1. 设备映射：deviceCode -> nodeId（通过registerDeviceMapping配置）
+ * 2. 通道映射：sw0/sw1/sw2/sw3 -> channel 0/1/2/3，sw -> 所有通道
+ * 3. 动作映射：0/stop -> stop, 1/fwd/on -> fwd, 2/rev -> rev
+ *
+ * ## 使用方式
+ *
+ * 1. 实现 IStrategyConverter 接口（或使用内置的 FanzhouStrategyConverter）
  * 2. 通过 StrategyConverterFactory 注册和获取转换器
- * 3. 调用 toRpcActions() 将云平台策略转换为RPC动作
+ * 3. 调用 registerDeviceMapping() 配置设备编码到节点ID的映射
+ * 4. 调用 toRpcActions() 将云平台策略转换为RPC动作
  */
 
 #ifndef FANZHOU_CLOUD_STRATEGY_CONVERTER_H

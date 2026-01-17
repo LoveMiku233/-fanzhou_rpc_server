@@ -14,13 +14,8 @@ namespace cloud {
 
 namespace {
 const char *const kLogSource = "StrategyConverter";
-}
+}  // namespace
 
-
-inline uint qHash(const CloudTypeId& key, uint seed = 0) noexcept
-{
-    return ::qHash(static_cast<int>(key), seed);
-}
 // ==================== RpcAction ====================
 
 QJsonObject RpcAction::toJson() const

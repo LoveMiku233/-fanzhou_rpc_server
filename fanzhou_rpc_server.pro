@@ -41,6 +41,8 @@ SOURCES += \
     src/rpc/json_rpc_dispatcher.cpp \
     src/rpc/json_rpc_server.cpp \
     src/rpc/json_rpc_client.cpp \
+    src/rpc/handlers/relay_handlers.cpp \
+    src/rpc/handlers/group_handlers.cpp \
     src/core/core_config.cpp \
     src/core/core_context.cpp \
     src/core/rpc_registry.cpp
@@ -78,6 +80,9 @@ HEADERS += \
     src/rpc/json_rpc_dispatcher.h \
     src/rpc/json_rpc_server.h \
     src/rpc/json_rpc_client.h \
+    src/rpc/handlers/rpc_handler_base.h \
+    src/rpc/handlers/relay_handlers.h \
+    src/rpc/handlers/group_handlers.h \
     src/core/core_config.h \
     src/core/core_context.h \
     src/core/rpc_registry.h
