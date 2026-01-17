@@ -127,8 +127,20 @@ StrategyConvertResult FanzhouStrategyConverter::toRpcAction(const SceneAction &a
     RpcAction rpcAction;
     rpcAction.method = QStringLiteral("relay.controlMulti");
     rpcAction.params[QStringLiteral("node")] = static_cast<int>(nodeId);
-    rpcAction.params[QStringLiteral("ch")] = channel;
-    rpcAction.params[QStringLiteral("action")] = relayAction;
+
+    // 处理通道：-1表示所有通道，使用actions数组格式；否则使用ch+action格式
+    if (channel == -1) {
+        // 所有通道使用同一动作，生成actions数组
+        QJsonArray actionsArr;
+        for (int i = 0; i < 4; ++i) {
+            actionsArr.append(relayAction);
+        }
+        rpcAction.params[QStringLiteral("actions")] = actionsArr;
+    } else {
+        // 单通道使用ch+action格式
+        rpcAction.params[QStringLiteral("ch")] = channel;
+        rpcAction.params[QStringLiteral("action")] = relayAction;
+    }
 
     LOG_DEBUG(kLogSource,
               QStringLiteral("Converted action: deviceCode=%1, identifier=%2 -> node=%3, ch=%4, action=%5")
@@ -179,9 +191,11 @@ void FanzhouStrategyConverter::clearDeviceMappings()
 
 bool FanzhouStrategyConverter::parseSwChannel(const QString &identifier, int &channel) const
 {
-    // identifier格式: sw0, sw1, sw2, sw3 或 sw (表示全部)
+    // identifier格式:
+    // - sw0, sw1, sw2, sw3: 控制指定通道（channel = 0-3）
+    // - sw: 控制所有通道（channel = -1，会被转换为actions数组格式）
     if (identifier == QStringLiteral("sw")) {
-        channel = -1;  // -1 表示全部通道
+        channel = -1;  // -1 表示全部通道，toRpcAction会将其转换为actions数组格式
         return true;
     }
 

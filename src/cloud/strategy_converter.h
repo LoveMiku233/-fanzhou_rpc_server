@@ -151,7 +151,7 @@ public:
      * @brief 获取设备映射
      * @param deviceCode 云平台设备编码
      * @param nodeId 输出：本地节点ID
-     * @return 存在映射返回true
+     * @return 存在映射时返回true
      */
     bool getDeviceMapping(const QString &deviceCode, quint8 &nodeId) const;
 
