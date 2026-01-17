@@ -1,6 +1,11 @@
 /**
  * @file rpc_registry.cpp
  * @brief RPC方法注册器实现
+ *
+ * RPC方法按模块分组注册：
+ * - relay.* 和 sensor.* 方法：见 rpc/handlers/relay_handlers.cpp
+ * - group.* 和 control.* 方法：见 rpc/handlers/group_handlers.cpp
+ * - 其他方法在本文件中实现
  */
 
 #include "rpc_registry.h"
@@ -18,6 +23,8 @@
 #include "rpc/json_rpc_dispatcher.h"
 #include "rpc/rpc_error_codes.h"
 #include "rpc/rpc_helpers.h"
+#include "rpc/handlers/relay_handlers.h"
+#include "rpc/handlers/group_handlers.h"
 
 #include <QDateTime>
 #include <QJsonArray>
