@@ -13,6 +13,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QLatin1String>
 
 #include "core/core_context.h"
 #include "rpc/json_rpc_dispatcher.h"
@@ -24,47 +25,49 @@ namespace rpc {
 
 /**
  * @brief RPC处理器公共常量
+ *
+ * 使用constexpr常量避免运行时字符串分配和线程安全问题。
  */
 namespace RpcKeys {
 
-// 通用JSON键 - 避免重复的QStringLiteral分配
-inline const QString &keyOk() { static const QString k = QStringLiteral("ok"); return k; }
-inline const QString &keyCh() { static const QString k = QStringLiteral("ch"); return k; }
-inline const QString &keyChannel() { static const QString k = QStringLiteral("channel"); return k; }
-inline const QString &keyStatusByte() { static const QString k = QStringLiteral("statusByte"); return k; }
-inline const QString &keyCurrentA() { static const QString k = QStringLiteral("currentA"); return k; }
-inline const QString &keyMode() { static const QString k = QStringLiteral("mode"); return k; }
-inline const QString &keyPhaseLost() { static const QString k = QStringLiteral("phaseLost"); return k; }
-inline const QString &keyNode() { static const QString k = QStringLiteral("node"); return k; }
-inline const QString &keyOnline() { static const QString k = QStringLiteral("online"); return k; }
-inline const QString &keyAgeMs() { static const QString k = QStringLiteral("ageMs"); return k; }
-inline const QString &keyChannels() { static const QString k = QStringLiteral("channels"); return k; }
-inline const QString &keyNodes() { static const QString k = QStringLiteral("nodes"); return k; }
-inline const QString &keyJobId() { static const QString k = QStringLiteral("jobId"); return k; }
-inline const QString &keyQueued() { static const QString k = QStringLiteral("queued"); return k; }
-inline const QString &keySuccess() { static const QString k = QStringLiteral("success"); return k; }
-inline const QString &keyGroupId() { static const QString k = QStringLiteral("groupId"); return k; }
-inline const QString &keyName() { static const QString k = QStringLiteral("name"); return k; }
-inline const QString &keyDevices() { static const QString k = QStringLiteral("devices"); return k; }
-inline const QString &keyDeviceCount() { static const QString k = QStringLiteral("deviceCount"); return k; }
-inline const QString &keyGroups() { static const QString k = QStringLiteral("groups"); return k; }
-inline const QString &keyTotal() { static const QString k = QStringLiteral("total"); return k; }
-inline const QString &keyAccepted() { static const QString k = QStringLiteral("accepted"); return k; }
-inline const QString &keyMissing() { static const QString k = QStringLiteral("missing"); return k; }
-inline const QString &keyJobIds() { static const QString k = QStringLiteral("jobIds"); return k; }
-inline const QString &keyPending() { static const QString k = QStringLiteral("pending"); return k; }
-inline const QString &keyActive() { static const QString k = QStringLiteral("active"); return k; }
-inline const QString &keyLastJobId() { static const QString k = QStringLiteral("lastJobId"); return k; }
-inline const QString &keyMessage() { static const QString k = QStringLiteral("message"); return k; }
-inline const QString &keyFinishedMs() { static const QString k = QStringLiteral("finishedMs"); return k; }
-inline const QString &keyId() { static const QString k = QStringLiteral("id"); return k; }
-inline const QString &keyAction() { static const QString k = QStringLiteral("action"); return k; }
-inline const QString &keyIntervalSec() { static const QString k = QStringLiteral("intervalSec"); return k; }
-inline const QString &keyEnabled() { static const QString k = QStringLiteral("enabled"); return k; }
-inline const QString &keyAutoStart() { static const QString k = QStringLiteral("autoStart"); return k; }
-inline const QString &keyAttached() { static const QString k = QStringLiteral("attached"); return k; }
-inline const QString &keyRunning() { static const QString k = QStringLiteral("running"); return k; }
-inline const QString &keyStrategies() { static const QString k = QStringLiteral("strategies"); return k; }
+// 通用JSON键常量
+constexpr const char* keyOk() { return "ok"; }
+constexpr const char* keyCh() { return "ch"; }
+constexpr const char* keyChannel() { return "channel"; }
+constexpr const char* keyStatusByte() { return "statusByte"; }
+constexpr const char* keyCurrentA() { return "currentA"; }
+constexpr const char* keyMode() { return "mode"; }
+constexpr const char* keyPhaseLost() { return "phaseLost"; }
+constexpr const char* keyNode() { return "node"; }
+constexpr const char* keyOnline() { return "online"; }
+constexpr const char* keyAgeMs() { return "ageMs"; }
+constexpr const char* keyChannels() { return "channels"; }
+constexpr const char* keyNodes() { return "nodes"; }
+constexpr const char* keyJobId() { return "jobId"; }
+constexpr const char* keyQueued() { return "queued"; }
+constexpr const char* keySuccess() { return "success"; }
+constexpr const char* keyGroupId() { return "groupId"; }
+constexpr const char* keyName() { return "name"; }
+constexpr const char* keyDevices() { return "devices"; }
+constexpr const char* keyDeviceCount() { return "deviceCount"; }
+constexpr const char* keyGroups() { return "groups"; }
+constexpr const char* keyTotal() { return "total"; }
+constexpr const char* keyAccepted() { return "accepted"; }
+constexpr const char* keyMissing() { return "missing"; }
+constexpr const char* keyJobIds() { return "jobIds"; }
+constexpr const char* keyPending() { return "pending"; }
+constexpr const char* keyActive() { return "active"; }
+constexpr const char* keyLastJobId() { return "lastJobId"; }
+constexpr const char* keyMessage() { return "message"; }
+constexpr const char* keyFinishedMs() { return "finishedMs"; }
+constexpr const char* keyId() { return "id"; }
+constexpr const char* keyAction() { return "action"; }
+constexpr const char* keyIntervalSec() { return "intervalSec"; }
+constexpr const char* keyEnabled() { return "enabled"; }
+constexpr const char* keyAutoStart() { return "autoStart"; }
+constexpr const char* keyAttached() { return "attached"; }
+constexpr const char* keyRunning() { return "running"; }
+constexpr const char* keyStrategies() { return "strategies"; }
 
 }  // namespace RpcKeys
 
@@ -133,10 +136,10 @@ inline void calcDeviceOnlineStatus(qint64 lastSeenMs, qint64 now, qint64 &outAge
 inline QJsonObject buildDeviceStatusObject(quint8 node, qint64 ageMs, bool online)
 {
     QJsonObject obj;
-    obj[RpcKeys::keyNode()] = static_cast<int>(node);
-    obj[RpcKeys::keyOnline()] = online;
+    obj[QLatin1String(RpcKeys::keyNode())] = static_cast<int>(node);
+    obj[QLatin1String(RpcKeys::keyOnline())] = online;
     // ageMs为-1时表示从未响应，返回null
-    obj[RpcKeys::keyAgeMs()] = (ageMs >= 0) ? static_cast<double>(ageMs) : QJsonValue();
+    obj[QLatin1String(RpcKeys::keyAgeMs())] = (ageMs >= 0) ? static_cast<double>(ageMs) : QJsonValue();
     return obj;
 }
 

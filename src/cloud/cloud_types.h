@@ -80,6 +80,3 @@ inline uint qHash(fanzhou::cloud::CloudTypeId key, uint seed = 0) noexcept
 }
 
 #endif  // CLOUD_TYPES_H
-
-
-#endif // CLOUD_TYPES_H
