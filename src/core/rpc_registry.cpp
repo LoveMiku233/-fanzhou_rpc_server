@@ -990,7 +990,6 @@ void RpcRegistry::registerRelay()
     dispatcher_->registerMethod(QStringLiteral("relay.controlMulti"),
                                  [this](const QJsonObject &params) {
         quint8 node = 0;
-        QString action0Str, action1Str, action2Str, action3Str;
 
         if (!rpc::RpcHelpers::getU8(params, "node", node))
             return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid node"));
@@ -1007,10 +1006,12 @@ void RpcRegistry::registerRelay()
             device::RelayProtocol::Action::Stop
         };
 
-        // 支持两种参数格式：
-        // 1. actions: ["stop", "fwd", "rev", "stop"]
-        // 2. action0, action1, action2, action3
+        // 支持三种参数格式：
+        // 1. actions: ["stop", "fwd", "rev", "stop"] - 控制所有4个通道
+        // 2. action0, action1, action2, action3 - 逐个指定通道动作
+        // 3. ch + action - 单通道控制（同一动作应用到指定通道，其他保持stop）
         if (params.contains(QStringLiteral("actions")) && params[QStringLiteral("actions")].isArray()) {
+            // 格式1: actions数组
             const QJsonArray arr = params[QStringLiteral("actions")].toArray();
             for (int i = 0; i < 4 && i < arr.size(); ++i) {
                 bool okAction = false;
@@ -1019,8 +1020,24 @@ void RpcRegistry::registerRelay()
                     actions[i] = action;
                 }
             }
+        } else if (params.contains(kKeyCh) && params.contains(kKeyAction)) {
+            // 格式3: ch + action（单通道控制）
+            quint8 channel = 0;
+            QString actionStr;
+            if (!rpc::RpcHelpers::getU8(params, "ch", channel) || channel > kMaxChannelId)
+                return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("invalid ch(0..3)"));
+            if (!rpc::RpcHelpers::getString(params, "action", actionStr))
+                return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing action"));
+
+            bool okAction = false;
+            const auto action = context_->parseAction(actionStr, &okAction);
+            if (!okAction)
+                return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("invalid action (stop/fwd/rev)"));
+
+            // 只设置指定通道的动作，其他通道保持默认stop
+            actions[channel] = action;
         } else {
-            // 逐个获取
+            // 格式2: action0, action1, action2, action3
             for (int i = 0; i < 4; ++i) {
                 QString actionStr;
                 if (rpc::RpcHelpers::getString(params, QStringLiteral("action%1").arg(i), actionStr)) {
