@@ -280,76 +280,86 @@ void CanComm::onTxPump()
     }
 
     if (errno == ENOBUFS || errno == EAGAIN || errno == EWOULDBLOCK) {
-        // 使用指数退避策略：退避时间 = kTxBackoffMs * 2^multiplier
-        // 安全：multiplier <= kMaxBackoffMultiplier (5)，最大退避 = 10 * 32 = 320ms
-        const int backoff = kTxBackoffMs * (1 << txBackoffMultiplier_);
-        txBackoffMs_ = backoff;
-        // 增加乘数用于下次退避（带上限）
-        if (txBackoffMultiplier_ < kMaxBackoffMultiplier) {
-            ++txBackoffMultiplier_;
-            txConsecutiveMaxBackoffCount_ = 0;  // 未达到最大退避，重置计数器
-        } else {
-            // 已达到最大退避，增加连续计数
-            ++txConsecutiveMaxBackoffCount_;
-        }
-        LOG_DEBUG(kLogSource, QStringLiteral("TX buffer full, backing off %1ms").arg(backoff));
+        tryResetInterface();
+        LOG_WARNING(kLogSource, QStringLiteral("CAN TX buffer 持续满载。可能原因：\n"
+                                               "  1. CAN总线未连接设备（无ACK）\n"
+                                               "  2. CAN接口未正确配置（波特率不匹配）\n"
+                                               "  3. 缺少终端电阻（120Ω）\n"
+                                               "  4. 接线问题（CAN_H/CAN_L）\n"
+                                               "请检查 'ip -details link show %1' 查看接口状态\n"
+                                               "restart can!")
+                                    .arg(config_.interface));
 
-        // 当达到最大退避时，输出一次详细的诊断信息
-        // 这通常表示CAN总线未正确连接或配置
-        if (txBackoffMultiplier_ == kMaxBackoffMultiplier && !txDiagLogged_) {
-            txDiagLogged_ = true;
-            LOG_WARNING(kLogSource,
-                        QStringLiteral("CAN TX buffer 持续满载。可能原因：\n"
-                                       "  1. CAN总线未连接设备（无ACK）\n"
-                                       "  2. CAN接口未正确配置（波特率不匹配）\n"
-                                       "  3. 缺少终端电阻（120Ω）\n"
-                                       "  4. 接线问题（CAN_H/CAN_L）\n"
-                                       "请检查 'ip -details link show %1' 查看接口状态")
-                            .arg(config_.interface));
-        }
+//        // 使用指数退避策略：退避时间 = kTxBackoffMs * 2^multiplier
+//        // 安全：multiplier <= kMaxBackoffMultiplier (5)，最大退避 = 10 * 32 = 320ms
+//        const int backoff = kTxBackoffMs * (1 << txBackoffMultiplier_);
+//        txBackoffMs_ = backoff;
+//        // 增加乘数用于下次退避（带上限）
+//        if (txBackoffMultiplier_ < kMaxBackoffMultiplier) {
+//            ++txBackoffMultiplier_;
+//            txConsecutiveMaxBackoffCount_ = 0;  // 未达到最大退避，重置计数器
+//        } else {
+//            // 已达到最大退避，增加连续计数
+//            ++txConsecutiveMaxBackoffCount_;
+//        }
+//        LOG_DEBUG(kLogSource, QStringLiteral("TX buffer full, backing off %1ms").arg(backoff));
 
-        // 如果连续达到最大退避次数超过限制，丢弃当前帧并重置退避
-        // 这防止系统因持续的总线问题而永久卡死
-        if (txConsecutiveMaxBackoffCount_ >= kMaxConsecutiveMaxBackoffRetries) {
-            const bool extended = (item.frame.can_id & CAN_EFF_FLAG) != 0;
-            const quint32 droppedCanId = item.frame.can_id & (extended ? CAN_EFF_MASK : CAN_SFF_MASK);
-            LOG_WARNING(kLogSource,
-                        QStringLiteral("TX持续失败，丢弃帧: id=0x%1, dlc=%2, 已重试%3次")
-                            .arg(droppedCanId, 0, 16)
-                            .arg(item.frame.can_dlc)
-                            .arg(txConsecutiveMaxBackoffCount_));
-            emit errorOccurred(
-                QStringLiteral("CAN TX持续失败，帧被丢弃 (id=0x%1)")
-                    .arg(droppedCanId, 0, 16));
-            txQueue_.dequeue();
-            // 重置退避状态，允许系统尝试恢复
-            txBackoffMultiplier_ = 0;
-            txBackoffMs_ = 0;
-            txConsecutiveMaxBackoffCount_ = 0;
-            txDiagLogged_ = false;
+//        // 当达到最大退避时，输出一次详细的诊断信息
+//        // 这通常表示CAN总线未正确连接或配置
+//        if (txBackoffMultiplier_ == kMaxBackoffMultiplier && !txDiagLogged_) {
+//            txDiagLogged_ = true;
+//            LOG_WARNING(kLogSource,
+//                        QStringLiteral("CAN TX buffer 持续满载。可能原因：\n"
+//                                       "  1. CAN总线未连接设备（无ACK）\n"
+//                                       "  2. CAN接口未正确配置（波特率不匹配）\n"
+//                                       "  3. 缺少终端电阻（120Ω）\n"
+//                                       "  4. 接线问题（CAN_H/CAN_L）\n"
+//                                       "请检查 'ip -details link show %1' 查看接口状态")
+//                            .arg(config_.interface));
+//        }
 
-            // 增加丢帧计数
-            ++droppedFrameCount_;
+//        // 如果连续达到最大退避次数超过限制，丢弃当前帧并重置退避
+//        // 这防止系统因持续的总线问题而永久卡死
+//        if (txConsecutiveMaxBackoffCount_ >= kMaxConsecutiveMaxBackoffRetries) {
+//            const bool extended = (item.frame.can_id & CAN_EFF_FLAG) != 0;
+//            const quint32 droppedCanId = item.frame.can_id & (extended ? CAN_EFF_MASK : CAN_SFF_MASK);
+//            LOG_WARNING(kLogSource,
+//                        QStringLiteral("TX持续失败，丢弃帧: id=0x%1, dlc=%2, 已重试%3次")
+//                            .arg(droppedCanId, 0, 16)
+//                            .arg(item.frame.can_dlc)
+//                            .arg(txConsecutiveMaxBackoffCount_));
+//            emit errorOccurred(
+//                QStringLiteral("CAN TX持续失败，帧被丢弃 (id=0x%1)")
+//                    .arg(droppedCanId, 0, 16));
+//            txQueue_.dequeue();
+//            // 重置退避状态，允许系统尝试恢复
+//            txBackoffMultiplier_ = 0;
+//            txBackoffMs_ = 0;
+//            txConsecutiveMaxBackoffCount_ = 0;
+//            txDiagLogged_ = false;
 
-            // 如果丢帧次数超过阈值，尝试重置CAN接口
-            // 这可以解决因总线状态异常导致的持续发送失败问题
-            if (droppedFrameCount_ >= kResetThreshold) {
-                LOG_WARNING(kLogSource,
-                            QStringLiteral("连续丢帧%1次，尝试重置CAN接口以恢复通信...")
-                                .arg(droppedFrameCount_));
-                if (tryResetInterface()) {
-                    droppedFrameCount_ = 0;
-                    LOG_INFO(kLogSource, QStringLiteral("CAN接口重置成功，通信已恢复"));
-                } else {
-                    // 重置失败（可能是冷却期间或其他原因），重置丢帧计数以避免每次丢帧都触发无效的重置尝试
-                    droppedFrameCount_ = 0;
-                    LOG_ERROR(kLogSource,
-                              QStringLiteral("CAN接口重置失败，通信可能仍然受阻。"
-                                             "将在连续丢弃%1帧后再次尝试重置。")
-                                  .arg(kResetThreshold));
-                }
-            }
-        }
+//            // 增加丢帧计数
+//            ++droppedFrameCount_;
+
+//            // 如果丢帧次数超过阈值，尝试重置CAN接口
+//            // 这可以解决因总线状态异常导致的持续发送失败问题
+//            if (droppedFrameCount_ >= kResetThreshold) {
+//                LOG_WARNING(kLogSource,
+//                            QStringLiteral("连续丢帧%1次，尝试重置CAN接口以恢复通信...")
+//                                .arg(droppedFrameCount_));
+//                if (tryResetInterface()) {
+//                    droppedFrameCount_ = 0;
+//                    LOG_INFO(kLogSource, QStringLiteral("CAN接口重置成功，通信已恢复"));
+//                } else {
+//                    // 重置失败（可能是冷却期间或其他原因），重置丢帧计数以避免每次丢帧都触发无效的重置尝试
+//                    droppedFrameCount_ = 0;
+//                    LOG_ERROR(kLogSource,
+//                              QStringLiteral("CAN接口重置失败，通信可能仍然受阻。"
+//                                             "将在连续丢弃%1帧后再次尝试重置。")
+//                                  .arg(kResetThreshold));
+//                }
+//            }
+//        }
         return;
     }
 
@@ -423,13 +433,13 @@ bool CanComm::tryResetInterface()
     }
 
     // 检查重置次数限制
-    if (txResetAttemptCount_ >= kMaxResetAttempts) {
-        LOG_ERROR(kLogSource,
-                  QStringLiteral("已达到最大接口重置次数限制(%1次)，停止尝试。"
-                                 "请手动检查CAN总线连接和配置。")
-                      .arg(kMaxResetAttempts));
-        return false;
-    }
+//    if (txResetAttemptCount_ >= kMaxResetAttempts) {
+//        LOG_ERROR(kLogSource,
+//                  QStringLiteral("已达到最大接口重置次数限制(%1次)，停止尝试。"
+//                                 "请手动检查CAN总线连接和配置。")
+//                      .arg(kMaxResetAttempts));
+//        return false;
+//    }
 
     resetInProgress_ = true;
     ++txResetAttemptCount_;
