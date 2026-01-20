@@ -19,48 +19,6 @@ namespace {
 const char *const kLogSource = "MqttChannelManager";
 }
 
-// ==================== MqttChannelConfig ====================
-
-MqttChannelConfig MqttChannelConfig::fromJson(const QJsonObject &obj)
-{
-    MqttChannelConfig config;
-    config.channelId = obj.value(QStringLiteral("channelId")).toInt(0);
-    config.name = obj.value(QStringLiteral("name")).toString();
-    config.enabled = obj.value(QStringLiteral("enabled")).toBool(true);
-    config.broker = obj.value(QStringLiteral("broker")).toString();
-    config.port = static_cast<quint16>(obj.value(QStringLiteral("port")).toInt(1883));
-    config.clientId = obj.value(QStringLiteral("clientId")).toString();
-    config.username = obj.value(QStringLiteral("username")).toString();
-    config.password = obj.value(QStringLiteral("password")).toString();
-    config.topicPrefix = obj.value(QStringLiteral("topicPrefix")).toString();
-    config.keepAliveSec = obj.value(QStringLiteral("keepAliveSec")).toInt(60);
-    config.autoReconnect = obj.value(QStringLiteral("autoReconnect")).toBool(true);
-    config.reconnectIntervalSec = obj.value(QStringLiteral("reconnectIntervalSec")).toInt(5);
-    config.qos = obj.value(QStringLiteral("qos")).toInt(0);
-    return config;
-}
-
-QJsonObject MqttChannelConfig::toJson() const
-{
-    QJsonObject obj;
-    obj[QStringLiteral("channelId")] = channelId;
-    obj[QStringLiteral("name")] = name;
-    obj[QStringLiteral("enabled")] = enabled;
-    obj[QStringLiteral("broker")] = broker;
-    obj[QStringLiteral("port")] = static_cast<int>(port);
-    obj[QStringLiteral("clientId")] = clientId;
-    if (!username.isEmpty()) {
-        obj[QStringLiteral("username")] = username;
-    }
-    // @TODO 不保存密码到JSON
-    obj[QStringLiteral("topicPrefix")] = topicPrefix;
-    obj[QStringLiteral("keepAliveSec")] = keepAliveSec;
-    obj[QStringLiteral("autoReconnect")] = autoReconnect;
-    obj[QStringLiteral("reconnectIntervalSec")] = reconnectIntervalSec;
-    obj[QStringLiteral("qos")] = qos;
-    return obj;
-}
-
 // ==================== MqttChannelManager ====================
 
 MqttChannelManager::MqttChannelManager(QObject *parent)
@@ -79,7 +37,7 @@ MqttChannelManager::~MqttChannelManager()
     channels_.clear();
 }
 
-bool MqttChannelManager::addChannel(const MqttChannelConfig &config, QString *error)
+bool MqttChannelManager::addChannel(const core::MqttChannelConfig &config, QString *error)
 {
     if (channels_.contains(config.channelId)) {
         if (error) {
@@ -102,6 +60,8 @@ bool MqttChannelManager::addChannel(const MqttChannelConfig &config, QString *er
     data.status.enabled = config.enabled;
     data.status.broker = config.broker;
     data.status.port = config.port;
+//    data.platform = CloudPlatformRegistry::instance()
+//            .platform(config.cloudid);
 
     // 创建MQTT客户端
     data.client = new MqttClient(this);
@@ -152,7 +112,7 @@ bool MqttChannelManager::removeChannel(int channelId, QString *error)
     return true;
 }
 
-bool MqttChannelManager::updateChannel(const MqttChannelConfig &config, QString *error)
+bool MqttChannelManager::updateChannel(const core::MqttChannelConfig &config, QString *error)
 {
     if (!channels_.contains(config.channelId)) {
         if (error) {
@@ -329,25 +289,25 @@ void MqttChannelManager::reportDeviceValueChange(quint8 deviceNode, quint8 chann
     msg[QStringLiteral("deviceNode")] = static_cast<int>(deviceNode);
     msg[QStringLiteral("channel")] = static_cast<int>(channel);
     msg[QStringLiteral("value")] = value;
-    if (!oldValue.isEmpty()) {
-        msg[QStringLiteral("oldValue")] = oldValue;
-    }
+//    if (!oldValue.isEmpty()) {
+//        msg[QStringLiteral("oldValue")] = oldValue;
+//    }
 
-    const QByteArray payload = QJsonDocument(msg).toJson(QJsonDocument::Compact);
-    const QString topic = QStringLiteral("device/%1/ch%2/change")
-                              .arg(deviceNode)
-                              .arg(channel);
+//    const QByteArray payload = QJsonDocument(msg).toJson(QJsonDocument::Compact);
+//    const QString topic = QStringLiteral("device/%1/ch%2/change")
+//                              .arg(deviceNode)
+//                              .arg(channel);
 
-    // 向所有已连接通道发布
-    const int sent = publishToAll(topic, payload, 1);
+//    // 向所有已连接通道发布
+//    const int sent = publishToAll(topic, payload, 1);
 
-    if (sent > 0) {
-        LOG_DEBUG(kLogSource,
-                  QStringLiteral("Device value change reported: node=%1, ch=%2, sent to %3 channels")
-                      .arg(deviceNode)
-                      .arg(channel)
-                      .arg(sent));
-    }
+//    if (sent > 0) {
+//        LOG_DEBUG(kLogSource,
+//                  QStringLiteral("Device value change reported: node=%1, ch=%2, sent to %3 channels")
+//                      .arg(deviceNode)
+//                      .arg(channel)
+//                      .arg(sent));
+//    }
 }
 
 QList<MqttChannelStatus> MqttChannelManager::channelStatusList() const
@@ -359,17 +319,17 @@ QList<MqttChannelStatus> MqttChannelManager::channelStatusList() const
     return list;
 }
 
-MqttChannelConfig MqttChannelManager::getChannelConfig(int channelId) const
+core::MqttChannelConfig MqttChannelManager::getChannelConfig(int channelId) const
 {
     if (channels_.contains(channelId)) {
         return channels_[channelId].config;
     }
-    return MqttChannelConfig();
+    return core::MqttChannelConfig();
 }
 
-QList<MqttChannelConfig> MqttChannelManager::allChannelConfigs() const
+QList<core::MqttChannelConfig> MqttChannelManager::allChannelConfigs() const
 {
-    QList<MqttChannelConfig> list;
+    QList<core::MqttChannelConfig> list;
     for (auto it = channels_.constBegin(); it != channels_.constEnd(); ++it) {
         list.append(it->config);
     }
@@ -397,6 +357,12 @@ void MqttChannelManager::onClientConnected()
     auto &data = channels_[channelId];
     data.status.connected = true;
     data.status.lastConnectedMs = QDateTime::currentMSecsSinceEpoch();
+
+    const QString downlinkTopic = QStringLiteral(
+           "sys/%1/%2/thing/service/#")
+               .arg(data.config.clientId)   // 或 productKey
+               .arg(data.config.clientId);  // 或 deviceName
+    subscribe(channelId, downlinkTopic, 1);
 
     LOG_INFO(kLogSource,
              QStringLiteral("MQTT channel %1 connected to %2:%3")

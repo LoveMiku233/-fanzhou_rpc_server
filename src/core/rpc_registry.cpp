@@ -426,66 +426,66 @@ void RpcRegistry::registerSystem()
 
     // ===================== 云平台配置RPC方法 =====================
 
-    // 获取MQTT配置
-    dispatcher_->registerMethod(QStringLiteral("cloud.mqtt.get"),
-                                 [this](const QJsonObject &) {
-        return QJsonObject{
-            {QStringLiteral("ok"), true},
-            {QStringLiteral("enabled"), context_->mqttEnabled},
-            {QStringLiteral("broker"), context_->mqttBroker},
-            {QStringLiteral("port"), context_->mqttPort},
-            {QStringLiteral("clientId"), context_->mqttClientId},
-            {QStringLiteral("username"), context_->mqttUsername},
-            {QStringLiteral("topic"), context_->mqttTopic},
-            {QStringLiteral("connected"), context_->mqttConnected}
-        };
-    });
+//    // 获取MQTT配置
+//    dispatcher_->registerMethod(QStringLiteral("cloud.mqtt.get"),
+//                                 [this](const QJsonObject &) {
+//        return QJsonObject{
+//            {QStringLiteral("ok"), true},
+//            {QStringLiteral("enabled"), context_->mqttEnabled},
+//            {QStringLiteral("broker"), context_->mqttBroker},
+//            {QStringLiteral("port"), context_->mqttPort},
+//            {QStringLiteral("clientId"), context_->mqttClientId},
+//            {QStringLiteral("username"), context_->mqttUsername},
+//            {QStringLiteral("topic"), context_->mqttTopic},
+//            {QStringLiteral("connected"), context_->mqttConnected}
+//        };
+//    });
 
-    // 设置MQTT配置
-    dispatcher_->registerMethod(QStringLiteral("cloud.mqtt.set"),
-                                 [this](const QJsonObject &params) {
-        QString broker;
-        qint32 port = 1883;
-        QString clientId;
-        QString username;
-        QString password;
-        QString topic;
-        bool enabled = true;
+//    // 设置MQTT配置
+//    dispatcher_->registerMethod(QStringLiteral("cloud.mqtt.set"),
+//                                 [this](const QJsonObject &params) {
+//        QString broker;
+//        qint32 port = 1883;
+//        QString clientId;
+//        QString username;
+//        QString password;
+//        QString topic;
+//        bool enabled = true;
 
-        rpc::RpcHelpers::getString(params, "broker", broker);
-        rpc::RpcHelpers::getI32(params, "port", port);
-        rpc::RpcHelpers::getString(params, "clientId", clientId);
-        rpc::RpcHelpers::getString(params, "username", username);
-        rpc::RpcHelpers::getString(params, "password", password);
-        rpc::RpcHelpers::getString(params, "topic", topic);
-        rpc::RpcHelpers::getBool(params, "enabled", enabled, true);
+//        rpc::RpcHelpers::getString(params, "broker", broker);
+//        rpc::RpcHelpers::getI32(params, "port", port);
+//        rpc::RpcHelpers::getString(params, "clientId", clientId);
+//        rpc::RpcHelpers::getString(params, "username", username);
+//        rpc::RpcHelpers::getString(params, "password", password);
+//        rpc::RpcHelpers::getString(params, "topic", topic);
+//        rpc::RpcHelpers::getBool(params, "enabled", enabled, true);
 
-        // 更新配置
-        if (!broker.isEmpty()) context_->mqttBroker = broker;
-        if (port > 0) context_->mqttPort = port;
-        if (!clientId.isEmpty()) context_->mqttClientId = clientId;
-        if (!username.isEmpty()) context_->mqttUsername = username;
-        if (!password.isEmpty()) context_->mqttPassword = password;
-        if (!topic.isEmpty()) context_->mqttTopic = topic;
-        context_->mqttEnabled = enabled;
+//        // 更新配置
+//        if (!broker.isEmpty()) context_->mqttBroker = broker;
+//        if (port > 0) context_->mqttPort = port;
+//        if (!clientId.isEmpty()) context_->mqttClientId = clientId;
+//        if (!username.isEmpty()) context_->mqttUsername = username;
+//        if (!password.isEmpty()) context_->mqttPassword = password;
+//        if (!topic.isEmpty()) context_->mqttTopic = topic;
+//        context_->mqttEnabled = enabled;
 
-        return QJsonObject{
-            {QStringLiteral("ok"), true},
-            {QStringLiteral("message"), QStringLiteral("MQTT configuration updated")}
-        };
-    });
+//        return QJsonObject{
+//            {QStringLiteral("ok"), true},
+//            {QStringLiteral("message"), QStringLiteral("MQTT configuration updated")}
+//        };
+//    });
 
-    // 测试MQTT连接
-    dispatcher_->registerMethod(QStringLiteral("cloud.mqtt.test"),
-                                 [this](const QJsonObject &) {
-        // 暂时返回模拟结果，实际需要实现MQTT客户端
-        return QJsonObject{
-            {QStringLiteral("ok"), true},
-            {QStringLiteral("message"), QStringLiteral("MQTT connection test - feature pending implementation")},
-            {QStringLiteral("broker"), context_->mqttBroker},
-            {QStringLiteral("port"), context_->mqttPort}
-        };
-    });
+//    // 测试MQTT连接
+//    dispatcher_->registerMethod(QStringLiteral("cloud.mqtt.test"),
+//                                 [this](const QJsonObject &) {
+//        // 暂时返回模拟结果，实际需要实现MQTT客户端
+//        return QJsonObject{
+//            {QStringLiteral("ok"), true},
+//            {QStringLiteral("message"), QStringLiteral("MQTT connection test - feature pending implementation")},
+//            {QStringLiteral("broker"), context_->mqttBroker},
+//            {QStringLiteral("port"), context_->mqttPort}
+//        };
+//    });
 }
 
 void RpcRegistry::registerCan()
@@ -2485,7 +2485,7 @@ void RpcRegistry::registerMqtt()
         rpc::RpcHelpers::getI32(params, "reconnectIntervalSec", reconnectIntervalSec);
         rpc::RpcHelpers::getI32(params, "qos", qos);
 
-        cloud::MqttChannelConfig config;
+        MqttChannelConfig config;
         config.channelId = channelId;
         config.name = name.isEmpty() ? QStringLiteral("mqtt-%1").arg(channelId) : name;
         config.enabled = enabled;

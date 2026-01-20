@@ -16,6 +16,8 @@ INCLUDEPATH += $$PWD/src
 
 SOURCES += \
     main.cpp \
+    src/cloud/cloud_message_handler.cpp \
+    src/cloud/cloud_uploader.cpp \
     src/cloud/mqtt/mqtt_client.cpp \
     src/cloud/mqtt/mqtt_channel_manager.cpp \
     src/utils/utils.cpp \
@@ -44,7 +46,10 @@ SOURCES += \
     src/core/rpc_registry.cpp
 
 HEADERS += \
+    src/cloud/cloud_message_handler.h \
+    src/cloud/cloud_platform.h \
     src/cloud/cloud_types.h \
+    src/cloud/cloud_uploader.h \
     src/cloud/mqtt/mqtt_client.h \
     src/cloud/mqtt/mqtt_channel_manager.h \
     src/utils/utils.h \

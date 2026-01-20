@@ -8,8 +8,8 @@
 #include "config/system_settings.h"
 #include "config/system_monitor.h"
 #include "cloud/mqtt/mqtt_channel_manager.h"
-//#include "cloud/scene_manager.h"
-//#include "cloud/cloud_message_handler.h"
+#include "cloud/cloud_uploader.h"
+#include "cloud/cloud_message_handler.h"
 #include "device/can/can_device_manager.h"
 #include "device/can/relay_gd427.h"
 #include "utils/logger.h"
@@ -58,8 +58,11 @@ bool CoreContext::init()
         LOG_ERROR(kLogSource, QStringLiteral("Failed to initialize devices"));
         return false;
     }
+
+    initMqtt();
     initQueue();
     bindStrategies({});
+
 
     LOG_INFO(kLogSource, QStringLiteral("Core context initialization complete"));
     return true;
@@ -94,7 +97,7 @@ bool CoreContext::init(const CoreConfig &config)
     mqttManager = new cloud::MqttChannelManager(this);
     // 加载MQTT通道配置
     for (const auto &mqttConfig : config.mqttChannels) {
-        cloud::MqttChannelConfig cloudConfig;
+        MqttChannelConfig cloudConfig;
         cloudConfig.channelId = mqttConfig.channelId;
         cloudConfig.name = mqttConfig.name;
         cloudConfig.enabled = mqttConfig.enabled;
@@ -203,6 +206,8 @@ bool CoreContext::init(const CoreConfig &config)
         return false;
     }
 
+    initMqtt();
+
     initQueue();
     bindStrategies(config.strategies);
     bindSensorStrategies(config.sensorStrategies);
@@ -279,7 +284,43 @@ bool CoreContext::initDevices()
                  QStringLiteral("Relay device added: node=0x%1")
                      .arg(node, 2, 16, QChar('0')));
     }
+
     return true;
+}
+
+bool CoreContext::initMqtt()
+{
+
+    cloudUploader = new cloud::CloudUploader(this, this);
+    cloudUploader->applyConfig(cloudUploadConfig);
+
+    cloudMessageHandler = new cloud::CloudMessageHandler(this, this);
+
+    connect(mqttManager, &cloud::MqttChannelManager::messageReceived,
+            cloudMessageHandler, &cloud::CloudMessageHandler::onMqttMessage);
+
+
+    for (auto it = relays.begin(); it != relays.end(); ++it) {
+        auto *relay = it.value();
+        quint8 nodeId = it.key();
+
+        connect(relay, &device::RelayGd427::statusUpdated,
+                this,
+                [this, nodeId](quint8 ch,
+                               fanzhou::device::RelayProtocol::Status /*status*/) {
+                    if (cloudUploader)
+                        cloudUploader->onChannelValueChanged(nodeId, ch);
+                });
+
+        connect(relay, &device::RelayGd427::autoStatusReceived,
+                this,
+                [this, nodeId](
+                    fanzhou::device::RelayProtocol::AutoStatusReport /*report*/) {
+                    if (cloudUploader)
+                        cloudUploader->onDeviceStatusChanged(nodeId);
+                });
+
+    }
 }
 
 bool CoreContext::initDevices(const CoreConfig &config)
@@ -324,23 +365,6 @@ bool CoreContext::initDevices(const CoreConfig &config)
                 canManager->addDevice(dev);
                 relays.insert(node, dev);
                 deviceConfigs.insert(node, devConfig);
-
-                // 连接状态变化信号用于MQTT上报
-                if (mqttManager) {
-                    connect(dev, &device::RelayGd427::statusUpdated,
-                            this, [this, node](quint8 channel, device::RelayProtocol::Status status) {
-                        // 构建设备值变化的JSON
-                        QJsonObject value;
-                        value[QStringLiteral("statusByte")] = static_cast<int>(status.statusByte);
-                        quint8 mode = device::RelayProtocol::modeBits(status.statusByte);
-                        value[QStringLiteral("mode")] = static_cast<int>(mode);
-                        value[QStringLiteral("modeStr")] =
-                            mode == 0 ? QStringLiteral("stop") :
-                            mode == 1 ? QStringLiteral("fwd") : QStringLiteral("rev");
-
-                        mqttManager->reportDeviceValueChange(node, channel, value);
-                    });
-                }
 
                 LOG_INFO(kLogSource,
                          QStringLiteral("RelayGd427 added: node=0x%1, name=%2")
@@ -1610,16 +1634,6 @@ bool CoreContext::setScreenConfig(const ScreenConfig &config, QString *error)
 
 /**
  * @brief 将当前运行时配置保存到文件
- * 
- * 这是解决"Web页面修改无法保存"问题的核心方法。
- * 
- * 为什么之前Web页面修改无法保存？
- * 原因：之前的实现中，通过RPC调用（如group.create、device.add等）
- * 创建的设备、分组、策略等只保存在内存中（存储在deviceGroups、
- * deviceConfigs、strategyConfigs_等成员变量中），服务重启后会丢失。
- * 
- * 解决方案：调用此方法将当前内存中的配置持久化到JSON配置文件。
- * 
  * @param path 配置文件路径，为空则使用configFilePath
  * @param error 错误信息输出
  * @return 成功返回true

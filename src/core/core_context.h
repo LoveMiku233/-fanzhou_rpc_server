@@ -27,6 +27,7 @@ class SystemMonitor;
 namespace cloud {
 class MqttChannelManager;
 class CloudMessageHandler;
+class CloudUploader;
 }
 
 namespace comm {
@@ -175,6 +176,7 @@ public:
     device::CanDeviceManager *canManager = nullptr;
     cloud::MqttChannelManager *mqttManager = nullptr;    ///< MQTT多通道管理器
     cloud::CloudMessageHandler *cloudMessageHandler = nullptr; ///< 云平台消息处理器
+    cloud::CloudUploader *cloudUploader = nullptr;               ///<
 
     // 设备注册表：节点ID -> 设备
     QHash<quint8, device::RelayGd427 *> relays;
@@ -207,16 +209,6 @@ public:
 
     // 配置文件路径（用于保存配置）
     QString configFilePath;
-
-    // MQTT云平台配置
-    bool mqttEnabled = false;
-    QString mqttBroker;
-    int mqttPort = 1883;
-    QString mqttClientId;
-    QString mqttUsername;
-    QString mqttPassword;
-    QString mqttTopic;
-    bool mqttConnected = false;
 
     // 配置管理
     /**
@@ -392,6 +384,8 @@ private:
     bool initCan();
     bool initDevices();
     bool initDevices(const CoreConfig &config);
+
+    bool initMqtt();
 
     void initQueue();
     void startQueueProcessor();

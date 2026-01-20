@@ -9,9 +9,11 @@
 #define CLOUD_TYPES_H
 
 #include <QtGlobal>
+#include <QHash>
 
 namespace fanzhou {
 namespace cloud {
+
 
 /**
  * @brief 云平台类型标识
@@ -22,7 +24,8 @@ namespace cloud {
  *   21-50:  其他类型云平台
  */
 enum class CloudTypeId : int {
-    FanzhouCloudMqtt = 1    ///< 泛舟云平台 (MQTT协议)
+    Unknown = 0,
+    FanzhouCloudMqtt = 1,    ///< 泛舟云平台 (MQTT协议)
     // 可扩展其他云平台类型
 };
 

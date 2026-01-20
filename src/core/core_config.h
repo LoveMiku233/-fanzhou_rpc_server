@@ -115,6 +115,32 @@ struct MqttChannelConfig {
     bool autoReconnect = true;      ///< 是否自动重连
     int reconnectIntervalSec = 5;   ///< 重连间隔（秒）
     int qos = 0;                    ///< 默认QoS级别
+
+    QString topicControlSub;   ///< 订阅：云 → 本地 控制（可选）
+    QString topicStrategySub;  ///< 订阅：云 → 本地 策略（可选）
+    QString topicStatusPub;    ///< 发布：本地 → 云 状态（可选）
+    QString topicEventPub;     ///< 发布：本地 → 云 事件（可选）
+
+    /**
+     * @brief 从JSON对象解析配置
+     */
+    static MqttChannelConfig fromJson(const QJsonObject &obj);
+
+    /**
+     * @brief 转换为JSON对象
+     */
+    QJsonObject toJson() const;
+};
+
+struct CloudNodeBinding {
+    quint8 nodeId = 0;          ///< 绑定的节点ID
+    QString formatId;           ///< 使用的上传格式标识（决定JSON结构）
+};
+
+struct CloudMqttChannelBinding {
+    int channelId = 0;          ///< MqttChannelManager 里的 channelId
+    QString topic;              ///< 该通道的发布 topic
+    QList<CloudNodeBinding> nodes; ///< 这个通道绑定了哪些节点
 };
 
 /**
@@ -141,7 +167,7 @@ struct ScreenConfig {
  * 配置哪些数据上传到云端，以及上传模式
  */
 struct CloudUploadConfig {
-    bool enabled = false;                    ///< 是否启用云数据上传
+    bool enabled = true;                    ///< 是否启用云数据上传
     QString uploadMode = QStringLiteral("change");  ///< 上传模式: "interval"(定时上传) 或 "change"(变化上传)
     int intervalSec = 60;                    ///< 定时上传间隔（秒），仅当uploadMode为interval时使用
     
@@ -155,6 +181,8 @@ struct CloudUploadConfig {
     double currentThreshold = 0.1;           ///< 电流变化阈值（安培），超过此值才上传
     bool statusChangeOnly = true;            ///< 状态变化时才上传（如开关状态改变）
     int minUploadIntervalSec = 5;           ///< 最小上传间隔（秒），防止频繁上传
+
+    QList<CloudMqttChannelBinding> channelBindings;
 };
 
 /**

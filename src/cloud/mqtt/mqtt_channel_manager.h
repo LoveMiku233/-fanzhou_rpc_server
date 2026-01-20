@@ -14,40 +14,14 @@
 #include <QList>
 #include <QObject>
 #include <QString>
+#include <cloud/cloud_types.h>
+#include <cloud/cloud_platform.h>
+#include "core/core_config.h"
 
 namespace fanzhou {
 namespace cloud {
 
 class MqttClient;
-
-/**
- * @brief MQTT通道配置
- */
-struct MqttChannelConfig {
-    int channelId = 0;              ///< 通道ID
-    QString name;                    ///< 通道名称
-    bool enabled = true;             ///< 是否启用
-    QString broker;                  ///< Broker地址
-    quint16 port = 1883;            ///< Broker端口
-    QString clientId;               ///< 客户端ID
-    QString username;               ///< 用户名（可选）
-    QString password;               ///< 密码（可选）
-    QString topicPrefix;            ///< 主题前缀
-    int keepAliveSec = 60;          ///< 心跳间隔（秒）
-    bool autoReconnect = true;      ///< 是否自动重连
-    int reconnectIntervalSec = 5;   ///< 重连间隔（秒）
-    int qos = 0;                    ///< 默认QoS级别
-
-    /**
-     * @brief 从JSON对象解析配置
-     */
-    static MqttChannelConfig fromJson(const QJsonObject &obj);
-
-    /**
-     * @brief 转换为JSON对象
-     */
-    QJsonObject toJson() const;
-};
 
 /**
  * @brief MQTT通道状态
@@ -87,7 +61,7 @@ public:
      * @param error 错误信息输出
      * @return 成功返回true
      */
-    bool addChannel(const MqttChannelConfig &config, QString *error = nullptr);
+    bool addChannel(const core::MqttChannelConfig &config, QString *error = nullptr);
 
     /**
      * @brief 移除MQTT通道
@@ -103,7 +77,7 @@ public:
      * @param error 错误信息输出
      * @return 成功返回true
      */
-    bool updateChannel(const MqttChannelConfig &config, QString *error = nullptr);
+    bool updateChannel(const core::MqttChannelConfig &config, QString *error = nullptr);
 
     /**
      * @brief 连接指定通道
@@ -184,12 +158,12 @@ public:
     /**
      * @brief 获取指定通道的配置
      */
-    MqttChannelConfig getChannelConfig(int channelId) const;
+    core::MqttChannelConfig getChannelConfig(int channelId) const;
 
     /**
      * @brief 获取所有通道配置
      */
-    QList<MqttChannelConfig> allChannelConfigs() const;
+    QList<core::MqttChannelConfig> allChannelConfigs() const;
 
     /**
      * @brief 检查通道是否存在
@@ -225,9 +199,10 @@ private slots:
 
 private:
     struct ChannelData {
-        MqttChannelConfig config;
+        core::MqttChannelConfig config;
         MqttClient *client = nullptr;
         MqttChannelStatus status;
+        CloudPlatform *platform = nullptr;   ///< platform
     };
 
     QHash<int, ChannelData> channels_;
