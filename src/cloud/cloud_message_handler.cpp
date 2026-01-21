@@ -23,45 +23,43 @@ CloudMessageHandler::CloudMessageHandler(core::CoreContext *ctx, QObject *parent
 }
 
 
-void CloudMessageHandler::onMqttMessage(int channelId, const QString &topic, const QByteArray &payload)
+void CloudMessageHandler::onMqttMessage(int channelId,
+                                       const QString &topic,
+                                       const QByteArray &payload)
 {
     QJsonParseError err;
     const QJsonDocument doc = QJsonDocument::fromJson(payload, &err);
     if (err.error != QJsonParseError::NoError || !doc.isObject()) {
         LOG_WARNING(kLogSource,
-                    QStringLiteral("invalid JSON From MQTT topic=%1 err=%2 payload=%3")
-                    .arg(topic)
-                    .arg(err.errorString())
-                    .arg(QString::fromUtf8(payload)));
+                    QStringLiteral("Invalid JSON from MQTT topic=%1 err=%2 payload=%3")
+                        .arg(topic)
+                        .arg(err.errorString())
+                        .arg(QString::fromUtf8(payload)));
         return;
     }
 
     const QJsonObject msg = doc.object();
 
-    const QString type = msg.value(QStringLiteral("type")).toString();
-    if (type.isEmpty()) {
-        LOG_WARNING(kLogSource,
-                    QStringLiteral("MQTT message missing 'type': topic=%1 payload=%2")
-                    .arg(topic)
-                    .arg(QString::fromUtf8(payload)));
+    LOG_INFO(kLogSource,
+             QStringLiteral("MQTT downlink received: channel=%1 topic=%2 payload=%3")
+                 .arg(channelId)
+                 .arg(topic)
+                 .arg(QString::fromUtf8(payload)));
+
+    bool hasControlKey = false;
+    for (auto it = msg.begin(); it != msg.end(); ++it) {
+        if (it.key().startsWith(QStringLiteral("node_"))) {
+            hasControlKey = true;
+            break;
+        }
+    }
+
+    if (hasControlKey) {
+        handleControlCommand(msg);
         return;
     }
-
-    LOG_INFO(kLogSource,
-             QStringLiteral("MQTT downlink received: type=%1 topic=%2")
-             .arg(type)
-             .arg(topic));
-
-    if (type == QStringLiteral("strategy")) {
-        handleStrategyCommand(msg);
-    } else if (type == QStringLiteral("control")) {
-        handleControlCommand(msg);
-    } else {
-        LOG_WARNING(kLogSource,
-                    QStringLiteral("Unknown MQTT command type=%1").arg(type));
-    }
-
 }
+
 
 
 void CloudMessageHandler::handleStrategyCommand(const QJsonObject &msg)
@@ -77,35 +75,84 @@ void CloudMessageHandler::handleControlCommand(const QJsonObject &msg)
     }
 
 
-    const int nodeId = msg.value(QStringLiteral("nodeId")).toInt(-1);
-    const int channel = msg.value(QStringLiteral("channel")).toInt(-1);
-    const int mode = msg.value(QStringLiteral("mode")).toInt(-1);
+
+    int successCount = 0;
+
+    // 遍历所有 key-value
+    for (auto it = msg.begin(); it != msg.end(); ++it) {
+        const QString key = it.key();
+        if (!key.startsWith(QStringLiteral("node_"))) {
+            continue;
+        }
+
+        // 期望格式: node_<nodeId>_sw<ch>
+        const QStringList parts = key.split('_');
+        if (parts.size() != 3) {
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("invalid control key format: %1").arg(key));
+            continue;
+        }
+
+        bool ok1 = false;
+        bool ok2 = false;
+
+        const int nodeId = parts[1].toInt(&ok1);  // node_<id>
+        const QString swPart = parts[2];          // sw1
+
+        if (!ok1 || !swPart.startsWith(QStringLiteral("sw"))) {
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("invalid control key format: %1").arg(key));
+            continue;
+        }
+
+        const int chIndex = swPart.mid(2).toInt(&ok2); // sw1 -> 1
+        if (!ok2 || chIndex <= 0) {
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("invalid channel index in key: %1").arg(key));
+            continue;
+        }
 
 
-    if (nodeId < 0 || channel < 0 || mode < 0) {
-        LOG_WARNING(kLogSource,
-                    QStringLiteral("invalid control command: %1")
-                    .arg(QString::fromUtf8(QJsonDocument(msg).toJson(QJsonDocument::Compact))));
-        return;
+        // fix index
+        const int channel = chIndex - 1;
+
+        const int mode = it.value().toInt(-1);
+        if (mode < 0) {
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("invalid mode value for key=%1").arg(key));
+            continue;
+        }
+
+        // 查找设备
+        auto *dev = ctx_->relays.value(static_cast<quint8>(nodeId), nullptr);
+        if (!dev) {
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("Control command for unknown nodeId=%1").arg(nodeId));
+            continue;
+        }
+
+        LOG_INFO(kLogSource,
+                 QStringLiteral("Cloud control: nodeId=%1 ch=%2 mode=%3")
+                     .arg(nodeId)
+                     .arg(channel)
+                     .arg(mode));
+
+        // 执行控制
+        dev->control(channel,
+                     static_cast<device::RelayProtocol::Action>(mode));
+
+        successCount++;
     }
 
-    auto *dev = ctx_->relays.value(static_cast<quint8>(nodeId), nullptr);
-    if (!dev) {
+    if (successCount == 0) {
         LOG_WARNING(kLogSource,
-                    QStringLiteral("Control command for unknown nodeId=%1").arg(nodeId));
-        return;
+                    QStringLiteral("No valid control command found in payload: %1")
+                        .arg(QString::fromUtf8(QJsonDocument(msg).toJson(QJsonDocument::Compact))));
+    } else {
+        LOG_INFO(kLogSource,
+                 QStringLiteral("Handled %1 cloud control commands").arg(successCount));
     }
-
-    LOG_INFO(kLogSource,
-             QStringLiteral("Control nodeId=%1 ch=%2 mode=%3")
-             .arg(nodeId)
-             .arg(channel)
-             .arg(mode));
-
-    dev->control(channel, static_cast<device::RelayProtocol::Action>(mode));
 }
-
-
 
 
 

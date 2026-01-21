@@ -4,7 +4,7 @@
 QT += core network mqtt
 QT -= gui
 
-CONFIG += c++11 console
+CONFIG += c++14 console
 CONFIG -= app_bundle
 
 TEMPLATE = app

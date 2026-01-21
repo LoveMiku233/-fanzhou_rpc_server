@@ -111,6 +111,10 @@ bool CoreContext::init(const CoreConfig &config)
         cloudConfig.autoReconnect = mqttConfig.autoReconnect;
         cloudConfig.reconnectIntervalSec = mqttConfig.reconnectIntervalSec;
         cloudConfig.qos = mqttConfig.qos;
+        cloudConfig.topicControlSub  = mqttConfig.topicControlSub;
+        cloudConfig.topicStrategySub = mqttConfig.topicStrategySub;
+        cloudConfig.topicStatusPub   = mqttConfig.topicStatusPub;
+        cloudConfig.topicEventPub    = mqttConfig.topicEventPub;
 
         QString error;
         if (!mqttManager->addChannel(cloudConfig, &error)) {
@@ -124,77 +128,6 @@ bool CoreContext::init(const CoreConfig &config)
              QStringLiteral("MQTT manager initialized with %1 channels")
                  .arg(mqttManager->channelCount()));
 
-//    // 初始化场景管理器
-//    sceneManager = new cloud::SceneManager(this);
-//    QString sceneStoragePath = QStringLiteral("/var/lib/fanzhou_core/scenes.json");
-//    if (!configFilePath.isEmpty()) {
-//        // 使用配置文件相同目录
-//        QFileInfo configInfo(configFilePath);
-//        sceneStoragePath = configInfo.absoluteDir().filePath(QStringLiteral("scenes.json"));
-//    }
-//    sceneManager->init(sceneStoragePath);
-//    LOG_INFO(kLogSource, QStringLiteral("Scene manager initialized"));
-
-//    // 初始化云平台消息处理器
-//    cloudMessageHandler = new cloud::CloudMessageHandler(sceneManager, this);
-
-//    // 连接MQTT消息接收信号到消息处理器
-//    connect(mqttManager, &cloud::MqttChannelManager::messageReceived,
-//            this, [this](int channelId, const QString &topic, const QByteArray &message) {
-//        QByteArray response = cloudMessageHandler->handleMessage(topic, message);
-//        if (!response.isEmpty()) {
-//            // 回复消息到相同通道
-//            mqttManager->publish(channelId, topic, response);
-//        }
-//    });
-
-//    // 连接场景动作信号到继电器控制
-//    connect(sceneManager, &cloud::SceneManager::actionRequired,
-//            this, [this](const QString &deviceCode, const QString &identifier, const QVariant &value) {
-//        // 解析设备编码获取节点ID
-//        // 假设deviceCode格式为节点ID或者可以映射到节点ID
-//        bool ok = false;
-//        int nodeId = deviceCode.toInt(&ok);
-//        if (!ok || nodeId < 1 || nodeId > 255) {
-//            // 尝试从设备配置中查找
-//            for (auto it = deviceConfigs.begin(); it != deviceConfigs.end(); ++it) {
-//                if (it->name == deviceCode) {
-//                    nodeId = it.key();
-//                    ok = true;
-//                    break;
-//                }
-//            }
-//        }
-
-//        if (!ok) {
-//            LOG_WARNING(kLogSource,
-//                        QStringLiteral("Scene action: unknown device %1").arg(deviceCode));
-//            return;
-//        }
-
-//        // 检查是否是继电器控制（sw1, sw2等）
-//        if (identifier.startsWith(QStringLiteral("sw"))) {
-//            bool chOk = false;
-//            int channel = identifier.mid(2).toInt(&chOk);
-//            if (chOk && channel >= 1 && channel <= 4) {
-//                channel -= 1;  // sw1->ch0, sw2->ch1, etc.
-
-//                // 解析动作值
-//                device::RelayProtocol::Action action = device::RelayProtocol::Action::Stop;
-//                int actionVal = value.toInt();
-//                if (actionVal == 1) {
-//                    action = device::RelayProtocol::Action::Forward;
-//                } else if (actionVal == 2) {
-//                    action = device::RelayProtocol::Action::Reverse;
-//                }
-
-//                // 执行控制
-//                enqueueControl(static_cast<quint8>(nodeId), static_cast<quint8>(channel),
-//                               action, QStringLiteral("scene"));
-//            }
-//        }
-//    });
-
     LOG_INFO(kLogSource, QStringLiteral("Cloud message handler initialized"));
 
     if (!initCan()) {
@@ -205,6 +138,8 @@ bool CoreContext::init(const CoreConfig &config)
         LOG_ERROR(kLogSource, QStringLiteral("Failed to initialize devices from config"));
         return false;
     }
+
+    cloudUploadConfig = config.cloudUpload;
 
     initMqtt();
 

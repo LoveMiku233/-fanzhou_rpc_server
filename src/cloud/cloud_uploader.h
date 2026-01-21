@@ -5,6 +5,9 @@
 #include <QHash>
 #include <QDateTime>
 #include <QJsonObject>
+
+#include <memory>
+
 #include "core/core_config.h"
 
 namespace fanzhou {
@@ -30,7 +33,10 @@ private:
     };
 
     core::CoreContext *ctx_;
-    core::CloudUploadConfig *cfg_ = nullptr;
+    std::unique_ptr<core::CloudUploadConfig> cfg_;
+
+    // idx map
+    QHash<quint8, QList<QPair<int, QString>>> nodeToChannels_;
 
     QHash<quint8, NodeUploadState> nodeStates_;
 

@@ -246,6 +246,156 @@ int MqttChannelManager::publishToAll(const QString &topic,
     return count;
 }
 
+/*
+ *  QString topicControlSub;   ///< 订阅：云 → 本地 控制（可选）
+ *  QString topicStrategySub;  ///< 订阅：云 → 本地 策略（可选）
+ *  QString topicStatusPub;    ///< 发布：本地 → 云 状态（可选）
+ *  QString topicEventPub;     ///< 发布：本地 → 云 事件（可选）
+ *
+ */
+bool MqttChannelManager::publishStatus(int channelId,
+                                      const QByteArray &payload,
+                                      int qos)
+{
+    if (!channels_.contains(channelId)) {
+        return false;
+    }
+
+    auto &data = channels_[channelId];
+    if (!data.status.connected) {
+        return false;
+    }
+
+    const QString topic = data.config.topicStatusPub.trimmed();
+    if (topic.isEmpty()) {
+        LOG_DEBUG(kLogSource,
+                  QStringLiteral("Channel %1 has no topicStatusPub configured, skip publishStatus")
+                      .arg(channelId));
+        return false;
+    }
+
+    const int actualQos = (qos >= 0) ? qos : data.config.qos;
+    const QString fullTopic = buildFullTopic(data.config.topicPrefix, topic);
+
+    data.client->publish(fullTopic, payload, actualQos);
+
+    data.status.messagesSent++;
+    data.status.lastMessageMs = QDateTime::currentMSecsSinceEpoch();
+
+    LOG_DEBUG(kLogSource,
+              QStringLiteral("publishStatus: channel=%1 topic=%2 payload=%3")
+                  .arg(channelId)
+                  .arg(fullTopic)
+                  .arg(QString::fromUtf8(payload)));
+
+    return true;
+}
+
+
+bool MqttChannelManager::publishEvent(int channelId,
+                                     const QByteArray &payload,
+                                     int qos)
+{
+    if (!channels_.contains(channelId)) {
+        return false;
+    }
+
+    auto &data = channels_[channelId];
+    if (!data.status.connected) {
+        return false;
+    }
+
+    const QString topic = data.config.topicEventPub.trimmed();
+    if (topic.isEmpty()) {
+        LOG_DEBUG(kLogSource,
+                  QStringLiteral("Channel %1 has no topicEventPub configured, skip publishEvent")
+                      .arg(channelId));
+        return false;
+    }
+
+    const int actualQos = (qos >= 0) ? qos : data.config.qos;
+    const QString fullTopic = buildFullTopic(data.config.topicPrefix, topic);
+
+    data.client->publish(fullTopic, payload, actualQos);
+
+    data.status.messagesSent++;
+    data.status.lastMessageMs = QDateTime::currentMSecsSinceEpoch();
+
+    LOG_DEBUG(kLogSource,
+              QStringLiteral("publishEvent: channel=%1 topic=%2 payload=%3")
+                  .arg(channelId)
+                  .arg(fullTopic)
+                  .arg(QString::fromUtf8(payload)));
+
+    return true;
+}
+
+bool MqttChannelManager::subscribeControlSub(int channelId, int qos)
+{
+    if (!channels_.contains(channelId)) {
+        return false;
+    }
+
+    auto &data = channels_[channelId];
+    if (!data.status.connected) {
+        return false;
+    }
+
+    const QString topic = data.config.topicControlSub.trimmed();
+    if (topic.isEmpty()) {
+        LOG_DEBUG(kLogSource,
+                  QStringLiteral("Channel %1 has no topicControlSub configured, skip subscribe")
+                      .arg(channelId));
+        return false;
+    }
+
+    const QString fullTopic = buildFullTopic(data.config.topicPrefix, topic);
+    const int actualQos = (qos >= 0) ? qos : data.config.qos;
+
+    data.client->subscribe(fullTopic, actualQos);
+
+    LOG_INFO(kLogSource,
+             QStringLiteral("subscribeControlSub: channel=%1 topic=%2")
+                 .arg(channelId)
+                 .arg(fullTopic));
+
+    return true;
+}
+
+bool MqttChannelManager::subscribeStrategySub(int channelId, int qos)
+{
+    if (!channels_.contains(channelId)) {
+        return false;
+    }
+
+    auto &data = channels_[channelId];
+    if (!data.status.connected) {
+        return false;
+    }
+
+    const QString topic = data.config.topicStrategySub.trimmed();
+    if (topic.isEmpty()) {
+        LOG_DEBUG(kLogSource,
+                  QStringLiteral("Channel %1 has no topicStrategySub configured, skip subscribe")
+                      .arg(channelId));
+        return false;
+    }
+
+    const QString fullTopic = buildFullTopic(data.config.topicPrefix, topic);
+    const int actualQos = (qos >= 0) ? qos : data.config.qos;
+
+    data.client->subscribe(fullTopic, actualQos);
+
+    LOG_INFO(kLogSource,
+             QStringLiteral("subscribeStrategySub: channel=%1 topic=%2")
+                 .arg(channelId)
+                 .arg(fullTopic));
+
+    return true;
+}
+
+
+
 bool MqttChannelManager::subscribe(int channelId, const QString &topic, int qos)
 {
     if (!channels_.contains(channelId)) {
@@ -289,25 +439,6 @@ void MqttChannelManager::reportDeviceValueChange(quint8 deviceNode, quint8 chann
     msg[QStringLiteral("deviceNode")] = static_cast<int>(deviceNode);
     msg[QStringLiteral("channel")] = static_cast<int>(channel);
     msg[QStringLiteral("value")] = value;
-//    if (!oldValue.isEmpty()) {
-//        msg[QStringLiteral("oldValue")] = oldValue;
-//    }
-
-//    const QByteArray payload = QJsonDocument(msg).toJson(QJsonDocument::Compact);
-//    const QString topic = QStringLiteral("device/%1/ch%2/change")
-//                              .arg(deviceNode)
-//                              .arg(channel);
-
-//    // 向所有已连接通道发布
-//    const int sent = publishToAll(topic, payload, 1);
-
-//    if (sent > 0) {
-//        LOG_DEBUG(kLogSource,
-//                  QStringLiteral("Device value change reported: node=%1, ch=%2, sent to %3 channels")
-//                      .arg(deviceNode)
-//                      .arg(channel)
-//                      .arg(sent));
-//    }
 }
 
 QList<MqttChannelStatus> MqttChannelManager::channelStatusList() const
@@ -358,11 +489,8 @@ void MqttChannelManager::onClientConnected()
     data.status.connected = true;
     data.status.lastConnectedMs = QDateTime::currentMSecsSinceEpoch();
 
-    const QString downlinkTopic = QStringLiteral(
-           "sys/%1/%2/thing/service/#")
-               .arg(data.config.clientId)   // 或 productKey
-               .arg(data.config.clientId);  // 或 deviceName
-    subscribe(channelId, downlinkTopic, 1);
+    subscribeControlSub(channelId, 1);
+    subscribeStrategySub(channelId, 1);
 
     LOG_INFO(kLogSource,
              QStringLiteral("MQTT channel %1 connected to %2:%3")

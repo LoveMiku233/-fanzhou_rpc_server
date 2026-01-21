@@ -113,6 +113,13 @@ public:
     bool publish(int channelId, const QString &topic,
                  const QByteArray &payload, int qos = -1);
 
+    // @TODO
+    bool publishStatus(int channelId, const QByteArray &payload, int qos);
+    bool publishEvent(int channelId, const QByteArray &payload, int qos);
+    bool subscribeControlSub(int channelId, int qos);
+    bool subscribeStrategySub(int channelId, int qos);
+
+
     /**
      * @brief 向所有已连接通道发布消息
      * @param topic 主题（相对于topicPrefix）

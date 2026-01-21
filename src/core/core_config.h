@@ -139,7 +139,7 @@ struct CloudNodeBinding {
 
 struct CloudMqttChannelBinding {
     int channelId = 0;          ///< MqttChannelManager 里的 channelId
-    QString topic;              ///< 该通道的发布 topic
+    QString topic = "null";              ///< 该通道的发布 topic
     QList<CloudNodeBinding> nodes; ///< 这个通道绑定了哪些节点
 };
 
@@ -182,6 +182,8 @@ struct CloudUploadConfig {
     bool statusChangeOnly = true;            ///< 状态变化时才上传（如开关状态改变）
     int minUploadIntervalSec = 5;           ///< 最小上传间隔（秒），防止频繁上传
 
+
+    // device_bindings
     QList<CloudMqttChannelBinding> channelBindings;
 };
 

@@ -41,6 +41,8 @@ class RelayGd427;
 
 namespace core {
 
+struct CloudNodeBinding;
+
 /**
  * @brief 控制任务结构
  */
@@ -177,6 +179,9 @@ public:
     cloud::MqttChannelManager *mqttManager = nullptr;    ///< MQTT多通道管理器
     cloud::CloudMessageHandler *cloudMessageHandler = nullptr; ///< 云平台消息处理器
     cloud::CloudUploader *cloudUploader = nullptr;               ///<
+
+    //
+//    QHash<quint8, QList<CloudNodeBinding>> cloud_binding_nodes;
 
     // 设备注册表：节点ID -> 设备
     QHash<quint8, device::RelayGd427 *> relays;

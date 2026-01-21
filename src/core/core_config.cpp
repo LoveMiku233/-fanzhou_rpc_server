@@ -304,6 +304,42 @@ bool CoreConfig::loadFromFile(const QString &path, QString *error)
         cloudUpload.currentThreshold = uploadObj.value(QStringLiteral("currentThreshold")).toDouble(cloudUpload.currentThreshold);
         cloudUpload.statusChangeOnly = uploadObj.value(QStringLiteral("statusChangeOnly")).toBool(cloudUpload.statusChangeOnly);
         cloudUpload.minUploadIntervalSec = uploadObj.value(QStringLiteral("minUploadIntervalSec")).toInt(cloudUpload.minUploadIntervalSec);
+
+        // 解析 channelBindings
+        cloudUpload.channelBindings.clear();
+
+        if (uploadObj.contains(QStringLiteral("channelBindings")) &&
+            uploadObj[QStringLiteral("channelBindings")].isArray()) {
+
+            const auto arr = uploadObj[QStringLiteral("channelBindings")].toArray();
+            for (const auto &val : arr) {
+                if (!val.isObject()) continue;
+                const auto obj = val.toObject();
+
+                CloudMqttChannelBinding binding;
+                binding.channelId = obj.value(QStringLiteral("channelId")).toInt(0);
+                // binding.topic = obj.value(QStringLiteral("topic")).toString();
+
+                if (obj.contains(QStringLiteral("nodes")) &&
+                    obj[QStringLiteral("nodes")].isArray()) {
+
+                    const auto nodeArr = obj[QStringLiteral("nodes")].toArray();
+                    for (const auto &nodeVal : nodeArr) {
+                        if (!nodeVal.isObject()) continue;
+                        const auto nodeObj = nodeVal.toObject();
+
+                        CloudNodeBinding nb;
+                        nb.nodeId = static_cast<quint8>(
+                            nodeObj.value(QStringLiteral("nodeId")).toInt(0));
+                        nb.formatId = nodeObj.value(QStringLiteral("formatId")).toString();
+
+                        binding.nodes.append(nb);
+                    }
+                }
+
+                cloudUpload.channelBindings.append(binding);
+            }
+        }
     }
 
     // 控制策略
@@ -380,6 +416,10 @@ bool CoreConfig::loadFromFile(const QString &path, QString *error)
             mqtt.autoReconnect = obj.value(QStringLiteral("autoReconnect")).toBool(true);
             mqtt.reconnectIntervalSec = obj.value(QStringLiteral("reconnectIntervalSec")).toInt(5);
             mqtt.qos = obj.value(QStringLiteral("qos")).toInt(0);
+            mqtt.topicControlSub  = obj.value(QStringLiteral("topicControlSub")).toString();
+            mqtt.topicStrategySub = obj.value(QStringLiteral("topicStrategySub")).toString();
+            mqtt.topicStatusPub   = obj.value(QStringLiteral("topicStatusPub")).toString();
+            mqtt.topicEventPub    = obj.value(QStringLiteral("topicEventPub")).toString();
 
             mqttChannels.append(mqtt);
         }
@@ -520,7 +560,33 @@ bool CoreConfig::saveToFile(const QString &path, QString *error) const
     cloudUploadObj[QStringLiteral("currentThreshold")] = cloudUpload.currentThreshold;
     cloudUploadObj[QStringLiteral("statusChangeOnly")] = cloudUpload.statusChangeOnly;
     cloudUploadObj[QStringLiteral("minUploadIntervalSec")] = cloudUpload.minUploadIntervalSec;
+    // 保存 channelBindings
+    if (!cloudUpload.channelBindings.isEmpty()) {
+        QJsonArray bindArr;
+
+        for (const auto &binding : cloudUpload.channelBindings) {
+            QJsonObject obj;
+            obj[QStringLiteral("channelId")] = binding.channelId;
+            obj[QStringLiteral("topic")] = binding.topic;
+
+            QJsonArray nodeArr;
+            for (const auto &nb : binding.nodes) {
+                QJsonObject nobj;
+                nobj[QStringLiteral("nodeId")] = nb.nodeId;
+                if (!nb.formatId.isEmpty()) {
+                    nobj[QStringLiteral("formatId")] = nb.formatId;
+                }
+                nodeArr.append(nobj);
+            }
+
+            obj[QStringLiteral("nodes")] = nodeArr;
+            bindArr.append(obj);
+        }
+
+        cloudUploadObj[QStringLiteral("channelBindings")] = bindArr;
+    }
     root[QStringLiteral("cloudUpload")] = cloudUploadObj;
+
 
     // 控制策略
     QJsonArray stratArr;
@@ -574,16 +640,29 @@ bool CoreConfig::saveToFile(const QString &path, QString *error) const
         if (!mqtt.username.isEmpty()) {
             obj[QStringLiteral("username")] = mqtt.username;
         }
-        // 注意：密码可选择是否保存，出于安全考虑可以不保存
         if (!mqtt.password.isEmpty()) {
             obj[QStringLiteral("password")] = mqtt.password;
         }
+        if (!mqtt.topicControlSub.isEmpty()) {
+            obj["topicControlSub"] = mqtt.topicControlSub;
+        }
+        if (!mqtt.topicStrategySub.isEmpty()) {
+            obj["topicStrategySub"] = mqtt.topicStrategySub;
+        }
+        if (!mqtt.topicStatusPub.isEmpty()) {
+            obj["topicStatusPub"] = mqtt.topicStatusPub;
+        }
+        if (!mqtt.topicEventPub.isEmpty()) {
+            obj["topicEventPub"] = mqtt.topicEventPub;
+        }
+
         obj[QStringLiteral("topicPrefix")] = mqtt.topicPrefix;
         obj[QStringLiteral("keepAliveSec")] = mqtt.keepAliveSec;
         obj[QStringLiteral("autoReconnect")] = mqtt.autoReconnect;
         obj[QStringLiteral("reconnectIntervalSec")] = mqtt.reconnectIntervalSec;
         obj[QStringLiteral("qos")] = mqtt.qos;
         mqttArr.append(obj);
+
     }
     root[QStringLiteral("mqttChannels")] = mqttArr;
 
