@@ -60,8 +60,6 @@ bool MqttChannelManager::addChannel(const core::MqttChannelConfig &config, QStri
     data.status.enabled = config.enabled;
     data.status.broker = config.broker;
     data.status.port = config.port;
-//    data.platform = CloudPlatformRegistry::instance()
-//            .platform(config.cloudid);
 
     // 创建MQTT客户端
     data.client = new MqttClient(this);
@@ -222,7 +220,7 @@ bool MqttChannelManager::publish(int channelId, const QString &topic,
         return false;
     }
 
-    const int actualQos = (qos >= 0) ? qos : data.config.qos;
+    const int actualQos = (qos > 0) ? qos : data.config.qos;
     const QString fullTopic = buildFullTopic(data.config.topicPrefix, topic);
 
     data.client->publish(fullTopic, payload, actualQos);
@@ -245,6 +243,7 @@ int MqttChannelManager::publishToAll(const QString &topic,
     }
     return count;
 }
+
 
 /*
  *  QString topicControlSub;   ///< 订阅：云 → 本地 控制（可选）
@@ -274,7 +273,7 @@ bool MqttChannelManager::publishStatus(int channelId,
         return false;
     }
 
-    const int actualQos = (qos >= 0) ? qos : data.config.qos;
+    const int actualQos = (qos > 0) ? qos : data.config.qos;
     const QString fullTopic = buildFullTopic(data.config.topicPrefix, topic);
 
     data.client->publish(fullTopic, payload, actualQos);
@@ -313,7 +312,7 @@ bool MqttChannelManager::publishEvent(int channelId,
         return false;
     }
 
-    const int actualQos = (qos >= 0) ? qos : data.config.qos;
+    const int actualQos = (qos > 0) ? qos : data.config.qos;
     const QString fullTopic = buildFullTopic(data.config.topicPrefix, topic);
 
     data.client->publish(fullTopic, payload, actualQos);
@@ -330,7 +329,78 @@ bool MqttChannelManager::publishEvent(int channelId,
     return true;
 }
 
-bool MqttChannelManager::subscribeControlSub(int channelId, int qos)
+
+bool MqttChannelManager::publishSetting(int channelId, const QByteArray &payload, int qos)
+{
+    if (!channels_.contains(channelId)) {
+        return false;
+    }
+
+    auto &data = channels_[channelId];
+    if (!data.status.connected) {
+        return false;
+    }
+
+    const QString topic = data.config.topicSettingPub.trimmed();
+    if (topic.isEmpty()) {
+        LOG_DEBUG(kLogSource,
+                  QStringLiteral("Channel %1 has no topicSettingPub configured, skip publishEvent")
+                      .arg(channelId));
+        return false;
+    }
+
+    const int actualQos = (qos > 0) ? qos : data.config.qos;
+    const QString fullTopic = buildFullTopic(data.config.topicPrefix, topic);
+
+    data.client->publish(fullTopic, payload, actualQos);
+
+    data.status.messagesSent++;
+    data.status.lastMessageMs = QDateTime::currentMSecsSinceEpoch();
+
+    LOG_DEBUG(kLogSource,
+              QStringLiteral("publishSetting: channel=%1 topic=%2 payload=%3")
+                  .arg(channelId)
+                  .arg(fullTopic)
+                  .arg(QString::fromUtf8(payload)));
+
+    return true;
+}
+
+bool MqttChannelManager::subscribeSetting(int channelId, int qos)
+{
+    if (!channels_.contains(channelId)) {
+        return false;
+    }
+
+    auto &data = channels_[channelId];
+    if (!data.status.connected) {
+        return false;
+    }
+
+    const QString topic = data.config.topicSettingSub.trimmed();
+    if (topic.isEmpty()) {
+        LOG_DEBUG(kLogSource,
+                  QStringLiteral("Channel %1 has no topicSettingSub configured, skip subscribe")
+                      .arg(channelId));
+        return false;
+    }
+
+    const QString fullTopic = buildFullTopic(data.config.topicPrefix, topic);
+    const int actualQos = (qos > 0) ? qos : data.config.qos;
+
+    data.client->subscribe(fullTopic, actualQos);
+
+    LOG_INFO(kLogSource,
+             QStringLiteral("topicSettingSub: channel=%1 topic=%2")
+                 .arg(channelId)
+                 .arg(fullTopic));
+
+    return true;
+}
+
+
+
+bool MqttChannelManager::subscribeControl(int channelId, int qos)
 {
     if (!channels_.contains(channelId)) {
         return false;
@@ -350,7 +420,7 @@ bool MqttChannelManager::subscribeControlSub(int channelId, int qos)
     }
 
     const QString fullTopic = buildFullTopic(data.config.topicPrefix, topic);
-    const int actualQos = (qos >= 0) ? qos : data.config.qos;
+    const int actualQos = (qos > 0) ? qos : data.config.qos;
 
     data.client->subscribe(fullTopic, actualQos);
 
@@ -362,7 +432,7 @@ bool MqttChannelManager::subscribeControlSub(int channelId, int qos)
     return true;
 }
 
-bool MqttChannelManager::subscribeStrategySub(int channelId, int qos)
+bool MqttChannelManager::subscribeStrategy(int channelId, int qos)
 {
     if (!channels_.contains(channelId)) {
         return false;
@@ -382,7 +452,7 @@ bool MqttChannelManager::subscribeStrategySub(int channelId, int qos)
     }
 
     const QString fullTopic = buildFullTopic(data.config.topicPrefix, topic);
-    const int actualQos = (qos >= 0) ? qos : data.config.qos;
+    const int actualQos = (qos > 0) ? qos : data.config.qos;
 
     data.client->subscribe(fullTopic, actualQos);
 
@@ -428,10 +498,14 @@ bool MqttChannelManager::unsubscribe(int channelId, const QString &topic)
     return true;
 }
 
+// @UNUSED
 void MqttChannelManager::reportDeviceValueChange(quint8 deviceNode, quint8 channel,
                                                    const QJsonObject &value,
                                                    const QJsonObject &oldValue)
 {
+
+    Q_UNUSED(oldValue);
+
     // 构建上报消息
     QJsonObject msg;
     msg[QStringLiteral("type")] = QStringLiteral("device_value_change");
@@ -489,8 +563,9 @@ void MqttChannelManager::onClientConnected()
     data.status.connected = true;
     data.status.lastConnectedMs = QDateTime::currentMSecsSinceEpoch();
 
-    subscribeControlSub(channelId, 1);
-    subscribeStrategySub(channelId, 1);
+    subscribeControl(channelId, 1);
+    subscribeStrategy(channelId, 1);
+    subscribeSetting(channelId, 1);
 
     LOG_INFO(kLogSource,
              QStringLiteral("MQTT channel %1 connected to %2:%3")
@@ -565,6 +640,49 @@ QString MqttChannelManager::buildFullTopic(const QString &prefix, const QString 
     }
     return prefix + '/' + topic;
 }
+
+
+QString MqttChannelManager::getStatusTopicFromConfig(int channelId)
+{
+    if (!channels_.contains(channelId)) {
+        return "";
+    }
+    return getChannelConfig(channelId).topicStatusPub;
+}
+
+QString MqttChannelManager::getControlTopicFromConfig(int channelId)
+{
+    if (!channels_.contains(channelId)) {
+        return "";
+    }
+    return getChannelConfig(channelId).topicControlSub;
+}
+
+QString MqttChannelManager::getStrategySubTopicFromConfig(int channelId)
+{
+    if (!channels_.contains(channelId)) {
+        return "";
+    }
+    return getChannelConfig(channelId).topicStrategySub;
+}
+
+QString MqttChannelManager::getSettingPubTopicFromConfig(int channelId)
+{
+    if (!channels_.contains(channelId)) {
+        return "";
+    }
+    return getChannelConfig(channelId).topicStatusPub;
+}
+
+QString MqttChannelManager::getSettingSubTopicFromConfig(int channelId)
+{
+    if (!channels_.contains(channelId)) {
+        return "";
+    }
+    return getChannelConfig(channelId).topicSettingSub;
+}
+
+
 
 }  // namespace cloud
 }  // namespace fanzhou

@@ -42,6 +42,9 @@ public:
         Q_UNUSED(deviceNode)
         Q_UNUSED(eventId)
         Q_UNUSED(params)
+        Q_UNUSED(outTopic)
+        Q_UNUSED(outPayload)
+        Q_UNUSED(outqos)
         return false;
     }
 

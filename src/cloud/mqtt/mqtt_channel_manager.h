@@ -116,9 +116,17 @@ public:
     // @TODO
     bool publishStatus(int channelId, const QByteArray &payload, int qos);
     bool publishEvent(int channelId, const QByteArray &payload, int qos);
-    bool subscribeControlSub(int channelId, int qos);
-    bool subscribeStrategySub(int channelId, int qos);
+    bool publishSetting(int channelId, const QByteArray &payload, int qos);
+    bool subscribeControl(int channelId, int qos);
+    bool subscribeStrategy(int channelId, int qos);
+    bool subscribeSetting(int channelId, int qos);
 
+    // @TODO
+    QString getStatusTopicFromConfig(int channelId);
+    QString getControlTopicFromConfig(int channelId);
+    QString getStrategySubTopicFromConfig(int channelId);
+    QString getSettingPubTopicFromConfig(int channelId);
+    QString getSettingSubTopicFromConfig(int channelId);
 
     /**
      * @brief 向所有已连接通道发布消息

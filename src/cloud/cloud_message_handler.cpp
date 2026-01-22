@@ -3,6 +3,7 @@
 #include "utils/logger.h"
 #include "device/can/relay_gd427.h"
 #include "device/can/relay_protocol.h"
+#include "cloud/mqtt/mqtt_channel_manager.h"
 
 #include <QJsonDocument>
 
@@ -24,57 +25,58 @@ CloudMessageHandler::CloudMessageHandler(core::CoreContext *ctx, QObject *parent
 
 
 void CloudMessageHandler::onMqttMessage(int channelId,
-                                       const QString &topic,
-                                       const QByteArray &payload)
+                                        const QString &topic,
+                                        const QByteArray &payload)
 {
+    if (!ctx_ || !ctx_->mqttManager) {
+        return;
+    }
+
     QJsonParseError err;
     const QJsonDocument doc = QJsonDocument::fromJson(payload, &err);
     if (err.error != QJsonParseError::NoError || !doc.isObject()) {
         LOG_WARNING(kLogSource,
-                    QStringLiteral("Invalid JSON from MQTT topic=%1 err=%2 payload=%3")
-                        .arg(topic)
-                        .arg(err.errorString())
-                        .arg(QString::fromUtf8(payload)));
+                    QStringLiteral("Invalid JSON payload on topic '%1'").arg(topic));
         return;
     }
 
-    const QJsonObject msg = doc.object();
+    const QJsonObject obj = doc.object();
 
-    LOG_INFO(kLogSource,
-             QStringLiteral("MQTT downlink received: channel=%1 topic=%2 payload=%3")
-                 .arg(channelId)
-                 .arg(topic)
-                 .arg(QString::fromUtf8(payload)));
+    const QString controlTopic =
+        ctx_->mqttManager->getControlTopicFromConfig(channelId);
 
-    bool hasControlKey = false;
-    for (auto it = msg.begin(); it != msg.end(); ++it) {
-        if (it.key().startsWith(QStringLiteral("node_"))) {
-            hasControlKey = true;
-            break;
-        }
-    }
+    const QString settingTopic =
+            ctx_->mqttManager->getSettingSubTopicFromConfig(channelId);
 
-    if (hasControlKey) {
-        handleControlCommand(msg);
+    // 分发处理
+    if (!controlTopic.isEmpty() && topic == controlTopic) {
+        handleControlCommand(channelId, obj);
         return;
     }
+
+    if (!settingTopic.isEmpty() && topic == settingTopic) {
+        handleSettingCommand(channelId, obj);
+        return;
+    }
+
+    LOG_DEBUG(kLogSource,
+              QStringLiteral("Unhandled MQTT topic: channel=%1 topic='%2'")
+                  .arg(channelId)
+                  .arg(topic));
 }
 
 
-
-void CloudMessageHandler::handleStrategyCommand(const QJsonObject &msg)
+void CloudMessageHandler::handleStrategyCommand(const int channelId, const QJsonObject &msg)
 {
-    LOG_DEBUG(kLogSource, QJsonDocument(msg).toJson(QJsonDocument::Compact));
+    LOG_DEBUG(kLogSource,QStringLiteral("Handled the %1 cloud Strategy commands").arg(channelId));
 }
 
-void CloudMessageHandler::handleControlCommand(const QJsonObject &msg)
+void CloudMessageHandler::handleControlCommand(const int channelId, const QJsonObject &msg)
 {
     if (!ctx_) {
         LOG_WARNING(kLogSource, "CoreContext is null, cannot handle control command");
         return;
     }
-
-
 
     int successCount = 0;
 
@@ -150,10 +152,16 @@ void CloudMessageHandler::handleControlCommand(const QJsonObject &msg)
                         .arg(QString::fromUtf8(QJsonDocument(msg).toJson(QJsonDocument::Compact))));
     } else {
         LOG_INFO(kLogSource,
-                 QStringLiteral("Handled %1 cloud control commands").arg(successCount));
+                 QStringLiteral("Handled the %1 cloud %2 control commands").arg(channelId).arg(successCount));
     }
 }
 
+
+void CloudMessageHandler::handleSettingCommand(const int channelId, const QJsonObject &msg)
+{
+
+    LOG_DEBUG(kLogSource,QStringLiteral("Handled the %1 cloud Setting commands").arg(channelId));
+}
 
 
 } // namespace cloud

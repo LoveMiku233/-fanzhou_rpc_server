@@ -418,6 +418,8 @@ bool CoreConfig::loadFromFile(const QString &path, QString *error)
             mqtt.qos = obj.value(QStringLiteral("qos")).toInt(0);
             mqtt.topicControlSub  = obj.value(QStringLiteral("topicControlSub")).toString();
             mqtt.topicStrategySub = obj.value(QStringLiteral("topicStrategySub")).toString();
+            mqtt.topicSettingSub  = obj.value(QStringLiteral("topicSettingSub")).toString();
+            mqtt.topicSettingPub  = obj.value(QStringLiteral("topicSettingPub")).toString();
             mqtt.topicStatusPub   = obj.value(QStringLiteral("topicStatusPub")).toString();
             mqtt.topicEventPub    = obj.value(QStringLiteral("topicEventPub")).toString();
 
@@ -654,6 +656,12 @@ bool CoreConfig::saveToFile(const QString &path, QString *error) const
         }
         if (!mqtt.topicEventPub.isEmpty()) {
             obj["topicEventPub"] = mqtt.topicEventPub;
+        }
+        if (!mqtt.topicSettingPub.isEmpty()) {
+            obj["topicSettingPub"] = mqtt.topicSettingPub;
+        }
+        if (!mqtt.topicSettingSub.isEmpty()) {
+            obj["topicSettingSub"] = mqtt.topicSettingSub;
         }
 
         obj[QStringLiteral("topicPrefix")] = mqtt.topicPrefix;

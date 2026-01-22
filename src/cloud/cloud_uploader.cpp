@@ -56,6 +56,8 @@ void CloudUploader::onDeviceStatusChanged(quint8 nodeId)
 
 void CloudUploader::onChannelValueChanged(quint8 nodeId, quint8 channel)
 {
+    Q_UNUSED(channel)
+
     if (!cfg_ || !cfg_->enabled) {
         return;
     }

@@ -22,10 +22,10 @@ public slots:
 private:
     int channelId = -1;
     core::CoreContext *ctx_;
-    void handleStrategyCommand(const QJsonObject &msg);
-    void handleControlCommand(const QJsonObject &msg);
+    void handleStrategyCommand(const int channelId, const QJsonObject &msg);
+    void handleControlCommand(const int channelId, const QJsonObject &msg);
+    void handleSettingCommand(const int channelId, const QJsonObject &msg);
     // TODO
-
 };
 
 } // namespace cloud

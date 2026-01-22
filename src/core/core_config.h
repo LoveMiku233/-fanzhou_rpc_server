@@ -118,6 +118,8 @@ struct MqttChannelConfig {
 
     QString topicControlSub;   ///< 订阅：云 → 本地 控制（可选）
     QString topicStrategySub;  ///< 订阅：云 → 本地 策略（可选）
+    QString topicSettingSub;
+    QString topicSettingPub;
     QString topicStatusPub;    ///< 发布：本地 → 云 状态（可选）
     QString topicEventPub;     ///< 发布：本地 → 云 事件（可选）
 
