@@ -15,6 +15,7 @@ namespace core {
 class CoreContext;
 }
 namespace cloud {
+namespace fanzhoucloud {
 
 class CloudUploader : public QObject {
     Q_OBJECT
@@ -44,6 +45,7 @@ private:
     QJsonObject buildNodePayload(quint8 nodeId, const QString &formatId) const;
 };
 
+}
 } // namespace cloud
 } // namespace fanzhou
 

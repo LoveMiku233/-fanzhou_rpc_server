@@ -87,17 +87,6 @@ CoreConfig CoreConfig::makeDefault()
     group.enabled = true;
     config.groups.append(group);
 
-    AutoStrategyConfig strategy;
-    strategy.strategyId = 1;
-    strategy.name = QStringLiteral("default-stop");
-    strategy.groupId = group.groupId;
-    strategy.channel = 0;
-    strategy.action = QStringLiteral("stop");
-    strategy.intervalSec = 120;
-    strategy.enabled = true;
-    strategy.autoStart = false;
-    config.strategies.append(strategy);
-
     return config;
 }
 
@@ -346,51 +335,7 @@ bool CoreConfig::loadFromFile(const QString &path, QString *error)
     strategies.clear();
     if (root.contains(QStringLiteral("strategies")) &&
         root[QStringLiteral("strategies")].isArray()) {
-        const auto arr = root[QStringLiteral("strategies")].toArray();
-        for (const auto &value : arr) {
-            if (!value.isObject()) continue;
-            const auto obj = value.toObject();
-
-            AutoStrategyConfig strat;
-            strat.strategyId = obj.value(QStringLiteral("id")).toInt(0);
-            strat.name = obj.value(QStringLiteral("name")).toString();
-            strat.groupId = obj.value(QStringLiteral("groupId")).toInt(0);
-            strat.channel = static_cast<qint8>(obj.value(QStringLiteral("channel")).toInt(0));
-            strat.action = obj.value(QStringLiteral("action")).toString(QStringLiteral("stop"));
-            strat.intervalSec = obj.value(QStringLiteral("intervalSec")).toInt(60);
-            strat.enabled = obj.value(QStringLiteral("enabled")).toBool(true);
-            strat.autoStart = obj.value(QStringLiteral("autoStart")).toBool(true);
-            strat.triggerType = obj.value(QStringLiteral("triggerType")).toString(QStringLiteral("interval"));
-            strat.dailyTime = obj.value(QStringLiteral("dailyTime")).toString();
-
-            strategies.append(strat);
-        }
-    }
-
-    // 传感器策略
-    sensorStrategies.clear();
-    if (root.contains(QStringLiteral("sensorStrategies")) &&
-        root[QStringLiteral("sensorStrategies")].isArray()) {
-        const auto arr = root[QStringLiteral("sensorStrategies")].toArray();
-        for (const auto &value : arr) {
-            if (!value.isObject()) continue;
-            const auto obj = value.toObject();
-
-            SensorStrategyConfig strat;
-            strat.strategyId = obj.value(QStringLiteral("id")).toInt(0);
-            strat.name = obj.value(QStringLiteral("name")).toString();
-            strat.sensorType = obj.value(QStringLiteral("sensorType")).toString();
-            strat.sensorNode = obj.value(QStringLiteral("sensorNode")).toInt(0);
-            strat.condition = obj.value(QStringLiteral("condition")).toString();
-            strat.threshold = obj.value(QStringLiteral("threshold")).toDouble(0.0);
-            strat.groupId = obj.value(QStringLiteral("groupId")).toInt(0);
-            strat.channel = obj.value(QStringLiteral("channel")).toInt(0);
-            strat.action = obj.value(QStringLiteral("action")).toString(QStringLiteral("stop"));
-            strat.cooldownSec = obj.value(QStringLiteral("cooldownSec")).toInt(60);
-            strat.enabled = obj.value(QStringLiteral("enabled")).toBool(true);
-
-            sensorStrategies.append(strat);
-        }
+        // @TODO
     }
 
     // MQTT多通道配置
@@ -594,40 +539,11 @@ bool CoreConfig::saveToFile(const QString &path, QString *error) const
     QJsonArray stratArr;
     for (const auto &strat : strategies) {
         QJsonObject obj;
-        obj[QStringLiteral("id")] = strat.strategyId;
-        obj[QStringLiteral("name")] = strat.name;
-        obj[QStringLiteral("groupId")] = strat.groupId;
-        obj[QStringLiteral("channel")] = static_cast<int>(strat.channel);
-        obj[QStringLiteral("action")] = strat.action;
-        obj[QStringLiteral("intervalSec")] = strat.intervalSec;
-        obj[QStringLiteral("enabled")] = strat.enabled;
-        obj[QStringLiteral("autoStart")] = strat.autoStart;
-        obj[QStringLiteral("triggerType")] = strat.triggerType;
-        if (!strat.dailyTime.isEmpty()) {
-            obj[QStringLiteral("dailyTime")] = strat.dailyTime;
-        }
+        // @TODO
         stratArr.append(obj);
     }
     root[QStringLiteral("strategies")] = stratArr;
 
-    // 传感器策略
-    QJsonArray sensorStratArr;
-    for (const auto &strat : sensorStrategies) {
-        QJsonObject obj;
-        obj[QStringLiteral("id")] = strat.strategyId;
-        obj[QStringLiteral("name")] = strat.name;
-        obj[QStringLiteral("sensorType")] = strat.sensorType;
-        obj[QStringLiteral("sensorNode")] = strat.sensorNode;
-        obj[QStringLiteral("condition")] = strat.condition;
-        obj[QStringLiteral("threshold")] = strat.threshold;
-        obj[QStringLiteral("groupId")] = strat.groupId;
-        obj[QStringLiteral("channel")] = strat.channel;
-        obj[QStringLiteral("action")] = strat.action;
-        obj[QStringLiteral("cooldownSec")] = strat.cooldownSec;
-        obj[QStringLiteral("enabled")] = strat.enabled;
-        sensorStratArr.append(obj);
-    }
-    root[QStringLiteral("sensorStrategies")] = sensorStratArr;
 
     // MQTT多通道配置
     QJsonArray mqttArr;

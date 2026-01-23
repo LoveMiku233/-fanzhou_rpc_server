@@ -1,4 +1,4 @@
-#include "cloud_uploader.h"
+#include "fanzhoucloud_uploader.h"
 #include "core/core_context.h"
 #include "device/can/relay_gd427.h"
 #include "cloud/mqtt/mqtt_channel_manager.h"
@@ -8,6 +8,7 @@
 
 namespace fanzhou {
 namespace cloud {
+namespace fanzhoucloud {
 namespace {
 const char *const kLogSource = "CloudUploader";
 }
@@ -237,6 +238,6 @@ QJsonObject CloudUploader::buildNodePayload(quint8 nodeId,
 
 
 
-
+}
 } // namespace cloud
 } // namespace fanzhou

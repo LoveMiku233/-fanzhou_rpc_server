@@ -13,6 +13,7 @@
 #include <QObject>
 #include <QQueue>
 #include <QTimer>
+#include <QDateTime>
 
 #include "core_config.h"
 #include "device/can/relay_protocol.h"
@@ -26,8 +27,11 @@ class SystemMonitor;
 
 namespace cloud {
 class MqttChannelManager;
+namespace fanzhoucloud {
 class CloudMessageHandler;
 class CloudUploader;
+class SettingService;
+}
 }
 
 namespace comm {
@@ -126,18 +130,9 @@ struct QueueSnapshot {
  * 定时策略的运行时状态
  */
 struct AutoStrategyState {
-    AutoStrategyConfig config;
+    AutoStrategy config;
     bool attached = false;
     bool running = false;
-};
-
-/**
- * @brief 传感器策略状态
- * 传感器触发策略的运行时状态
- */
-struct SensorStrategyState {
-    SensorStrategyConfig config;
-    bool active = false;  ///< 是否处于活动状态
 };
 
 /**
@@ -177,8 +172,9 @@ public:
     comm::CanComm *canBus = nullptr;
     device::CanDeviceManager *canManager = nullptr;
     cloud::MqttChannelManager *mqttManager = nullptr;    ///< MQTT多通道管理器
-    cloud::CloudMessageHandler *cloudMessageHandler = nullptr; ///< 云平台消息处理器
-    cloud::CloudUploader *cloudUploader = nullptr;               ///<
+    cloud::fanzhoucloud::CloudMessageHandler *cloudMessageHandler = nullptr; ///< 云平台消息处理器
+    cloud::fanzhoucloud::CloudUploader *cloudUploader = nullptr;               ///<
+    cloud::fanzhoucloud::SettingService *cloudSettingService = nullptr;
 
     //
 //    QHash<quint8, QList<CloudNodeBinding>> cloud_binding_nodes;
@@ -329,28 +325,11 @@ public:
     QList<AutoStrategyState> strategyStates() const;
     bool setStrategyEnabled(int strategyId, bool enabled);
     bool triggerStrategy(int strategyId);
-    bool createStrategy(const AutoStrategyConfig &config, QString *error = nullptr);
+    bool createStrategy(const AutoStrategy &config, QString *error = nullptr);
     bool deleteStrategy(int strategyId, QString *error = nullptr);
-
-    // 传感器策略管理
-    QList<SensorStrategyState> sensorStrategyStates() const;
-    bool createSensorStrategy(const SensorStrategyConfig &config, QString *error = nullptr);
-    bool deleteSensorStrategy(int strategyId, QString *error = nullptr);
-    bool setSensorStrategyEnabled(int strategyId, bool enabled);
-    void checkSensorTriggers(const QString &sensorType, int sensorNode, double value);
-
-    // 继电器策略管理（直接控制单个继电器，不需要分组）
-    QList<RelayStrategyConfig> relayStrategyStates() const;
-    bool createRelayStrategy(const RelayStrategyConfig &config, QString *error = nullptr);
-    bool deleteRelayStrategy(int strategyId, QString *error = nullptr);
-    bool setRelayStrategyEnabled(int strategyId, bool enabled);
-
-    // 传感器触发继电器策略管理
-    QList<SensorRelayStrategyConfig> sensorRelayStrategyStates() const;
-    bool createSensorRelayStrategy(const SensorRelayStrategyConfig &config, QString *error = nullptr);
-    bool deleteSensorRelayStrategy(int strategyId, QString *error = nullptr);
-    bool setSensorRelayStrategyEnabled(int strategyId, bool enabled);
-
+    //
+    bool isInEffectiveTime(const AutoStrategy &s, const QDateTime &now) const;
+    bool executeActions(const AutoStrategy &s);
     // 认证管理
     /**
      * @brief 验证token是否有效
@@ -389,29 +368,19 @@ private:
     bool initCan();
     bool initDevices();
     bool initDevices(const CoreConfig &config);
-
     bool initMqtt();
-
+    bool initStrategy();
     void initQueue();
     void startQueueProcessor();
     void processNextJob();
+    void evaluateAllStrategies();
     ControlJobResult executeJob(const ControlJob &job);
 
-    void bindStrategies(const QList<AutoStrategyConfig> &strategies);
-    void bindSensorStrategies(const QList<SensorStrategyConfig> &strategies);
-    void attachStrategiesForGroup(int groupId);
-    void detachStrategiesForGroup(int groupId);
-    void attachRelayStrategy(const RelayStrategyConfig &config);
-    int strategyIntervalMs(const AutoStrategyConfig &config) const;
-    int relayStrategyIntervalMs(const RelayStrategyConfig &config) const;
+    int strategyIntervalMs(const AutoStrategy &config) const;
     bool evaluateSensorCondition(const QString &condition, double value, double threshold) const;
 
-    QList<AutoStrategyConfig> strategyConfigs_;
-    QList<SensorStrategyConfig> sensorStrategyConfigs_;  ///< 传感器策略配置列表
-    QList<RelayStrategyConfig> relayStrategyConfigs_;    ///< 继电器策略配置列表
-    QList<SensorRelayStrategyConfig> sensorRelayStrategyConfigs_;  ///< 传感器触发继电器策略列表
-    QHash<int, QTimer *> strategyTimers_;
-    QHash<int, QTimer *> relayStrategyTimers_;  ///< 继电器策略定时器
+    QList<AutoStrategy> strategys_;
+    QTimer *autoStrategyScheduler_;
 
     QQueue<ControlJob> controlQueue_;
     QHash<quint64, ControlJobResult> jobResults_;

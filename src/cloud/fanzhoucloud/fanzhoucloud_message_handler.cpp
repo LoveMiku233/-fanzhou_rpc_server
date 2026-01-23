@@ -1,15 +1,16 @@
-#include "cloud_message_handler.h"
+#include "fanzhoucloud_message_handler.h"
 #include "core/core_context.h"
 #include "utils/logger.h"
 #include "device/can/relay_gd427.h"
 #include "device/can/relay_protocol.h"
 #include "cloud/mqtt/mqtt_channel_manager.h"
+#include "cloud/fanzhoucloud/fanzhoucloud_setting_service.h"
 
 #include <QJsonDocument>
 
 namespace fanzhou {
 namespace cloud {
-
+namespace fanzhoucloud {
 namespace  {
 const char *const kLogSource = "CloudMessageHandler";
 }
@@ -159,10 +160,47 @@ void CloudMessageHandler::handleControlCommand(const int channelId, const QJsonO
 
 void CloudMessageHandler::handleSettingCommand(const int channelId, const QJsonObject &msg)
 {
-
     LOG_DEBUG(kLogSource,QStringLiteral("Handled the %1 cloud Setting commands").arg(channelId));
+
+    const QString method = msg.value("method").toString();
+    const QString type = msg.value("type").toString();
+    const QJsonObject data = msg.value("data").toObject();
+    const QString requestId = msg.value("requestId").toString();
+    const qint64 timestamp = msg.value("timestamp").toVariant().toLongLong();
+
+    if (method.isEmpty() || type.isEmpty() || requestId.isEmpty()) {
+        LOG_WARNING(kLogSource, "invalid setting message: missing fields");
+        return;
+    }
+
+    LOG_INFO(kLogSource,
+             QStringLiteral("Setting request: method=%1 type=%2 requestId=%3")
+             .arg(method)
+             .arg(type)
+             .arg(requestId));
+
+    // resp
+    QJsonObject resp;
+    QString error;
+
+    bool ok = ctx_->cloudSettingService->handleRequest(data, resp, error);
+
+    if (ok || !error.isEmpty()) {
+        resp["method"] = QStringLiteral("%1_response").arg(method);
+        resp["type"] = type;
+        resp["requestId"] = requestId;
+        resp["timestamp"] = static_cast<qint64>(timestamp);
+
+        ctx_->mqttManager->publishSetting(
+                       channelId,
+                       QJsonDocument(resp).toJson(QJsonDocument::Compact),
+                       0);
+    }
 }
 
 
+
+
+}
 } // namespace cloud
 } // namespace fanzhou

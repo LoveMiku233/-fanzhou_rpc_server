@@ -8,8 +8,9 @@
 #include "config/system_settings.h"
 #include "config/system_monitor.h"
 #include "cloud/mqtt/mqtt_channel_manager.h"
-#include "cloud/cloud_uploader.h"
-#include "cloud/cloud_message_handler.h"
+#include "cloud/fanzhoucloud/fanzhoucloud_uploader.h"
+#include "cloud/fanzhoucloud/fanzhoucloud_message_handler.h"
+#include "cloud/fanzhoucloud/fanzhoucloud_setting_service.h"
 #include "device/can/can_device_manager.h"
 #include "device/can/relay_gd427.h"
 #include "utils/logger.h"
@@ -61,8 +62,7 @@ bool CoreContext::init()
 
     initMqtt();
     initQueue();
-    bindStrategies({});
-
+    initStrategy();
 
     LOG_INFO(kLogSource, QStringLiteral("Core context initialization complete"));
     return true;
@@ -142,10 +142,8 @@ bool CoreContext::init(const CoreConfig &config)
     cloudUploadConfig = config.cloudUpload;
 
     initMqtt();
-
     initQueue();
-    bindStrategies(config.strategies);
-    bindSensorStrategies(config.sensorStrategies);
+    initStrategy();
 
     LOG_INFO(kLogSource, QStringLiteral("Core context initialization complete"));
     return true;
@@ -223,40 +221,7 @@ bool CoreContext::initDevices()
     return true;
 }
 
-bool CoreContext::initMqtt()
-{
 
-    cloudUploader = new cloud::CloudUploader(this, this);
-    cloudUploader->applyConfig(cloudUploadConfig);
-
-    cloudMessageHandler = new cloud::CloudMessageHandler(this, this);
-
-    connect(mqttManager, &cloud::MqttChannelManager::messageReceived,
-            cloudMessageHandler, &cloud::CloudMessageHandler::onMqttMessage);
-
-
-    for (auto it = relays.begin(); it != relays.end(); ++it) {
-        auto *relay = it.value();
-        quint8 nodeId = it.key();
-
-        connect(relay, &device::RelayGd427::statusUpdated,
-                this,
-                [this, nodeId](quint8 ch,
-                               fanzhou::device::RelayProtocol::Status /*status*/) {
-                    if (cloudUploader)
-                        cloudUploader->onChannelValueChanged(nodeId, ch);
-                });
-
-        connect(relay, &device::RelayGd427::autoStatusReceived,
-                this,
-                [this, nodeId](
-                    fanzhou::device::RelayProtocol::AutoStatusReport /*report*/) {
-                    if (cloudUploader)
-                        cloudUploader->onDeviceStatusChanged(nodeId);
-                });
-
-    }
-}
 
 bool CoreContext::initDevices(const CoreConfig &config)
 {
@@ -364,12 +329,89 @@ bool CoreContext::initDevices(const CoreConfig &config)
     return true;
 }
 
+
+bool CoreContext::initStrategy()
+{
+    autoStrategyScheduler_ = new QTimer(this);
+    autoStrategyScheduler_->setInterval(1000); // 每秒扫描一次
+    connect(autoStrategyScheduler_, &QTimer::timeout,
+            this, &CoreContext::evaluateAllStrategies);
+    autoStrategyScheduler_->start();
+
+    return false;
+}
+
+bool CoreContext::initMqtt()
+{
+
+    cloudUploader = new cloud::fanzhoucloud::CloudUploader(this, this);
+    cloudUploader->applyConfig(cloudUploadConfig);
+
+    cloudMessageHandler = new cloud::fanzhoucloud::CloudMessageHandler(this, this);
+    cloudSettingService = new cloud::fanzhoucloud::SettingService();
+
+    connect(mqttManager, &cloud::MqttChannelManager::messageReceived,
+            cloudMessageHandler, &cloud::fanzhoucloud::CloudMessageHandler::onMqttMessage);
+
+
+    for (auto it = relays.begin(); it != relays.end(); ++it) {
+        auto *relay = it.value();
+        quint8 nodeId = it.key();
+
+        connect(relay, &device::RelayGd427::statusUpdated,
+                this,
+                [this, nodeId](quint8 ch,
+                               fanzhou::device::RelayProtocol::Status /*status*/) {
+                    if (cloudUploader)
+                        cloudUploader->onChannelValueChanged(nodeId, ch);
+                });
+
+        connect(relay, &device::RelayGd427::autoStatusReceived,
+                this,
+                [this, nodeId](
+                    fanzhou::device::RelayProtocol::AutoStatusReport /*report*/) {
+                    if (cloudUploader)
+                        cloudUploader->onDeviceStatusChanged(nodeId);
+                });
+
+    }
+}
+
 void CoreContext::initQueue()
 {
     if (controlTimer_) return;
     controlTimer_ = new QTimer(this);
     controlTimer_->setInterval(kQueueTickMs);
     connect(controlTimer_, &QTimer::timeout, this, &CoreContext::processNextJob);
+}
+
+
+bool CoreContext::isInEffectiveTime(const AutoStrategy &s, const QDateTime &now) const
+{
+    if (!s.effectiveBeginTime.isEmpty()) {
+        if (now < QDateTime::fromString(s.effectiveBeginTime, Qt::ISODate)) return false;
+    }
+
+    if (!s.effectiveEndTime.isEmpty()) {
+        if (now > QDateTime::fromString(s.effectiveEndTime, Qt::ISODate)) return false;
+    }
+    return true;
+}
+
+
+
+void CoreContext::evaluateAllStrategies()
+{
+    const QDateTime now = QDateTime::currentDateTime();
+
+    for (const AutoStrategy &s : strategys_) {
+        if (s.enabled == false) continue;                  // not enabled, skip
+        if (!isInEffectiveTime(s, now)) continue;          // not within the effective time
+        if (!evaluateConditions(s.conditions)) continue;   // conditions incorrect
+
+        // exec
+        executeActions(s);
+    }
 }
 
 void CoreContext::startQueueProcessor()
@@ -784,7 +826,6 @@ bool CoreContext::createGroup(int groupId, const QString &name, QString *error)
     }
     deviceGroups.insert(groupId, {});
     groupNames.insert(groupId, name);
-    attachStrategiesForGroup(groupId);
     return true;
 }
 
@@ -794,7 +835,6 @@ bool CoreContext::deleteGroup(int groupId, QString *error)
         if (error) *error = QStringLiteral("group not found");
         return false;
     }
-    detachStrategiesForGroup(groupId);
     deviceGroups.remove(groupId);
     groupNames.remove(groupId);
     return true;
@@ -814,7 +854,6 @@ bool CoreContext::addDeviceToGroup(int groupId, quint8 node, QString *error)
     if (!devices.contains(node)) {
         devices.append(node);
     }
-    attachStrategiesForGroup(groupId);
     return true;
 }
 
@@ -844,258 +883,38 @@ device::RelayProtocol::Action CoreContext::parseAction(const QString &str, bool 
     return device::RelayProtocol::Action::Stop;
 }
 
-int CoreContext::strategyIntervalMs(const AutoStrategyConfig &config) const
+int CoreContext::strategyIntervalMs(const AutoStrategy &config) const
 {
-    return qMax(1, config.intervalSec) * kMsPerSec;
+
 }
 
-void CoreContext::bindStrategies(const QList<AutoStrategyConfig> &strategies)
-{
-    strategyConfigs_ = strategies;
-    for (auto *timer : strategyTimers_) {
-        if (!timer) continue;
-        timer->stop();
-        timer->deleteLater();
-    }
-    strategyTimers_.clear();
-
-    for (auto it = deviceGroups.begin(); it != deviceGroups.end(); ++it) {
-        attachStrategiesForGroup(it.key());
-    }
-}
-
-void CoreContext::attachStrategiesForGroup(int groupId)
-{
-    for (const auto &config : strategyConfigs_) {
-        if (!config.enabled || config.groupId != groupId) continue;
-
-        bool okAction = false;
-        const auto action = parseAction(config.action, &okAction);
-        if (!okAction) continue;
-        if (!deviceGroups.contains(config.groupId)) continue;
-
-        QTimer *timer = strategyTimers_.value(config.strategyId, nullptr);
-        if (!timer) {
-            timer = new QTimer(this);
-            timer->setInterval(strategyIntervalMs(config));
-
-            const int strategyId = config.strategyId;
-            const int targetGroupId = config.groupId;
-            const qint8 channel = config.channel;
-            const QString strategyName = config.name;
-
-            connect(timer, &QTimer::timeout, this,
-                    [this, targetGroupId, channel, strategyId, strategyName, action]() {
-                const QString reason =
-                    QStringLiteral("auto:%1")
-                        .arg(strategyName.isEmpty() ? QString::number(strategyId) : strategyName);
-                // 使用优化版分组控制 - 自动合并同一节点的多通道控制
-                queueGroupControlOptimized(targetGroupId, channel, action, reason);
-            });
-            strategyTimers_.insert(config.strategyId, timer);
-        } else {
-            timer->setInterval(strategyIntervalMs(config));
-        }
-
-        if (!config.autoStart && timer->isActive()) {
-            timer->stop();
-        }
-        if (config.autoStart && !timer->isActive()) {
-            timer->start();
-        }
-    }
-}
-
-void CoreContext::detachStrategiesForGroup(int groupId)
-{
-    for (const auto &config : strategyConfigs_) {
-        if (config.groupId != groupId) continue;
-        if (auto *timer = strategyTimers_.value(config.strategyId, nullptr)) {
-            timer->stop();
-        }
-    }
-}
 
 QList<AutoStrategyState> CoreContext::strategyStates() const
 {
-    QList<AutoStrategyState> list;
-    for (const auto &config : strategyConfigs_) {
-        AutoStrategyState state;
-        state.config = config;
-        auto *timer = strategyTimers_.value(config.strategyId, nullptr);
-        state.attached = timer != nullptr && deviceGroups.contains(config.groupId);
-        state.running = timer && timer->isActive();
-        list.append(state);
-    }
-    return list;
+
 }
 
 bool CoreContext::setStrategyEnabled(int strategyId, bool enabled)
 {
-    bool found = false;
-    int groupId = 0;
-    for (auto &config : strategyConfigs_) {
-        if (config.strategyId == strategyId) {
-            config.enabled = enabled;
-            found = true;
-            groupId = config.groupId;
-            break;
-        }
-    }
-    if (!found) return false;
-
-    if (enabled) {
-        attachStrategiesForGroup(groupId);
-    } else {
-        if (auto *timer = strategyTimers_.value(strategyId, nullptr)) {
-            timer->stop();
-        }
-    }
     return true;
 }
 
 bool CoreContext::triggerStrategy(int strategyId)
 {
-    for (const auto &config : strategyConfigs_) {
-        if (config.strategyId != strategyId) continue;
-
-        bool okAction = false;
-        const auto action = parseAction(config.action, &okAction);
-        if (!okAction) return false;
-        if (!deviceGroups.contains(config.groupId)) return false;
-
-        const QString reason = QStringLiteral("manual-strategy:%1")
-            .arg(config.name.isEmpty() ? QString::number(config.strategyId) : config.name);
-        
-        // 使用优化版分组控制 - 自动合并同一节点的多通道控制
-        const auto stats = queueGroupControlOptimized(config.groupId, config.channel, action, reason);
-        return stats.accepted > 0;
-    }
     return false;
 }
 
-bool CoreContext::createStrategy(const AutoStrategyConfig &config, QString *error)
+bool CoreContext::createStrategy(const AutoStrategy &config, QString *error)
 {
-    // 检查策略ID是否已存在
-    for (const auto &existing : strategyConfigs_) {
-        if (existing.strategyId == config.strategyId) {
-            if (error) *error = QStringLiteral("strategy id already exists");
-            return false;
-        }
-    }
 
-    // 检查分组是否存在
-    if (!deviceGroups.contains(config.groupId)) {
-        if (error) *error = QStringLiteral("group not found");
-        return false;
-    }
-
-    // 添加策略配置
-    strategyConfigs_.append(config);
-    
-    // 挂载策略
-    if (config.enabled) {
-        attachStrategiesForGroup(config.groupId);
-    }
-
-    LOG_INFO(kLogSource,
-             QStringLiteral("Strategy created: id=%1, name=%2, groupId=%3")
-                 .arg(config.strategyId)
-                 .arg(config.name)
-                 .arg(config.groupId));
     return true;
 }
 
 bool CoreContext::deleteStrategy(int strategyId, QString *error)
 {
-    // 查找并删除策略
-    for (int i = 0; i < strategyConfigs_.size(); ++i) {
-        if (strategyConfigs_[i].strategyId == strategyId) {
-            // 停止定时器
-            if (auto *timer = strategyTimers_.value(strategyId, nullptr)) {
-                timer->stop();
-                timer->deleteLater();
-                strategyTimers_.remove(strategyId);
-            }
-
-            strategyConfigs_.removeAt(i);
-            LOG_INFO(kLogSource, QStringLiteral("Strategy deleted: id=%1").arg(strategyId));
-            return true;
-        }
-    }
-
-    if (error) *error = QStringLiteral("strategy not found");
-    return false;
-}
-
-QList<SensorStrategyState> CoreContext::sensorStrategyStates() const
-{
-    QList<SensorStrategyState> list;
-    for (const auto &config : sensorStrategyConfigs_) {
-        SensorStrategyState state;
-        state.config = config;
-        state.active = config.enabled && deviceGroups.contains(config.groupId);
-        list.append(state);
-    }
-    return list;
-}
-
-bool CoreContext::createSensorStrategy(const SensorStrategyConfig &config, QString *error)
-{
-    // 检查策略ID是否已存在
-    for (const auto &existing : sensorStrategyConfigs_) {
-        if (existing.strategyId == config.strategyId) {
-            if (error) *error = QStringLiteral("sensor strategy id already exists");
-            return false;
-        }
-    }
-
-    // 检查分组是否存在
-    if (!deviceGroups.contains(config.groupId)) {
-        if (error) *error = QStringLiteral("group not found");
-        return false;
-    }
-
-    // 添加传感器策略配置
-    sensorStrategyConfigs_.append(config);
-
-    LOG_INFO(kLogSource,
-             QStringLiteral("Sensor strategy created: id=%1, name=%2, sensor=%3, groupId=%4")
-                 .arg(config.strategyId)
-                 .arg(config.name)
-                 .arg(config.sensorType)
-                 .arg(config.groupId));
     return true;
 }
 
-bool CoreContext::deleteSensorStrategy(int strategyId, QString *error)
-{
-    for (int i = 0; i < sensorStrategyConfigs_.size(); ++i) {
-        if (sensorStrategyConfigs_[i].strategyId == strategyId) {
-            sensorStrategyConfigs_.removeAt(i);
-            LOG_INFO(kLogSource, QStringLiteral("Sensor strategy deleted: id=%1").arg(strategyId));
-            return true;
-        }
-    }
-
-    if (error) *error = QStringLiteral("sensor strategy not found");
-    return false;
-}
-
-bool CoreContext::setSensorStrategyEnabled(int strategyId, bool enabled)
-{
-    for (auto &config : sensorStrategyConfigs_) {
-        if (config.strategyId == strategyId) {
-            config.enabled = enabled;
-            LOG_INFO(kLogSource,
-                     QStringLiteral("Sensor strategy %1: id=%2")
-                         .arg(enabled ? "enabled" : "disabled")
-                         .arg(strategyId));
-            return true;
-        }
-    }
-    return false;
-}
 
 bool CoreContext::evaluateSensorCondition(const QString &condition, double value, double threshold) const
 {
@@ -1107,270 +926,6 @@ bool CoreContext::evaluateSensorCondition(const QString &condition, double value
     return false;
 }
 
-void CoreContext::checkSensorTriggers(const QString &sensorType, int sensorNode, double value)
-{
-    const qint64 now = QDateTime::currentMSecsSinceEpoch();
-
-    for (auto &config : sensorStrategyConfigs_) {
-        // 检查是否匹配
-        if (!config.enabled) continue;
-        if (config.sensorType != sensorType) continue;
-        if (config.sensorNode != sensorNode) continue;
-        if (!deviceGroups.contains(config.groupId)) continue;
-
-        // 检查冷却时间
-        if (config.lastTriggerMs > 0) {
-            const qint64 elapsed = now - config.lastTriggerMs;
-            if (elapsed < config.cooldownSec * kMsPerSec) continue;
-        }
-
-        // 评估条件
-        if (!evaluateSensorCondition(config.condition, value, config.threshold)) continue;
-
-        // 触发控制
-        bool okAction = false;
-        const auto action = parseAction(config.action, &okAction);
-        if (!okAction) continue;
-
-        const QString reason = QStringLiteral("sensor:%1(%2)=%3")
-            .arg(config.sensorType)
-            .arg(sensorNode)
-            .arg(value);
-
-        // 使用优化版分组控制 - 自动合并同一节点的多通道控制
-        const auto stats = queueGroupControlOptimized(config.groupId, config.channel, action, reason);
-
-        // 更新触发时间
-        config.lastTriggerMs = now;
-
-        LOG_INFO(kLogSource,
-                 QStringLiteral("Sensor strategy triggered: id=%1, sensor=%2(%3)=%4, action=%5, frames=%6->%7")
-                     .arg(config.strategyId)
-                     .arg(config.sensorType)
-                     .arg(sensorNode)
-                     .arg(value)
-                     .arg(config.action)
-                     .arg(stats.originalFrameCount)
-                     .arg(stats.optimizedFrameCount));
-    }
-}
-
-void CoreContext::bindSensorStrategies(const QList<SensorStrategyConfig> &strategies)
-{
-    sensorStrategyConfigs_ = strategies;
-    LOG_INFO(kLogSource, QStringLiteral("Bound %1 sensor strategies").arg(strategies.size()));
-}
-
-// 继电器策略相关实现
-int CoreContext::relayStrategyIntervalMs(const RelayStrategyConfig &config) const
-{
-    return qMax(1, config.intervalSec) * kMsPerSec;
-}
-
-QList<RelayStrategyConfig> CoreContext::relayStrategyStates() const
-{
-    return relayStrategyConfigs_;
-}
-
-void CoreContext::attachRelayStrategy(const RelayStrategyConfig &config)
-{
-    if (!config.enabled) return;
-    if (!relays.contains(static_cast<quint8>(config.nodeId))) return;
-
-    bool okAction = false;
-    const auto action = parseAction(config.action, &okAction);
-    if (!okAction) return;
-
-    QTimer *timer = relayStrategyTimers_.value(config.strategyId, nullptr);
-    if (!timer) {
-        timer = new QTimer(const_cast<CoreContext*>(this));
-        timer->setInterval(relayStrategyIntervalMs(config));
-
-        const int strategyId = config.strategyId;
-        const int targetNodeId = config.nodeId;
-        const qint8 channel = config.channel;
-        const QString strategyName = config.name;
-
-        connect(timer, &QTimer::timeout, this,
-                [this, targetNodeId, channel, strategyId, strategyName, action]() {
-            const QString reason =
-                QStringLiteral("auto-relay:%1")
-                    .arg(strategyName.isEmpty() ? QString::number(strategyId) : strategyName);
-            
-            auto *dev = relays.value(static_cast<quint8>(targetNodeId), nullptr);
-            if (!dev) return;
-            
-            // channel=-1 表示控制所有通道（使用controlMulti优化），0-kMaxChannelId 表示单个通道
-            if (channel >= 0 && channel <= kMaxChannelId) {
-                // 单个通道
-                enqueueControl(static_cast<quint8>(targetNodeId), static_cast<quint8>(channel), action, reason);
-            } else {
-                // channel=-1 表示控制所有通道 - 使用controlMulti优化，1帧代替4帧
-                device::RelayProtocol::Action actions[4] = {action, action, action, action};
-                const bool ok = dev->controlMulti(actions);
-                if (ok) {
-                    LOG_DEBUG(kLogSource, QStringLiteral("[优化] 继电器策略%1: 节点0x%2全通道控制合并为1帧")
-                        .arg(strategyId)
-                        .arg(targetNodeId, 2, 16, QChar('0')));
-                } else {
-                    LOG_WARNING(kLogSource, QStringLiteral("[优化] 继电器策略%1: 节点0x%2全通道控制失败")
-                        .arg(strategyId)
-                        .arg(targetNodeId, 2, 16, QChar('0')));
-                }
-            }
-        });
-        relayStrategyTimers_.insert(config.strategyId, timer);
-    } else {
-        timer->setInterval(relayStrategyIntervalMs(config));
-    }
-
-    if (!config.autoStart && timer->isActive()) {
-        timer->stop();
-    }
-    if (config.autoStart && !timer->isActive()) {
-        timer->start();
-    }
-}
-
-bool CoreContext::createRelayStrategy(const RelayStrategyConfig &config, QString *error)
-{
-    // 检查策略ID是否已存在
-    for (const auto &existing : relayStrategyConfigs_) {
-        if (existing.strategyId == config.strategyId) {
-            if (error) *error = QStringLiteral("relay strategy id already exists");
-            return false;
-        }
-    }
-
-    // 检查设备是否存在
-    if (!relays.contains(static_cast<quint8>(config.nodeId))) {
-        if (error) *error = QStringLiteral("device not found");
-        return false;
-    }
-
-    // 添加策略配置
-    relayStrategyConfigs_.append(config);
-
-    // 挂载策略
-    if (config.enabled) {
-        attachRelayStrategy(config);
-    }
-
-    LOG_INFO(kLogSource,
-             QStringLiteral("Relay strategy created: id=%1, name=%2, nodeId=%3")
-                 .arg(config.strategyId)
-                 .arg(config.name)
-                 .arg(config.nodeId));
-    return true;
-}
-
-bool CoreContext::deleteRelayStrategy(int strategyId, QString *error)
-{
-    for (int i = 0; i < relayStrategyConfigs_.size(); ++i) {
-        if (relayStrategyConfigs_[i].strategyId == strategyId) {
-            // 停止定时器
-            if (auto *timer = relayStrategyTimers_.value(strategyId, nullptr)) {
-                timer->stop();
-                timer->deleteLater();
-                relayStrategyTimers_.remove(strategyId);
-            }
-
-            relayStrategyConfigs_.removeAt(i);
-            LOG_INFO(kLogSource, QStringLiteral("Relay strategy deleted: id=%1").arg(strategyId));
-            return true;
-        }
-    }
-
-    if (error) *error = QStringLiteral("relay strategy not found");
-    return false;
-}
-
-bool CoreContext::setRelayStrategyEnabled(int strategyId, bool enabled)
-{
-    for (auto &config : relayStrategyConfigs_) {
-        if (config.strategyId == strategyId) {
-            config.enabled = enabled;
-
-            if (enabled) {
-                attachRelayStrategy(config);
-            } else {
-                if (auto *timer = relayStrategyTimers_.value(strategyId, nullptr)) {
-                    timer->stop();
-                }
-            }
-
-            LOG_INFO(kLogSource,
-                     QStringLiteral("Relay strategy %1: id=%2")
-                         .arg(enabled ? "enabled" : "disabled")
-                         .arg(strategyId));
-            return true;
-        }
-    }
-    return false;
-}
-
-// 传感器触发继电器策略相关实现
-QList<SensorRelayStrategyConfig> CoreContext::sensorRelayStrategyStates() const
-{
-    return sensorRelayStrategyConfigs_;
-}
-
-bool CoreContext::createSensorRelayStrategy(const SensorRelayStrategyConfig &config, QString *error)
-{
-    // 检查策略ID是否已存在
-    for (const auto &existing : sensorRelayStrategyConfigs_) {
-        if (existing.strategyId == config.strategyId) {
-            if (error) *error = QStringLiteral("sensor relay strategy id already exists");
-            return false;
-        }
-    }
-
-    // 检查设备是否存在
-    if (!relays.contains(static_cast<quint8>(config.nodeId))) {
-        if (error) *error = QStringLiteral("device not found");
-        return false;
-    }
-
-    // 添加传感器触发继电器策略配置
-    sensorRelayStrategyConfigs_.append(config);
-
-    LOG_INFO(kLogSource,
-             QStringLiteral("Sensor relay strategy created: id=%1, name=%2, sensor=%3, nodeId=%4")
-                 .arg(config.strategyId)
-                 .arg(config.name)
-                 .arg(config.sensorType)
-                 .arg(config.nodeId));
-    return true;
-}
-
-bool CoreContext::deleteSensorRelayStrategy(int strategyId, QString *error)
-{
-    for (int i = 0; i < sensorRelayStrategyConfigs_.size(); ++i) {
-        if (sensorRelayStrategyConfigs_[i].strategyId == strategyId) {
-            sensorRelayStrategyConfigs_.removeAt(i);
-            LOG_INFO(kLogSource, QStringLiteral("Sensor relay strategy deleted: id=%1").arg(strategyId));
-            return true;
-        }
-    }
-
-    if (error) *error = QStringLiteral("sensor relay strategy not found");
-    return false;
-}
-
-bool CoreContext::setSensorRelayStrategyEnabled(int strategyId, bool enabled)
-{
-    for (auto &config : sensorRelayStrategyConfigs_) {
-        if (config.strategyId == strategyId) {
-            config.enabled = enabled;
-            LOG_INFO(kLogSource,
-                     QStringLiteral("Sensor relay strategy %1: id=%2")
-                         .arg(enabled ? "enabled" : "disabled")
-                         .arg(strategyId));
-            return true;
-        }
-    }
-    return false;
-}
 
 QStringList CoreContext::methodGroups() const
 {
@@ -1414,8 +969,6 @@ bool CoreContext::addChannelToGroup(int groupId, quint8 node, int channel, QStri
     if (!channels.contains(channelKey)) {
         channels.append(channelKey);
     }
-
-    attachStrategiesForGroup(groupId);
     return true;
 }
 
@@ -1620,10 +1173,7 @@ bool CoreContext::saveConfig(const QString &path, QString *error)
     }
     
     // 定时策略
-    config.strategies = strategyConfigs_;
-    
-    // 传感器策略
-    config.sensorStrategies = sensorStrategyConfigs_;
+    config.strategies = strategys_;
     
     // 保存到文件
     QString saveError;
@@ -1692,8 +1242,7 @@ bool CoreContext::reloadConfig(const QString &path, QString *error)
     }
     
     // 更新策略配置
-    bindStrategies(config.strategies);
-    bindSensorStrategies(config.sensorStrategies);
+    // @TODO
     
     // 更新屏幕配置
     screenConfig = config.screen;
@@ -1789,9 +1338,7 @@ QJsonObject CoreContext::exportConfig() const
     root[QStringLiteral("groups")] = groupArr;
     
     // 策略数量统计
-    root[QStringLiteral("strategyCount")] = strategyConfigs_.size();
-    root[QStringLiteral("sensorStrategyCount")] = sensorStrategyConfigs_.size();
-    root[QStringLiteral("relayStrategyCount")] = relayStrategyConfigs_.size();
+    root[QStringLiteral("strategyCount")] = strategys_.size();
     
     // 屏幕配置
     QJsonObject screenObj;
@@ -1852,7 +1399,6 @@ bool CoreContext::generateToken(const QString &username, const QString &password
     }
     
     // 验证密码（简单实现：使用secret作为密码）
-    // 注意：生产环境应该使用更安全的验证方式，如bcrypt/scrypt hash
     // 当前实现适用于内网/受信环境的基本防护
     if (password != authConfig.secret) {
         LOG_WARNING(kLogSource,
@@ -1861,7 +1407,7 @@ bool CoreContext::generateToken(const QString &username, const QString &password
         return false;
     }
     
-    // 生成token（使用QRandomGenerator获得更好的随机性）
+    // 生成token
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
     const quint32 random1 = QRandomGenerator::global()->generate();
     const quint32 random2 = QRandomGenerator::global()->generate();

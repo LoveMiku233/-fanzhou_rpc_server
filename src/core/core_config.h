@@ -45,7 +45,7 @@ struct RelayNodeConfig {
  */
 struct CanConfig {
     QString interface = QStringLiteral("can0");
-    int bitrate = 125000;
+    int bitrate = 250000;
     bool tripleSampling = true;
     bool canFd = false;
 };
@@ -189,8 +189,51 @@ struct CloudUploadConfig {
     QList<CloudMqttChannelBinding> channelBindings;
 };
 
+
 /**
- * @brief 自动控制策略配置
+  * @brief new 设备actions
+  * @todo
+  */
+struct StrategyAction {
+    QString identifier = "";        ///< "identifier": "node_1_sw1", 属性标识
+    int identifierValue = 0.0f;  ///< "identifierValue": 1,	属性值
+};
+
+/**
+  * @brief new 设备conditions
+  * @todo
+  */
+struct StrategyCondition {
+    QString identifier = "";        ///< "identifier": "airTemp", 属性标识
+    double identifierValue = 0.0f;  ///< "identifierValue": 30,	属性值
+    QString op = "";                ///< 条件操作符 eq等于 ne不等于 gt大于 lt小于 egt大等于 elt小等于
+};
+
+
+/**
+  * @brief new 自动控制策略配置
+  * @todo
+  */
+struct AutoStrategy {
+    int strategyId = 0;
+    int groupId = 0;                     ///< 绑定的分组ID
+    int version = 1;                     ///< 场景版本号，通过版本号比对是否需要更新，每编辑一次，版本号+1
+    bool enabled = true;                 ///< 是否启用
+    QString type = "scene";              ///<
+    QString updateTime = "";             ///< 最后更新时间
+    QString strategyName = "";
+    QString strategyType = "auto";       ///< auto自动场景，manual手动场景
+    QString effectiveBeginTime = "";     ///< 生效开始时间
+    QString effectiveEndTime = "";       ///< 生效结束时间
+    qint8 matchType = 0;                 ///< 触发方式：0为需符合全部条件，1为任一条件符合即执行
+    qint8 status = 0;                    ///< 场景状态：0正常，1关闭
+    StrategyAction *actions;             ///< 执行设备
+    StrategyCondition *conditions;       ///< 条件
+};
+
+
+/**
+ * @brief old 自动控制策略配置
  * 定时策略，按间隔时间或每日固定时间自动触发分组控制
  */
 struct AutoStrategyConfig {
@@ -206,58 +249,6 @@ struct AutoStrategyConfig {
     QString dailyTime;           ///< 每日执行时间（格式: "HH:MM"），仅当triggerType为daily时使用
 };
 
-/**
- * @brief 传感器触发策略配置
- * 当传感器数值满足阈值条件时，自动触发分组控制
- */
-struct SensorStrategyConfig {
-    int strategyId = 0;          ///< 策略ID
-    QString name;                 ///< 策略名称
-    QString sensorType;          ///< 传感器类型 (temperature/humidity/light/pressure/soil_moisture/co2)
-    int sensorNode = 0;          ///< 传感器节点ID
-    QString condition;           ///< 阈值条件 (gt/lt/eq/gte/lte)  @TODO:条件操作符  eq 等于 ne 不等于 gt 大于 lt 小于 egt 大等于 elt 小等于
-    double threshold = 0.0;      ///< 阈值
-    int groupId = 0;             ///< 绑定的分组ID
-    int channel = 0;             ///< 控制通道，-1表示所有通道
-    QString action = QStringLiteral("stop");  ///< 触发动作
-    int cooldownSec = 60;        ///< 冷却时间（秒），防止频繁触发
-    bool enabled = true;         ///< 是否启用
-    qint64 lastTriggerMs = 0;    ///< 上次触发时间（内部使用）
-};
-
-/**
- * @brief 定时继电器策略配置
- * 按间隔时间自动触发单个继电器控制（不需要分组）
- */
-struct RelayStrategyConfig {
-    int strategyId = 0;          ///< 策略ID
-    QString name;                 ///< 策略名称
-    int nodeId = 0;              ///< 目标设备节点ID
-    qint8 channel = 0;           ///< 控制通道，-1表示所有通道
-    QString action = QStringLiteral("stop");  ///< 控制动作
-    int intervalSec = 60;        ///< 执行间隔（秒）
-    bool enabled = true;         ///< 是否启用
-    bool autoStart = true;       ///< 是否自动启动
-};
-
-/**
- * @brief 传感器触发继电器策略配置
- * 当传感器数值满足阈值条件时，直接触发单个继电器控制
- */
-struct SensorRelayStrategyConfig {
-    int strategyId = 0;          ///< 策略ID
-    QString name;                 ///< 策略名称
-    QString sensorType;          ///< 传感器类型
-    int sensorNode = 0;          ///< 传感器节点ID
-    QString condition;           ///< 阈值条件
-    double threshold = 0.0;      ///< 阈值
-    int nodeId = 0;              ///< 目标设备节点ID
-    int channel = 0;             ///< 控制通道
-    QString action = QStringLiteral("stop");  ///< 触发动作
-    int cooldownSec = 60;        ///< 冷却时间（秒）
-    bool enabled = true;         ///< 是否启用
-    qint64 lastTriggerMs = 0;    ///< 上次触发时间（内部使用）
-};
 
 /**
  * @brief 核心系统配置
@@ -274,8 +265,7 @@ public:
     CloudUploadConfig cloudUpload;  ///< 云数据上传配置
     QList<DeviceConfig> devices;
     QList<DeviceGroupConfig> groups;
-    QList<AutoStrategyConfig> strategies;
-    QList<SensorStrategyConfig> sensorStrategies;  ///< 传感器触发策略列表
+    QList<AutoStrategy> strategies;
     QList<MqttChannelConfig> mqttChannels;  ///< MQTT多通道配置列表
 
     /**

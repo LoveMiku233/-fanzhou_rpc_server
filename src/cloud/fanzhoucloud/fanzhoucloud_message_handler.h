@@ -8,6 +8,7 @@ namespace core {
 class CoreContext;
 }
 namespace cloud {
+namespace fanzhoucloud {
 
 class CloudMessageHandler : public QObject
 {
@@ -27,7 +28,7 @@ private:
     void handleSettingCommand(const int channelId, const QJsonObject &msg);
     // TODO
 };
-
+}
 } // namespace cloud
 } // namespace fanzhou
 
