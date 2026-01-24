@@ -17,6 +17,7 @@ INCLUDEPATH += $$PWD/src
 SOURCES += \
     main.cpp \
     src/cloud/fanzhoucloud/message_handler.cpp \
+    src/cloud/fanzhoucloud/parser.cpp \
     src/cloud/fanzhoucloud/setting_service.cpp \
     src/cloud/fanzhoucloud/uploader.cpp \
     src/cloud/mqtt/mqtt_client.cpp \
@@ -57,6 +58,7 @@ HEADERS += \
     src/cloud/cloud_platform.h \
     src/cloud/cloud_types.h \
     src/cloud/fanzhoucloud/message_handler.h \
+    src/cloud/fanzhoucloud/parser.h \
     src/cloud/fanzhoucloud/protocol.h \
     src/cloud/fanzhoucloud/setting_service.h \
     src/cloud/fanzhoucloud/uploader.h \

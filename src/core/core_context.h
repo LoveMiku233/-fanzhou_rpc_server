@@ -328,9 +328,15 @@ public:
     bool createStrategy(const AutoStrategy &config, QString *error = nullptr);
     bool deleteStrategy(int strategyId, QString *error = nullptr);
     //
-    bool isInEffectiveTime(const AutoStrategy &s, const QDateTime &now) const;
-    bool executeActions(const QList<StrategyAction> &actions);
+    bool isInEffectiveTime(const AutoStrategy &s, const QTime &now) const;
+    void executeActions(const QList<StrategyAction> &actions);
     bool evaluateConditions(const QList<StrategyCondition> &conditions, qint8 matchType);
+
+    // 分组
+    bool ensureGroupForStrategy(AutoStrategy &s, QString *error);
+
+
+
     // 认证管理
     /**
      * @brief 验证token是否有效

@@ -387,27 +387,47 @@ void CoreContext::initQueue()
 }
 
 
-bool CoreContext::isInEffectiveTime(const AutoStrategy &s, const QDateTime &now) const
+bool CoreContext::isInEffectiveTime(const AutoStrategy &s, const QTime &now) const
 {
-    if (!s.effectiveBeginTime.isEmpty()) {
-        if (now < QDateTime::fromString(s.effectiveBeginTime, Qt::ISODate)) return false;
+    if (s.effectiveBeginTime.isEmpty() || s.effectiveEndTime.isEmpty())
+            return true;
+
+    QTime begin = QTime::fromString(s.effectiveBeginTime, "HH:mm");
+    QTime end   = QTime::fromString(s.effectiveEndTime,   "HH:mm");
+
+    if (!begin.isValid() || !end.isValid())
+            return true;
+
+    if (begin <= end) {
+       return (now >= begin && now <= end);
+    } else {
+       return (now >= begin || now <= end);
     }
 
-    if (!s.effectiveEndTime.isEmpty()) {
-        if (now > QDateTime::fromString(s.effectiveEndTime, Qt::ISODate)) return false;
-    }
     return true;
 }
 
-bool CoreContext::executeActions(const QList<StrategyAction> &actions)
+void CoreContext::executeActions(const QList<StrategyAction> &actions)
 {
-
-    return true;
+//    for (auto a : actions) {
+//
+//    }
 }
 
 bool CoreContext::evaluateConditions(const QList<StrategyCondition> &conditions, qint8 matchType)
 {
-    return true;
+    if (conditions.isEmpty()) return true;
+
+    for (auto c : conditions) {
+        // double value = readSensorValue();
+        double value = 999.0f;
+        bool ok = evaluateSensorCondition(c.op, value, c.identifierValue);
+
+        if (matchType == 0 && !ok) return false;
+        if (matchType == 1 && ok) return true;
+    }
+    // fix bug
+    return (matchType == 0);
 }
 
 
@@ -415,15 +435,71 @@ void CoreContext::evaluateAllStrategies()
 {
     const QDateTime now = QDateTime::currentDateTime();
 
-    for (const AutoStrategy &s : strategys_) {
+    for (AutoStrategy &s : strategys_) {
         if (s.enabled == false) continue;                  // not enabled, skip
-        if (!isInEffectiveTime(s, now)) continue;          // not within the effective time
-        if (!evaluateConditions(s.conditions, s.matchType)) continue;   // conditions incorrect
+
+        if (!isInEffectiveTime(s, now.time()))   // not within the effective time
+            continue;
+        if (s.lastTriggered.isValid()) {
+            if (isInEffectiveTime(s, s.lastTriggered.time()))
+                continue;
+        }
+
+        if (!evaluateConditions(s.conditions, s.matchType))
+            continue;
 
         // exec
-        executeActions(s.actions);
+        // executeActions(s.actions);
+        s.lastTriggered = now;
+        for (auto a : s.actions) {
+            const QString reason = QStringLiteral("auto:%1").arg(s.strategyName);
+
+            queueGroupControlOptimized(
+                        s.groupId,
+                        -1,
+                        static_cast<device::RelayProtocol::Action>(a.identifierValue),
+                        reason
+                        );
+        }
     }
 }
+
+
+bool CoreContext::ensureGroupForStrategy(AutoStrategy &s, QString *error)
+{
+    // new
+    if (s.groupId <= 0) {
+        qint32 newGroupId = 1;
+        if (!deviceGroups.isEmpty()) {
+            newGroupId = deviceGroups.size() + 1;
+        }
+
+        QString name = QStringLiteral("auto_strategy_%1").arg(s.strategyId);
+
+        if (!createGroup(newGroupId, name, error)) {
+            return false;
+        }
+
+        s.groupId = newGroupId;
+
+        LOG_INFO(kLogSource, QStringLiteral("Auto create group for Strategy: strategyId=%1, groupId=%2")
+                 .arg(s.strategyId)
+                 .arg(s.groupId));
+
+    }
+
+
+     // updata
+    const qint32 groupId = s.groupId;
+    for (const auto &a : s.actions) {
+        const quint8 node = a.node;
+        const quint32 ch = a.channel;
+
+        // @TODO
+    }
+
+}
+
 
 void CoreContext::startQueueProcessor()
 {
@@ -623,7 +699,7 @@ GroupControlStats CoreContext::queueGroupControlOptimized(int groupId, int chann
         }
     }
     
-    // 统计原始帧数（优化前）
+    // 统计原始帧数
     stats.originalFrameCount = 0;
     for (auto it = nodeChannels.begin(); it != nodeChannels.end(); ++it) {
         stats.originalFrameCount += it.value().size();

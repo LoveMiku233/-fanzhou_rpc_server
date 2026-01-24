@@ -11,6 +11,14 @@ bool CoreConfig::loadStrategies(const QJsonObject &root)
     if (root.contains(QStringLiteral("strategies")) &&
         root[QStringLiteral("strategies")].isArray()) {
         // @TODO
+        const QJsonArray arr = root[QStringLiteral("strategies")].toArray();
+        const QDate today = QDate::currentDate();
+
+        for (const auto &v : arr) {
+
+        }
+
+
     } else {
         return false;
     }

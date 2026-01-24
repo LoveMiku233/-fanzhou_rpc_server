@@ -1543,6 +1543,8 @@ void RpcRegistry::registerAuto()
     // 创建定时策略
     dispatcher_->registerMethod(QStringLiteral("auto.strategy.create"),
                                  [this](const QJsonObject &params) {
+
+
             return QJsonObject{{QStringLiteral("ok"), true}};
     });
 
