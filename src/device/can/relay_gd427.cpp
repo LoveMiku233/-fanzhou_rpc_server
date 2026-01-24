@@ -23,7 +23,7 @@
  */
 
 #include "relay_gd427.h"
-#include "comm/can_comm.h"
+#include "comm/can/can_comm.h"
 
 #include <QDateTime>
 #include <QtGlobal>

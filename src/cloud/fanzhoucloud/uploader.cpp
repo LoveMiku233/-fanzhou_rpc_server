@@ -1,4 +1,4 @@
-#include "fanzhoucloud_uploader.h"
+#include "uploader.h"
 #include "core/core_context.h"
 #include "device/can/relay_gd427.h"
 #include "cloud/mqtt/mqtt_channel_manager.h"

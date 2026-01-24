@@ -1,10 +1,10 @@
-#include "fanzhoucloud_message_handler.h"
+#include "message_handler.h"
 #include "core/core_context.h"
 #include "utils/logger.h"
 #include "device/can/relay_gd427.h"
 #include "device/can/relay_protocol.h"
 #include "cloud/mqtt/mqtt_channel_manager.h"
-#include "cloud/fanzhoucloud/fanzhoucloud_setting_service.h"
+#include "cloud/fanzhoucloud/setting_service.h"
 
 #include <QJsonDocument>
 

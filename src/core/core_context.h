@@ -329,7 +329,8 @@ public:
     bool deleteStrategy(int strategyId, QString *error = nullptr);
     //
     bool isInEffectiveTime(const AutoStrategy &s, const QDateTime &now) const;
-    bool executeActions(const AutoStrategy &s);
+    bool executeActions(const QList<StrategyAction> &actions);
+    bool evaluateConditions(const QList<StrategyCondition> &conditions, qint8 matchType);
     // 认证管理
     /**
      * @brief 验证token是否有效

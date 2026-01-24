@@ -4,7 +4,7 @@
  */
 
 #include "can_device_manager.h"
-#include "comm/can_comm.h"
+#include "comm/can/can_comm.h"
 #include "i_can_device.h"
 
 namespace fanzhou {

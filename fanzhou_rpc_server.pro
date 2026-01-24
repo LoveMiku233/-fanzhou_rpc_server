@@ -1,7 +1,7 @@
 # FanZhou RPC Server
 # Qt project file for greenhouse control system core service
 
-QT += core network mqtt
+QT += core network mqtt serialport serialbus
 QT -= gui
 
 CONFIG += c++14 console
@@ -16,18 +16,26 @@ INCLUDEPATH += $$PWD/src
 
 SOURCES += \
     main.cpp \
-    src/cloud/fanzhoucloud/fanzhoucloud_message_handler.cpp \
-    src/cloud/fanzhoucloud/fanzhoucloud_setting_service.cpp \
-    src/cloud/fanzhoucloud/fanzhoucloud_uploader.cpp \
+    src/cloud/fanzhoucloud/message_handler.cpp \
+    src/cloud/fanzhoucloud/setting_service.cpp \
+    src/cloud/fanzhoucloud/uploader.cpp \
     src/cloud/mqtt/mqtt_client.cpp \
     src/cloud/mqtt/mqtt_channel_manager.cpp \
+    src/core/core_config.cpp \
+    src/core/core_config_cloud.cpp \
+    src/core/core_config_comm.cpp \
+    src/core/core_config_device.cpp \
+    src/core/core_config_main.cpp \
+    src/core/core_config_strategy.cpp \
+    src/core/core_context.cpp \
+    src/core/rpc_registry.cpp \
     src/utils/utils.cpp \
     src/utils/logger.cpp \
-    src/config/system_settings.cpp \
-    src/config/system_monitor.cpp \
+    src/utils/system_settings.cpp \
+    src/utils/system_monitor.cpp \
     src/comm/base/comm_adapter.cpp \
-    src/comm/serial_comm.cpp \
-    src/comm/can_comm.cpp \
+    src/comm/serial/serial_comm.cpp \
+    src/comm/can/can_comm.cpp \
     src/device/base/device_adapter.cpp \
     src/device/can/can_device_manager.cpp \
     src/device/can/relay_gd427.cpp \
@@ -41,27 +49,31 @@ SOURCES += \
     src/rpc/json_rpc_server.cpp \
     src/rpc/json_rpc_client.cpp \
     src/rpc/handlers/relay_handlers.cpp \
-    src/rpc/handlers/group_handlers.cpp \
-    src/core/core_config.cpp \
-    src/core/core_context.cpp \
-    src/core/rpc_registry.cpp
+    src/rpc/handlers/group_handlers.cpp
+
+
 
 HEADERS += \
     src/cloud/cloud_platform.h \
     src/cloud/cloud_types.h \
-    src/cloud/fanzhoucloud/fanzhoucloud_message_handler.h \
-    src/cloud/fanzhoucloud/fanzhoucloud_protocol.h \
-    src/cloud/fanzhoucloud/fanzhoucloud_setting_service.h \
-    src/cloud/fanzhoucloud/fanzhoucloud_uploader.h \
+    src/cloud/fanzhoucloud/message_handler.h \
+    src/cloud/fanzhoucloud/protocol.h \
+    src/cloud/fanzhoucloud/setting_service.h \
+    src/cloud/fanzhoucloud/uploader.h \
     src/cloud/mqtt/mqtt_client.h \
     src/cloud/mqtt/mqtt_channel_manager.h \
+    src/types/cloud_type.h \
+    src/types/comm_type.h \
+    src/types/device_type.h \
+    src/types/strategy_type.h \
+    src/types/system_type.h \
     src/utils/utils.h \
     src/utils/logger.h \
-    src/config/system_settings.h \
-    src/config/system_monitor.h \
+    src/utils/system_settings.h \
+    src/utils/system_monitor.h \
     src/comm/base/comm_adapter.h \
-    src/comm/serial_comm.h \
-    src/comm/can_comm.h \
+    src/comm/serial/serial_comm.h \
+    src/comm/can/can_comm.h \
     src/device/device_types.h \
     src/device/base/device_adapter.h \
     src/device/base/i_sensor.h \

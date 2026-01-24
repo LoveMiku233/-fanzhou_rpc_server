@@ -12,9 +12,9 @@
 #include "core_context.h"
 
 #include "cloud/mqtt/mqtt_channel_manager.h"
-#include "comm/can_comm.h"
-#include "config/system_monitor.h"
-#include "config/system_settings.h"
+#include "comm/can/can_comm.h"
+#include "utils/system_monitor.h"
+#include "utils/system_settings.h"
 #include "device/can/relay_gd427.h"
 #include "device/device_types.h"
 #include "rpc/json_rpc_dispatcher.h"

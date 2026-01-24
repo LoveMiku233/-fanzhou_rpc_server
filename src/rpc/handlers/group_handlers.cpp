@@ -6,7 +6,7 @@
 #include "group_handlers.h"
 #include "rpc_handler_base.h"
 
-#include "comm/can_comm.h"
+#include "comm/can/can_comm.h"
 
 namespace fanzhou {
 namespace rpc {

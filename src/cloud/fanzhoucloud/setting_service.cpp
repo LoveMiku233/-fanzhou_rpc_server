@@ -1,4 +1,4 @@
-#include "fanzhoucloud_setting_service.h"
+#include "setting_service.h"
 
 namespace fanzhou {
 namespace cloud {

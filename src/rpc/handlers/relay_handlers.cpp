@@ -6,7 +6,7 @@
 #include "relay_handlers.h"
 #include "rpc_handler_base.h"
 
-#include "comm/can_comm.h"
+#include "comm/can/can_comm.h"
 #include "device/can/relay_gd427.h"
 #include "device/device_types.h"
 

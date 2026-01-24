@@ -9,7 +9,7 @@
 #define FANZHOU_CAN_DEVICE_MANAGER_H
 
 #include <QObject>
-#include <QVector>
+#include <QList>
 
 namespace fanzhou {
 
@@ -59,7 +59,7 @@ private:
     void onCanFrame(quint32 canId, const QByteArray &payload, bool extended, bool rtr);
 
     comm::CanComm *bus_ = nullptr;
-    QVector<ICanDevice *> devices_;
+    QList<ICanDevice *> devices_;
 };
 
 }  // namespace device

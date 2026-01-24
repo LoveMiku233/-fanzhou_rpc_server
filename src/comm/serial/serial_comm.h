@@ -11,7 +11,7 @@
 #include <QObject>
 #include <QSocketNotifier>
 
-#include "base/comm_adapter.h"
+#include "comm/base/comm_adapter.h"
 
 namespace fanzhou {
 namespace comm {

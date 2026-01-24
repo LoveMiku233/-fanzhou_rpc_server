@@ -4,7 +4,7 @@
  */
 
 #include "modbus_sensor.h"
-#include "comm/serial_comm.h"
+#include "comm/serial/serial_comm.h"
 #include "utils/logger.h"
 
 #include <QDateTime>

@@ -4,13 +4,14 @@
  */
 
 #include "core_context.h"
-#include "comm/can_comm.h"
-#include "config/system_settings.h"
-#include "config/system_monitor.h"
+#include "core_config.h"
+#include "comm/can/can_comm.h"
+#include "utils/system_settings.h"
+#include "utils/system_monitor.h"
 #include "cloud/mqtt/mqtt_channel_manager.h"
-#include "cloud/fanzhoucloud/fanzhoucloud_uploader.h"
-#include "cloud/fanzhoucloud/fanzhoucloud_message_handler.h"
-#include "cloud/fanzhoucloud/fanzhoucloud_setting_service.h"
+#include "cloud/fanzhoucloud/uploader.h"
+#include "cloud/fanzhoucloud/message_handler.h"
+#include "cloud/fanzhoucloud/setting_service.h"
 #include "device/can/can_device_manager.h"
 #include "device/can/relay_gd427.h"
 #include "utils/logger.h"
@@ -398,6 +399,16 @@ bool CoreContext::isInEffectiveTime(const AutoStrategy &s, const QDateTime &now)
     return true;
 }
 
+bool CoreContext::executeActions(const QList<StrategyAction> &actions)
+{
+
+    return true;
+}
+
+bool CoreContext::evaluateConditions(const QList<StrategyCondition> &conditions, qint8 matchType)
+{
+    return true;
+}
 
 
 void CoreContext::evaluateAllStrategies()
@@ -407,10 +418,10 @@ void CoreContext::evaluateAllStrategies()
     for (const AutoStrategy &s : strategys_) {
         if (s.enabled == false) continue;                  // not enabled, skip
         if (!isInEffectiveTime(s, now)) continue;          // not within the effective time
-        if (!evaluateConditions(s.conditions)) continue;   // conditions incorrect
+        if (!evaluateConditions(s.conditions, s.matchType)) continue;   // conditions incorrect
 
         // exec
-        executeActions(s);
+        executeActions(s.actions);
     }
 }
 
