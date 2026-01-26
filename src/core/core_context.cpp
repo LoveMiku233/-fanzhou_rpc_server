@@ -46,6 +46,7 @@ CoreContext::CoreContext(QObject *parent)
 
 bool CoreContext::init()
 {
+    coreConfig = CoreConfig::makeDefault();
     LOG_INFO(kLogSource, QStringLiteral("Initializing core context (default config)..."));
 
     if (!initSystemSettings()) {
@@ -63,26 +64,20 @@ bool CoreContext::init()
 
     initMqtt();
     initQueue();
-    initStrategy();
-
     LOG_INFO(kLogSource, QStringLiteral("Core context initialization complete"));
     return true;
 }
 
 bool CoreContext::init(const CoreConfig &config)
 {
+
+    coreConfig = config;
     LOG_INFO(kLogSource, QStringLiteral("Initializing core context with config..."));
     LOG_DEBUG(kLogSource,
               QStringLiteral("RPC port: %1, CAN interface: %2, bitrate: %3")
                   .arg(config.main.rpcPort)
                   .arg(config.can.interface)
                   .arg(config.can.bitrate));
-
-    rpcPort = config.main.rpcPort;
-    authConfig = config.main.auth;
-    canInterface = config.can.interface;
-    canBitrate = config.can.bitrate;
-    tripleSampling = config.can.tripleSampling;
 
     if (!initSystemSettings()) {
         LOG_ERROR(kLogSource, QStringLiteral("Failed to initialize system settings"));
@@ -94,48 +89,13 @@ bool CoreContext::init(const CoreConfig &config)
     systemMonitor->start(1000);  // 每秒采样一次
     LOG_INFO(kLogSource, QStringLiteral("System monitor started"));
 
-    // 初始化MQTT多通道管理器
-    mqttManager = new cloud::MqttChannelManager(this);
-    // 加载MQTT通道配置
-    for (const auto &mqttConfig : config.mqttChannels) {
-        MqttChannelConfig cloudConfig;
-        cloudConfig.channelId = mqttConfig.channelId;
-        cloudConfig.name = mqttConfig.name;
-        cloudConfig.enabled = mqttConfig.enabled;
-        cloudConfig.broker = mqttConfig.broker;
-        cloudConfig.port = mqttConfig.port;
-        cloudConfig.clientId = mqttConfig.clientId;
-        cloudConfig.username = mqttConfig.username;
-        cloudConfig.password = mqttConfig.password;
-        cloudConfig.topicPrefix = mqttConfig.topicPrefix;
-        cloudConfig.keepAliveSec = mqttConfig.keepAliveSec;
-        cloudConfig.autoReconnect = mqttConfig.autoReconnect;
-        cloudConfig.reconnectIntervalSec = mqttConfig.reconnectIntervalSec;
-        cloudConfig.qos = mqttConfig.qos;
-        cloudConfig.topicControlSub  = mqttConfig.topicControlSub;
-        cloudConfig.topicStrategySub = mqttConfig.topicStrategySub;
-        cloudConfig.topicStatusPub   = mqttConfig.topicStatusPub;
-        cloudConfig.topicEventPub    = mqttConfig.topicEventPub;
 
-        QString error;
-        if (!mqttManager->addChannel(cloudConfig, &error)) {
-            LOG_WARNING(kLogSource,
-                        QStringLiteral("Failed to add MQTT channel %1: %2")
-                            .arg(mqttConfig.channelId)
-                            .arg(error));
-        }
-    }
-    LOG_INFO(kLogSource,
-             QStringLiteral("MQTT manager initialized with %1 channels")
-                 .arg(mqttManager->channelCount()));
-
-    LOG_INFO(kLogSource, QStringLiteral("Cloud message handler initialized"));
 
     if (!initCan()) {
         LOG_ERROR(kLogSource, QStringLiteral("Failed to initialize CAN bus"));
         return false;
     }
-    if (!initDevices(config)) {
+    if (!initDevices()) {
         LOG_ERROR(kLogSource, QStringLiteral("Failed to initialize devices from config"));
         return false;
     }
@@ -172,10 +132,10 @@ bool CoreContext::initSystemSettings()
 
     LOG_INFO(kLogSource,
              QStringLiteral("Setting CAN bitrate: interface=%1, bitrate=%2, tripleSampling=%3")
-                 .arg(canInterface)
-                 .arg(canBitrate)
-                 .arg(tripleSampling));
-    systemSettings->setCanBitrate(canInterface, canBitrate, tripleSampling);
+                 .arg(coreConfig.can.interface)
+                 .arg(coreConfig.can.bitrate)
+                 .arg(coreConfig.can.tripleSampling));
+    systemSettings->setCanBitrate(coreConfig.can.interface, coreConfig.can.bitrate, coreConfig.can.tripleSampling);
     return true;
 }
 
@@ -184,7 +144,7 @@ bool CoreContext::initCan()
     LOG_DEBUG(kLogSource, QStringLiteral("Initializing CAN bus..."));
 
     comm::CanConfig canConfig;
-    canConfig.interface = canInterface;
+    canConfig.interface = coreConfig.can.interface;
     canConfig.canFd = false;
 
     canBus = new comm::CanComm(canConfig, this);
@@ -196,7 +156,7 @@ bool CoreContext::initCan()
         LOG_WARNING(kLogSource,
                     QStringLiteral("CAN open failed, RPC service will start but CAN methods will not work"));
     } else {
-        LOG_INFO(kLogSource, QStringLiteral("CAN bus opened: %1").arg(canInterface));
+        LOG_INFO(kLogSource, QStringLiteral("CAN bus opened: %1").arg(coreConfig.can.interface));
     }
 
     canManager = new device::CanDeviceManager(canBus, this);
@@ -204,36 +164,17 @@ bool CoreContext::initCan()
     return true;
 }
 
+
 bool CoreContext::initDevices()
-{
-    LOG_DEBUG(kLogSource, QStringLiteral("Initializing devices (default mode)..."));
-
-    const QList<quint8> nodes = {0x01};
-    for (auto node : nodes) {
-        auto *dev = new device::RelayGd427(node, canBus, this);
-        dev->init();
-        canManager->addDevice(dev);
-        relays.insert(node, dev);
-        LOG_INFO(kLogSource,
-                 QStringLiteral("Relay device added: node=0x%1")
-                     .arg(node, 2, 16, QChar('0')));
-    }
-
-    return true;
-}
-
-
-
-bool CoreContext::initDevices(const CoreConfig &config)
 {
     LOG_DEBUG(kLogSource, QStringLiteral("Initializing devices from config..."));
     relays.clear();
 
-    if (!config.devices.isEmpty()) {
+    if (!coreConfig.devices.isEmpty()) {
         LOG_INFO(kLogSource,
-                 QStringLiteral("Found %1 devices in config").arg(config.devices.size()));
+                 QStringLiteral("Found %1 devices in config").arg(coreConfig.devices.size()));
 
-        for (const auto &devConfig : config.devices) {
+        for (const auto &devConfig : coreConfig.devices) {
             const bool enabled = devConfig.params.value(QStringLiteral("enabled")).toBool(true);
             if (!enabled) {
                 LOG_DEBUG(kLogSource,
@@ -284,14 +225,14 @@ bool CoreContext::initDevices(const CoreConfig &config)
         deviceGroups.clear();
         groupNames.clear();
         groupChannels.clear();
-        deviceGroups.reserve(config.groups.size());
-        groupNames.reserve(config.groups.size());
-        groupChannels.reserve(config.groups.size());
+        deviceGroups.reserve(coreConfig.groups.size());
+        groupNames.reserve(coreConfig.groups.size());
+        groupChannels.reserve(coreConfig.groups.size());
 
         LOG_INFO(kLogSource,
-                 QStringLiteral("Loading %1 device groups...").arg(config.groups.size()));
+                 QStringLiteral("Loading %1 device groups...").arg(coreConfig.groups.size()));
 
-        for (const auto &grpConfig : config.groups) {
+        for (const auto &grpConfig : coreConfig.groups) {
             if (!grpConfig.enabled) {
                 LOG_DEBUG(kLogSource,
                           QStringLiteral("Device group '%1' disabled, skipping")
@@ -333,6 +274,15 @@ bool CoreContext::initDevices(const CoreConfig &config)
 
 bool CoreContext::initStrategy()
 {
+    strategys_ = coreConfig.strategies;
+//    ;dont add Group
+//    for (auto &s : strategys_) {
+//        QString err;
+//        if (!ensureGroupForStrategy(s, &err)) {
+//            LOG_ERROR(kLogSource, QStringLiteral("Failed to ensure group for strategy: %1 error: %2").arg(s.strategyId).arg(err));
+//        }
+//    }
+
     autoStrategyScheduler_ = new QTimer(this);
     autoStrategyScheduler_->setInterval(1000); // 每秒扫描一次
     connect(autoStrategyScheduler_, &QTimer::timeout,
@@ -344,6 +294,43 @@ bool CoreContext::initStrategy()
 
 bool CoreContext::initMqtt()
 {
+
+    // 初始化MQTT多通道管理器
+    mqttManager = new cloud::MqttChannelManager(this);
+    // 加载MQTT通道配置
+    for (const auto &mqttConfig : coreConfig.mqttChannels) {
+        MqttChannelConfig cloudConfig;
+        cloudConfig.channelId = mqttConfig.channelId;
+        cloudConfig.name = mqttConfig.name;
+        cloudConfig.enabled = mqttConfig.enabled;
+        cloudConfig.broker = mqttConfig.broker;
+        cloudConfig.port = mqttConfig.port;
+        cloudConfig.clientId = mqttConfig.clientId;
+        cloudConfig.username = mqttConfig.username;
+        cloudConfig.password = mqttConfig.password;
+        cloudConfig.topicPrefix = mqttConfig.topicPrefix;
+        cloudConfig.keepAliveSec = mqttConfig.keepAliveSec;
+        cloudConfig.autoReconnect = mqttConfig.autoReconnect;
+        cloudConfig.reconnectIntervalSec = mqttConfig.reconnectIntervalSec;
+        cloudConfig.qos = mqttConfig.qos;
+        cloudConfig.topicControlSub  = mqttConfig.topicControlSub;
+        cloudConfig.topicStrategySub = mqttConfig.topicStrategySub;
+        cloudConfig.topicStatusPub   = mqttConfig.topicStatusPub;
+        cloudConfig.topicEventPub    = mqttConfig.topicEventPub;
+
+        QString error;
+        if (!mqttManager->addChannel(cloudConfig, &error)) {
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("Failed to add MQTT channel %1: %2")
+                            .arg(mqttConfig.channelId)
+                            .arg(error));
+        }
+    }
+    LOG_INFO(kLogSource,
+             QStringLiteral("MQTT manager initialized with %1 channels")
+                 .arg(mqttManager->channelCount()));
+
+    LOG_INFO(kLogSource, QStringLiteral("Cloud message handler initialized"));
 
     cloudUploader = new cloud::fanzhoucloud::CloudUploader(this, this);
     cloudUploader->applyConfig(cloudUploadConfig);
@@ -448,30 +435,136 @@ void CoreContext::evaluateAllStrategies()
         if (!evaluateConditions(s.conditions, s.matchType))
             continue;
 
-        // exec
-        // executeActions(s.actions);
         s.lastTriggered = now;
-        for (auto a : s.actions) {
-            const QString reason = QStringLiteral("auto:%1").arg(s.strategyName);
-
-            queueGroupControlOptimized(
-                        s.groupId,
-                        -1,
-                        static_cast<device::RelayProtocol::Action>(a.identifierValue),
-                        reason
-                        );
+        int cnt = 0;
+        for (auto &a: s.actions) {
+            cnt++;
+            const QString source = QStringLiteral("auto:%1 count:%2").arg(s.strategyName).arg(cnt);
+            enqueueControl(a.node, a.channel, static_cast<device::RelayProtocol::Action>(a.identifierValue), source, true);
         }
+
+
+//          ;2
+//          queueGroupControlOptimized(
+//                    s.groupId,
+//                    -1,
+//                    static_cast<device::RelayProtocol::Action>(a.identifierValue),
+//                    reason
+//                    );
     }
 }
+
+int CoreContext::strategyIntervalMs(const AutoStrategy &config) const
+{
+    Q_UNUSED(config);
+    return 1000; // 1000ms
+}
+
+
+QList<AutoStrategyState> CoreContext::strategyStates() const
+{
+    QList<AutoStrategyState> states;
+    for (const auto &s: strategys_) {
+        AutoStrategyState st;
+        st.config = s;
+        st.attached = (s.groupId > 0);       ///< 是否已绑定分组
+        st.running = false;                  ///< 是否运行
+        states.append(st);
+    }
+    return states;
+}
+
+bool CoreContext::setStrategyEnabled(int strategyId, bool enabled)
+{
+    for (auto &s : strategys_) {
+        if (s.strategyId == strategyId) {
+            s.enabled = enabled;
+            LOG_INFO(kLogSource, QStringLiteral("Strategy %1 set enabled=%2")
+                     .arg(strategyId)
+                     .arg(enabled));
+            return true;
+        }
+    }
+    LOG_WARNING(kLogSource, QStringLiteral("Strategy %1 not found").arg(strategyId));
+    return false;
+}
+
+bool CoreContext::triggerStrategy(int strategyId)
+{
+    for (auto &s : strategys_) {
+        if (s.strategyId == strategyId) {
+            if (!s.enabled) {
+                LOG_WARNING(kLogSource, QStringLiteral("Strategy %1 is disabled").arg(strategyId));
+                return false;
+            }
+
+            LOG_INFO(kLogSource, QStringLiteral("Triggering strategy %1").arg(strategyId));
+            // 执行策略动作
+            int cnt = 0;
+            for (auto &a: s.actions) {
+                cnt++;
+                const QString source = QStringLiteral("auto:%1 count:%2").arg(s.strategyName).arg(cnt);
+                enqueueControl(a.node, a.channel, static_cast<device::RelayProtocol::Action>(a.identifierValue), source, true);
+            }
+            return true;
+        }
+    }
+    LOG_WARNING(kLogSource, QStringLiteral("Strategy %1 not found").arg(strategyId));
+    return false;
+}
+
+bool CoreContext::createStrategy(const AutoStrategy &config, QString *error)
+{
+    // 检查是否存在同名ID
+    for (const auto &s : strategys_) {
+        if (s.strategyId == config.strategyId) {
+            if (error) *error = QStringLiteral("StrategyId %1 already exists").arg(config.strategyId);
+            return false;
+        }
+    }
+    strategys_.append(config);
+    LOG_INFO(kLogSource, QStringLiteral("Created strategy %1").arg(config.strategyId));
+    return true;
+}
+
+bool CoreContext::deleteStrategy(int strategyId, QString *error)
+{
+    for (int i = 0; i < strategys_.size(); ++i) {
+        if (strategys_[i].strategyId == strategyId) {
+            strategys_.removeAt(i);
+            LOG_INFO(kLogSource, QStringLiteral("Deleted strategy %1").arg(strategyId));
+            return true;
+        }
+    }
+    if (error) *error = QStringLiteral("StrategyId %1 not found").arg(strategyId);
+    return false;
+}
+
+
+bool CoreContext::evaluateSensorCondition(const QString &condition, double value, double threshold) const
+{
+    if (condition == QStringLiteral("gt")) return value > threshold;
+    if (condition == QStringLiteral("lt")) return value < threshold;
+    if (condition == QStringLiteral("eq")) return qAbs(value - threshold) < kFloatCompareEpsilon;
+    if (condition == QStringLiteral("gte")) return value >= threshold;
+    if (condition == QStringLiteral("lte")) return value <= threshold;
+    return false;
+}
+
 
 
 bool CoreContext::ensureGroupForStrategy(AutoStrategy &s, QString *error)
 {
+    auto fail = [&](const QString &msg) {
+        if (error) *error = msg;
+        return false;
+    };
+
     // new
     if (s.groupId <= 0) {
         qint32 newGroupId = 1;
         if (!deviceGroups.isEmpty()) {
-            newGroupId = deviceGroups.size() + 1;
+            newGroupId = deviceGroups.keys().last() + 1;
         }
 
         QString name = QStringLiteral("auto_strategy_%1").arg(s.strategyId);
@@ -488,16 +581,34 @@ bool CoreContext::ensureGroupForStrategy(AutoStrategy &s, QString *error)
 
     }
 
-
      // updata
     const qint32 groupId = s.groupId;
     for (const auto &a : s.actions) {
         const quint8 node = a.node;
         const quint32 ch = a.channel;
 
-        // @TODO
-    }
+        if (!deviceGroups.contains(groupId) ||
+                !deviceGroups[groupId].contains(node)) {
 
+            if (!addDeviceToGroup(groupId, node, error)) {
+                return fail(QStringLiteral("addDeviceToGroup failed: group=%1 node=%2")
+                            .arg(groupId).arg(node));
+            }
+        }
+
+        if (ch >= 0) {
+            // groupChannels: groupId -> QList<int>
+            const QList<int> &chs = groupChannels.value(groupId);
+
+            if (!chs.contains(ch)) {
+                if (!addChannelToGroup(groupId, node, ch, error)) {
+                    return fail(QStringLiteral("addChannelToGroup failed: group=%1 node=%2 ch=%3")
+                                .arg(groupId).arg(node).arg(ch));
+                }
+            }
+        }
+    }
+    return true;
 }
 
 
@@ -970,48 +1081,6 @@ device::RelayProtocol::Action CoreContext::parseAction(const QString &str, bool 
     return device::RelayProtocol::Action::Stop;
 }
 
-int CoreContext::strategyIntervalMs(const AutoStrategy &config) const
-{
-
-}
-
-
-QList<AutoStrategyState> CoreContext::strategyStates() const
-{
-
-}
-
-bool CoreContext::setStrategyEnabled(int strategyId, bool enabled)
-{
-    return true;
-}
-
-bool CoreContext::triggerStrategy(int strategyId)
-{
-    return false;
-}
-
-bool CoreContext::createStrategy(const AutoStrategy &config, QString *error)
-{
-
-    return true;
-}
-
-bool CoreContext::deleteStrategy(int strategyId, QString *error)
-{
-    return true;
-}
-
-
-bool CoreContext::evaluateSensorCondition(const QString &condition, double value, double threshold) const
-{
-    if (condition == QStringLiteral("gt")) return value > threshold;
-    if (condition == QStringLiteral("lt")) return value < threshold;
-    if (condition == QStringLiteral("eq")) return qAbs(value - threshold) < kFloatCompareEpsilon;
-    if (condition == QStringLiteral("gte")) return value >= threshold;
-    if (condition == QStringLiteral("lte")) return value <= threshold;
-    return false;
-}
 
 
 QStringList CoreContext::methodGroups() const
@@ -1225,30 +1294,28 @@ bool CoreContext::saveConfig(const QString &path, QString *error)
         return false;
     }
 
-    // 构建配置对象
-    CoreConfig config;
-    
-    // 主配置
-    config.main.rpcPort = rpcPort;
-    config.main.auth = authConfig;  // 保存认证配置
-    
-    // CAN配置
-    config.can.interface = canInterface;
-    config.can.bitrate = canBitrate;
-    config.can.tripleSampling = tripleSampling;
-    
+
     // 屏幕配置
-    config.screen = screenConfig;
+    coreConfig.screen = screenConfig;
     
     // 设备列表
-    config.devices = deviceConfigs.values();
+    coreConfig.devices = deviceConfigs.values();
     
     // 设备分组
-    config.groups.clear();
+    coreConfig.groups.clear();
     for (auto it = deviceGroups.begin(); it != deviceGroups.end(); ++it) {
         DeviceGroupConfig grp;
         grp.groupId = it.key();
         grp.name = groupNames.value(it.key(), QString());
+//        int sId = -1;
+//        if (grp.name.startsWith(QStringLiteral("auto_strategy_"))) {
+//
+//            sId = grp.name.section('_', -1).toInt();
+//        }
+
+//        if (sId != -1) {
+//            qDebug() << "Found Strategy ID:" << sId << " for Group:" << grp.groupId;
+//        }
         grp.enabled = true;
         // 转换设备节点ID列表
         for (quint8 node : it.value()) {
@@ -1256,15 +1323,16 @@ bool CoreContext::saveConfig(const QString &path, QString *error)
         }
         // 保存分组通道
         grp.channels = groupChannels.value(it.key(), {});
-        config.groups.append(grp);
+        coreConfig.groups.append(grp);
     }
     
     // 定时策略
-    config.strategies = strategys_;
-    
+    coreConfig.strategies = strategys_;
+
+    coreConfig.mqttChannels = mqttManager->allChannelConfigs();
     // 保存到文件
     QString saveError;
-    if (!config.saveToFile(targetPath, &saveError)) {
+    if (!coreConfig.saveToFile(targetPath, &saveError)) {
         if (error) {
             *error = QStringLiteral("保存配置失败: %1").arg(saveError);
         }
@@ -1296,9 +1364,8 @@ bool CoreContext::reloadConfig(const QString &path, QString *error)
         return false;
     }
 
-    CoreConfig config;
     QString loadError;
-    if (!config.loadFromFile(targetPath, &loadError)) {
+    if (!coreConfig.loadFromFile(targetPath, &loadError)) {
         if (error) {
             *error = QStringLiteral("加载配置失败: %1").arg(loadError);
         }
@@ -1314,7 +1381,7 @@ bool CoreContext::reloadConfig(const QString &path, QString *error)
     groupNames.clear();
     groupChannels.clear();
     
-    for (const auto &grpConfig : config.groups) {
+    for (const auto &grpConfig : coreConfig.groups) {
         if (!grpConfig.enabled) continue;
         
         QList<quint8> nodes;
@@ -1332,10 +1399,10 @@ bool CoreContext::reloadConfig(const QString &path, QString *error)
     // @TODO
     
     // 更新屏幕配置
-    screenConfig = config.screen;
+    screenConfig = coreConfig.screen;
     
     // 更新云数据上传配置
-    cloudUploadConfig = config.cloudUpload;
+    cloudUploadConfig = coreConfig.cloudUpload;
     
     LOG_INFO(kLogSource, QStringLiteral("配置已重新加载: %1").arg(targetPath));
     return true;
@@ -1354,7 +1421,7 @@ QJsonObject CoreContext::exportConfig() const
     
     // 主配置
     QJsonObject mainObj;
-    mainObj[QStringLiteral("rpcPort")] = static_cast<int>(rpcPort);
+    mainObj[QStringLiteral("rpcPort")] = static_cast<int>(coreConfig.main.rpcPort);
     
     // 认证状态（不包含敏感信息）
     QJsonObject authObj;
@@ -1369,9 +1436,9 @@ QJsonObject CoreContext::exportConfig() const
     
     // CAN配置
     QJsonObject canObj;
-    canObj[QStringLiteral("interface")] = canInterface;
-    canObj[QStringLiteral("bitrate")] = canBitrate;
-    canObj[QStringLiteral("tripleSampling")] = tripleSampling;
+    canObj[QStringLiteral("interface")] = coreConfig.can.interface;
+    canObj[QStringLiteral("bitrate")] = coreConfig.can.bitrate;
+    canObj[QStringLiteral("tripleSampling")] = coreConfig.can.tripleSampling;
     
     // CAN状态诊断信息（帮助诊断"CAN无法发送"的问题）
     if (canBus) {

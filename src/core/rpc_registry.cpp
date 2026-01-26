@@ -12,6 +12,7 @@
 #include "core_context.h"
 
 #include "cloud/mqtt/mqtt_channel_manager.h"
+#include "cloud/fanzhoucloud/parser.h"
 #include "comm/can/can_comm.h"
 #include "utils/system_monitor.h"
 #include "utils/system_settings.h"
@@ -192,9 +193,9 @@ void RpcRegistry::registerSystem()
             {QStringLiteral("ok"), true},
             {QStringLiteral("serverVersion"), QStringLiteral("1.0.0")},
             {QStringLiteral("serverTime"), QString::number(now)},
-            {QStringLiteral("rpcPort"), context_->rpcPort},
-            {QStringLiteral("canInterface"), context_->canInterface},
-            {QStringLiteral("canBitrate"), context_->canBitrate},
+            {QStringLiteral("rpcPort"), context_->coreConfig.main.rpcPort},
+            {QStringLiteral("canInterface"), context_->coreConfig.can.interface},
+            {QStringLiteral("canBitrate"), context_->coreConfig.can.bitrate},
             {QStringLiteral("canOpened"), canOpened},
             {QStringLiteral("canTxQueueSize"), canTxQueueSize},
             {QStringLiteral("deviceCount"), context_->relays.size()},
@@ -436,8 +437,8 @@ void RpcRegistry::registerCan()
 
         QJsonObject result{
             {kKeyOk, true},
-            {QStringLiteral("interface"), context_->canInterface},
-            {QStringLiteral("bitrate"), context_->canBitrate},
+            {QStringLiteral("interface"), context_->coreConfig.can.interface},
+            {QStringLiteral("bitrate"), context_->coreConfig.can.bitrate},
             {QStringLiteral("opened"), canOpened},
             {QStringLiteral("txQueueSize"), txQueueSize}
         };
@@ -449,8 +450,8 @@ void RpcRegistry::registerCan()
                 "  1. CAN interface exists: ip link show %1\n"
                 "  2. CAN interface is up: ip link set %1 up\n"
                 "  3. Bitrate is set: canconfig %1 bitrate %2")
-                .arg(context_->canInterface)
-                .arg(context_->canBitrate);
+                .arg(context_->coreConfig.can.interface)
+                .arg(context_->coreConfig.can.bitrate);
         }
 
         return result;
@@ -1504,9 +1505,48 @@ void RpcRegistry::registerAuto()
         QJsonArray arr;
         const auto states = context_->strategyStates();
         for (const auto &state : states) {
-            QJsonObject obj;
-            // @TODO
-            arr.append(obj);
+                const auto &s = state.config;
+
+                QJsonObject obj;
+                obj["id"]        = s.strategyId;
+                obj["name"]      = s.strategyName;
+                obj["type"]      = s.strategyType;   // auto / manual
+                obj["enabled"]   = s.enabled;
+                obj["matchType"] = s.matchType;
+                obj["version"]   = s.version;
+                obj["updateTime"] = s.updateTime;
+
+                obj["effectiveBeginTime"] = s.effectiveBeginTime;
+                obj["effectiveEndTime"]   = s.effectiveEndTime;
+
+                obj["attached"] = state.attached;
+                obj["running"]  = state.running;
+
+                // actions
+                QJsonArray actArr;
+                for (const auto &a : s.actions) {
+                    QJsonObject aobj;
+                    aobj["node"] = a.node;
+                    aobj["channel"] = a.channel;
+                    aobj["value"] = a.identifierValue;
+                    actArr.append(aobj);
+                }
+                obj["actions"] = actArr;
+
+                // conditions
+                QJsonArray condArr;
+                for (const auto &c : s.conditions) {
+                    QJsonObject cobj;
+                    cobj["device"] = c.sensor_dev;
+                    cobj["identifier"] = c.identifier;
+                    cobj["op"] = c.op;
+                    cobj["value"] = c.identifierValue;
+                    condArr.append(cobj);
+                }
+                obj["conditions"] = condArr;
+
+                arr.append(obj);
+
         }
         return QJsonObject{{QStringLiteral("ok"), true}, {QStringLiteral("strategies"), arr}};
     });
@@ -1540,13 +1580,34 @@ void RpcRegistry::registerAuto()
         return QJsonObject{{QStringLiteral("ok"), true}};
     });
 
-    // 创建定时策略
+    // 创建策略
     dispatcher_->registerMethod(QStringLiteral("auto.strategy.create"),
                                  [this](const QJsonObject &params) {
+            core::AutoStrategy s;
+            QString err;
 
+            // 解析 JSON -> AutoStrategy
+            if (!cloud::fanzhoucloud::parseAutoStrategyFromJson(params, s, &err)) {
+                return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, err);
+            }
 
-            return QJsonObject{{QStringLiteral("ok"), true}};
-    });
+            // 创建策略
+            if (!context_->createStrategy(s, &err)) {
+                return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, err);
+            }
+
+            // 确保为该策略创建/更新分组
+            if (!context_->ensureGroupForStrategy(s, &err)) {
+                return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue,
+                QStringLiteral("create group failed: %1").arg(err));
+            }
+
+            return QJsonObject{
+                {QStringLiteral("ok"), true},
+                {QStringLiteral("id"), s.strategyId},
+                {QStringLiteral("groupId"), s.groupId}
+            };
+        });
 
     // 删除策略
     dispatcher_->registerMethod(QStringLiteral("auto.strategy.delete"),
@@ -1697,7 +1758,7 @@ void RpcRegistry::registerDevice()
             // Use the new getDefaultCommType function
             config.commType = device::getDefaultCommType(config.deviceType);
         }
-        config.bus = bus.isEmpty() ? context_->canInterface : bus;
+        config.bus = bus.isEmpty() ? context_->coreConfig.can.interface : bus;
 
         if (params.contains(QStringLiteral("params")) && params[QStringLiteral("params")].isObject()) {
             config.params = params[QStringLiteral("params")].toObject();
@@ -1898,23 +1959,7 @@ void RpcRegistry::registerScreen()
 
 // ===================== 配置管理RPC方法 =====================
 
-/**
- * @brief 注册配置保存/加载相关的RPC方法
- * 
- * 这组方法解决了"Web页面修改无法保存"的问题：
- * 
- * 问题原因：
- * 之前通过RPC调用（如group.create、device.add等）创建的设备、分组、
- * 策略等配置只保存在内存中，服务重启后会丢失。
- * 
- * 解决方案：
- * 提供config.save方法，让用户可以将内存中的配置持久化到配置文件。
- * 
- * 使用方法：
- * 1. 通过Web页面或RPC修改配置（创建分组、添加设备等）
- * 2. 调用config.save将配置保存到文件
- * 3. 下次服务启动时会自动加载保存的配置
- */
+
 void RpcRegistry::registerConfig()
 {
     // 获取当前配置
@@ -1926,8 +1971,6 @@ void RpcRegistry::registerConfig()
     });
 
     // 保存配置到文件
-    // 调用此方法将当前运行时的配置（设备、分组、策略等）保存到配置文件
-    // 这样服务重启后可以保留这些修改
     dispatcher_->registerMethod(QStringLiteral("config.save"),
                                  [this](const QJsonObject &params) {
         QString path;

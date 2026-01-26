@@ -5,6 +5,7 @@
 #include "device/can/relay_protocol.h"
 #include "cloud/mqtt/mqtt_channel_manager.h"
 #include "cloud/fanzhoucloud/setting_service.h"
+#include "cloud/fanzhoucloud/parser.h"
 
 #include <QJsonDocument>
 
@@ -69,7 +70,32 @@ void CloudMessageHandler::onMqttMessage(int channelId,
 
 void CloudMessageHandler::handleStrategyCommand(const int channelId, const QJsonObject &msg)
 {
-    LOG_DEBUG(kLogSource,QStringLiteral("Handled the %1 cloud Strategy commands").arg(channelId));
+    Q_UNUSED(channelId);
+    LOG_DEBUG(kLogSource, QStringLiteral("Handled the %1 cloud Strategy commands, Cloud scene msg: %2")
+              .arg(channelId)
+              .arg(QString(QJsonDocument(msg).toJson(QJsonDocument::Compact))));
+
+    const QString method = msg.value("method").toString();
+    const QString type = msg.value("type").toString();
+    const QJsonObject data = msg.value("data").toObject();
+    if (data.isEmpty()) {
+        LOG_WARNING(kLogSource, QStringLiteral("data is Empty, return!"));
+        return;
+    }
+
+    QJsonObject ret_data;
+
+    // 1. 云端返回消息
+    if (method == "get_response" || method == "set") {
+        // 设置场景策略
+        if (type == "scene") {
+            ret_data = parseSceneDataFromJson(data);
+        }
+        // @TODO other
+    } else if (method == "delete") {
+
+    } // TODO else
+
 }
 
 void CloudMessageHandler::handleControlCommand(const int channelId, const QJsonObject &msg)

@@ -123,7 +123,7 @@ int main(int argc, char *argv[])
     // 5. 启动JSON-RPC服务器
     fanzhou::rpc::JsonRpcServer server(&dispatcher);
     server.setCoreContext(&context);  // 设置核心上下文用于认证
-    const quint16 port = context.rpcPort;
+    const quint16 port = context.coreConfig.main.rpcPort;
     LOG_INFO(kLogSource, QStringLiteral("Starting JSON-RPC server on port %1...").arg(port));
 
     if (!server.listen(QHostAddress::Any, port)) {

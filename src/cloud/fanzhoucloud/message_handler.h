@@ -10,6 +10,16 @@ class CoreContext;
 namespace cloud {
 namespace fanzhoucloud {
 
+enum class CloudMethod {
+    Unknown,
+    Get,
+    GetResponse,
+    Set,
+    SetResponse,
+    Delete,
+    DeleteResponse,
+};
+
 class CloudMessageHandler : public QObject
 {
     Q_OBJECT

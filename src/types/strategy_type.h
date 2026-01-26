@@ -47,6 +47,7 @@ struct StrategyCondition {
   * @todo
   */
 struct AutoStrategy {
+    int cloudChannelId = 0;
     int strategyId = 0;
     int groupId = 0;                     ///< 绑定的分组ID
     int version = 1;                     ///< 场景版本号，通过版本号比对是否需要更新，每编辑一次，版本号+1

@@ -1,5 +1,6 @@
 #include "parser.h"
 #include "types/strategy_type.h"
+#include "utils/logger.h"
 
 #include <QJsonDocument>
 #include <QJsonArray>
@@ -7,6 +8,9 @@
 namespace fanzhou {
 namespace cloud {
 namespace fanzhoucloud {
+namespace  {
+const char *const kLogSource = "FanzhouParser";
+}
 
 
 bool parseAutoStrategyFromJson(const QJsonObject &obj, core::AutoStrategy &s, QString *error)
@@ -22,11 +26,14 @@ bool parseAutoStrategyFromJson(const QJsonObject &obj, core::AutoStrategy &s, QS
 
     // 必填字段
     s.strategyId   = obj.value("id").toInt();
+    if (s.strategyId <= 0)
+        return fail("invalid id");
     s.strategyName = obj.value("sceneName").toString();
     s.strategyType = obj.value("sceneType").toString(); // auto / manual
     s.matchType    = static_cast<qint8>(obj.value("matchType").toInt(0));
     s.version      = obj.value("version").toInt(1);
     s.updateTime   = obj.value("updateTime").toString();
+    s.cloudChannelId = obj.value("cloudChannelId").toInt(0);
 
     // status: 0正常, 1关闭
     int status = obj.value("status").toInt(0);
@@ -141,6 +148,23 @@ bool parseNodeChannelKey(const QString &key, quint8 &node, qint8 &channel)
     channel = static_cast<qint8>(chIndex - 1); // 转成 0-based
 
     return true;
+
+}
+
+
+QJsonObject parseSceneDataFromJson(const QJsonObject &obj)
+{
+    // 基本参数
+    const int code = obj.value("code").toInt(999);
+    const QString message = obj.value("message").toString();
+    const QJsonArray data_arr = obj.value("result").toArray();
+
+
+
+    if (code > 0 || data_arr.isEmpty()) {
+        LOG_WARNING(kLogSource, QStringLiteral("code:%1, message:%2").arg(code).arg(message));
+        return QJsonObject();
+    }
 
 }
 

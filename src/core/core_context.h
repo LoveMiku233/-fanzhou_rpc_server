@@ -178,32 +178,19 @@ public:
 
     //
 //    QHash<quint8, QList<CloudNodeBinding>> cloud_binding_nodes;
-
     // 设备注册表：节点ID -> 设备
     QHash<quint8, device::RelayGd427 *> relays;
-
     // 设备分组：分组ID -> 节点ID列表
     QHash<int, QList<quint8>> deviceGroups;
     QHash<int, QString> groupNames;
     QHash<int, QList<int>> groupChannels;  ///< 分组ID -> 指定通道列表
-
     // 设备配置记录（用于动态管理）
     QHash<quint8, DeviceConfig> deviceConfigs;
-
+    CoreConfig coreConfig;
     // 屏幕配置
     ScreenConfig screenConfig;
-    
     // 云数据上传配置
     CloudUploadConfig cloudUploadConfig;
-
-    // CAN配置
-    QString canInterface = QStringLiteral("can0");
-    int canBitrate = 125000;
-    bool tripleSampling = true;
-
-    // 服务器配置
-    quint16 rpcPort = 12345;
-
     // 认证配置
     AuthConfig authConfig;
     QHash<QString, qint64> validTokens;  ///< Token -> 过期时间戳(ms)，0表示永不过期
@@ -374,13 +361,13 @@ private:
     bool initSystemSettings();
     bool initCan();
     bool initDevices();
-    bool initDevices(const CoreConfig &config);
     bool initMqtt();
     bool initStrategy();
     void initQueue();
     void startQueueProcessor();
     void processNextJob();
     void evaluateAllStrategies();
+
     ControlJobResult executeJob(const ControlJob &job);
 
     int strategyIntervalMs(const AutoStrategy &config) const;

@@ -13,6 +13,7 @@ namespace fanzhoucloud {
 
 bool parseAutoStrategyFromJson(const QJsonObject &obj, core::AutoStrategy &out, QString *error = nullptr);
 bool parseNodeChannelKey(const QString &key, quint8 &node, qint8 &channel);
+QJsonObject parseSceneDataFromJson(const QJsonObject &obj);
 
 }
 }
