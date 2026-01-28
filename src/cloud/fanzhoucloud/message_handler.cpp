@@ -30,7 +30,7 @@ void CloudMessageHandler::onMqttMessage(int channelId,
                                         const QString &topic,
                                         const QByteArray &payload)
 {
-    if (!ctx_ || !ctx_->mqttManager) {
+    if (!ctx_ || !ctx_->mqttManager || channelId != channelId_) {
         return;
     }
 
@@ -57,7 +57,7 @@ void CloudMessageHandler::onMqttMessage(int channelId,
     }
 
     if (!settingTopic.isEmpty() && topic == settingTopic) {
-        handleSettingCommand(channelId, obj);
+        handleStrategyCommand(channelId, obj);
         return;
     }
 
@@ -67,42 +67,278 @@ void CloudMessageHandler::onMqttMessage(int channelId,
                   .arg(topic));
 }
 
-
-void CloudMessageHandler::handleStrategyCommand(const int channelId, const QJsonObject &msg)
+void CloudMessageHandler::setChannelId(int channel)
 {
-    Q_UNUSED(channelId);
-    LOG_DEBUG(kLogSource, QStringLiteral("Handled the %1 cloud Strategy commands, Cloud scene msg: %2")
-              .arg(channelId)
-              .arg(QString(QJsonDocument(msg).toJson(QJsonDocument::Compact))));
+    channelId_ = channel;
+}
 
-    const QString method = msg.value("method").toString();
-    const QString type = msg.value("type").toString();
-    const QJsonObject data = msg.value("data").toObject();
-    if (data.isEmpty()) {
-        LOG_WARNING(kLogSource, QStringLiteral("data is Empty, return!"));
-        return;
+
+QList<core::AutoStrategy> parseStrategyByType(
+    const QString &type,
+    const QJsonObject &data,
+    QString *error)
+{
+    if (type == "scene") {
+        return parseSceneDataFromJson(data);
     }
 
-    QJsonObject ret_data;
+    if (type == "timer") {
+        if (error) *error = "timer strategy not supported";
+        return {};
+    }
 
-    // 1. 云端返回消息
-    if (method == "get_response" || method == "set") {
-        // 设置场景策略
-        if (type == "scene") {
-            ret_data = parseSceneDataFromJson(data);
+    if (error) *error = "unknown strategy type";
+    return {};
+}
+
+bool CloudMessageHandler::applyStrategies(
+    const QList<core::AutoStrategy> &list,
+    int &lastId,
+    int &lastVersion,
+    QString &errMsg)
+{
+    for (const auto &cfg : list) {
+        bool isUpdate = false;
+        QString err;
+
+        if (!ctx_->checkActionValid(cfg, &err)) {
+            errMsg = err;
+            return false;
         }
-        // @TODO other
-    } else if (method == "delete") {
 
-    } // TODO else
+        if (!ctx_->createStrategy(cfg, &isUpdate, &err)) {
+            errMsg = err;
+            return false;
+        }
+
+        lastId = cfg.strategyId;
+        lastVersion = cfg.version;
+    }
+    return true;
+}
+
+bool CloudMessageHandler::sendStrategyCommand(const core::AutoStrategy &a, const QJsonObject &msg)
+{
 
 }
 
-void CloudMessageHandler::handleControlCommand(const int channelId, const QJsonObject &msg)
+bool CloudMessageHandler::handleStrategyCommand(
+        const int channelId,
+        const QJsonObject &msg)
+{
+    LOG_DEBUG(kLogSource,
+              QStringLiteral("Handled the %1 cloud Strategy commands, msg: %2")
+              .arg(channelId)
+              .arg(QString(QJsonDocument(msg).toJson(QJsonDocument::Compact))));
+
+    if (channelId != channelId_) return false;
+
+    if (!msg.contains("method") ||
+            !msg.contains("type") ||
+            !msg.contains("requestId")) {
+        LOG_WARNING(kLogSource, QStringLiteral("bad strategy packet"));
+        return false;
+    }
+
+    const QString method = msg.value("method").toString();
+    const QString type = msg.value("type").toString();
+    const QString requestId = msg.value("requestId").toString();
+
+    int lastId = 0;
+    int lastVersion = 0;
+    int errCode = 0;
+    QString errMsg;
+    bool ok = false;
+
+    QList<core::AutoStrategy> strategies;
+    QString parseErr;
+
+    // parse
+    if (method == "get_response") {
+        strategies = parseSyncData(
+                    type,
+                    msg.value("data").toObject(),
+                    &parseErr);
+
+        if (!parseErr.isEmpty()) {
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("parse get_response failed: %1")
+                        .arg(parseErr));
+            return false;
+        }
+
+        // is response, no reply
+        if (!applyStrategies(strategies, lastId, lastVersion, errMsg)) {
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("apply get_response failed: %1")
+                        .arg(errMsg));
+            return false;
+        }
+
+        return true;
+    }
+
+    else if (method == "set") {
+        core::AutoStrategy one;
+        if (!parseSetCommand(
+                    type,
+                    msg.value("data").toObject(),
+                    one,
+                    &parseErr)) {
+            errCode = 1001;
+            errMsg = parseErr;
+            goto REPLY;
+        }
+
+        strategies = { one };
+    }
+
+    else if (method == "delete") {
+        QList<int> ids;
+        if (!parseDeleteCommand(
+                    type,
+                    msg.value("data"),
+                    ids,
+                    &parseErr)) {
+            errCode = 4001; // 场景ID为空
+            errMsg = parseErr;
+            goto REPLY;
+        }
+
+        QString delErr;
+        for (int id : ids) {
+            if (!ctx_->deleteStrategy(id, &delErr)) {
+                ok = false;
+                errCode = 4002;     // 场景不存在 / 不可删除
+                errMsg = delErr;
+                goto REPLY;
+            }
+        }
+
+
+        // 暂时删除一个
+        lastId = ids.first();
+        ok = true;
+        errMsg = QStringLiteral("删除成功");
+        goto REPLY;
+    }
+
+    else if (method == "get") {
+
+    }
+
+    else {
+        errCode = 1000;
+        errMsg = QStringLiteral("unsupported method");
+        goto REPLY;
+    }
+
+    // apply
+    if (!applyStrategies(strategies, lastId, lastVersion, errMsg)) {
+        errCode = 1002;
+        goto REPLY;
+    }
+
+    ok = true;
+
+    // reply
+REPLY:
+    return sendStrategyReply(
+                method,
+                type,
+                ok,
+                lastId,
+                lastVersion,
+                requestId,
+                errCode,
+                errMsg);
+}
+
+
+
+bool CloudMessageHandler::sendStrategyReply(const QString &method,
+                                            const QString &type,
+                                            bool ok,
+                                            int objectId,
+                                            int version,
+                                            const QString &requestId,
+                                            int errCode,
+                                            const QString &errMsg)
+{
+    // 防止对 response 再回复
+    if (method.contains("_response")) {
+        LOG_WARNING(kLogSource, QStringLiteral("Already response method, skip reply"));
+        return false;
+    }
+
+    QJsonObject report;
+
+    // method: get -> get_response, set -> set_response, delete -> delete_response
+    const QString rp_method = method + "_response";
+    report.insert("method", rp_method);
+    report.insert("type", type);
+
+    // ===== 构造 data =====
+    QJsonObject data;
+
+    if (ok) {
+        data.insert("code", 0);
+        data.insert("message", "");
+
+        QJsonObject result;
+
+        // 根据 type 决定返回字段名
+        if (type == "scene") {
+            result.insert("sceneId", objectId);
+        } else if (type == "timer") {
+            result.insert("timerId", objectId);
+        }
+
+        // get / set 才需要 version / updateTime
+        if (method == "get" || method == "set") {
+            result.insert("version", version);
+            result.insert("updateTime",
+                          QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss"));
+        }
+
+        data.insert("result", result);
+    } else {
+        data.insert("code", errCode);
+        data.insert("message", errMsg);
+        data.insert("result", QJsonValue()); // null
+    }
+
+    report.insert("data", data);
+
+    // ===== requestId 原样返回 =====
+    report.insert("requestId", requestId);
+
+    // ===== timestamp：毫秒 =====
+    const qint64 ts = QDateTime::currentMSecsSinceEpoch();
+    report.insert("timestamp", ts);
+
+    // report
+    QByteArray report_str = QJsonDocument(report).toJson(QJsonDocument::Compact);
+
+    // 打 log
+    LOG_DEBUG(kLogSource,
+              QStringLiteral("Send strategy reply: %1")
+              .arg(QString(report_str)));
+
+    // 实际发送
+    return ctx_->mqttManager->publishSetting(
+                channelId_,
+                report_str,
+                0
+                );
+}
+
+
+bool CloudMessageHandler::handleControlCommand(const int channelId, const QJsonObject &msg)
 {
     if (!ctx_) {
         LOG_WARNING(kLogSource, "CoreContext is null, cannot handle control command");
-        return;
+        return false;
     }
 
     int successCount = 0;
@@ -180,11 +416,14 @@ void CloudMessageHandler::handleControlCommand(const int channelId, const QJsonO
     } else {
         LOG_INFO(kLogSource,
                  QStringLiteral("Handled the %1 cloud %2 control commands").arg(channelId).arg(successCount));
+        return true;
     }
+
+    return false;
 }
 
 
-void CloudMessageHandler::handleSettingCommand(const int channelId, const QJsonObject &msg)
+bool CloudMessageHandler::handleSettingCommand(const int channelId, const QJsonObject &msg)
 {
     LOG_DEBUG(kLogSource,QStringLiteral("Handled the %1 cloud Setting commands").arg(channelId));
 
@@ -196,7 +435,7 @@ void CloudMessageHandler::handleSettingCommand(const int channelId, const QJsonO
 
     if (method.isEmpty() || type.isEmpty() || requestId.isEmpty()) {
         LOG_WARNING(kLogSource, "invalid setting message: missing fields");
-        return;
+        return false;
     }
 
     LOG_INFO(kLogSource,
@@ -221,7 +460,9 @@ void CloudMessageHandler::handleSettingCommand(const int channelId, const QJsonO
                        channelId,
                        QJsonDocument(resp).toJson(QJsonDocument::Compact),
                        0);
+        return true;
     }
+    return false;
 }
 
 

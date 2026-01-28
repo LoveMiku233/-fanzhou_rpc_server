@@ -38,6 +38,21 @@ void MqttClient::setCredentials(const QString &username, const QString &password
     }
 }
 
+
+void MqttClient::setCloudType(const CloudTypeId type)
+{
+    if (type >= CloudTypeId::MAX || type < CloudTypeId::Unknown) {
+        return;
+    }
+    cloud_type = type;
+}
+
+CloudTypeId MqttClient::getCloudType()
+{
+    return cloud_type;
+}
+
+
 void MqttClient::setClientId(const QString &clientId)
 {
     if (!clientId.isEmpty()) {

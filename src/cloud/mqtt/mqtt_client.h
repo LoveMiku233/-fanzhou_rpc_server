@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QtMqtt/qmqttclient.h>
+#include "cloud/cloud_types.h"
 
 namespace fanzhou {
 namespace cloud {
@@ -19,6 +20,9 @@ public:
 
     // 设置认证信息
     void setCredentials(const QString &username, const QString &password);
+
+    void setCloudType(const CloudTypeId type);
+    CloudTypeId getCloudType();
 
     // 设置客户端ID
     void setClientId(const QString &clientId);
@@ -61,6 +65,7 @@ private slots:
 
 private:
     QMqttClient *m_client;
+    CloudTypeId cloud_type = CloudTypeId::Unknown;
 };
 
 }  // namespace cloud

@@ -12,6 +12,7 @@
 #include "cloud/fanzhoucloud/uploader.h"
 #include "cloud/fanzhoucloud/message_handler.h"
 #include "cloud/fanzhoucloud/setting_service.h"
+#include "cloud/fanzhoucloud/parser.h"
 #include "device/can/can_device_manager.h"
 #include "device/can/relay_gd427.h"
 #include "utils/logger.h"
@@ -300,6 +301,8 @@ bool CoreContext::initMqtt()
     // 加载MQTT通道配置
     for (const auto &mqttConfig : coreConfig.mqttChannels) {
         MqttChannelConfig cloudConfig;
+        // cloudConfig.type = mqttConfig.type;
+        cloudConfig.type = cloud::CloudTypeId::FanzhouCloudMqtt;
         cloudConfig.channelId = mqttConfig.channelId;
         cloudConfig.name = mqttConfig.name;
         cloudConfig.enabled = mqttConfig.enabled;
@@ -317,6 +320,9 @@ bool CoreContext::initMqtt()
         cloudConfig.topicStrategySub = mqttConfig.topicStrategySub;
         cloudConfig.topicStatusPub   = mqttConfig.topicStatusPub;
         cloudConfig.topicEventPub    = mqttConfig.topicEventPub;
+        cloudConfig.topicSettingSub  = mqttConfig.topicSettingSub;
+        cloudConfig.topicSettingPub  = mqttConfig.topicSettingPub;
+
 
         QString error;
         if (!mqttManager->addChannel(cloudConfig, &error)) {
@@ -336,6 +342,8 @@ bool CoreContext::initMqtt()
     cloudUploader->applyConfig(cloudUploadConfig);
 
     cloudMessageHandler = new cloud::fanzhoucloud::CloudMessageHandler(this, this);
+    cloudMessageHandler->setChannelId(1);
+
     cloudSettingService = new cloud::fanzhoucloud::SettingService();
 
     connect(mqttManager, &cloud::MqttChannelManager::messageReceived,
@@ -513,16 +521,29 @@ bool CoreContext::triggerStrategy(int strategyId)
     return false;
 }
 
-bool CoreContext::createStrategy(const AutoStrategy &config, QString *error)
+bool CoreContext::createStrategy(const AutoStrategy &config, bool *isUpdate, QString *error)
 {
     // 检查是否存在同名ID
-    for (const auto &s : strategys_) {
-        if (s.strategyId == config.strategyId) {
-            if (error) *error = QStringLiteral("StrategyId %1 already exists").arg(config.strategyId);
-            return false;
+    for (auto &s : strategys_) {
+        if (s.strategyId == config.strategyId && s.version < config.version) {
+            AutoStrategy old = s;
+            s = config;
+            s.lastTriggered = old.lastTriggered;
+            s.cloudChannelId = old.cloudChannelId;
+            s.enabled = old.enabled;
+
+            if (isUpdate) *isUpdate = true;
+
+            LOG_INFO(kLogSource,
+                     QStringLiteral("Updated strategy %1, version=%2")
+                     .arg(config.strategyId)
+                     .arg(config.version));
+            return true;
         }
     }
+
     strategys_.append(config);
+    if (isUpdate) *isUpdate = false;
     LOG_INFO(kLogSource, QStringLiteral("Created strategy %1").arg(config.strategyId));
     return true;
 }
@@ -1244,6 +1265,48 @@ DeviceConfig CoreContext::getDeviceConfig(quint8 nodeId) const
 {
     return deviceConfigs.value(nodeId, DeviceConfig{});
 }
+
+bool CoreContext::checkActionValid(const AutoStrategy &arr, QString *errMsg)
+{
+
+    for (auto a : arr.actions) {
+        int nodeId = 0;
+        int channel = 0;
+
+        if (!cloud::fanzhoucloud::parseNodeChannelKey(a.identifier, nodeId, channel)) {
+            if (errMsg) *errMsg = QString("invalid identifier format: %1").arg(a.identifier);
+            return false;
+        }
+
+        // 1. 校验 node 是否存在
+        auto devIt = relays.find(nodeId);
+        if (devIt == relays.end()) {
+            if (errMsg) *errMsg = QString("device node not exist: %1").arg(nodeId);
+            return false;
+        }
+
+        // 2. 校验通道范围
+        int maxChannels = kMaxChannelId;
+        if (channel < 0 || channel > maxChannels) {
+            if (errMsg) {
+                *errMsg = QString("invalid channel index: node_%1_sw%2")
+                        .arg(nodeId)
+                        .arg(channel + 1);
+            }
+            return false;
+        }
+
+        // 3. 校验值范围（继电器一般只能 0/1）
+        if (a.identifierValue > 2) {
+            if (errMsg) *errMsg = QString("invalid value for %1").arg(a.identifier);
+            return false;
+        }
+    }
+
+    return true;
+}
+
+
 
 ScreenConfig CoreContext::getScreenConfig() const
 {

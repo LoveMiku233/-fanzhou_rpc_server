@@ -20,12 +20,12 @@ bool parseAutoStrategyFromJson(const QJsonObject &obj, core::AutoStrategy &s, QS
         return false;
     };
 
-    if (!obj.contains("id"))            return fail("missing id");
+    if (!obj.contains("sceneId"))            return fail("missing sceneId");
     if (!obj.contains("sceneName"))     return fail("missing sceneName");
     if (!obj.contains("sceneType"))     return fail("missing sceneType");
 
     // 必填字段
-    s.strategyId   = obj.value("id").toInt();
+    s.strategyId   = obj.value("sceneId").toInt();
     if (s.strategyId <= 0)
         return fail("invalid id");
     s.strategyName = obj.value("sceneName").toString();
@@ -73,8 +73,8 @@ bool parseAutoStrategyFromJson(const QJsonObject &obj, core::AutoStrategy &s, QS
             const QString identifier = aobj.value("identifier").toString();
             const int value = aobj.value("identifierValue").toInt();
 
-            quint8 node = 0;
-            qint8 channel = -1;
+            int node = 0;
+            int channel = -1;
 
             // 解析 "node_1_sw1"
             if (!parseNodeChannelKey(identifier, node, channel)) {
@@ -121,7 +121,7 @@ bool parseAutoStrategyFromJson(const QJsonObject &obj, core::AutoStrategy &s, QS
 }
 
 
-bool parseNodeChannelKey(const QString &key, quint8 &node, qint8 &channel)
+bool parseNodeChannelKey(const QString &key, int &node, int &channel)
 {
     // 期望格式: node_<nodeId>_sw<ch>
     if (!key.startsWith(QStringLiteral("node_")))
@@ -152,21 +152,214 @@ bool parseNodeChannelKey(const QString &key, quint8 &node, qint8 &channel)
 }
 
 
-QJsonObject parseSceneDataFromJson(const QJsonObject &obj)
+QList<core::AutoStrategy> parseSceneDataFromJson(const QJsonObject &obj)
 {
     // 基本参数
     const int code = obj.value("code").toInt(999);
     const QString message = obj.value("message").toString();
     const QJsonArray data_arr = obj.value("result").toArray();
 
-
+    QList<core::AutoStrategy> st;
 
     if (code > 0 || data_arr.isEmpty()) {
         LOG_WARNING(kLogSource, QStringLiteral("code:%1, message:%2").arg(code).arg(message));
-        return QJsonObject();
+        return st;
     }
 
+    //
+    for (auto s : data_arr) {
+        if (s.isObject()) {
+            QJsonObject jobj = s.toObject();
+            core::AutoStrategy tmp;
+            // 处理
+            if (parseAutoStrategyFromJson(jobj, tmp)) {
+                st.append(tmp);
+            }
+        }
+    }
+    LOG_WARNING(kLogSource, QStringLiteral("parse cnt: %1").arg(st.size()));
+    return st;
 }
+
+
+bool parseSceneActions(const QJsonArray &arr,
+                       QList<core::StrategyAction> &out,
+                       QString *error)
+{
+    out.clear();
+
+    auto fail = [&](const QString &msg) {
+        if (error) *error = msg;
+        return false;
+    };
+
+    for (const auto &v : arr) {
+        if (!v.isObject())
+            continue;
+
+        const QJsonObject obj = v.toObject();
+
+        if (!obj.contains("identifier") || !obj.contains("identifierValue"))
+            return fail("action missing identifier or identifierValue");
+
+        const QString identifier = obj.value("identifier").toString();
+        const int value = obj.value("identifierValue").toInt();
+
+        int node = 0;
+        int channel = -1;
+        if (!parseNodeChannelKey(identifier, node, channel))
+            return fail(QString("invalid identifier: %1").arg(identifier));
+
+        core::StrategyAction a;
+        a.identifier = identifier;
+        a.node = node;
+        a.channel = channel;
+        a.identifierValue = value;
+
+        if (obj.contains("deviceCode"))
+            a.action_dev = obj.value("deviceCode").toString();
+
+        out.append(a);
+    }
+
+    return true;
+}
+
+bool parseSetCommand(const QString &type,
+                     const QJsonObject &data,
+                     core::AutoStrategy &out,
+                     QString *error)
+{
+    if (type == "scene") {
+        return parseSceneSetData(data, out, error);
+    }
+    if (type == "timer") {
+        return parseTimerSetData(data, out, error);
+    }
+
+    if (error)
+        *error = QString("unsupported set type: %1").arg(type);
+    return false;
+}
+
+QList<core::AutoStrategy> parseSyncData(
+    const QString &type,
+    const QJsonObject &obj,
+    QString *error)
+{
+    if (type == "scene") {
+        return parseSceneSyncData(obj);
+    }
+
+    if (type == "timer") {
+        if (error) *error = "timer strategy not supported";
+        return {};
+    }
+
+    if (error) *error = "unknown strategy type";
+    return {};
+}
+
+bool parseSceneSetData(const QJsonObject &obj,
+                       core::AutoStrategy &out,
+                       QString *error)
+{
+    if (!parseAutoStrategyFromJson(obj, out, error))
+        return false;
+
+    out.type = "scene";
+    return true;
+}
+
+
+QList<core::AutoStrategy> parseSceneSyncData(const QJsonObject &obj)
+{
+    QList<core::AutoStrategy> list;
+
+    const int code = obj.value("code").toInt(-1);
+    if (code != 0) {
+        LOG_WARNING(kLogSource, "scene sync code != 0");
+        return list;
+    }
+
+    const QJsonArray arr = obj.value("result").toArray();
+    for (const auto &v : arr) {
+        if (!v.isObject())
+            continue;
+
+        core::AutoStrategy s;
+        if (parseAutoStrategyFromJson(v.toObject(), s)) {
+            s.type = "scene";
+            list.append(s);
+        }
+    }
+
+    return list;
+}
+
+bool parseTimerSetData(const QJsonObject &obj,
+                       core::AutoStrategy &out,
+                       QString *error)
+{
+    // 先复用 scene
+    if (!parseAutoStrategyFromJson(obj, out, error))
+        return false;
+
+    out.type = "timer";
+
+    // @TODO:
+
+    return true;
+}
+
+QList<core::AutoStrategy> parseTimerSyncData(const QJsonObject &obj)
+{
+    QList<core::AutoStrategy> list;
+
+    const QJsonArray arr = obj.value("result").toArray();
+    for (const auto &v : arr) {
+        if (!v.isObject())
+            continue;
+
+        core::AutoStrategy s;
+        if (parseAutoStrategyFromJson(v.toObject(), s)) {
+            s.type = "timer";
+            list.append(s);
+        }
+    }
+
+    return list;
+}
+
+
+bool parseDeleteCommand(const QString &type,
+                        const QJsonValue &data,
+                        QList<int> &sceneIds,
+                        QString *error)
+{
+    sceneIds.clear();
+
+    if (type != "scene" && type != "timer") {
+        if (error) *error = "unsupported strategy type";
+        return false;
+    }
+
+    if (data.isDouble()) {
+        int id = data.toInt();
+        if (id <= 0) {
+            if (error) *error = "invalid strategy id";
+            return false;
+        }
+        sceneIds.append(id);
+        return true;
+    }
+
+    // @TODO ARRAY
+
+    if (error) *error = "invalid delete data format";
+    return false;
+}
+
 
 }
 }

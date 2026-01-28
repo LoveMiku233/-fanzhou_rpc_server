@@ -102,6 +102,10 @@ public:
      */
     void disconnectAll();
 
+
+    void setChannelType(int channelId, CloudTypeId type);
+    CloudTypeId getChannelType(int channelId);
+
     /**
      * @brief 向指定通道发布消息
      * @param channelId 通道ID

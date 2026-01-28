@@ -13,6 +13,7 @@
 
 #include "cloud/mqtt/mqtt_channel_manager.h"
 #include "cloud/fanzhoucloud/parser.h"
+#include "cloud/cloud_types.h"
 #include "comm/can/can_comm.h"
 #include "utils/system_monitor.h"
 #include "utils/system_settings.h"
@@ -1585,6 +1586,7 @@ void RpcRegistry::registerAuto()
                                  [this](const QJsonObject &params) {
             core::AutoStrategy s;
             QString err;
+            bool isUpdate = false;
 
             // 解析 JSON -> AutoStrategy
             if (!cloud::fanzhoucloud::parseAutoStrategyFromJson(params, s, &err)) {
@@ -1592,7 +1594,7 @@ void RpcRegistry::registerAuto()
             }
 
             // 创建策略
-            if (!context_->createStrategy(s, &err)) {
+            if (!context_->createStrategy(s, &isUpdate, &err)) {
                 return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, err);
             }
 
@@ -2051,6 +2053,7 @@ void RpcRegistry::registerMqtt()
 
         qint32 channelId = 0;
         QString name, broker, clientId, username, password, topicPrefix;
+        int type = 0;
         qint32 port = 1883;
         bool enabled = true;
         qint32 keepAliveSec = 60;
@@ -2065,8 +2068,10 @@ void RpcRegistry::registerMqtt()
             return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing broker"));
         }
 
+
         rpc::RpcHelpers::getString(params, "name", name);
         rpc::RpcHelpers::getI32(params, "port", port);
+        rpc::RpcHelpers::getI32(params, "type", type);
         rpc::RpcHelpers::getString(params, "clientId", clientId);
         rpc::RpcHelpers::getString(params, "username", username);
         rpc::RpcHelpers::getString(params, "password", password);
@@ -2078,6 +2083,7 @@ void RpcRegistry::registerMqtt()
         rpc::RpcHelpers::getI32(params, "qos", qos);
 
         MqttChannelConfig config;
+        config.type = static_cast<cloud::CloudTypeId>(type);
         config.channelId = channelId;
         config.name = name.isEmpty() ? QStringLiteral("mqtt-%1").arg(channelId) : name;
         config.enabled = enabled;

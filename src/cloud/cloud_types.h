@@ -27,6 +27,7 @@ enum class CloudTypeId : int {
     Unknown = 0,
     FanzhouCloudMqtt = 1,    ///< 泛舟云平台 (MQTT协议)
     // 可扩展其他云平台类型
+    MAX
 };
 
 /**
@@ -75,7 +76,7 @@ inline const char* cloudCommTypeToString(CloudCommTypeId type)
  * @param seed 哈希种子
  * @return 哈希值
  *
- * 注意：此函数必须定义在全局命名空间中才能被Qt的QHash正确发现。
+ *
  */
 inline uint qHash(fanzhou::cloud::CloudTypeId key, uint seed = 0) noexcept
 {

@@ -4,6 +4,7 @@
 #include <QString>
 #include <QList>
 #include <QJsonObject>
+#include "cloud/cloud_types.h"
 
 namespace fanzhou {
 namespace core {
@@ -14,6 +15,7 @@ namespace core {
  * 支持多MQTT通道连接
  */
 struct MqttChannelConfig {
+    cloud::CloudTypeId type = cloud::CloudTypeId::Unknown;
     int channelId = 0;              ///< 通道ID
     QString name;                    ///< 通道名称
     bool enabled = true;             ///< 是否启用

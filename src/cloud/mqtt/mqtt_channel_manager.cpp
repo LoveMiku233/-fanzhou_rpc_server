@@ -146,6 +146,23 @@ bool MqttChannelManager::updateChannel(const core::MqttChannelConfig &config, QS
     return true;
 }
 
+
+void MqttChannelManager::setChannelType(int channelId, CloudTypeId type)
+{
+    if (!channels_.contains(channelId)) {
+        return;
+    }
+    channels_[channelId].client->setCloudType(type);
+}
+
+CloudTypeId MqttChannelManager::getChannelType(int channelId)
+{
+    if (!channels_.contains(channelId)) {
+        return CloudTypeId::Unknown;
+    }
+    return channels_[channelId].client->getCloudType();
+}
+
 bool MqttChannelManager::connectChannel(int channelId)
 {
     if (!channels_.contains(channelId)) {

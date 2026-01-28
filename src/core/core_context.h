@@ -248,6 +248,7 @@ public:
     bool removeDevice(quint8 nodeId, QString *error = nullptr);
     QList<DeviceConfig> listDevices() const;
     DeviceConfig getDeviceConfig(quint8 nodeId) const;
+    bool checkActionValid(const AutoStrategy &arr, QString *errMsg);
 
     // 屏幕配置管理
     ScreenConfig getScreenConfig() const;
@@ -312,7 +313,7 @@ public:
     QList<AutoStrategyState> strategyStates() const;
     bool setStrategyEnabled(int strategyId, bool enabled);
     bool triggerStrategy(int strategyId);
-    bool createStrategy(const AutoStrategy &config, QString *error = nullptr);
+    bool createStrategy(const AutoStrategy &config, bool *isUpdate, QString *error = nullptr);
     bool deleteStrategy(int strategyId, QString *error = nullptr);
     //
     bool isInEffectiveTime(const AutoStrategy &s, const QTime &now) const;
