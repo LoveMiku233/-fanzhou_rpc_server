@@ -73,6 +73,7 @@ bool CoreConfig::loadMqttChannels(const QJsonObject &root)
             const auto obj = value.toObject();
 
             MqttChannelConfig mqtt;
+            mqtt.type = static_cast<cloud::CloudTypeId>(obj.value(QStringLiteral("type")).toInt(0));
             mqtt.channelId = obj.value(QStringLiteral("channelId")).toInt(0);
             mqtt.name = obj.value(QStringLiteral("name")).toString();
             mqtt.enabled = obj.value(QStringLiteral("enabled")).toBool(true);
@@ -149,6 +150,7 @@ void CoreConfig::saveMqttChannels(QJsonObject &root) const
     QJsonArray mqttArr;
     for (const auto &mqtt : mqttChannels) {
         QJsonObject obj;
+        obj[QStringLiteral("type")] = static_cast<int>(mqtt.type);
         obj[QStringLiteral("channelId")] = mqtt.channelId;
         obj[QStringLiteral("name")] = mqtt.name;
         obj[QStringLiteral("enabled")] = mqtt.enabled;

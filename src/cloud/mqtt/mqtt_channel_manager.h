@@ -14,9 +14,12 @@
 #include <QList>
 #include <QObject>
 #include <QString>
+#include <QTimer>
+
 #include <cloud/cloud_types.h>
 #include <cloud/cloud_platform.h>
 #include "core/core_config.h"
+
 
 namespace fanzhou {
 namespace cloud {
@@ -101,6 +104,10 @@ public:
      * @brief 断开所有通道
      */
     void disconnectAll();
+
+
+    void sendGetScene(int ch);
+    void trySyncSceneIfNeeded();
 
 
     void setChannelType(int channelId, CloudTypeId type);
@@ -222,9 +229,11 @@ private:
         MqttClient *client = nullptr;
         MqttChannelStatus status;
         CloudPlatform *platform = nullptr;   ///< platform
+        bool needSyncScene = true;
     };
 
     QHash<int, ChannelData> channels_;
+    QTimer *syncTimer_ = nullptr;
     int nextChannelId_ = 1;
 
     QString buildFullTopic(const QString &prefix, const QString &topic) const;

@@ -24,6 +24,14 @@ int toInt(device::CommTypeId type)
     return static_cast<int>(type);
 }
 
+static SensorSource sensorSourceFromString(const QString &s)
+{
+    if (s == "mqtt")  return SensorSource::Mqtt;
+    return SensorSource::Local;
+}
+
+
+
 bool CoreConfig::loadDevices(const QJsonObject &root)
 {
     devices.clear();
@@ -54,6 +62,41 @@ bool CoreConfig::loadDevices(const QJsonObject &root)
     }
     return true;
 }
+
+bool CoreConfig::loadSensors(const QJsonObject &root)
+{
+    sensors.clear();
+
+    if (!root.contains("sensors") || !root["sensors"].isArray())
+        return true; // 允许没有传感器
+
+    const auto arr = root["sensors"].toArray();
+    for (const auto &v : arr) {
+        if (!v.isObject()) continue;
+        const auto obj = v.toObject();
+
+        SensorNodeConfig cfg;
+        cfg.sensorId = obj.value("sensorId").toString();
+        cfg.name     = obj.value("name").toString();
+        cfg.source   = sensorSourceFromString(obj.value("source").toString());
+        cfg.enabled  = obj.value("enabled").toBool(true);
+        cfg.unit     = obj.value("unit").toString();
+
+        if (cfg.source == SensorSource::Mqtt) {
+            cfg.mqttChannelId = obj.value("mqttChannelId").toInt(-1);
+            cfg.topic         = obj.value("topic").toString();
+            cfg.jsonPath      = obj.value("jsonPath").toString();
+        } else {
+            cfg.nodeId  = obj.value("nodeId").toInt(-1);
+            cfg.channel = obj.value("channel").toInt(-1);
+        }
+
+        sensors.append(cfg);
+    }
+
+    return true;
+}
+
 
 bool CoreConfig::loadGroups(const QJsonObject &root)
 {
@@ -115,6 +158,34 @@ void CoreConfig::saveDevices(QJsonObject &root) const
         devArr.append(obj);
     }
     root[QStringLiteral("devices")] = devArr;
+}
+
+void CoreConfig::saveSensors(QJsonObject &root) const
+{
+    QJsonArray arr;
+
+    for (const auto &cfg : sensors) {
+        QJsonObject obj;
+        obj["sensorId"] = cfg.sensorId;
+        obj["name"]     = cfg.name;
+        obj["enabled"]  = cfg.enabled;
+        obj["unit"]     = cfg.unit;
+        obj["source"]   = (cfg.source == SensorSource::Mqtt ? "mqtt" : "local");
+
+        if (cfg.source == SensorSource::Mqtt) {
+            obj["mqttChannelId"] = cfg.mqttChannelId;
+            obj["jsonPath"]      = cfg.jsonPath;
+            if (!cfg.topic.isEmpty())
+                obj["topic"] = cfg.topic;
+        } else {
+            obj["nodeId"]  = cfg.nodeId;
+            obj["channel"] = cfg.channel;
+        }
+
+        arr.append(obj);
+    }
+
+    root["sensors"] = arr;
 }
 
 void CoreConfig::saveGroups(QJsonObject &root) const

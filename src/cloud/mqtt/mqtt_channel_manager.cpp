@@ -24,6 +24,11 @@ const char *const kLogSource = "MqttChannelManager";
 MqttChannelManager::MqttChannelManager(QObject *parent)
     : QObject(parent)
 {
+    syncTimer_ = new QTimer(this);
+    syncTimer_->setInterval(10000);
+    connect(syncTimer_, &QTimer::timeout,
+            this, &MqttChannelManager::trySyncSceneIfNeeded);
+    syncTimer_->start();
 }
 
 MqttChannelManager::~MqttChannelManager()
@@ -35,6 +40,7 @@ MqttChannelManager::~MqttChannelManager()
         }
     }
     channels_.clear();
+    syncTimer_->stop();
 }
 
 bool MqttChannelManager::addChannel(const core::MqttChannelConfig &config, QString *error)
@@ -76,7 +82,8 @@ bool MqttChannelManager::addChannel(const core::MqttChannelConfig &config, QStri
     channels_.insert(config.channelId, data);
 
     LOG_INFO(kLogSource,
-             QStringLiteral("MQTT channel added: id=%1, name=%2, broker=%3:%4")
+             QStringLiteral("MQTT channel added: type=%1, id=%2, name=%3, broker=%4:%5")
+                 .arg(static_cast<int>(config.type))
                  .arg(config.channelId)
                  .arg(config.name)
                  .arg(config.broker)
@@ -222,6 +229,78 @@ void MqttChannelManager::disconnectAll()
 {
     for (auto it = channels_.begin(); it != channels_.end(); ++it) {
         disconnectChannel(it.key());
+    }
+}
+
+void MqttChannelManager::sendGetScene(int channelId)
+{
+    if (!channels_.contains(channelId)) {
+        LOG_WARNING(kLogSource,
+                    QStringLiteral("sendGetScene failed: channel %1 not found")
+                    .arg(channelId));
+        return;
+    }
+
+    auto &ch = channels_[channelId];
+
+    if (!ch.status.connected) {
+        LOG_DEBUG(kLogSource,
+                  QStringLiteral("sendGetScene skip: channel %1 not connected")
+                  .arg(channelId));
+        return;
+    }
+
+    // ===== 1. 构造请求 =====
+    QJsonObject req;
+    QJsonObject data;
+
+    req["method"] = QStringLiteral("get");
+    req["type"]   = QStringLiteral("scene");
+
+    // id = 0 -> 获取所有场景
+    data["id"] = 0;
+    req["data"] = data;
+
+    // req_yyyyMMddHHmmssSSS
+    req["requestId"] = QStringLiteral("req_%1")
+            .arg(QDateTime::currentDateTime()
+                 .toString("yyyyMMddHHmmsszzz"));
+
+    req["timestamp"] = QDateTime::currentMSecsSinceEpoch();
+
+    const QByteArray payload =
+            QJsonDocument(req).toJson(QJsonDocument::Compact);
+
+    // ===== 2. 日志 =====
+    LOG_INFO(kLogSource,
+             QStringLiteral("send get scene: channel=%1 topic=%2 payload=%3")
+             .arg(channelId)
+             .arg(ch.config.topicSettingPub)
+             .arg(QString::fromUtf8(payload)));
+
+    // ===== 3. 发送 =====
+    const bool ok = publishSetting(channelId, payload, ch.config.qos);
+
+    if (!ok) {
+        LOG_WARNING(kLogSource,
+                    QStringLiteral("sendGetScene publish failed: channel=%1")
+                    .arg(channelId));
+    }
+}
+
+void MqttChannelManager::trySyncSceneIfNeeded()
+{
+    for (auto it = channels_.begin(); it != channels_.end(); ++it) {
+        auto &ch = it.value();
+
+        if (!ch.status.connected)
+            continue;
+
+        if (!ch.needSyncScene)
+            continue;
+
+        sendGetScene(it.key());
+        ch.needSyncScene = false;
     }
 }
 
@@ -583,6 +662,40 @@ void MqttChannelManager::onClientConnected()
     subscribeControl(channelId, 1);
     subscribeStrategy(channelId, 1);
     subscribeSetting(channelId, 1);
+
+    if (client->getCloudType() == CloudTypeId::FanzhouCloudMqtt) {
+        data.needSyncScene = true;
+    }
+
+
+//    if (client->getCloudType() == CloudTypeId::FanzhouCloudMqtt) {
+
+//        QJsonObject req;
+//        QJsonObject data;
+
+//        req["method"] = QStringLiteral("get");
+//        req["type"]   = QStringLiteral("scene");
+
+//        // id = 0 -> 获取所有场景
+//        data["id"] = 0;
+//        req["data"] = data;
+
+//        req["requestId"] = QStringLiteral("req_%1")
+//                .arg(QDateTime::currentDateTime()
+//                     .toString("yyyyMMddHHmmsszzz"));
+
+//        req["timestamp"] = QDateTime::currentMSecsSinceEpoch();
+
+//        const QByteArray payload =
+//            QJsonDocument(req).toJson(QJsonDocument::Compact);
+
+//        LOG_INFO(kLogSource,
+//                 QStringLiteral("send get scene request: %1")
+//                     .arg(QString::fromUtf8(payload)));
+
+//        publishSetting(channelId, payload, 0);
+//    }
+
 
     LOG_INFO(kLogSource,
              QStringLiteral("MQTT channel %1 connected to %2:%3")

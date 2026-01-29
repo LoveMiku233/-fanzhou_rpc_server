@@ -32,6 +32,8 @@ bool writeTextFile(const QString &path, const QByteArray &data, QString *error)
     return true;
 }
 
+
+
 }  // namespace
 
 CoreConfig CoreConfig::makeDefault()
@@ -102,6 +104,7 @@ bool CoreConfig::loadFromFile(const QString &path, QString *error)
     loadCloudUpload(root);
     loadStrategies(root);
     loadMqttChannels(root);
+    loadSensors(root);
 
     return true;
 }
@@ -119,6 +122,7 @@ bool CoreConfig::saveToFile(const QString &path, QString *error) const
     saveCloudUpload(root);
     saveStrategies(root);
     saveMqttChannels(root);
+    saveSensors(root);
 
     QJsonDocument doc(root);
     const QByteArray data = doc.toJson(QJsonDocument::Indented);

@@ -413,6 +413,7 @@ bool CloudMessageHandler::handleControlCommand(const int channelId, const QJsonO
         LOG_WARNING(kLogSource,
                     QStringLiteral("No valid control command found in payload: %1")
                         .arg(QString::fromUtf8(QJsonDocument(msg).toJson(QJsonDocument::Compact))));
+        ctx_->onMqttSensorMessage(channelId, "", msg);
     } else {
         LOG_INFO(kLogSource,
                  QStringLiteral("Handled the %1 cloud %2 control commands").arg(channelId).arg(successCount));

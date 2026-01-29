@@ -53,6 +53,19 @@ enum class DeviceTypeId : int {
     SensorUartPm25 = 83,        ///< PM2.5传感器 (UART)
 };
 
+
+/**
+ * @brief 传感器数据来源
+ *
+ * 注意：
+ * - 本地设备：有 nodeId / channel
+ * - MQTT：无物理设备（虚拟传感器）
+ */
+enum class SensorSourceType : int {
+    LocalDevice = 1,   ///< 本地设备采集（CAN / Modbus / UART）
+    Mqtt = 2,          ///< MQTT 接收的虚拟传感器
+};
+
 /**
  * @brief 通信类型标识符
  */
@@ -230,6 +243,14 @@ struct DeviceTypeInfo {
     CommTypeId defaultCommType;  ///< 默认通信类型
 };
 
+
+struct SensorSourceInfo {
+    SensorSourceType id;
+    const char* name;
+    const char* description;
+    const char* last_update;
+};
+
 /**
  * @brief 通信类型信息结构
  */
@@ -283,6 +304,16 @@ inline const DeviceTypeInfo* allDeviceTypes(int &count)
     };
     count = sizeof(types) / sizeof(types[0]);
     return types;
+}
+
+inline const SensorSourceInfo* allSensorSources(int& count)
+{
+    static const SensorSourceInfo sources[] = {
+        {SensorSourceType::LocalDevice, "LocalDevice", "本地设备采集"},
+        {SensorSourceType::Mqtt, "Mqtt", "MQTT 虚拟传感器"},
+    };
+    count = sizeof(sources) / sizeof(sources[0]);
+    return sources;
 }
 
 /**

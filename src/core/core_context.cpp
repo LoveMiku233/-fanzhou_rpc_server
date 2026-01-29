@@ -171,6 +171,34 @@ bool CoreContext::initDevices()
     LOG_DEBUG(kLogSource, QStringLiteral("Initializing devices from config..."));
     relays.clear();
 
+    sensorConfigs.clear();
+    for (const auto &cfg : coreConfig.sensors) {
+
+        // 防御性校验（非常重要）
+        if (cfg.sensorId.isEmpty()) {
+            LOG_WARNING(kLogSource, "skip sensor: empty sensorId");
+            continue;
+        }
+
+        if (cfg.source == SensorSource::Mqtt) {
+            if (cfg.mqttChannelId < 0 || cfg.jsonPath.isEmpty()) {
+                LOG_WARNING(kLogSource,
+                         QStringLiteral("skip mqtt sensor %1: invalid channel or jsonPath")
+                         .arg(cfg.sensorId));
+                continue;
+            }
+        }
+
+        sensorConfigs.insert(cfg.sensorId, cfg);
+
+        LOG_INFO(kLogSource,
+                 QStringLiteral("load sensor ok: id=%1 source=%2 ch=%3 path=%4")
+                 .arg(cfg.sensorId)
+                 .arg(int(cfg.source))
+                 .arg(cfg.mqttChannelId)
+                 .arg(cfg.jsonPath));
+    }
+
     if (!coreConfig.devices.isEmpty()) {
         LOG_INFO(kLogSource,
                  QStringLiteral("Found %1 devices in config").arg(coreConfig.devices.size()));
@@ -295,14 +323,12 @@ bool CoreContext::initStrategy()
 
 bool CoreContext::initMqtt()
 {
-
     // 初始化MQTT多通道管理器
     mqttManager = new cloud::MqttChannelManager(this);
     // 加载MQTT通道配置
     for (const auto &mqttConfig : coreConfig.mqttChannels) {
         MqttChannelConfig cloudConfig;
-        // cloudConfig.type = mqttConfig.type;
-        cloudConfig.type = cloud::CloudTypeId::FanzhouCloudMqtt;
+        cloudConfig.type = mqttConfig.type;
         cloudConfig.channelId = mqttConfig.channelId;
         cloudConfig.name = mqttConfig.name;
         cloudConfig.enabled = mqttConfig.enabled;
@@ -384,23 +410,43 @@ void CoreContext::initQueue()
 
 bool CoreContext::isInEffectiveTime(const AutoStrategy &s, const QTime &now) const
 {
-    if (s.effectiveBeginTime.isEmpty() || s.effectiveEndTime.isEmpty())
-            return true;
+    if (s.effectiveBeginTime.isEmpty() || s.effectiveEndTime.isEmpty()) {
+        LOG_DEBUG(kLogSource,
+                  QStringLiteral("strategy[%1] no effective time limit")
+                      .arg(s.strategyId));
+        return true;
+    }
 
     QTime begin = QTime::fromString(s.effectiveBeginTime, "HH:mm");
     QTime end   = QTime::fromString(s.effectiveEndTime,   "HH:mm");
 
-    if (!begin.isValid() || !end.isValid())
-            return true;
-
-    if (begin <= end) {
-       return (now >= begin && now <= end);
-    } else {
-       return (now >= begin || now <= end);
+    if (!begin.isValid() || !end.isValid()) {
+        LOG_WARNING(kLogSource,
+                    QStringLiteral("strategy[%1] invalid effective time: %2 ~ %3")
+                        .arg(s.strategyId)
+                        .arg(s.effectiveBeginTime)
+                        .arg(s.effectiveEndTime));
+        return true;
     }
 
-    return true;
+    bool inRange = false;
+    if (begin <= end) {
+        inRange = (now >= begin && now <= end);
+    } else {
+        inRange = (now >= begin || now <= end);
+    }
+
+    LOG_DEBUG(kLogSource,
+              QStringLiteral("strategy[%1] time check: now=%2 range=%3~%4 result=%5")
+                  .arg(s.strategyId)
+                  .arg(now.toString("HH:mm"))
+                  .arg(begin.toString("HH:mm"))
+                  .arg(end.toString("HH:mm"))
+                  .arg(inRange));
+
+    return inRange;
 }
+
 
 void CoreContext::executeActions(const QList<StrategyAction> &actions)
 {
@@ -409,21 +455,68 @@ void CoreContext::executeActions(const QList<StrategyAction> &actions)
 //    }
 }
 
-bool CoreContext::evaluateConditions(const QList<StrategyCondition> &conditions, qint8 matchType)
+bool CoreContext::evaluateConditions(const QList<StrategyCondition> &conditions,
+                                     qint8 matchType)
 {
-    if (conditions.isEmpty()) return true;
-
-    for (auto c : conditions) {
-        // double value = readSensorValue();
-        double value = 999.0f;
-        bool ok = evaluateSensorCondition(c.op, value, c.identifierValue);
-
-        if (matchType == 0 && !ok) return false;
-        if (matchType == 1 && ok) return true;
+    if (conditions.isEmpty()) {
+        LOG_DEBUG(kLogSource, "evaluateConditions: no conditions, auto pass");
+        return true;
     }
-    // fix bug
+
+    bool hasValidCondition = false;
+
+    LOG_DEBUG(kLogSource,
+              QStringLiteral("evaluateConditions: matchType=%1, condCount=%2")
+                  .arg(matchType)
+                  .arg(conditions.size()));
+
+    for (const auto &c : conditions) {
+
+        // 1. 传感器是否存在
+        if (!sensorValues.contains(c.identifier)) {
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("condition sensor not found, skip: %1")
+                            .arg(c.identifier));
+            continue;   // ❗ OR / AND 都应该跳过
+        }
+
+        bool ok1 = false;
+        const double value = sensorValues.value(c.identifier).toDouble(&ok1);
+        if (!ok1) {
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("invalid sensor value, skip: %1")
+                            .arg(c.identifier));
+            continue;
+        }
+
+        hasValidCondition = true;
+
+        const bool ok = evaluateSensorCondition(c.op, value, c.identifierValue);
+
+        if (matchType == 0) { // AND
+            if (!ok) {
+                LOG_DEBUG(kLogSource, "AND mode -> one condition failed");
+                return false;
+            }
+        } else { // OR
+            if (ok) {
+                LOG_DEBUG(kLogSource, "OR mode -> one condition matched");
+                return true;
+            }
+        }
+    }
+
+    // 如果没有任何“有效条件”
+    if (!hasValidCondition) {
+        LOG_WARNING(kLogSource, "no valid conditions evaluated");
+        return false;
+    }
+
+    // AND：所有有效条件都通过
+    // OR ：没有任何条件命中
     return (matchType == 0);
 }
+
 
 
 void CoreContext::evaluateAllStrategies()
@@ -436,7 +529,7 @@ void CoreContext::evaluateAllStrategies()
         if (!isInEffectiveTime(s, now.time()))   // not within the effective time
             continue;
         if (s.lastTriggered.isValid()) {
-            if (isInEffectiveTime(s, s.lastTriggered.time()))
+            if (s.lastTriggered.msecsTo(now) < 10000)
                 continue;
         }
 
@@ -459,6 +552,7 @@ void CoreContext::evaluateAllStrategies()
 //                    static_cast<device::RelayProtocol::Action>(a.identifierValue),
 //                    reason
 //                    );
+
     }
 }
 
@@ -562,15 +656,22 @@ bool CoreContext::deleteStrategy(int strategyId, QString *error)
 }
 
 
-bool CoreContext::evaluateSensorCondition(const QString &condition, double value, double threshold) const
+bool CoreContext::evaluateSensorCondition(const QString &op,
+                                          double value,
+                                          double threshold) const
 {
-    if (condition == QStringLiteral("gt")) return value > threshold;
-    if (condition == QStringLiteral("lt")) return value < threshold;
-    if (condition == QStringLiteral("eq")) return qAbs(value - threshold) < kFloatCompareEpsilon;
-    if (condition == QStringLiteral("gte")) return value >= threshold;
-    if (condition == QStringLiteral("lte")) return value <= threshold;
+    if (op == "gt")   return value > threshold;
+    if (op == "lt")   return value < threshold;
+    if (op == "eq")   return qAbs(value - threshold) < kFloatCompareEpsilon;
+    if (op == "ne")   return qAbs(value - threshold) >= kFloatCompareEpsilon;
+    if (op == "egt")  return value >= threshold;
+    if (op == "elt")  return value <= threshold;
+
+    LOG_WARNING(kLogSource,
+                QStringLiteral("unknown condition op: %1").arg(op));
     return false;
 }
+
 
 
 
@@ -1307,6 +1408,92 @@ bool CoreContext::checkActionValid(const AutoStrategy &arr, QString *errMsg)
 }
 
 
+void CoreContext::onLocalSensorReport(int nodeId, int channel, double rawValue)
+{
+    for (auto it = sensorConfigs.begin(); it != sensorConfigs.end(); ++it) {
+        const auto &cfg = it.value();
+
+        if (cfg.source != SensorSource::Local)
+            continue;
+
+        if (cfg.nodeId == nodeId && cfg.channel == channel) {
+            const double value = rawValue * cfg.scale + cfg.offset;
+
+            sensorValues[cfg.sensorId] = value;
+            sensorUpdateTime[cfg.sensorId] = QDateTime::currentDateTime();
+
+            LOG_DEBUG(kLogSource,
+                      QStringLiteral("local sensor update: %1 node=%2 ch=%3 raw=%4 value=%5")
+                          .arg(cfg.sensorId)
+                          .arg(nodeId)
+                          .arg(channel)
+                          .arg(rawValue)
+                          .arg(value));
+        }
+    }
+}
+
+void CoreContext::onMqttSensorMessage(const int channelId,
+                                      const QString &topic,
+                                      const QJsonObject &payload)
+{
+    const QDateTime now = QDateTime::currentDateTime();
+
+    LOG_DEBUG(kLogSource,
+              QStringLiteral("mqtt sensor message: ch=%1 topic=%2 payload=%3")
+                  .arg(channelId)
+                  .arg(topic)
+                  .arg(QString(QJsonDocument(payload).toJson(QJsonDocument::Compact))));
+
+
+    for (auto it = sensorConfigs.begin(); it != sensorConfigs.end(); ++it) {
+        const SensorNodeConfig &cfg = it.value();
+        LOG_DEBUG(kLogSource,
+            QStringLiteral("check sensor cfg: id=%1 source=%2 ch=%3 jsonPath=%4")
+                .arg(cfg.sensorId)
+                .arg(int(cfg.source))
+                .arg(cfg.mqttChannelId)
+                .arg(cfg.jsonPath));
+
+        if (cfg.source != SensorSource::Mqtt)
+            continue;
+
+        if (cfg.mqttChannelId != channelId)
+            continue;
+
+        QJsonValue v(payload);
+        const QStringList keys = cfg.jsonPath.split('.');
+
+        for (const QString &key : keys) {
+            if (key.isEmpty())
+                continue;
+
+            if (!v.isObject()) {
+                v = QJsonValue();
+                break;
+            }
+            v = v.toObject().value(key);
+        }
+
+        if (v.isUndefined() || v.isNull()) {
+            LOG_DEBUG(kLogSource,
+                      QStringLiteral("mqtt sensor [%1] jsonPath not found: %2")
+                          .arg(cfg.sensorId)
+                          .arg(cfg.jsonPath));
+            continue;
+        }
+
+        sensorValues[cfg.sensorId] = v.toVariant();
+        sensorUpdateTime[cfg.sensorId] = now;
+
+        LOG_DEBUG(kLogSource,
+                  QStringLiteral("mqtt sensor update: %1 value=%2")
+                      .arg(cfg.sensorId)
+                      .arg(v.toVariant().toString()));
+    }
+}
+
+
 
 ScreenConfig CoreContext::getScreenConfig() const
 {
@@ -1391,6 +1578,12 @@ bool CoreContext::saveConfig(const QString &path, QString *error)
     
     // 定时策略
     coreConfig.strategies = strategys_;
+
+    // ===== 传感器配置 =====
+    coreConfig.sensors.clear();
+    for (auto it = sensorConfigs.begin(); it != sensorConfigs.end(); ++it) {
+        coreConfig.sensors.append(it.value());
+    }
 
     coreConfig.mqttChannels = mqttManager->allChannelConfigs();
     // 保存到文件

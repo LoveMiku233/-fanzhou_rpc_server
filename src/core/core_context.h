@@ -14,6 +14,7 @@
 #include <QQueue>
 #include <QTimer>
 #include <QDateTime>
+#include <QVariant>
 
 #include "core_config.h"
 #include "device/can/relay_protocol.h"
@@ -180,6 +181,12 @@ public:
 //    QHash<quint8, QList<CloudNodeBinding>> cloud_binding_nodes;
     // 设备注册表：节点ID -> 设备
     QHash<quint8, device::RelayGd427 *> relays;
+
+
+    QHash<QString, SensorNodeConfig> sensorConfigs;   ///< sensorId -> config
+    // 传感器运行时数据
+    QHash<QString, QVariant> sensorValues;            ///< sensorId -> 当前值
+    QHash<QString, QDateTime> sensorUpdateTime;       ///< 最近更新时间
     // 设备分组：分组ID -> 节点ID列表
     QHash<int, QList<quint8>> deviceGroups;
     QHash<int, QString> groupNames;
@@ -249,6 +256,15 @@ public:
     QList<DeviceConfig> listDevices() const;
     DeviceConfig getDeviceConfig(quint8 nodeId) const;
     bool checkActionValid(const AutoStrategy &arr, QString *errMsg);
+
+    void checkCloudSync();
+
+    // local sensor
+    void onLocalSensorReport(int nodeId, int channel, double rawValue);
+    // cloud sensor
+    void onMqttSensorMessage(const int channelId,
+                             const QString &topic,
+                             const QJsonObject &payload);
 
     // 屏幕配置管理
     ScreenConfig getScreenConfig() const;
