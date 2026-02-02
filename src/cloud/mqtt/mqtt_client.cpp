@@ -20,6 +20,9 @@ MqttClient::MqttClient(QObject *parent)
 
     connect(m_client, &QMqttClient::errorChanged,
             this, &MqttClient::onError);
+
+    // 3.1.1
+    setMqttVer(QMqttClient::MQTT_3_1_1);
 }
 
 void MqttClient::setBroker(const QString &host, quint16 port)
@@ -38,6 +41,9 @@ void MqttClient::setCredentials(const QString &username, const QString &password
     }
 }
 
+void MqttClient::setMqttVer(QMqttClient::ProtocolVersion ver) {
+    m_client->setProtocolVersion(ver);
+}
 
 void MqttClient::setCloudType(const CloudTypeId type)
 {

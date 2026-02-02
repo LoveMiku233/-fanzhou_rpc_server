@@ -79,7 +79,12 @@ bool CoreConfig::loadMqttChannels(const QJsonObject &root)
             mqtt.enabled = obj.value(QStringLiteral("enabled")).toBool(true);
             mqtt.broker = obj.value(QStringLiteral("broker")).toString();
             mqtt.port = static_cast<quint16>(obj.value(QStringLiteral("port")).toInt(1883));
+
             mqtt.clientId = obj.value(QStringLiteral("clientId")).toString();
+            if (mqtt.clientId.isEmpty()) {
+                mqtt.clientId = QStringLiteral("fanzhou_%1").arg(mqtt.name);
+            }
+
             mqtt.username = obj.value(QStringLiteral("username")).toString();
             mqtt.password = obj.value(QStringLiteral("password")).toString();
             mqtt.topicPrefix = obj.value(QStringLiteral("topicPrefix")).toString();

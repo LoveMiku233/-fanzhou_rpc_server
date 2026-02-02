@@ -194,10 +194,11 @@ bool MqttChannelManager::connectChannel(int channelId)
     data.client->setKeepAlive(data.config.keepAliveSec);
 
     LOG_INFO(kLogSource,
-             QStringLiteral("Connecting MQTT channel %1 to %2:%3...")
+             QStringLiteral("Connecting MQTT channel %1 to %2:%3... UserName: %4")
                  .arg(channelId)
                  .arg(data.config.broker)
-                 .arg(data.config.port));
+                 .arg(data.config.port)
+                 .arg(data.config.username));
 
     data.client->connectToBroker();
     return true;
