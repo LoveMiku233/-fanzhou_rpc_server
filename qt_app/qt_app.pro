@@ -26,6 +26,8 @@ SOURCES += \
     src/device_widget.cpp \
     src/group_widget.cpp \
     src/strategy_widget.cpp \
+    src/strategy_dialog.cpp \
+    src/sensor_widget.cpp \
     src/connection_dialog.cpp \
     src/connection_widget.cpp \
     src/relay_control_widget.cpp \
@@ -40,6 +42,8 @@ HEADERS += \
     src/device_widget.h \
     src/group_widget.h \
     src/strategy_widget.h \
+    src/strategy_dialog.h \
+    src/sensor_widget.h \
     src/connection_dialog.h \
     src/connection_widget.h \
     src/relay_control_widget.h \

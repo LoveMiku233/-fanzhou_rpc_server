@@ -477,7 +477,7 @@ void SettingsWidget::setupUi()
     sysOpLayout->setContentsMargins(10, 14, 10, 10);
 
     QLabel *warningLabel = new QLabel(
-        QStringLiteral("⚠️ 以下操作需要管理员权限，请谨慎使用"), systemTab);
+        QStringLiteral("[警] 以下操作需要管理员权限，请谨慎使用"), systemTab);
     warningLabel->setStyleSheet(QStringLiteral(
         "color: #856404; font-size: 12px; padding: 8px; "
         "background-color: #fff3cd; border-radius: 6px;"));
@@ -485,13 +485,13 @@ void SettingsWidget::setupUi()
 
     QHBoxLayout *sysOpBtnLayout = new QHBoxLayout();
     
-    QPushButton *rebootBtn = new QPushButton(QStringLiteral("🔄 重启系统"), systemTab);
+    QPushButton *rebootBtn = new QPushButton(QStringLiteral("[刷] 重启系统"), systemTab);
     rebootBtn->setProperty("type", QStringLiteral("warning"));
     rebootBtn->setMinimumHeight(44);
     connect(rebootBtn, &QPushButton::clicked, this, &SettingsWidget::onRebootSystem);
     sysOpBtnLayout->addWidget(rebootBtn);
 
-    QPushButton *shutdownBtn = new QPushButton(QStringLiteral("⏻ 关闭系统"), systemTab);
+    QPushButton *shutdownBtn = new QPushButton(QStringLiteral("[关] 关闭系统"), systemTab);
     shutdownBtn->setProperty("type", QStringLiteral("danger"));
     shutdownBtn->setMinimumHeight(44);
     connect(shutdownBtn, &QPushButton::clicked, this, &SettingsWidget::onShutdownSystem);
@@ -1002,7 +1002,7 @@ void SettingsWidget::onShutdownSystem()
 
     QMessageBox::StandardButton reply = QMessageBox::critical(this,
         QStringLiteral("确认关机"),
-        QStringLiteral("确定要关闭系统吗？\n\n⚠️ 关机后需要手动重新上电才能启动设备！"),
+        QStringLiteral("确定要关闭系统吗？\n\n[警] 关机后需要手动重新上电才能启动设备！"),
         QMessageBox::Yes | QMessageBox::No);
 
     if (reply != QMessageBox::Yes) return;

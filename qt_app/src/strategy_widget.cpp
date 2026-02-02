@@ -1,12 +1,15 @@
 /**
  * @file strategy_widget.cpp
- * @brief 策略管理页面实现 - 卡片式布局
+ * @brief 策略管理页面实现 - 卡片式布局（美化版）
  * 
  * 使用卡片式显示策略，参考Web端设计
  */
 
 #include "strategy_widget.h"
 #include "rpc_client.h"
+#include "strategy_dialog.h"
+
+#include <QScroller>
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -22,6 +25,13 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QMouseEvent>
+#include <QListWidget>
+#include <QStackedWidget>
+#include <QTextEdit>
+#include <QDateTimeEdit>
+#include <QPainter>
+#include <QPropertyAnimation>
+#include <QGraphicsDropShadowEffect>
 
 // ==================== StrategyCard Implementation ====================
 
@@ -32,56 +42,129 @@ StrategyCard::StrategyCard(int strategyId, const QString &name,
     , name_(name)
     , type_(type)
     , enabled_(false)
+    , m_hoverScale(1.0)
     , nameLabel_(nullptr)
     , idLabel_(nullptr)
     , typeLabel_(nullptr)
     , descLabel_(nullptr)
     , statusLabel_(nullptr)
     , toggleBtn_(nullptr)
+    , editBtn_(nullptr)
+    , deleteBtn_(nullptr)
+    , m_hoverAnimation(nullptr)
 {
     setupUi();
+    
+    // 设置悬停动画
+    m_hoverAnimation = new QPropertyAnimation(this, "hoverScale", this);
+    m_hoverAnimation->setDuration(150);
+    m_hoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
+    
+    setAttribute(Qt::WA_Hover, true);
+}
+
+StrategyCard::~StrategyCard()
+{
+}
+
+void StrategyCard::setHoverScale(qreal scale)
+{
+    m_hoverScale = scale;
+    updateGeometry();
+}
+
+void StrategyCard::enterEvent(QEvent *event)
+{
+    QFrame::enterEvent(event);
+    startHoverAnimation(1.02);
+    raise();
+}
+
+void StrategyCard::leaveEvent(QEvent *event)
+{
+    QFrame::leaveEvent(event);
+    startHoverAnimation(1.0);
+}
+
+void StrategyCard::startHoverAnimation(qreal endScale)
+{
+    if (m_hoverAnimation) {
+        m_hoverAnimation->stop();
+        m_hoverAnimation->setStartValue(m_hoverScale);
+        m_hoverAnimation->setEndValue(endScale);
+        m_hoverAnimation->start();
+    }
+}
+
+void StrategyCard::paintEvent(QPaintEvent *event)
+{
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+    
+    // 绘制阴影效果
+    if (m_hoverScale > 1.0) {
+        painter.setPen(Qt::NoPen);
+        QColor shadowColor(0, 0, 0, 50);
+        painter.setBrush(shadowColor);
+        QRect shadowRect = rect().adjusted(4, 6, -4, -2);
+        painter.drawRoundedRect(shadowRect, 12, 12);
+    }
+    
+    QFrame::paintEvent(event);
 }
 
 void StrategyCard::setupUi()
 {
     setObjectName(QStringLiteral("strategyCard"));
+    setFrameShape(QFrame::NoFrame);
     setStyleSheet(QStringLiteral(
         "#strategyCard {"
-        "  background-color: white;"
-        "  border: 1px solid #d0d5dd;"
-        "  border-radius: 10px;"
-        "  padding: 12px;"
+        "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);"
+        "  border: 2px solid #e0e0e0;"
+        "  border-radius: 14px;"
         "}"
         "#strategyCard:hover {"
         "  border-color: #3498db;"
-        "  background-color: #f8f9fa;"
+        "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #ebf5fb);"
         "}"));
-    setMinimumHeight(120);
+    setMinimumHeight(160);
+    setMaximumWidth(420);
+    
+    // 阴影效果
+    QGraphicsDropShadowEffect *shadow = new QGraphicsDropShadowEffect(this);
+    shadow->setBlurRadius(12);
+    shadow->setColor(QColor(0, 0, 0, 35));
+    shadow->setOffset(0, 3);
+    setGraphicsEffect(shadow);
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(10, 10, 10, 10);
-    mainLayout->setSpacing(6);
+    mainLayout->setContentsMargins(14, 12, 14, 12);
+    mainLayout->setSpacing(10);
 
     // 顶部行：名称、类型、ID
     QHBoxLayout *topRow = new QHBoxLayout();
+    topRow->setSpacing(8);
     
-    nameLabel_ = new QLabel(QStringLiteral("[T] %1").arg(name_), this);
+    nameLabel_ = new QLabel(QStringLiteral("[策] %1").arg(name_), this);
     nameLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 14px; font-weight: bold; color: #2c3e50;"));
+        "font-size: 16px; font-weight: bold; color: #2c3e50;"));
     topRow->addWidget(nameLabel_);
     
     topRow->addStretch();
     
     typeLabel_ = new QLabel(type_, this);
+    QString typeBg = (type_ == QStringLiteral("AUTO")) ? QStringLiteral("#3498db") : QStringLiteral("#9b59b6");
+    QString typeIcon = (type_ == QStringLiteral("AUTO")) ? QStringLiteral("[自]") : QStringLiteral("[手]");
     typeLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 11px; color: white; background-color: #3498db; "
-        "padding: 2px 6px; border-radius: 4px;"));
+        "font-size: 11px; color: white; background-color: %1; "
+        "padding: 4px 10px; border-radius: 10px; font-weight: bold;").arg(typeBg));
+    typeLabel_->setText(QStringLiteral("%1 %2").arg(typeIcon, type_));
     topRow->addWidget(typeLabel_);
     
-    idLabel_ = new QLabel(QStringLiteral("ID: %1").arg(strategyId_), this);
+    idLabel_ = new QLabel(QStringLiteral("ID:%1").arg(strategyId_), this);
     idLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 11px; color: #7f8c8d; background-color: #ecf0f1; "
-        "padding: 2px 6px; border-radius: 4px; margin-left: 4px;"));
+        "font-size: 12px; color: #7f8c8d; background-color: #ecf0f1; "
+        "padding: 4px 8px; border-radius: 6px; font-weight: 500;"));
     topRow->addWidget(idLabel_);
     
     mainLayout->addLayout(topRow);
@@ -89,47 +172,74 @@ void StrategyCard::setupUi()
     // 描述行
     descLabel_ = new QLabel(QStringLiteral("加载中..."), this);
     descLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 12px; color: #666; padding: 4px; "
-        "background-color: #f8f9fa; border-radius: 4px;"));
+        "font-size: 12px; color: #5d6d7e; padding: 8px; "
+        "background-color: #f8f9fa; border-radius: 8px;"));
     descLabel_->setWordWrap(true);
-    descLabel_->setMinimumHeight(24);
+    descLabel_->setMinimumHeight(50);
     mainLayout->addWidget(descLabel_);
+
+    // 底部分隔线
+    QFrame *line = new QFrame(this);
+    line->setFrameShape(QFrame::HLine);
+    line->setStyleSheet(QStringLiteral("color: #e8e8e8;"));
+    line->setMaximumHeight(1);
+    mainLayout->addWidget(line);
 
     // 状态和操作行
     QHBoxLayout *bottomRow = new QHBoxLayout();
+    bottomRow->setSpacing(8);
     
-    statusLabel_ = new QLabel(QStringLiteral("禁用"), this);
+    statusLabel_ = new QLabel(QStringLiteral("[X] 禁用"), this);
     statusLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 12px; font-weight: bold; color: #e74c3c;"));
+        "font-size: 13px; font-weight: bold; color: #e74c3c; padding: 6px 12px;"
+        "background-color: #fdf2f2; border-radius: 8px;"));
     bottomRow->addWidget(statusLabel_);
     
     bottomRow->addStretch();
     
-    toggleBtn_ = new QPushButton(QStringLiteral("启用"), this);
-    toggleBtn_->setMinimumHeight(28);
-    toggleBtn_->setMinimumWidth(60);
+    toggleBtn_ = new QPushButton(QStringLiteral("[启] 启用"), this);
+    toggleBtn_->setMinimumHeight(36);
+    toggleBtn_->setMinimumWidth(70);
     toggleBtn_->setStyleSheet(QStringLiteral(
-        "background-color: #27ae60; color: white; border: none; border-radius: 4px;"));
+        "QPushButton { background-color: #27ae60; color: white; border: none; "
+        "border-radius: 8px; font-weight: bold; font-size: 12px; padding: 0 16px; }"
+        "QPushButton:hover { background-color: #229954; }"));
     connect(toggleBtn_, &QPushButton::clicked, [this]() {
         emit toggleClicked(strategyId_, !enabled_);
     });
     bottomRow->addWidget(toggleBtn_);
     
-    QPushButton *triggerBtn = new QPushButton(QStringLiteral("触发"), this);
-    triggerBtn->setMinimumHeight(28);
-    triggerBtn->setMinimumWidth(50);
+    QPushButton *triggerBtn = new QPushButton(QStringLiteral("[触] 触发"), this);
+    triggerBtn->setMinimumHeight(36);
+    triggerBtn->setMinimumWidth(60);
     triggerBtn->setStyleSheet(QStringLiteral(
-        "background-color: #3498db; color: white; border: none; border-radius: 4px;"));
+        "QPushButton { background-color: #e74c3c; color: white; border: none; "
+        "border-radius: 8px; font-size: 12px; padding: 0 12px; }"
+        "QPushButton:hover { background-color: #c0392b; }"));
     connect(triggerBtn, &QPushButton::clicked, [this]() {
         emit triggerClicked(strategyId_);
     });
     bottomRow->addWidget(triggerBtn);
     
-    QPushButton *deleteBtn = new QPushButton(QStringLiteral("X"), this);
-    deleteBtn->setMinimumHeight(28);
-    deleteBtn->setMinimumWidth(32);
+    editBtn_ = new QPushButton(QStringLiteral("[编]"), this);
+    editBtn_->setMinimumHeight(36);
+    editBtn_->setMinimumWidth(44);
+    editBtn_->setStyleSheet(QStringLiteral(
+        "QPushButton { background-color: #f39c12; color: white; border: none; "
+        "border-radius: 8px; font-size: 14px; }"
+        "QPushButton:hover { background-color: #d68910; }"));
+    connect(editBtn_, &QPushButton::clicked, [this]() {
+        emit editClicked(strategyId_);
+    });
+    bottomRow->addWidget(editBtn_);
+    
+    QPushButton *deleteBtn = new QPushButton(QStringLiteral("[删]"), this);
+    deleteBtn->setMinimumHeight(36);
+    deleteBtn->setMinimumWidth(44);
     deleteBtn->setStyleSheet(QStringLiteral(
-        "background-color: #e74c3c; color: white; border: none; border-radius: 4px;"));
+        "QPushButton { background-color: #95a5a6; color: white; border: none; "
+        "border-radius: 8px; font-size: 14px; }"
+        "QPushButton:hover { background-color: #7f8c8d; }"));
     connect(deleteBtn, &QPushButton::clicked, [this]() {
         emit deleteClicked(strategyId_);
     });
@@ -144,31 +254,36 @@ void StrategyCard::updateInfo(const QString &name, const QString &description,
     name_ = name;
     enabled_ = enabled;
     
-    QString icon = type_.contains(QStringLiteral("传感器")) ? 
-                   QStringLiteral("[S]") : QStringLiteral("[T]");
-    nameLabel_->setText(QStringLiteral("%1 %2").arg(icon, name));
+    nameLabel_->setText(QStringLiteral("[策] %1").arg(name));
     descLabel_->setText(description);
     
     if (enabled) {
         if (running) {
-            statusLabel_->setText(QStringLiteral("运行中"));
+            statusLabel_->setText(QStringLiteral("[运] 运行中"));
             statusLabel_->setStyleSheet(QStringLiteral(
-                "font-size: 12px; font-weight: bold; color: #27ae60;"));
+                "font-size: 13px; font-weight: bold; color: #e74c3c; padding: 6px 12px;"
+                "background-color: #fadbd8; border-radius: 8px;"));
         } else {
-            statusLabel_->setText(QStringLiteral("已启用"));
+            statusLabel_->setText(QStringLiteral("[OK] 已启用"));
             statusLabel_->setStyleSheet(QStringLiteral(
-                "font-size: 12px; font-weight: bold; color: #3498db;"));
+                "font-size: 13px; font-weight: bold; color: #27ae60; padding: 6px 12px;"
+                "background-color: #d4edda; border-radius: 8px;"));
         }
-        toggleBtn_->setText(QStringLiteral("禁用"));
+        toggleBtn_->setText(QStringLiteral("[禁] 禁用"));
         toggleBtn_->setStyleSheet(QStringLiteral(
-            "background-color: #95a5a6; color: white; border: none; border-radius: 4px;"));
+            "QPushButton { background-color: #7f8c8d; color: white; border: none; "
+            "border-radius: 8px; font-weight: bold; font-size: 12px; padding: 0 16px; }"
+            "QPushButton:hover { background-color: #6c7a7d; }"));
     } else {
-        statusLabel_->setText(QStringLiteral("已禁用"));
+        statusLabel_->setText(QStringLiteral("[X] 已禁用"));
         statusLabel_->setStyleSheet(QStringLiteral(
-            "font-size: 12px; font-weight: bold; color: #e74c3c;"));
-        toggleBtn_->setText(QStringLiteral("启用"));
+            "font-size: 13px; font-weight: bold; color: #e74c3c; padding: 6px 12px;"
+            "background-color: #fdf2f2; border-radius: 8px;"));
+        toggleBtn_->setText(QStringLiteral("[启] 启用"));
         toggleBtn_->setStyleSheet(QStringLiteral(
-            "background-color: #27ae60; color: white; border: none; border-radius: 4px;"));
+            "QPushButton { background-color: #27ae60; color: white; border: none; "
+            "border-radius: 8px; font-weight: bold; font-size: 12px; padding: 0 16px; }"
+            "QPushButton:hover { background-color: #229954; }"));
     }
 }
 
@@ -178,392 +293,137 @@ StrategyWidget::StrategyWidget(RpcClient *rpcClient, QWidget *parent)
     : QWidget(parent)
     , rpcClient_(rpcClient)
     , statusLabel_(nullptr)
-    , tabWidget_(nullptr)
-    , timerCardsContainer_(nullptr)
-    , timerCardsLayout_(nullptr)
-    , sensorCardsContainer_(nullptr)
-    , sensorCardsLayout_(nullptr)
+    , cardsContainer_(nullptr)
+    , cardsLayout_(nullptr)
 {
     setupUi();
+    qDebug() << "[STRATEGY_WIDGET] 策略页面初始化完成";
 }
 
 void StrategyWidget::setupUi()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(10, 10, 10, 10);
-    mainLayout->setSpacing(8);
+    mainLayout->setContentsMargins(16, 16, 16, 16);
+    mainLayout->setSpacing(16);
 
-    // 页面标题
-    QLabel *titleLabel = new QLabel(QStringLiteral("策略管理"), this);
+    // 页面标题 - 美化
+    QLabel *titleLabel = new QLabel(QStringLiteral("[策] 策略管理"), this);
     titleLabel->setStyleSheet(QStringLiteral(
-        "font-size: 18px; font-weight: bold; color: #2c3e50; padding: 4px 0;"));
+        "font-size: 26px; font-weight: bold; color: #2c3e50; padding: 4px 0;"));
     mainLayout->addWidget(titleLabel);
 
-    // 工具栏
+    // 工具栏 - 美化
     QHBoxLayout *toolbarLayout = new QHBoxLayout();
-    toolbarLayout->setSpacing(8);
+    toolbarLayout->setSpacing(12);
 
-    QPushButton *refreshAllBtn = new QPushButton(QStringLiteral("刷新全部"), this);
-    refreshAllBtn->setMinimumHeight(36);
-    connect(refreshAllBtn, &QPushButton::clicked, this, &StrategyWidget::refreshAllStrategies);
-    toolbarLayout->addWidget(refreshAllBtn);
+    QPushButton *refreshBtn = new QPushButton(QStringLiteral("[刷] 刷新"), this);
+    refreshBtn->setMinimumHeight(44);
+    refreshBtn->setStyleSheet(QStringLiteral(
+        "QPushButton { background-color: #3498db; color: white; border: none; "
+        "border-radius: 10px; padding: 0 20px; font-weight: bold; font-size: 14px; }"
+        "QPushButton:hover { background-color: #2980b9; }"));
+    connect(refreshBtn, &QPushButton::clicked, this, &StrategyWidget::onRefreshStrategiesClicked);
+    toolbarLayout->addWidget(refreshBtn);
+
+    QPushButton *createBtn = new QPushButton(QStringLiteral("[+] 创建策略"), this);
+    createBtn->setMinimumHeight(44);
+    createBtn->setStyleSheet(QStringLiteral(
+        "QPushButton { background-color: #27ae60; color: white; border: none; "
+        "border-radius: 10px; padding: 0 20px; font-weight: bold; font-size: 14px; }"
+        "QPushButton:hover { background-color: #229954; }"));
+    connect(createBtn, &QPushButton::clicked, this, &StrategyWidget::onCreateStrategyClicked);
+    toolbarLayout->addWidget(createBtn);
 
     toolbarLayout->addStretch();
 
     statusLabel_ = new QLabel(this);
-    statusLabel_->setStyleSheet(QStringLiteral("color: #7f8c8d; font-size: 12px;"));
+    statusLabel_->setStyleSheet(QStringLiteral(
+        "color: #7f8c8d; font-size: 14px; padding: 8px 12px; background-color: #f8f9fa; border-radius: 6px;"));
     toolbarLayout->addWidget(statusLabel_);
 
     mainLayout->addLayout(toolbarLayout);
 
-    // 标签页
-    tabWidget_ = new QTabWidget(this);
-    tabWidget_->addTab(createTimerStrategyTab(), QStringLiteral("定时策略"));
-    tabWidget_->addTab(createSensorStrategyTab(), QStringLiteral("传感器策略"));
-    mainLayout->addWidget(tabWidget_, 1);
-}
-
-QWidget* StrategyWidget::createTimerStrategyTab()
-{
-    QWidget *tab = new QWidget();
-    QVBoxLayout *layout = new QVBoxLayout(tab);
-    layout->setContentsMargins(8, 8, 8, 8);
-    layout->setSpacing(8);
-
-    // 工具栏
-    QHBoxLayout *toolbarLayout = new QHBoxLayout();
-    toolbarLayout->setSpacing(8);
-
-    QPushButton *refreshBtn = new QPushButton(QStringLiteral("刷新"), tab);
-    refreshBtn->setMinimumHeight(40);
-    connect(refreshBtn, &QPushButton::clicked, this, &StrategyWidget::onRefreshTimerStrategiesClicked);
-    toolbarLayout->addWidget(refreshBtn);
-
-    QPushButton *createBtn = new QPushButton(QStringLiteral("创建策略"), tab);
-    createBtn->setProperty("type", QStringLiteral("success"));
-    createBtn->setMinimumHeight(40);
-    connect(createBtn, &QPushButton::clicked, this, &StrategyWidget::onCreateTimerStrategyClicked);
-    toolbarLayout->addWidget(createBtn);
-
-    toolbarLayout->addStretch();
-    layout->addLayout(toolbarLayout);
-
-    // 卡片容器 - 一行两个
-    timerCardsContainer_ = new QWidget(tab);
-    timerCardsLayout_ = new QGridLayout(timerCardsContainer_);
-    timerCardsLayout_->setContentsMargins(0, 0, 0, 0);
-    timerCardsLayout_->setSpacing(10);
-    timerCardsLayout_->setColumnStretch(0, 1);
-    timerCardsLayout_->setColumnStretch(1, 1);
-
-    layout->addWidget(timerCardsContainer_, 1);
-
-    // 提示
-    QLabel *helpLabel = new QLabel(
-        QStringLiteral("提示：定时策略按间隔或每日定时执行分组控制"),
-        tab);
-    helpLabel->setStyleSheet(QStringLiteral(
-        "color: #7f8c8d; font-size: 11px; padding: 4px;"));
-    helpLabel->setAlignment(Qt::AlignCenter);
-    layout->addWidget(helpLabel);
-
-    return tab;
-}
-
-QWidget* StrategyWidget::createSensorStrategyTab()
-{
-    QWidget *tab = new QWidget();
-    QVBoxLayout *layout = new QVBoxLayout(tab);
-    layout->setContentsMargins(8, 8, 8, 8);
-    layout->setSpacing(8);
-
-    // 工具栏
-    QHBoxLayout *toolbarLayout = new QHBoxLayout();
-    toolbarLayout->setSpacing(8);
-
-    QPushButton *refreshBtn = new QPushButton(QStringLiteral("刷新"), tab);
-    refreshBtn->setMinimumHeight(40);
-    connect(refreshBtn, &QPushButton::clicked, this, &StrategyWidget::onRefreshSensorStrategiesClicked);
-    toolbarLayout->addWidget(refreshBtn);
-
-    QPushButton *createBtn = new QPushButton(QStringLiteral("创建策略"), tab);
-    createBtn->setProperty("type", QStringLiteral("success"));
-    createBtn->setMinimumHeight(40);
-    connect(createBtn, &QPushButton::clicked, this, &StrategyWidget::onCreateSensorStrategyClicked);
-    toolbarLayout->addWidget(createBtn);
-
-    toolbarLayout->addStretch();
-    layout->addLayout(toolbarLayout);
+    // 滚动区域用于卡片
+    QScrollArea *scrollArea = new QScrollArea(this);
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    scrollArea->setStyleSheet(QStringLiteral(
+        "QScrollArea { background: transparent; border: none; }"
+        "QScrollBar:vertical { width: 10px; background: #f0f0f0; border-radius: 5px; margin: 4px; }"
+        "QScrollBar::handle:vertical { background: #c0c0c0; border-radius: 5px; min-height: 40px; }"
+    ));
+    
+    // 启用触控滚动
+    QScroller::grabGesture(scrollArea->viewport(), QScroller::LeftMouseButtonGesture);
 
     // 卡片容器
-    sensorCardsContainer_ = new QWidget(tab);
-    sensorCardsLayout_ = new QGridLayout(sensorCardsContainer_);
-    sensorCardsLayout_->setContentsMargins(0, 0, 0, 0);
-    sensorCardsLayout_->setSpacing(10);
-    sensorCardsLayout_->setColumnStretch(0, 1);
-    sensorCardsLayout_->setColumnStretch(1, 1);
+    cardsContainer_ = new QWidget();
+    cardsContainer_->setStyleSheet(QStringLiteral("background-color: transparent;"));
+    cardsLayout_ = new QGridLayout(cardsContainer_);
+    cardsLayout_->setContentsMargins(0, 0, 0, 0);
+    cardsLayout_->setSpacing(16);
+    cardsLayout_->setColumnStretch(0, 1);
+    cardsLayout_->setColumnStretch(1, 1);
 
-    layout->addWidget(sensorCardsContainer_, 1);
+    scrollArea->setWidget(cardsContainer_);
+    mainLayout->addWidget(scrollArea, 1);
 
-    // 提示
+    // 提示 - 美化
     QLabel *helpLabel = new QLabel(
-        QStringLiteral("提示：传感器策略当数值达到阈值条件时执行分组控制"),
-        tab);
+        QStringLiteral("[示] 提示：策略是基于条件触发的自动化控制规则，包含执行动作和触发条件。点击策略卡片可编辑。"),
+        this);
     helpLabel->setStyleSheet(QStringLiteral(
-        "color: #7f8c8d; font-size: 11px; padding: 4px;"));
+        "color: #5d6d7e; font-size: 13px; padding: 10px; background-color: #eaf2f8; border-radius: 8px;"));
     helpLabel->setAlignment(Qt::AlignCenter);
-    layout->addWidget(helpLabel);
-
-    return tab;
+    helpLabel->setWordWrap(true);
+    mainLayout->addWidget(helpLabel);
 }
 
-void StrategyWidget::clearTimerStrategyCards()
+void StrategyWidget::clearStrategyCards()
 {
-    for (StrategyCard *card : timerStrategyCards_) {
-        timerCardsLayout_->removeWidget(card);
+    for (StrategyCard *card : strategyCards_) {
+        cardsLayout_->removeWidget(card);
         delete card;
     }
-    timerStrategyCards_.clear();
-}
-
-void StrategyWidget::clearSensorStrategyCards()
-{
-    for (StrategyCard *card : sensorStrategyCards_) {
-        sensorCardsLayout_->removeWidget(card);
-        delete card;
-    }
-    sensorStrategyCards_.clear();
+    strategyCards_.clear();
 }
 
 void StrategyWidget::refreshAllStrategies()
 {
-    onRefreshTimerStrategiesClicked();
-    onRefreshSensorStrategiesClicked();
+    onRefreshStrategiesClicked();
 }
 
-// ==================== 定时策略槽函数 ====================
-
-void StrategyWidget::onRefreshTimerStrategiesClicked()
+void StrategyWidget::onRefreshStrategiesClicked()
 {
     if (!rpcClient_ || !rpcClient_->isConnected()) {
-        statusLabel_->setText(QStringLiteral("[!] 未连接"));
+        statusLabel_->setText(QStringLiteral("[X] 未连接"));
         return;
     }
 
+    statusLabel_->setText(QStringLiteral("[载] 加载中..."));
+    qDebug() << "[STRATEGY_WIDGET] 刷新策略列表";
+
     QJsonValue result = rpcClient_->call(QStringLiteral("auto.strategy.list"));
+    
+    qDebug() << "[STRATEGY_WIDGET] auto.strategy.list 响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
+    
     if (result.isObject()) {
         QJsonObject obj = result.toObject();
         if (obj.contains(QStringLiteral("strategies"))) {
             QJsonArray strategies = obj.value(QStringLiteral("strategies")).toArray();
-            updateTimerStrategyCards(strategies);
-            statusLabel_->setText(QStringLiteral("定时策略: %1 个").arg(strategies.size()));
+            strategiesCache_ = strategies;
+            updateStrategyCards(strategies);
+            statusLabel_->setText(QStringLiteral("[OK] 共 %1 个策略").arg(strategies.size()));
             return;
         }
     }
-    statusLabel_->setText(QStringLiteral("[X] 获取策略失败"));
+    statusLabel_->setText(QStringLiteral("[X] 加载失败"));
 }
 
-void StrategyWidget::onCreateTimerStrategyClicked()
+void StrategyWidget::updateStrategyCards(const QJsonArray &strategies)
 {
-    if (!rpcClient_ || !rpcClient_->isConnected()) {
-        QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先连接服务器"));
-        return;
-    }
-
-    // 创建弹窗
-    QDialog dialog(this);
-    dialog.setWindowTitle(QStringLiteral("创建定时策略"));
-    dialog.setMinimumWidth(400);
-    
-    QVBoxLayout *layout = new QVBoxLayout(&dialog);
-    
-    // 说明
-    QLabel *infoLabel = new QLabel(
-        QStringLiteral("策略将控制分组中已绑定的所有通道"), &dialog);
-    infoLabel->setStyleSheet(QStringLiteral(
-        "color: #666; font-size: 12px; padding: 8px; "
-        "background-color: #e3f2fd; border-radius: 6px;"));
-    layout->addWidget(infoLabel);
-    
-    QGridLayout *formGrid = new QGridLayout();
-    formGrid->setSpacing(8);
-    
-    // 第一行
-    formGrid->addWidget(new QLabel(QStringLiteral("策略ID:"), &dialog), 0, 0);
-    QSpinBox *idSpinBox = new QSpinBox(&dialog);
-    idSpinBox->setRange(1, 999);
-    idSpinBox->setMinimumHeight(40);
-    formGrid->addWidget(idSpinBox, 0, 1);
-    
-    formGrid->addWidget(new QLabel(QStringLiteral("名称:"), &dialog), 0, 2);
-    QLineEdit *nameEdit = new QLineEdit(&dialog);
-    nameEdit->setPlaceholderText(QStringLiteral("策略名称(可空)"));
-    nameEdit->setMinimumHeight(40);
-    formGrid->addWidget(nameEdit, 0, 3);
-    
-    // 第二行
-    formGrid->addWidget(new QLabel(QStringLiteral("分组ID:"), &dialog), 1, 0);
-    QSpinBox *groupIdSpinBox = new QSpinBox(&dialog);
-    groupIdSpinBox->setRange(1, 999);
-    groupIdSpinBox->setMinimumHeight(40);
-    formGrid->addWidget(groupIdSpinBox, 1, 1);
-    
-    formGrid->addWidget(new QLabel(QStringLiteral("动作:"), &dialog), 1, 2);
-    QComboBox *actionCombo = new QComboBox(&dialog);
-    actionCombo->addItem(QStringLiteral("停止"), QStringLiteral("stop"));
-    actionCombo->addItem(QStringLiteral("正转"), QStringLiteral("fwd"));
-    actionCombo->addItem(QStringLiteral("反转"), QStringLiteral("rev"));
-    actionCombo->setMinimumHeight(40);
-    formGrid->addWidget(actionCombo, 1, 3);
-    
-    // 第三行 - 触发类型
-    formGrid->addWidget(new QLabel(QStringLiteral("触发方式:"), &dialog), 2, 0);
-    QComboBox *triggerTypeCombo = new QComboBox(&dialog);
-    triggerTypeCombo->addItem(QStringLiteral("按间隔执行"), QStringLiteral("interval"));
-    triggerTypeCombo->addItem(QStringLiteral("每日定时"), QStringLiteral("daily"));
-    triggerTypeCombo->setMinimumHeight(40);
-    formGrid->addWidget(triggerTypeCombo, 2, 1);
-    
-    formGrid->addWidget(new QLabel(QStringLiteral("间隔(秒):"), &dialog), 2, 2);
-    QSpinBox *intervalSpinBox = new QSpinBox(&dialog);
-    intervalSpinBox->setRange(1, 86400);
-    intervalSpinBox->setValue(3600);
-    intervalSpinBox->setMinimumHeight(40);
-    formGrid->addWidget(intervalSpinBox, 2, 3);
-    
-    // 第四行 - 每日时间
-    formGrid->addWidget(new QLabel(QStringLiteral("每日时间:"), &dialog), 3, 0);
-    QLineEdit *dailyTimeEdit = new QLineEdit(&dialog);
-    dailyTimeEdit->setPlaceholderText(QStringLiteral("HH:MM (如 08:00)"));
-    dailyTimeEdit->setMinimumHeight(40);
-    dailyTimeEdit->setEnabled(false);
-    formGrid->addWidget(dailyTimeEdit, 3, 1);
-    
-    QCheckBox *enabledCheckBox = new QCheckBox(QStringLiteral("立即启用"), &dialog);
-    enabledCheckBox->setChecked(true);
-    formGrid->addWidget(enabledCheckBox, 3, 2, 1, 2);
-    
-    layout->addLayout(formGrid);
-    
-    // 触发类型切换
-    connect(triggerTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            [intervalSpinBox, dailyTimeEdit](int index) {
-        intervalSpinBox->setEnabled(index == 0);
-        dailyTimeEdit->setEnabled(index == 1);
-    });
-    
-    QDialogButtonBox *buttonBox = new QDialogButtonBox(
-        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
-    buttonBox->button(QDialogButtonBox::Ok)->setText(QStringLiteral("创建"));
-    buttonBox->button(QDialogButtonBox::Ok)->setMinimumHeight(40);
-    buttonBox->button(QDialogButtonBox::Cancel)->setText(QStringLiteral("取消"));
-    buttonBox->button(QDialogButtonBox::Cancel)->setMinimumHeight(40);
-    connect(buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    connect(buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    layout->addWidget(buttonBox);
-    
-    if (dialog.exec() != QDialog::Accepted) {
-        return;
-    }
-
-    QString name = nameEdit->text().trimmed();
-    if (name.isEmpty()) {
-        name = QStringLiteral("策略-%1").arg(idSpinBox->value());
-    }
-
-    QJsonObject params;
-    params[QStringLiteral("id")] = idSpinBox->value();
-    params[QStringLiteral("name")] = name;
-    params[QStringLiteral("groupId")] = groupIdSpinBox->value();
-    params[QStringLiteral("channel")] = -1;  // 使用分组绑定的通道
-    params[QStringLiteral("action")] = actionCombo->currentData().toString();
-    params[QStringLiteral("enabled")] = enabledCheckBox->isChecked();
-    params[QStringLiteral("triggerType")] = triggerTypeCombo->currentData().toString();
-    
-    if (triggerTypeCombo->currentIndex() == 0) {
-        params[QStringLiteral("intervalSec")] = intervalSpinBox->value();
-    } else {
-        params[QStringLiteral("dailyTime")] = dailyTimeEdit->text();
-        params[QStringLiteral("intervalSec")] = 86400;  // 默认一天
-    }
-
-    QJsonValue result = rpcClient_->call(QStringLiteral("auto.strategy.create"), params);
-
-    if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        statusLabel_->setText(QStringLiteral("策略创建成功"));
-        emit logMessage(QStringLiteral("创建定时策略成功: %1").arg(name));
-        onRefreshTimerStrategiesClicked();
-    } else {
-        QString error = result.toObject().value(QStringLiteral("error")).toString();
-        QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("创建策略失败: %1").arg(error));
-    }
-}
-
-void StrategyWidget::onToggleTimerStrategy(int strategyId, bool newState)
-{
-    if (!rpcClient_ || !rpcClient_->isConnected()) return;
-
-    QJsonObject params;
-    params[QStringLiteral("id")] = strategyId;
-    params[QStringLiteral("enabled")] = newState;
-
-    QJsonValue result = rpcClient_->call(QStringLiteral("auto.strategy.enable"), params);
-
-    if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        statusLabel_->setText(QStringLiteral("策略 %1 状态已更新").arg(strategyId));
-        emit logMessage(QStringLiteral("策略状态已更新"));
-        onRefreshTimerStrategiesClicked();
-    } else {
-        QString error = result.toObject().value(QStringLiteral("error")).toString();
-        QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("更新策略失败: %1").arg(error));
-    }
-}
-
-void StrategyWidget::onTriggerTimerStrategy(int strategyId)
-{
-    if (!rpcClient_ || !rpcClient_->isConnected()) return;
-
-    QJsonObject params;
-    params[QStringLiteral("id")] = strategyId;
-
-    QJsonValue result = rpcClient_->call(QStringLiteral("auto.strategy.trigger"), params);
-
-    if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        statusLabel_->setText(QStringLiteral("策略 %1 已触发").arg(strategyId));
-        emit logMessage(QStringLiteral("手动触发策略成功"));
-    } else {
-        QString error = result.toObject().value(QStringLiteral("error")).toString();
-        QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("触发策略失败: %1").arg(error));
-    }
-}
-
-void StrategyWidget::onDeleteTimerStrategy(int strategyId)
-{
-    QMessageBox::StandardButton reply = QMessageBox::question(this,
-        QStringLiteral("确认删除"),
-        QStringLiteral("确定要删除策略 %1 吗？").arg(strategyId),
-        QMessageBox::Yes | QMessageBox::No);
-
-    if (reply != QMessageBox::Yes) return;
-
-    QJsonObject params;
-    params[QStringLiteral("id")] = strategyId;
-
-    QJsonValue result = rpcClient_->call(QStringLiteral("auto.strategy.delete"), params);
-
-    if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        statusLabel_->setText(QStringLiteral("策略 %1 删除成功").arg(strategyId));
-        emit logMessage(QStringLiteral("删除定时策略成功"));
-        onRefreshTimerStrategiesClicked();
-    } else {
-        QString error = result.toObject().value(QStringLiteral("error")).toString();
-        QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("删除策略失败: %1").arg(error));
-    }
-}
-
-void StrategyWidget::updateTimerStrategyCards(const QJsonArray &strategies)
-{
-    clearTimerStrategyCards();
+    clearStrategyCards();
 
     int row = 0;
     int col = 0;
@@ -575,36 +435,76 @@ void StrategyWidget::updateTimerStrategyCards(const QJsonArray &strategies)
         if (name.isEmpty()) {
             name = QStringLiteral("策略-%1").arg(id);
         }
+        QString type = s.value(QStringLiteral("type")).toString();
+        if (type.isEmpty()) {
+            type = QStringLiteral("auto");
+        }
 
-        StrategyCard *card = new StrategyCard(id, name, QStringLiteral("定时"), this);
+        StrategyCard *card = new StrategyCard(id, name, type.toUpper(), this);
         
         // 连接信号
-        connect(card, &StrategyCard::toggleClicked, this, &StrategyWidget::onToggleTimerStrategy);
-        connect(card, &StrategyCard::triggerClicked, this, &StrategyWidget::onTriggerTimerStrategy);
-        connect(card, &StrategyCard::deleteClicked, this, &StrategyWidget::onDeleteTimerStrategy);
+        connect(card, &StrategyCard::toggleClicked, this, &StrategyWidget::onToggleStrategy);
+        connect(card, &StrategyCard::triggerClicked, this, &StrategyWidget::onTriggerStrategy);
+        connect(card, &StrategyCard::editClicked, this, &StrategyWidget::onEditStrategyClicked);
+        connect(card, &StrategyCard::deleteClicked, this, &StrategyWidget::onDeleteStrategy);
 
         // 构建描述
-        int groupId = s.value(QStringLiteral("groupId")).toInt();
-        QString action = s.value(QStringLiteral("action")).toString();
-        QString triggerType = s.value(QStringLiteral("triggerType")).toString();
-        QString desc;
+        QJsonArray actions = s.value(QStringLiteral("actions")).toArray();
+        QJsonArray conditions = s.value(QStringLiteral("conditions")).toArray();
         
-        if (triggerType == QStringLiteral("daily")) {
-            QString dailyTime = s.value(QStringLiteral("dailyTime")).toString();
-            desc = QStringLiteral("每日 %1 → 分组%2 → %3")
-                .arg(dailyTime).arg(groupId).arg(action);
-        } else {
-            int interval = s.value(QStringLiteral("intervalSec")).toInt();
-            desc = QStringLiteral("每 %1 秒 → 分组%2 → %3")
-                .arg(interval).arg(groupId).arg(action);
+        QStringList actionTexts;
+        for (const QJsonValue &a : actions) {
+            QJsonObject action = a.toObject();
+            int node = action.value(QStringLiteral("node")).toInt();
+            int channel = action.value(QStringLiteral("channel")).toInt();
+            int value = action.value(QStringLiteral("value")).toInt();
+            QString actionStr;
+            switch (value) {
+                case 0: actionStr = QStringLiteral("[停] 停止"); break;
+                case 1: actionStr = QStringLiteral("[正] 正转"); break;
+                case 2: actionStr = QStringLiteral("[反] 反转"); break;
+                default: actionStr = QStringLiteral("[?] 未知"); break;
+            }
+            actionTexts << QStringLiteral("节点%1:通道%2→%3").arg(node).arg(channel).arg(actionStr);
+        }
+        
+        QStringList conditionTexts;
+        for (const QJsonValue &c : conditions) {
+            QJsonObject cond = c.toObject();
+            QString device = cond.value(QStringLiteral("device")).toString();
+            QString identifier = cond.value(QStringLiteral("identifier")).toString();
+            QString op = cond.value(QStringLiteral("op")).toString();
+            double value = cond.value(QStringLiteral("value")).toDouble();
+            
+            QString opText;
+            if (op == QStringLiteral("gt")) opText = QStringLiteral(">");
+            else if (op == QStringLiteral("lt")) opText = QStringLiteral("<");
+            else if (op == QStringLiteral("eq")) opText = QStringLiteral("=");
+            else if (op == QStringLiteral("egt")) opText = QStringLiteral(">=");
+            else if (op == QStringLiteral("elt")) opText = QStringLiteral("<=");
+            else opText = QStringLiteral(">");
+            
+            conditionTexts << QStringLiteral("%1 %2 %3").arg(identifier).arg(opText).arg(value);
+        }
+        
+        QString desc;
+        if (!actionTexts.isEmpty()) {
+            desc += QStringLiteral("[执] 执行: %1").arg(actionTexts.join(QStringLiteral(" | ")));
+        }
+        if (!conditionTexts.isEmpty()) {
+            if (!desc.isEmpty()) desc += QStringLiteral("\n");
+            desc += QStringLiteral("[条] 条件: %1").arg(conditionTexts.join(QStringLiteral(" | ")));
+        }
+        if (desc.isEmpty()) {
+            desc = QStringLiteral("[警] 无配置");
         }
 
         bool enabled = s.value(QStringLiteral("enabled")).toBool();
         bool running = s.value(QStringLiteral("running")).toBool();
         card->updateInfo(name, desc, enabled, running);
 
-        timerCardsLayout_->addWidget(card, row, col);
-        timerStrategyCards_.append(card);
+        cardsLayout_->addWidget(card, row, col);
+        strategyCards_.append(card);
 
         col++;
         if (col >= 2) {
@@ -613,170 +513,101 @@ void StrategyWidget::updateTimerStrategyCards(const QJsonArray &strategies)
         }
     }
     
-    timerCardsLayout_->setRowStretch(row + 1, 1);
+    cardsLayout_->setRowStretch(row + 1, 1);
 }
 
-// ==================== 传感器策略槽函数 ====================
-
-void StrategyWidget::onRefreshSensorStrategiesClicked()
+bool StrategyWidget::showStrategyDialog(QJsonObject &strategy, bool isEdit)
 {
-    if (!rpcClient_ || !rpcClient_->isConnected()) {
-        return;
+    qDebug() << "[STRATEGY_WIDGET] 显示策略对话框 isEdit=" << isEdit;
+    
+    StrategyDialog dialog(this);
+    dialog.setStrategy(strategy, isEdit);
+    
+    if (dialog.exec() != QDialog::Accepted) {
+        qDebug() << "[STRATEGY_WIDGET] 策略对话框取消";
+        return false;
     }
-
-    QJsonValue result = rpcClient_->call(QStringLiteral("auto.sensor.list"));
-    if (result.isObject()) {
-        QJsonObject obj = result.toObject();
-        if (obj.contains(QStringLiteral("strategies"))) {
-            QJsonArray strategies = obj.value(QStringLiteral("strategies")).toArray();
-            updateSensorStrategyCards(strategies);
-        }
-    }
+    
+    strategy = dialog.getStrategy();
+    qDebug() << "[STRATEGY_WIDGET] 策略对话框确认，数据:" << QJsonDocument(strategy).toJson(QJsonDocument::Compact);
+    return true;
 }
 
-void StrategyWidget::onCreateSensorStrategyClicked()
+void StrategyWidget::onCreateStrategyClicked()
 {
     if (!rpcClient_ || !rpcClient_->isConnected()) {
         QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先连接服务器"));
         return;
     }
 
-    // 创建弹窗
-    QDialog dialog(this);
-    dialog.setWindowTitle(QStringLiteral("创建传感器策略"));
-    dialog.setMinimumWidth(450);
-    
-    QVBoxLayout *layout = new QVBoxLayout(&dialog);
-    
-    QLabel *infoLabel = new QLabel(
-        QStringLiteral("当传感器数值满足条件时，自动控制分组中的设备"), &dialog);
-    infoLabel->setStyleSheet(QStringLiteral(
-        "color: #666; font-size: 12px; padding: 8px; "
-        "background-color: #e3f2fd; border-radius: 6px;"));
-    layout->addWidget(infoLabel);
-    
-    QGridLayout *formGrid = new QGridLayout();
-    formGrid->setSpacing(8);
-    
-    // 第一行
-    formGrid->addWidget(new QLabel(QStringLiteral("策略ID:"), &dialog), 0, 0);
-    QSpinBox *idSpinBox = new QSpinBox(&dialog);
-    idSpinBox->setRange(1, 999);
-    idSpinBox->setMinimumHeight(40);
-    formGrid->addWidget(idSpinBox, 0, 1);
-    
-    formGrid->addWidget(new QLabel(QStringLiteral("名称:"), &dialog), 0, 2);
-    QLineEdit *nameEdit = new QLineEdit(&dialog);
-    nameEdit->setPlaceholderText(QStringLiteral("策略名称"));
-    nameEdit->setMinimumHeight(40);
-    formGrid->addWidget(nameEdit, 0, 3);
-    
-    // 第二行 - 传感器配置
-    formGrid->addWidget(new QLabel(QStringLiteral("传感器类型:"), &dialog), 1, 0);
-    QComboBox *sensorTypeCombo = new QComboBox(&dialog);
-    sensorTypeCombo->addItem(QStringLiteral("温度"), QStringLiteral("temperature"));
-    sensorTypeCombo->addItem(QStringLiteral("湿度"), QStringLiteral("humidity"));
-    sensorTypeCombo->addItem(QStringLiteral("光照"), QStringLiteral("light"));
-    sensorTypeCombo->addItem(QStringLiteral("土壤湿度"), QStringLiteral("soil_moisture"));
-    sensorTypeCombo->setMinimumHeight(40);
-    formGrid->addWidget(sensorTypeCombo, 1, 1);
-    
-    formGrid->addWidget(new QLabel(QStringLiteral("传感器节点:"), &dialog), 1, 2);
-    QSpinBox *sensorNodeSpinBox = new QSpinBox(&dialog);
-    sensorNodeSpinBox->setRange(1, 255);
-    sensorNodeSpinBox->setMinimumHeight(40);
-    formGrid->addWidget(sensorNodeSpinBox, 1, 3);
-    
-    // 第三行 - 条件
-    formGrid->addWidget(new QLabel(QStringLiteral("条件:"), &dialog), 2, 0);
-    QComboBox *conditionCombo = new QComboBox(&dialog);
-    conditionCombo->addItem(QStringLiteral("大于 (>)"), QStringLiteral("gt"));
-    conditionCombo->addItem(QStringLiteral("小于 (<)"), QStringLiteral("lt"));
-    conditionCombo->addItem(QStringLiteral("等于 (=)"), QStringLiteral("eq"));
-    conditionCombo->setMinimumHeight(40);
-    formGrid->addWidget(conditionCombo, 2, 1);
-    
-    formGrid->addWidget(new QLabel(QStringLiteral("阈值:"), &dialog), 2, 2);
-    QDoubleSpinBox *thresholdSpinBox = new QDoubleSpinBox(&dialog);
-    thresholdSpinBox->setRange(-1000, 1000);
-    thresholdSpinBox->setValue(30.0);
-    thresholdSpinBox->setMinimumHeight(40);
-    formGrid->addWidget(thresholdSpinBox, 2, 3);
-    
-    // 第四行 - 控制配置
-    formGrid->addWidget(new QLabel(QStringLiteral("分组ID:"), &dialog), 3, 0);
-    QSpinBox *groupIdSpinBox = new QSpinBox(&dialog);
-    groupIdSpinBox->setRange(1, 999);
-    groupIdSpinBox->setMinimumHeight(40);
-    formGrid->addWidget(groupIdSpinBox, 3, 1);
-    
-    formGrid->addWidget(new QLabel(QStringLiteral("动作:"), &dialog), 3, 2);
-    QComboBox *actionCombo = new QComboBox(&dialog);
-    actionCombo->addItem(QStringLiteral("停止"), QStringLiteral("stop"));
-    actionCombo->addItem(QStringLiteral("正转"), QStringLiteral("fwd"));
-    actionCombo->addItem(QStringLiteral("反转"), QStringLiteral("rev"));
-    actionCombo->setMinimumHeight(40);
-    formGrid->addWidget(actionCombo, 3, 3);
-    
-    // 第五行
-    formGrid->addWidget(new QLabel(QStringLiteral("冷却时间(秒):"), &dialog), 4, 0);
-    QSpinBox *cooldownSpinBox = new QSpinBox(&dialog);
-    cooldownSpinBox->setRange(0, 86400);
-    cooldownSpinBox->setValue(60);
-    cooldownSpinBox->setMinimumHeight(40);
-    formGrid->addWidget(cooldownSpinBox, 4, 1);
-    
-    QCheckBox *enabledCheckBox = new QCheckBox(QStringLiteral("立即启用"), &dialog);
-    enabledCheckBox->setChecked(true);
-    formGrid->addWidget(enabledCheckBox, 4, 2, 1, 2);
-    
-    layout->addLayout(formGrid);
-    
-    QDialogButtonBox *buttonBox = new QDialogButtonBox(
-        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
-    buttonBox->button(QDialogButtonBox::Ok)->setText(QStringLiteral("创建"));
-    buttonBox->button(QDialogButtonBox::Ok)->setMinimumHeight(40);
-    buttonBox->button(QDialogButtonBox::Cancel)->setText(QStringLiteral("取消"));
-    buttonBox->button(QDialogButtonBox::Cancel)->setMinimumHeight(40);
-    connect(buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    connect(buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    layout->addWidget(buttonBox);
-    
-    if (dialog.exec() != QDialog::Accepted) {
+    QJsonObject strategy;
+    if (!showStrategyDialog(strategy, false)) {
         return;
     }
 
-    QString name = nameEdit->text().trimmed();
-    if (name.isEmpty()) {
-        name = QStringLiteral("传感器策略-%1").arg(idSpinBox->value());
-    }
-
-    QJsonObject params;
-    params[QStringLiteral("id")] = idSpinBox->value();
-    params[QStringLiteral("name")] = name;
-    params[QStringLiteral("sensorType")] = sensorTypeCombo->currentData().toString();
-    params[QStringLiteral("sensorNode")] = sensorNodeSpinBox->value();
-    params[QStringLiteral("condition")] = conditionCombo->currentData().toString();
-    params[QStringLiteral("threshold")] = thresholdSpinBox->value();
-    params[QStringLiteral("groupId")] = groupIdSpinBox->value();
-    params[QStringLiteral("channel")] = -1;  // 使用分组绑定的通道
-    params[QStringLiteral("action")] = actionCombo->currentData().toString();
-    params[QStringLiteral("cooldownSec")] = cooldownSpinBox->value();
-    params[QStringLiteral("enabled")] = enabledCheckBox->isChecked();
-
-    QJsonValue result = rpcClient_->call(QStringLiteral("auto.sensor.create"), params);
+    qDebug() << "[STRATEGY_WIDGET] 创建策略:" << QJsonDocument(strategy).toJson(QJsonDocument::Compact);
+    
+    QJsonValue result = rpcClient_->call(QStringLiteral("auto.strategy.create"), strategy);
+    
+    qDebug() << "[STRATEGY_WIDGET] auto.strategy.create 响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
 
     if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        statusLabel_->setText(QStringLiteral("传感器策略创建成功"));
-        emit logMessage(QStringLiteral("创建传感器策略成功: %1").arg(name));
-        onRefreshSensorStrategiesClicked();
+        int id = result.toObject().value(QStringLiteral("id")).toInt();
+        statusLabel_->setText(QStringLiteral("[OK] 策略 %1 创建成功").arg(id));
+        emit logMessage(QStringLiteral("创建策略成功: %1").arg(strategy.value(QStringLiteral("name")).toString()));
+        onRefreshStrategiesClicked();
     } else {
         QString error = result.toObject().value(QStringLiteral("error")).toString();
-        QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("创建策略失败: %1").arg(error));
+        QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("[X] 创建策略失败: %1").arg(error));
     }
 }
 
-void StrategyWidget::onToggleSensorStrategy(int strategyId, bool newState)
+void StrategyWidget::onEditStrategyClicked(int strategyId)
+{
+    if (!rpcClient_ || !rpcClient_->isConnected()) {
+        QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先连接服务器"));
+        return;
+    }
+
+    // 从缓存中查找策略
+    QJsonObject strategy;
+    bool found = false;
+    for (const QJsonValue &v : strategiesCache_) {
+        QJsonObject s = v.toObject();
+        if (s.value(QStringLiteral("id")).toInt() == strategyId) {
+            strategy = s;
+            found = true;
+            break;
+        }
+    }
+    
+    if (!found) {
+        QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("策略不存在"));
+        return;
+    }
+
+    qDebug() << "[STRATEGY_WIDGET] 编辑策略 strategyId=" << strategyId;
+
+    if (!showStrategyDialog(strategy, true)) {
+        return;
+    }
+
+    // 更新策略（使用create接口，服务端会处理更新）
+    QJsonValue result = rpcClient_->call(QStringLiteral("auto.strategy.create"), strategy);
+    
+    qDebug() << "[STRATEGY_WIDGET] 更新策略响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
+
+    if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
+        statusLabel_->setText(QStringLiteral("[OK] 策略 %1 更新成功").arg(strategyId));
+        emit logMessage(QStringLiteral("更新策略成功"));
+        onRefreshStrategiesClicked();
+    } else {
+        QString error = result.toObject().value(QStringLiteral("error")).toString();
+        QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("[X] 更新策略失败: %1").arg(error));
+    }
+}
+
+void StrategyWidget::onToggleStrategy(int strategyId, bool newState)
 {
     if (!rpcClient_ || !rpcClient_->isConnected()) return;
 
@@ -784,22 +615,49 @@ void StrategyWidget::onToggleSensorStrategy(int strategyId, bool newState)
     params[QStringLiteral("id")] = strategyId;
     params[QStringLiteral("enabled")] = newState;
 
-    QJsonValue result = rpcClient_->call(QStringLiteral("auto.sensor.enable"), params);
+    qDebug() << "[STRATEGY_WIDGET] 切换策略状态 strategyId=" << strategyId << "enabled=" << newState;
+    
+    QJsonValue result = rpcClient_->call(QStringLiteral("auto.strategy.enable"), params);
+    
+    qDebug() << "[STRATEGY_WIDGET] auto.strategy.enable 响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
 
     if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        emit logMessage(QStringLiteral("传感器策略状态已更新"));
-        onRefreshSensorStrategiesClicked();
+        statusLabel_->setText(QStringLiteral("[OK] 策略 %1 状态已更新").arg(strategyId));
+        emit logMessage(QStringLiteral("策略状态已更新"));
+        onRefreshStrategiesClicked();
     } else {
         QString error = result.toObject().value(QStringLiteral("error")).toString();
-        QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("更新策略失败: %1").arg(error));
+        QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("[X] 更新策略失败: %1").arg(error));
     }
 }
 
-void StrategyWidget::onDeleteSensorStrategy(int strategyId)
+void StrategyWidget::onTriggerStrategy(int strategyId)
+{
+    if (!rpcClient_ || !rpcClient_->isConnected()) return;
+
+    QJsonObject params;
+    params[QStringLiteral("id")] = strategyId;
+
+    qDebug() << "[STRATEGY_WIDGET] 手动触发策略 strategyId=" << strategyId;
+    
+    QJsonValue result = rpcClient_->call(QStringLiteral("auto.strategy.trigger"), params);
+    
+    qDebug() << "[STRATEGY_WIDGET] auto.strategy.trigger 响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
+
+    if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
+        statusLabel_->setText(QStringLiteral("[触] 策略 %1 已触发").arg(strategyId));
+        emit logMessage(QStringLiteral("手动触发策略成功"));
+    } else {
+        QString error = result.toObject().value(QStringLiteral("error")).toString();
+        QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("[X] 触发策略失败: %1").arg(error));
+    }
+}
+
+void StrategyWidget::onDeleteStrategy(int strategyId)
 {
     QMessageBox::StandardButton reply = QMessageBox::question(this,
         QStringLiteral("确认删除"),
-        QStringLiteral("确定要删除传感器策略 %1 吗？").arg(strategyId),
+        QStringLiteral("确定要删除策略 %1 吗？").arg(strategyId),
         QMessageBox::Yes | QMessageBox::No);
 
     if (reply != QMessageBox::Yes) return;
@@ -807,67 +665,18 @@ void StrategyWidget::onDeleteSensorStrategy(int strategyId)
     QJsonObject params;
     params[QStringLiteral("id")] = strategyId;
 
-    QJsonValue result = rpcClient_->call(QStringLiteral("auto.sensor.delete"), params);
+    qDebug() << "[STRATEGY_WIDGET] 删除策略 strategyId=" << strategyId;
+    
+    QJsonValue result = rpcClient_->call(QStringLiteral("auto.strategy.delete"), params);
+    
+    qDebug() << "[STRATEGY_WIDGET] auto.strategy.delete 响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
 
     if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        emit logMessage(QStringLiteral("删除传感器策略成功"));
-        onRefreshSensorStrategiesClicked();
+        statusLabel_->setText(QStringLiteral("[OK] 策略 %1 删除成功").arg(strategyId));
+        emit logMessage(QStringLiteral("删除策略成功"));
+        onRefreshStrategiesClicked();
     } else {
         QString error = result.toObject().value(QStringLiteral("error")).toString();
-        QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("删除策略失败: %1").arg(error));
+        QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("[X] 删除策略失败: %1").arg(error));
     }
-}
-
-void StrategyWidget::updateSensorStrategyCards(const QJsonArray &strategies)
-{
-    clearSensorStrategyCards();
-
-    int row = 0;
-    int col = 0;
-
-    for (const QJsonValue &val : strategies) {
-        QJsonObject s = val.toObject();
-        int id = s.value(QStringLiteral("id")).toInt();
-        QString name = s.value(QStringLiteral("name")).toString();
-        if (name.isEmpty()) {
-            name = QStringLiteral("传感器策略-%1").arg(id);
-        }
-
-        StrategyCard *card = new StrategyCard(id, name, QStringLiteral("传感器"), this);
-        
-        // 连接信号
-        connect(card, &StrategyCard::toggleClicked, this, &StrategyWidget::onToggleSensorStrategy);
-        connect(card, &StrategyCard::deleteClicked, this, &StrategyWidget::onDeleteSensorStrategy);
-
-        // 构建描述
-        QString sensorType = s.value(QStringLiteral("sensorType")).toString();
-        int sensorNode = s.value(QStringLiteral("sensorNode")).toInt();
-        QString condition = s.value(QStringLiteral("condition")).toString();
-        double threshold = s.value(QStringLiteral("threshold")).toDouble();
-        int groupId = s.value(QStringLiteral("groupId")).toInt();
-        QString action = s.value(QStringLiteral("action")).toString();
-        
-        QString conditionText = condition == QStringLiteral("gt") ? QStringLiteral(">") :
-                               (condition == QStringLiteral("lt") ? QStringLiteral("<") : QStringLiteral("="));
-        
-        QString desc = QStringLiteral("%1#%2 %3 %4 → 分组%5 → %6")
-            .arg(sensorType).arg(sensorNode)
-            .arg(conditionText).arg(threshold, 0, 'f', 1)
-            .arg(groupId).arg(action);
-
-        bool enabled = s.value(QStringLiteral("enabled")).toBool();
-        bool active = s.value(QStringLiteral("active")).toBool();
-        card->updateInfo(name, desc, enabled, active);
-
-        sensorCardsLayout_->addWidget(card, row, col);
-        sensorStrategyCards_.append(card);
-
-        col++;
-        if (col >= 2) {
-            col = 0;
-            row++;
-        }
-    }
-    
-    sensorCardsLayout_->setRowStretch(row + 1, 1);
 }

@@ -1,6 +1,6 @@
 /**
  * @file mainwindow.cpp
- * @brief 主窗口实现 - 大棚控制系统
+ * @brief 主窗口实现 - 大棚控制系统（美化版）
  */
 
 #include "mainwindow.h"
@@ -9,6 +9,7 @@
 #include "device_widget.h"
 #include "group_widget.h"
 #include "strategy_widget.h"
+#include "sensor_widget.h"
 #include "log_widget.h"
 #include "settings_widget.h"
 
@@ -36,6 +37,7 @@ MainWindow::MainWindow(QWidget *parent)
     , deviceWidget_(nullptr)
     , groupWidget_(nullptr)
     , strategyWidget_(nullptr)
+    , sensorWidget_(nullptr)
     , logWidget_(nullptr)
     , settingsWidget_(nullptr)
     , rpcClient_(new RpcClient(this))
@@ -59,7 +61,34 @@ MainWindow::MainWindow(QWidget *parent)
     cloudStatusTimer_->start(5000);  // 每5秒检查一次云连接状态
     
     // 延迟执行自动连接（等待UI初始化完成）
-    QTimer::singleShot(500, this, &MainWindow::attemptAutoConnect);
+    QTimer::singleShot(800, this, [this]() {
+        // 启动时自动连接（如果启用了自动连接）
+        QSettings settings;
+        bool autoConnect = settings.value(QStringLiteral("settings/autoConnect"), true).toBool();
+        
+        if (autoConnect) {
+            QString host = settings.value(QStringLiteral("connection/host"), QStringLiteral("127.0.0.1")).toString();
+            quint16 port = static_cast<quint16>(settings.value(QStringLiteral("connection/port"), 12345).toInt());
+            
+            onLogMessage(QStringLiteral("正在自动连接到服务器 %1:%2...").arg(host).arg(port));
+            qDebug() << "[MAIN_WINDOW] 正在自动连接到服务器" << host << ":" << port;
+            
+            rpcClient_->setEndpoint(host, port);
+            
+            if (rpcClient_->connectToServer(3000)) {
+                onLogMessage(QStringLiteral("[OK] 自动连接成功"));
+                qDebug() << "[MAIN_WINDOW] 自动连接成功";
+                onConnectionStatusChanged(true);
+            } else {
+                onLogMessage(QStringLiteral("[X] 自动连接失败，请检查服务器是否运行"), QStringLiteral("WARN"));
+                qDebug() << "[MAIN_WINDOW] 自动连接失败";
+            }
+        } else {
+            qDebug() << "[MAIN_WINDOW] 自动连接未启用";
+        }
+    });
+    
+    qDebug() << "[MAIN_WINDOW] 主窗口初始化完成";
 }
 
 MainWindow::~MainWindow()
@@ -67,6 +96,7 @@ MainWindow::~MainWindow()
     autoRefreshTimer_->stop();
     statusBarTimer_->stop();
     cloudStatusTimer_->stop();
+    qDebug() << "[MAIN_WINDOW] 主窗口销毁";
 }
 
 void MainWindow::setupUi()
@@ -82,14 +112,14 @@ void MainWindow::setupStatusBar()
         "QStatusBar { "
         "  background-color: #1a252f; "
         "  color: white; "
-        "  padding: 2px 6px; "
-        "  font-size: 11px; "
+        "  padding: 4px 8px; "
+        "  font-size: 12px; "
         "}"));
 
     // 连接状态
     connectionStatusLabel_ = new QLabel(QStringLiteral("[X] 未连接"));
     connectionStatusLabel_->setStyleSheet(QStringLiteral(
-        "color: #e74c3c; font-weight: bold; padding: 2px 8px;"));
+        "color: #e74c3c; font-weight: bold; padding: 4px 10px;"));
     statusBar->addWidget(connectionStatusLabel_);
 
     // 分隔符
@@ -101,7 +131,7 @@ void MainWindow::setupStatusBar()
     // 云连接状态
     cloudStatusLabel_ = new QLabel(QStringLiteral("[云] 未连接"));
     cloudStatusLabel_->setStyleSheet(QStringLiteral(
-        "color: #95a5a6; padding: 2px 8px;"));
+        "color: #95a5a6; padding: 4px 10px;"));
     cloudStatusLabel_->setToolTip(QStringLiteral("云/MQTT连接状态"));
     statusBar->addWidget(cloudStatusLabel_);
 
@@ -114,7 +144,7 @@ void MainWindow::setupStatusBar()
     // 时间
     timeLabel_ = new QLabel(QStringLiteral("--:--:--"));
     timeLabel_->setStyleSheet(QStringLiteral(
-        "color: #ecf0f1; padding: 2px 8px;"));
+        "color: #ecf0f1; padding: 4px 10px; font-weight: 500;"));
     statusBar->addWidget(timeLabel_);
 
     // 分隔符
@@ -124,9 +154,9 @@ void MainWindow::setupStatusBar()
     statusBar->addWidget(sep2);
 
     // 报警/日志信息
-    alertLabel_ = new QLabel(QStringLiteral("系统就绪"));
+    alertLabel_ = new QLabel(QStringLiteral("[OK] 系统就绪"));
     alertLabel_->setStyleSheet(QStringLiteral(
-        "color: #bdc3c7; padding: 2px 8px;"));
+        "color: #bdc3c7; padding: 4px 10px;"));
     statusBar->addWidget(alertLabel_, 1);
 }
 
@@ -152,41 +182,66 @@ void MainWindow::createSidebar()
 {
     sidebar_ = new QWidget(this);
     sidebar_->setObjectName(QStringLiteral("sidebar"));
-    sidebar_->setFixedWidth(90);  // 稍微增宽侧边栏以适应更大字体
+    sidebar_->setFixedWidth(100);
+    sidebar_->setStyleSheet(QStringLiteral(
+        "#sidebar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2c3e50, stop:1 #1a252f); }"));
 
     sidebarLayout_ = new QVBoxLayout(sidebar_);
-    sidebarLayout_->setContentsMargins(4, 8, 4, 8);
-    sidebarLayout_->setSpacing(4);
+    sidebarLayout_->setContentsMargins(6, 12, 6, 12);
+    sidebarLayout_->setSpacing(6);
 
     // Logo/标题 - 使用纯文本
-    QLabel *logoLabel = new QLabel(QStringLiteral("大棚\n控制"), sidebar_);
+    QLabel *logoLabel = new QLabel(QStringLiteral("[棚]\n大棚\n控制"), sidebar_);
     logoLabel->setObjectName(QStringLiteral("sidebarLogo"));
     logoLabel->setAlignment(Qt::AlignCenter);
     logoLabel->setWordWrap(true);
+    logoLabel->setStyleSheet(QStringLiteral(
+        "font-size: 16px; font-weight: bold; color: #27ae60; padding: 8px;"));
     sidebarLayout_->addWidget(logoLabel);
 
-    sidebarLayout_->addSpacing(8);
+    sidebarLayout_->addSpacing(12);
 
-    // 菜单按钮 - 使用纯文本，无emoji，添加策略菜单
+    // 菜单按钮 - 使用纯文本，添加传感器菜单
     struct MenuItem {
         QString text;
+        QString icon;
     };
 
     QList<MenuItem> menuItems = {
-        {QStringLiteral("主页")},
-        {QStringLiteral("设备")},
-        {QStringLiteral("分组")},
-        {QStringLiteral("策略")},
-        {QStringLiteral("日志")},
-        {QStringLiteral("设置")}
+        {QStringLiteral("主页"), QStringLiteral("[主]")},
+        {QStringLiteral("设备"), QStringLiteral("[设]")},
+        {QStringLiteral("分组"), QStringLiteral("[组]")},
+        {QStringLiteral("策略"), QStringLiteral("[策]")},
+        {QStringLiteral("传感器"), QStringLiteral("[感]")},
+        {QStringLiteral("日志"), QStringLiteral("[志]")},
+        {QStringLiteral("设置"), QStringLiteral("[置]")}
     };
 
     for (int i = 0; i < menuItems.size(); ++i) {
-        QPushButton *btn = new QPushButton(menuItems[i].text, sidebar_);
+        QPushButton *btn = new QPushButton(
+            QStringLiteral("%1\n%2").arg(menuItems[i].icon, menuItems[i].text), sidebar_);
         btn->setObjectName(QStringLiteral("menuButton"));
         btn->setProperty("menuIndex", i);
         btn->setCheckable(true);
-        btn->setMinimumHeight(50);
+        btn->setMinimumHeight(64);
+        btn->setStyleSheet(QStringLiteral(
+            "QPushButton { "
+            "  background-color: transparent; "
+            "  color: #bdc3c7; "
+            "  border: none; "
+            "  border-radius: 8px; "
+            "  font-size: 11px; "
+            "  padding: 8px 4px; "
+            "}"
+            "QPushButton:hover { "
+            "  background-color: rgba(255,255,255,0.1); "
+            "  color: #ecf0f1; "
+            "}"
+            "QPushButton:checked { "
+            "  background-color: #3498db; "
+            "  color: white; "
+            "  font-weight: bold; "
+            "}"));
         connect(btn, &QPushButton::clicked, this, &MainWindow::onMenuButtonClicked);
         sidebarLayout_->addWidget(btn);
         menuButtons_.append(btn);
@@ -195,9 +250,10 @@ void MainWindow::createSidebar()
     sidebarLayout_->addStretch();
 
     // 版本信息
-    QLabel *versionLabel = new QLabel(QStringLiteral("v1.0"), sidebar_);
+    QLabel *versionLabel = new QLabel(QStringLiteral("v1.1"), sidebar_);
     versionLabel->setObjectName(QStringLiteral("sidebarVersion"));
     versionLabel->setAlignment(Qt::AlignCenter);
+    versionLabel->setStyleSheet(QStringLiteral("color: #7f8c8d; font-size: 10px;"));
     sidebarLayout_->addWidget(versionLabel);
 
     // 默认选中第一个菜单
@@ -254,6 +310,17 @@ void MainWindow::createContentArea()
     connect(strategyWidget_, &StrategyWidget::logMessage, this, &MainWindow::onLogMessage);
     contentStack_->addWidget(strategyScrollArea);
 
+    // 创建传感器监控页面（带滚动）
+    QScrollArea *sensorScrollArea = new QScrollArea(this);
+    sensorScrollArea->setWidgetResizable(true);
+    sensorScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    sensorScrollArea->setFrameShape(QFrame::NoFrame);
+    sensorWidget_ = new SensorWidget(rpcClient_, this);
+    sensorScrollArea->setWidget(sensorWidget_);
+    QScroller::grabGesture(sensorScrollArea->viewport(), QScroller::LeftMouseButtonGesture);
+    connect(sensorWidget_, &SensorWidget::logMessage, this, &MainWindow::onLogMessage);
+    contentStack_->addWidget(sensorScrollArea);
+
     // 创建日志页面（带滚动）
     QScrollArea *logScrollArea = new QScrollArea(this);
     logScrollArea->setWidgetResizable(true);
@@ -264,9 +331,9 @@ void MainWindow::createContentArea()
     QScroller::grabGesture(logScrollArea->viewport(), QScroller::LeftMouseButtonGesture);
     connect(logWidget_, &LogWidget::newAlertMessage, this, [this](const QString &message) {
         lastAlertMessage_ = message;
-        alertLabel_->setText(QStringLiteral("[!] %1").arg(message));
+        alertLabel_->setText(QStringLiteral("[警] %1").arg(message));
         alertLabel_->setStyleSheet(QStringLiteral(
-            "color: #f39c12; padding: 2px 8px; font-weight: bold;"));
+            "color: #f39c12; padding: 4px 10px; font-weight: bold;"));
     });
     contentStack_->addWidget(logScrollArea);
 
@@ -290,6 +357,7 @@ void MainWindow::onMenuButtonClicked()
     if (!btn) return;
 
     int index = btn->property("menuIndex").toInt();
+    qDebug() << "[MAIN_WINDOW] 菜单点击 index=" << index;
     switchToPage(index);
 }
 
@@ -318,6 +386,10 @@ void MainWindow::switchToPage(int index)
     // 切换到策略管理页面时刷新策略列表
     if (index == 3 && strategyWidget_ && rpcClient_->isConnected()) {
         strategyWidget_->refreshAllStrategies();
+    }
+    // 切换到传感器页面时刷新传感器列表
+    if (index == 4 && sensorWidget_ && rpcClient_->isConnected()) {
+        sensorWidget_->refreshSensorList();
     }
 }
 
@@ -351,12 +423,18 @@ void MainWindow::onConnectionStatusChanged(bool connected)
         if (strategyWidget_) {
             strategyWidget_->refreshAllStrategies();
         }
+        if (sensorWidget_) {
+            sensorWidget_->refreshSensorList();
+        }
 
-        onLogMessage(QStringLiteral("已连接到服务器 %1:%2")
+        onLogMessage(QStringLiteral("[OK] 已连接到服务器 %1:%2")
             .arg(rpcClient_->host()).arg(rpcClient_->port()));
+        
+        qDebug() << "[MAIN_WINDOW] 已连接到服务器" << rpcClient_->host() << ":" << rpcClient_->port();
     } else {
         autoRefreshTimer_->stop();
-        onLogMessage(QStringLiteral("服务器连接已断开"), QStringLiteral("WARN"));
+        onLogMessage(QStringLiteral("[X] 服务器连接已断开"), QStringLiteral("WARN"));
+        qDebug() << "[MAIN_WINDOW] 服务器连接已断开";
     }
 }
 
@@ -365,14 +443,14 @@ void MainWindow::updateStatusBarConnection(bool connected)
     if (connected) {
         connectionStatusLabel_->setText(QStringLiteral("[OK] 已连接"));
         connectionStatusLabel_->setStyleSheet(QStringLiteral(
-            "color: #27ae60; font-weight: bold; padding: 2px 8px;"));
-        alertLabel_->setText(QStringLiteral("系统运行正常"));
+            "color: #27ae60; font-weight: bold; padding: 4px 10px;"));
+        alertLabel_->setText(QStringLiteral("[OK] 系统运行正常"));
         alertLabel_->setStyleSheet(QStringLiteral(
-            "color: #bdc3c7; padding: 2px 8px;"));
+            "color: #27ae60; padding: 4px 10px; font-weight: 500;"));
     } else {
         connectionStatusLabel_->setText(QStringLiteral("[X] 未连接"));
         connectionStatusLabel_->setStyleSheet(QStringLiteral(
-            "color: #e74c3c; font-weight: bold; padding: 2px 8px;"));
+            "color: #e74c3c; font-weight: bold; padding: 4px 10px;"));
     }
 }
 
@@ -383,10 +461,6 @@ void MainWindow::onAutoRefreshTimeout()
         if (currentPageIndex_ == 0 && homeWidget_) {
             homeWidget_->refreshData();
         }
-        // 注意：移除了设备状态的自动轮询
-        // 原因：节点设备会主动通过CAN总线上报状态数据（CAN ID: 0x200+nodeId）
-        // 如果QT同时通过RPC轮询查询状态，会导致CAN TX buffer拥塞
-        // 用户可以通过手动点击"刷新设备"或"查询全部"按钮获取最新状态
     }
 }
 
@@ -398,13 +472,13 @@ void MainWindow::onLogMessage(const QString &message, const QString &level)
 
     // 更新状态栏报警信息
     if (level == QStringLiteral("ERROR")) {
-        alertLabel_->setText(QStringLiteral("[ERR] %1").arg(message));
+        alertLabel_->setText(QStringLiteral("[X] %1").arg(message));
         alertLabel_->setStyleSheet(QStringLiteral(
-            "color: #e74c3c; padding: 2px 8px; font-weight: bold;"));
+            "color: #e74c3c; padding: 4px 10px; font-weight: bold;"));
     } else if (level == QStringLiteral("WARN")) {
-        alertLabel_->setText(QStringLiteral("[!] %1").arg(message));
+        alertLabel_->setText(QStringLiteral("[警] %1").arg(message));
         alertLabel_->setStyleSheet(QStringLiteral(
-            "color: #f39c12; padding: 2px 8px;"));
+            "color: #f39c12; padding: 4px 10px; font-weight: 500;"));
     }
 }
 
@@ -450,7 +524,7 @@ void MainWindow::updateCloudStatus()
 {
     if (!rpcClient_->isConnected()) {
         cloudStatusLabel_->setText(QStringLiteral("[云] 未连接"));
-        cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #95a5a6; padding: 2px 8px;"));
+        cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #95a5a6; padding: 4px 10px;"));
         return;
     }
     
@@ -463,7 +537,7 @@ void MainWindow::updateCloudStatus()
         // 检查是否成功
         if (!resultObj.value(QStringLiteral("ok")).toBool()) {
             cloudStatusLabel_->setText(QStringLiteral("[云] 未知"));
-            cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #95a5a6; padding: 2px 8px;"));
+            cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #95a5a6; padding: 4px 10px;"));
             return;
         }
         
@@ -481,20 +555,20 @@ void MainWindow::updateCloudStatus()
         
         if (totalChannels == 0) {
             cloudStatusLabel_->setText(QStringLiteral("[云] 未配置"));
-            cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #95a5a6; padding: 2px 8px;"));
+            cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #95a5a6; padding: 4px 10px;"));
         } else if (connectedChannels == 0) {
             cloudStatusLabel_->setText(QStringLiteral("[云] 断开 (0/%1)").arg(totalChannels));
-            cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #e67e22; padding: 2px 8px;"));
+            cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #e67e22; padding: 4px 10px;"));
         } else if (connectedChannels == totalChannels) {
             cloudStatusLabel_->setText(QStringLiteral("[云] 已连接 (%1)").arg(totalChannels));
-            cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #27ae60; font-weight: bold; padding: 2px 8px;"));
+            cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #27ae60; font-weight: bold; padding: 4px 10px;"));
         } else {
             cloudStatusLabel_->setText(QStringLiteral("[云] 部分连接 (%1/%2)").arg(connectedChannels).arg(totalChannels));
-            cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #f39c12; padding: 2px 8px;"));
+            cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #f39c12; padding: 4px 10px;"));
         }
     } else {
         // RPC调用失败或方法不存在
         cloudStatusLabel_->setText(QStringLiteral("[云] 未知"));
-        cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #95a5a6; padding: 2px 8px;"));
+        cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #95a5a6; padding: 4px 10px;"));
     }
 }

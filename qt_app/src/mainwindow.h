@@ -21,6 +21,7 @@ class HomeWidget;
 class DeviceWidget;
 class GroupWidget;
 class StrategyWidget;
+class SensorWidget;
 class LogWidget;
 class SettingsWidget;
 
@@ -74,6 +75,7 @@ private:
     DeviceWidget *deviceWidget_;
     GroupWidget *groupWidget_;
     StrategyWidget *strategyWidget_;
+    SensorWidget *sensorWidget_;
     LogWidget *logWidget_;
     SettingsWidget *settingsWidget_;
 
