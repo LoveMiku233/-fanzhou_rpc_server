@@ -548,6 +548,10 @@ void SettingsWidget::onConnect()
     emit logMessage(QStringLiteral("正在连接到 %1:%2...").arg(host).arg(port));
 
     if (rpcClient_->connectToServer()) {
+        // 手动触发连接状态更新（因为waitForConnected同步调用可能不会触发信号）
+        updateConnectionStatus(true);
+        emit logMessage(QStringLiteral("服务器连接成功"));
+        emit connectionStatusChanged(true);
         onPing();
     }
 }
