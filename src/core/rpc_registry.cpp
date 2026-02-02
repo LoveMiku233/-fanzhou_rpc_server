@@ -17,6 +17,7 @@
 #include "comm/can/can_comm.h"
 #include "utils/system_monitor.h"
 #include "utils/system_settings.h"
+#include "utils/logger.h"
 #include "device/can/relay_gd427.h"
 #include "device/device_types.h"
 #include "rpc/json_rpc_dispatcher.h"
