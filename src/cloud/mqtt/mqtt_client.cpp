@@ -83,11 +83,11 @@ void MqttClient::setKeepAlive(int seconds)
 void MqttClient::connectToBroker()
 {
     LOG_INFO(kLogSource,
-             QStringLiteral("MQTT connecting to %1:%2 (clientId=%3, username=%4)")
+             QStringLiteral("MQTT connecting to %1:%2 (clientId=%3, hasAuth=%4)")
                  .arg(m_client->hostname())
                  .arg(m_client->port())
                  .arg(m_client->clientId())
-                 .arg(m_client->username().isEmpty() ? QStringLiteral("(none)") : m_client->username()));
+                 .arg(m_client->username().isEmpty() ? QStringLiteral("no") : QStringLiteral("yes")));
     m_client->connectToHost();
 }
 
@@ -214,8 +214,10 @@ void MqttClient::onError(QMqttClient::ClientError error)
             errorStr = QStringLiteral("Protocol violation");
             break;
         case QMqttClient::UnknownError:
+            errorStr = QStringLiteral("Unknown MQTT error");
+            break;
         default:
-            errorStr = QStringLiteral("Unknown error (code=%1)").arg(static_cast<int>(error));
+            errorStr = QStringLiteral("Unhandled error (code=%1)").arg(static_cast<int>(error));
             break;
         }
         LOG_ERROR(kLogSource,
