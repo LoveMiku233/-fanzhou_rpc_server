@@ -1155,47 +1155,112 @@ void RpcRegistry::registerRelay()
         return result;
     });
 
-    // 传感器列表 - 列出所有已配置的传感器设备
+    // 传感器列表 - 列出所有已配置的传感器（包括物理设备传感器和MQTT虚拟传感器）
     dispatcher_->registerMethod(QStringLiteral("sensor.list"),
                                  [this](const QJsonObject &params) {
+        QString sourceFilter;
+        rpc::RpcHelpers::getString(params, "source", sourceFilter);  // 可选过滤：local/mqtt/all
+
         QString commTypeFilter;
-        rpc::RpcHelpers::getString(params, "commType", commTypeFilter);  // 可选过滤：serial/can
+        rpc::RpcHelpers::getString(params, "commType", commTypeFilter);  // 可选过滤：serial/can（仅对local有效）
 
         QJsonArray sensors;
-        const auto devices = context_->listDevices();
 
-        for (const auto &dev : devices) {
-            // 只返回传感器类型的设备
-            if (!device::isSensorType(dev.deviceType)) {
-                continue;
-            }
+        // 1. 添加 sensorConfigs 中的配置传感器（包括MQTT虚拟传感器和本地传感器）
+        for (auto it = context_->sensorConfigs.constBegin();
+             it != context_->sensorConfigs.constEnd(); ++it) {
+            const QString &sensorId = it.key();
+            const auto &cfg = it.value();
 
-            // 如果指定了通信类型过滤
-            if (!commTypeFilter.isEmpty()) {
-                if (commTypeFilter.toLower() == QStringLiteral("serial") &&
-                    dev.commType != device::CommTypeId::Serial) {
+            // 来源过滤
+            if (!sourceFilter.isEmpty() && sourceFilter.toLower() != QStringLiteral("all")) {
+                if (sourceFilter.toLower() == QStringLiteral("mqtt") &&
+                    cfg.source != core::SensorSource::Mqtt) {
                     continue;
                 }
-                if (commTypeFilter.toLower() == QStringLiteral("can") &&
-                    dev.commType != device::CommTypeId::Can) {
+                if (sourceFilter.toLower() == QStringLiteral("local") &&
+                    cfg.source != core::SensorSource::Local) {
                     continue;
                 }
             }
 
             QJsonObject sensorObj;
-            sensorObj[QStringLiteral("nodeId")] = dev.nodeId;
-            sensorObj[kKeyName] = dev.name;
-            sensorObj[QStringLiteral("type")] = static_cast<int>(dev.deviceType);
-            sensorObj[QStringLiteral("typeName")] = QString::fromLatin1(device::deviceTypeToString(dev.deviceType));
-            sensorObj[QStringLiteral("commType")] = static_cast<int>(dev.commType);
-            sensorObj[QStringLiteral("commTypeName")] = QString::fromLatin1(device::commTypeToString(dev.commType));
-            sensorObj[QStringLiteral("bus")] = dev.bus;
+            sensorObj[QStringLiteral("sensorId")] = sensorId;
+            sensorObj[kKeyName] = cfg.name;
+            sensorObj[QStringLiteral("source")] = (cfg.source == core::SensorSource::Mqtt) 
+                ? QStringLiteral("mqtt") : QStringLiteral("local");
+            sensorObj[QStringLiteral("sourceType")] = static_cast<int>(cfg.source);
+            sensorObj[QStringLiteral("unit")] = cfg.unit;
+            sensorObj[kKeyEnabled] = cfg.enabled;
 
-            if (!dev.params.isEmpty()) {
-                sensorObj[QStringLiteral("params")] = dev.params;
+            if (cfg.source == core::SensorSource::Mqtt) {
+                sensorObj[QStringLiteral("mqttChannelId")] = cfg.mqttChannelId;
+                sensorObj[QStringLiteral("topic")] = cfg.topic;
+                sensorObj[QStringLiteral("jsonPath")] = cfg.jsonPath;
+            } else {
+                sensorObj[QStringLiteral("nodeId")] = cfg.nodeId;
+                sensorObj[QStringLiteral("channel")] = cfg.channel;
+            }
+
+            // 添加当前值（如果有）
+            if (context_->sensorValues.contains(sensorId)) {
+                const QVariant &val = context_->sensorValues.value(sensorId);
+                sensorObj[QStringLiteral("value")] = QJsonValue::fromVariant(val);
+                sensorObj[QStringLiteral("hasValue")] = true;
+
+                if (context_->sensorUpdateTime.contains(sensorId)) {
+                    const QDateTime &updateTime = context_->sensorUpdateTime.value(sensorId);
+                    sensorObj[QStringLiteral("updateTime")] = updateTime.toString(Qt::ISODate);
+                }
+            } else {
+                sensorObj[QStringLiteral("hasValue")] = false;
             }
 
             sensors.append(sensorObj);
+        }
+
+        // 2. 添加 listDevices() 中的物理传感器设备（如果没有过滤为mqtt）
+        if (sourceFilter.isEmpty() || sourceFilter.toLower() == QStringLiteral("all") ||
+            sourceFilter.toLower() == QStringLiteral("local")) {
+            const auto devices = context_->listDevices();
+
+            for (const auto &dev : devices) {
+                // 只返回传感器类型的设备
+                if (!device::isSensorType(dev.deviceType)) {
+                    continue;
+                }
+
+                // 如果指定了通信类型过滤
+                if (!commTypeFilter.isEmpty()) {
+                    if (commTypeFilter.toLower() == QStringLiteral("serial") &&
+                        dev.commType != device::CommTypeId::Serial) {
+                        continue;
+                    }
+                    if (commTypeFilter.toLower() == QStringLiteral("can") &&
+                        dev.commType != device::CommTypeId::Can) {
+                        continue;
+                    }
+                }
+
+                QJsonObject sensorObj;
+                sensorObj[QStringLiteral("sensorId")] = QStringLiteral("device_%1").arg(dev.nodeId);
+                sensorObj[QStringLiteral("nodeId")] = dev.nodeId;
+                sensorObj[kKeyName] = dev.name;
+                sensorObj[QStringLiteral("source")] = QStringLiteral("local");
+                sensorObj[QStringLiteral("sourceType")] = static_cast<int>(core::SensorSource::Local);
+                sensorObj[QStringLiteral("type")] = static_cast<int>(dev.deviceType);
+                sensorObj[QStringLiteral("typeName")] = QString::fromLatin1(device::deviceTypeToString(dev.deviceType));
+                sensorObj[QStringLiteral("commType")] = static_cast<int>(dev.commType);
+                sensorObj[QStringLiteral("commTypeName")] = QString::fromLatin1(device::commTypeToString(dev.commType));
+                sensorObj[QStringLiteral("bus")] = dev.bus;
+                sensorObj[QStringLiteral("hasValue")] = false;
+
+                if (!dev.params.isEmpty()) {
+                    sensorObj[QStringLiteral("params")] = dev.params;
+                }
+
+                sensors.append(sensorObj);
+            }
         }
 
         return QJsonObject{
