@@ -265,6 +265,9 @@ public:
     void onMqttSensorMessage(const int channelId,
                              const QString &topic,
                              const QJsonObject &payload);
+    // 继电器状态作为传感器值更新
+    void updateRelaySensorValue(quint8 nodeId, quint8 channel, 
+                                const device::RelayProtocol::Status &status);
 
     // 屏幕配置管理
     ScreenConfig getScreenConfig() const;

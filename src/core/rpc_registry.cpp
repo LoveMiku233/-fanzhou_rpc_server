@@ -1204,6 +1204,329 @@ void RpcRegistry::registerRelay()
             {kKeyTotal, sensors.size()}
         };
     });
+
+    // 获取传感器当前值 - sensor.value
+    dispatcher_->registerMethod(QStringLiteral("sensor.value"),
+                                 [this](const QJsonObject &params) {
+        QString sensorId;
+        if (!rpc::RpcHelpers::getString(params, "sensorId", sensorId))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing sensorId"));
+
+        // 检查传感器是否配置
+        if (!context_->sensorConfigs.contains(sensorId)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, 
+                QStringLiteral("sensor not found: %1").arg(sensorId));
+        }
+
+        const auto &cfg = context_->sensorConfigs.value(sensorId);
+        
+        QJsonObject result{
+            {kKeyOk, true},
+            {QStringLiteral("sensorId"), sensorId},
+            {kKeyName, cfg.name},
+            {QStringLiteral("source"), static_cast<int>(cfg.source)},
+            {QStringLiteral("unit"), cfg.unit}
+        };
+
+        // 检查是否有值
+        if (context_->sensorValues.contains(sensorId)) {
+            const QVariant &val = context_->sensorValues.value(sensorId);
+            result[QStringLiteral("value")] = QJsonValue::fromVariant(val);
+            result[QStringLiteral("hasValue")] = true;
+            
+            // 添加更新时间
+            if (context_->sensorUpdateTime.contains(sensorId)) {
+                const QDateTime &updateTime = context_->sensorUpdateTime.value(sensorId);
+                result[QStringLiteral("updateTime")] = updateTime.toString(Qt::ISODate);
+                result[QStringLiteral("updateMs")] = updateTime.toMSecsSinceEpoch();
+            }
+        } else {
+            result[QStringLiteral("hasValue")] = false;
+            result[QStringLiteral("note")] = QStringLiteral("No value received yet");
+        }
+
+        return result;
+    });
+
+    // 获取所有传感器值 - sensor.values
+    dispatcher_->registerMethod(QStringLiteral("sensor.values"),
+                                 [this](const QJsonObject &) {
+        QJsonArray sensorsArr;
+        
+        for (auto it = context_->sensorConfigs.constBegin(); 
+             it != context_->sensorConfigs.constEnd(); ++it) {
+            const QString &sensorId = it.key();
+            const auto &cfg = it.value();
+            
+            QJsonObject sensorObj{
+                {QStringLiteral("sensorId"), sensorId},
+                {kKeyName, cfg.name},
+                {QStringLiteral("source"), static_cast<int>(cfg.source)},
+                {QStringLiteral("unit"), cfg.unit},
+                {kKeyEnabled, cfg.enabled}
+            };
+            
+            if (context_->sensorValues.contains(sensorId)) {
+                const QVariant &val = context_->sensorValues.value(sensorId);
+                sensorObj[QStringLiteral("value")] = QJsonValue::fromVariant(val);
+                sensorObj[QStringLiteral("hasValue")] = true;
+                
+                if (context_->sensorUpdateTime.contains(sensorId)) {
+                    const QDateTime &updateTime = context_->sensorUpdateTime.value(sensorId);
+                    sensorObj[QStringLiteral("updateTime")] = updateTime.toString(Qt::ISODate);
+                    sensorObj[QStringLiteral("updateMs")] = updateTime.toMSecsSinceEpoch();
+                }
+            } else {
+                sensorObj[QStringLiteral("hasValue")] = false;
+            }
+            
+            sensorsArr.append(sensorObj);
+        }
+
+        return QJsonObject{
+            {kKeyOk, true},
+            {QStringLiteral("sensors"), sensorsArr},
+            {kKeyTotal, sensorsArr.size()}
+        };
+    });
+
+    // 添加传感器配置 - sensor.add
+    dispatcher_->registerMethod(QStringLiteral("sensor.add"),
+                                 [this](const QJsonObject &params) {
+        core::SensorNodeConfig cfg;
+        
+        // 必需参数
+        if (!rpc::RpcHelpers::getString(params, "sensorId", cfg.sensorId) || cfg.sensorId.isEmpty())
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid sensorId"));
+        
+        // 检查是否已存在
+        if (context_->sensorConfigs.contains(cfg.sensorId)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, 
+                QStringLiteral("sensor already exists: %1").arg(cfg.sensorId));
+        }
+
+        // 可选参数
+        QString name;
+        if (rpc::RpcHelpers::getString(params, "name", name)) {
+            cfg.name = name;
+        } else {
+            cfg.name = cfg.sensorId;
+        }
+
+        // 传感器来源
+        qint32 sourceInt = 0;
+        if (rpc::RpcHelpers::getI32(params, "source", sourceInt)) {
+            cfg.source = static_cast<core::SensorSource>(sourceInt);
+        }
+
+        // 单位和缩放
+        QString unit;
+        if (rpc::RpcHelpers::getString(params, "unit", unit))
+            cfg.unit = unit;
+        
+        double scale = 1.0, offset = 0.0;
+        if (params.contains(QStringLiteral("scale")))
+            cfg.scale = params[QStringLiteral("scale")].toDouble(1.0);
+        if (params.contains(QStringLiteral("offset")))
+            cfg.offset = params[QStringLiteral("offset")].toDouble(0.0);
+
+        // 本地传感器参数
+        qint32 nodeId = -1, channel = -1;
+        if (rpc::RpcHelpers::getI32(params, "nodeId", nodeId))
+            cfg.nodeId = nodeId;
+        if (rpc::RpcHelpers::getI32(params, "channel", channel))
+            cfg.channel = channel;
+
+        // MQTT传感器参数
+        qint32 mqttChannelId = -1;
+        if (rpc::RpcHelpers::getI32(params, "mqttChannelId", mqttChannelId))
+            cfg.mqttChannelId = mqttChannelId;
+        QString topic, jsonPath;
+        if (rpc::RpcHelpers::getString(params, "topic", topic))
+            cfg.topic = topic;
+        if (rpc::RpcHelpers::getString(params, "jsonPath", jsonPath))
+            cfg.jsonPath = jsonPath;
+
+        cfg.enabled = params.value(QStringLiteral("enabled")).toBool(true);
+
+        // 添加到配置
+        context_->sensorConfigs.insert(cfg.sensorId, cfg);
+        context_->coreConfig.sensors.append(cfg);
+
+        LOG_INFO("RpcRegistry", 
+                 QStringLiteral("Sensor added: %1 (source=%2)")
+                     .arg(cfg.sensorId)
+                     .arg(static_cast<int>(cfg.source)));
+
+        return QJsonObject{
+            {kKeyOk, true},
+            {QStringLiteral("sensorId"), cfg.sensorId}
+        };
+    });
+
+    // 更新传感器配置 - sensor.update
+    dispatcher_->registerMethod(QStringLiteral("sensor.update"),
+                                 [this](const QJsonObject &params) {
+        QString sensorId;
+        if (!rpc::RpcHelpers::getString(params, "sensorId", sensorId))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing sensorId"));
+
+        if (!context_->sensorConfigs.contains(sensorId)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, 
+                QStringLiteral("sensor not found: %1").arg(sensorId));
+        }
+
+        auto &cfg = context_->sensorConfigs[sensorId];
+
+        // 更新可选参数
+        QString name;
+        if (rpc::RpcHelpers::getString(params, "name", name))
+            cfg.name = name;
+
+        QString unit;
+        if (rpc::RpcHelpers::getString(params, "unit", unit))
+            cfg.unit = unit;
+        
+        if (params.contains(QStringLiteral("scale")))
+            cfg.scale = params[QStringLiteral("scale")].toDouble(cfg.scale);
+        if (params.contains(QStringLiteral("offset")))
+            cfg.offset = params[QStringLiteral("offset")].toDouble(cfg.offset);
+        if (params.contains(QStringLiteral("enabled")))
+            cfg.enabled = params[QStringLiteral("enabled")].toBool(cfg.enabled);
+
+        // MQTT相关
+        QString jsonPath;
+        if (rpc::RpcHelpers::getString(params, "jsonPath", jsonPath))
+            cfg.jsonPath = jsonPath;
+        qint32 mqttChannelId;
+        if (rpc::RpcHelpers::getI32(params, "mqttChannelId", mqttChannelId))
+            cfg.mqttChannelId = mqttChannelId;
+
+        // 同步到coreConfig
+        for (auto &s : context_->coreConfig.sensors) {
+            if (s.sensorId == sensorId) {
+                s = cfg;
+                break;
+            }
+        }
+
+        LOG_INFO("RpcRegistry", 
+                 QStringLiteral("Sensor updated: %1").arg(sensorId));
+
+        return QJsonObject{
+            {kKeyOk, true},
+            {QStringLiteral("sensorId"), sensorId}
+        };
+    });
+
+    // 删除传感器配置 - sensor.delete
+    dispatcher_->registerMethod(QStringLiteral("sensor.delete"),
+                                 [this](const QJsonObject &params) {
+        QString sensorId;
+        if (!rpc::RpcHelpers::getString(params, "sensorId", sensorId))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing sensorId"));
+
+        if (!context_->sensorConfigs.contains(sensorId)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, 
+                QStringLiteral("sensor not found: %1").arg(sensorId));
+        }
+
+        // 从运行时配置移除
+        context_->sensorConfigs.remove(sensorId);
+        context_->sensorValues.remove(sensorId);
+        context_->sensorUpdateTime.remove(sensorId);
+
+        // 从coreConfig移除
+        for (int i = 0; i < context_->coreConfig.sensors.size(); ++i) {
+            if (context_->coreConfig.sensors[i].sensorId == sensorId) {
+                context_->coreConfig.sensors.removeAt(i);
+                break;
+            }
+        }
+
+        LOG_INFO("RpcRegistry", 
+                 QStringLiteral("Sensor deleted: %1").arg(sensorId));
+
+        return QJsonObject{
+            {kKeyOk, true},
+            {QStringLiteral("sensorId"), sensorId}
+        };
+    });
+
+    // 获取传感器配置详情 - sensor.config
+    dispatcher_->registerMethod(QStringLiteral("sensor.config"),
+                                 [this](const QJsonObject &params) {
+        QString sensorId;
+        if (!rpc::RpcHelpers::getString(params, "sensorId", sensorId))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing sensorId"));
+
+        if (!context_->sensorConfigs.contains(sensorId)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, 
+                QStringLiteral("sensor not found: %1").arg(sensorId));
+        }
+
+        const auto &cfg = context_->sensorConfigs.value(sensorId);
+        
+        QJsonObject result{
+            {kKeyOk, true},
+            {QStringLiteral("sensorId"), cfg.sensorId},
+            {kKeyName, cfg.name},
+            {QStringLiteral("source"), static_cast<int>(cfg.source)},
+            {QStringLiteral("valueType"), static_cast<int>(cfg.valueType)},
+            {QStringLiteral("nodeId"), cfg.nodeId},
+            {kKeyChannel, cfg.channel},
+            {QStringLiteral("mqttChannelId"), cfg.mqttChannelId},
+            {QStringLiteral("topic"), cfg.topic},
+            {QStringLiteral("jsonPath"), cfg.jsonPath},
+            {QStringLiteral("unit"), cfg.unit},
+            {QStringLiteral("scale"), cfg.scale},
+            {QStringLiteral("offset"), cfg.offset},
+            {kKeyEnabled, cfg.enabled}
+        };
+
+        return result;
+    });
+
+    // 手动设置传感器值（用于测试或外部数据注入）- sensor.setValue
+    dispatcher_->registerMethod(QStringLiteral("sensor.setValue"),
+                                 [this](const QJsonObject &params) {
+        QString sensorId;
+        if (!rpc::RpcHelpers::getString(params, "sensorId", sensorId))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing sensorId"));
+
+        if (!params.contains(QStringLiteral("value"))) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing value"));
+        }
+
+        const QJsonValue val = params.value(QStringLiteral("value"));
+        
+        // 如果传感器不存在，自动创建配置
+        if (!context_->sensorConfigs.contains(sensorId)) {
+            core::SensorNodeConfig cfg;
+            cfg.sensorId = sensorId;
+            cfg.name = sensorId;
+            cfg.source = core::SensorSource::Local;
+            cfg.enabled = true;
+            context_->sensorConfigs.insert(sensorId, cfg);
+            
+            LOG_INFO("RpcRegistry", 
+                     QStringLiteral("Sensor auto-created for setValue: %1").arg(sensorId));
+        }
+
+        context_->sensorValues[sensorId] = val.toVariant();
+        context_->sensorUpdateTime[sensorId] = QDateTime::currentDateTime();
+
+        LOG_DEBUG("RpcRegistry", 
+                  QStringLiteral("Sensor value set: %1 = %2")
+                      .arg(sensorId)
+                      .arg(val.toVariant().toString()));
+
+        return QJsonObject{
+            {kKeyOk, true},
+            {QStringLiteral("sensorId"), sensorId},
+            {QStringLiteral("value"), val}
+        };
+    });
 }
 
 void RpcRegistry::registerGroup()

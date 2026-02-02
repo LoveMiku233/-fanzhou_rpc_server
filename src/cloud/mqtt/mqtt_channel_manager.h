@@ -222,6 +222,7 @@ private slots:
     void onClientConnected();
     void onClientDisconnected();
     void onClientMessageReceived(const QByteArray &message, const QString &topic);
+    void onClientError(const QString &error);
 
 private:
     struct ChannelData {

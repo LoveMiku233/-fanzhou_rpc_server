@@ -1,9 +1,13 @@
 #include "mqtt_client.h"
 #include <QtMqtt/qmqttclient.h>
-#include <QDebug>
+#include "utils/logger.h"
 
 namespace fanzhou {
 namespace cloud {
+
+namespace {
+const char *const kLogSource = "MqttClient";
+}
 
 MqttClient::MqttClient(QObject *parent)
     : QObject(parent),
@@ -21,7 +25,10 @@ MqttClient::MqttClient(QObject *parent)
     connect(m_client, &QMqttClient::errorChanged,
             this, &MqttClient::onError);
 
-    // 3.1.1
+    connect(m_client, &QMqttClient::stateChanged,
+            this, &MqttClient::onStateChanged);
+
+    // 使用 MQTT 3.1.1 协议版本
     setMqttVer(QMqttClient::MQTT_3_1_1);
 }
 
@@ -75,9 +82,12 @@ void MqttClient::setKeepAlive(int seconds)
 
 void MqttClient::connectToBroker()
 {
-    qDebug() << "MQTT connecting to"
-             << m_client->hostname()
-             << m_client->port();
+    LOG_INFO(kLogSource,
+             QStringLiteral("MQTT connecting to %1:%2 (clientId=%3, hasAuth=%4)")
+                 .arg(m_client->hostname())
+                 .arg(m_client->port())
+                 .arg(m_client->clientId())
+                 .arg(m_client->username().isEmpty() ? QStringLiteral("no") : QStringLiteral("yes")));
     m_client->connectToHost();
 }
 
@@ -126,23 +136,55 @@ quint16 MqttClient::port() const
 
 void MqttClient::onConnected()
 {
-    qDebug() << "MQTT connected";
+    LOG_INFO(kLogSource,
+             QStringLiteral("MQTT connected to %1:%2")
+                 .arg(m_client->hostname())
+                 .arg(m_client->port()));
     emit connected();
 }
 
 void MqttClient::onDisconnected()
 {
-    qDebug() << "MQTT disconnected";
+    LOG_INFO(kLogSource,
+             QStringLiteral("MQTT disconnected from %1:%2")
+                 .arg(m_client->hostname())
+                 .arg(m_client->port()));
     emit disconnected();
 }
 
 void MqttClient::onMessageReceived(const QByteArray &message,
                                    const QMqttTopicName &topic)
 {
-    qDebug() << "MQTT message:"
-             << topic.name()
-             << message;
+    LOG_DEBUG(kLogSource,
+              QStringLiteral("MQTT message received: topic=%1, size=%2 bytes")
+                  .arg(topic.name())
+                  .arg(message.size()));
     emit messageReceived(message, topic.name());
+}
+
+void MqttClient::onStateChanged(QMqttClient::ClientState state)
+{
+    QString stateStr;
+    switch (state) {
+    case QMqttClient::Disconnected:
+        stateStr = QStringLiteral("Disconnected");
+        break;
+    case QMqttClient::Connecting:
+        stateStr = QStringLiteral("Connecting");
+        break;
+    case QMqttClient::Connected:
+        stateStr = QStringLiteral("Connected");
+        break;
+    default:
+        stateStr = QStringLiteral("Unknown");
+        break;
+    }
+    LOG_DEBUG(kLogSource,
+              QStringLiteral("MQTT state changed: %1 (%2:%3)")
+                  .arg(stateStr)
+                  .arg(m_client->hostname())
+                  .arg(m_client->port()));
+    emit stateChanged(state);
 }
 
 void MqttClient::onError(QMqttClient::ClientError error)
@@ -166,17 +208,23 @@ void MqttClient::onError(QMqttClient::ClientError error)
             errorStr = QStringLiteral("Not authorized");
             break;
         case QMqttClient::TransportInvalid:
-            errorStr = QStringLiteral("Transport invalid");
+            errorStr = QStringLiteral("Transport invalid - check network connection");
             break;
         case QMqttClient::ProtocolViolation:
             errorStr = QStringLiteral("Protocol violation");
             break;
         case QMqttClient::UnknownError:
+            errorStr = QStringLiteral("Unknown MQTT error");
+            break;
         default:
-            errorStr = QStringLiteral("Unknown error");
+            errorStr = QStringLiteral("Unhandled error (code=%1)").arg(static_cast<int>(error));
             break;
         }
-        qDebug() << "MQTT error:" << errorStr;
+        LOG_ERROR(kLogSource,
+                  QStringLiteral("MQTT error: %1 (broker=%2:%3)")
+                      .arg(errorStr)
+                      .arg(m_client->hostname())
+                      .arg(m_client->port()));
         emit errorOccurred(errorStr);
     }
 }
