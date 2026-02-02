@@ -438,6 +438,9 @@ void MainWindow::attemptAutoConnect()
         if (!result.isUndefined()) {
             onLogMessage(QStringLiteral("服务器响应正常"));
         }
+        
+        // 手动触发连接状态更新（因为waitForConnected同步调用可能不会触发信号）
+        onConnectionStatusChanged(true);
     } else {
         onLogMessage(QStringLiteral("自动连接失败，请检查服务器是否运行"), QStringLiteral("WARN"));
     }

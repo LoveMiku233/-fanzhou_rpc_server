@@ -293,8 +293,8 @@ def main():
 
     parser.add_argument(
         "--host",
-        default="192.168.0.104",
-        help="RPC服务器地址 (默认: 192.168.0.104)",
+        default="localhost",
+        help="RPC服务器地址 (默认: localhost)",
     )
 
     parser.add_argument(
