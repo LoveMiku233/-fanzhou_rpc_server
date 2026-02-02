@@ -30,6 +30,9 @@ let deviceListCache = [];
 // 分组列表缓存
 let groupListCache = [];
 
+// 传感器映射缓存
+let sensorMappingCache = [];
+
 // 日志条目数量限制
 const MAX_LOG_ENTRIES = 100;
 
@@ -577,6 +580,10 @@ function showPage(pageName) {
     const targetBtn = document.querySelector(`.nav-btn[data-page="${pageName}"]`);
     if (targetBtn) {
         targetBtn.classList.add('active');
+    }
+
+    if (pageName === 'sensors') {
+        refreshSensorMapping();
     }
 }
 
@@ -2576,6 +2583,85 @@ function readSensor(nodeId) {
             log('error', `读取传感器失败: ${response.error.message || '未知错误'}`);
         }
     });
+}
+
+/**
+ * 刷新传感器映射表
+ */
+function refreshSensorMapping() {
+    callMethod('sensor.list', { source: 'all' }, function(response) {
+        if (response.result && response.result.ok) {
+            sensorMappingCache = response.result.sensors || [];
+            renderSensorMappingTable();
+        } else if (response.error) {
+            log('error', `获取传感器映射失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 渲染传感器映射表格
+ */
+function renderSensorMappingTable() {
+    const tableBody = document.getElementById('sensorMappingTableBody');
+    const emptyEl = document.getElementById('sensorMappingEmpty');
+    const cardEl = document.getElementById('sensorMappingCard');
+
+    if (!tableBody) {
+        return;
+    }
+
+    if (!sensorMappingCache || sensorMappingCache.length === 0) {
+        if (emptyEl) emptyEl.style.display = 'block';
+        if (cardEl) cardEl.style.display = 'none';
+        tableBody.innerHTML = '<tr><td colspan="7" class="sensor-mapping-placeholder">暂无传感器数据</td></tr>';
+        return;
+    }
+
+    if (emptyEl) emptyEl.style.display = 'none';
+    if (cardEl) cardEl.style.display = 'block';
+
+    let html = '';
+    sensorMappingCache.forEach(sensor => {
+        const name = escapeHtml(sensor.name || sensor.sensorId || '--');
+        const sensorId = escapeHtml(sensor.sensorId || '--');
+        const source = String(sensor.source || 'local').toLowerCase();
+        const sourceLabel = source === 'mqtt' ? '☁️ MQTT' : '🧩 本地';
+        const sourceClass = source === 'mqtt' ? 'mqtt' : '';
+        const nodeLabel = sensor.nodeId !== undefined ? `节点 ${sensor.nodeId}` : '--';
+        const channelLabel = sensor.channel !== undefined ? `通道 ${sensor.channel}` : '';
+        const nodeInfo = channelLabel ? `${nodeLabel} / ${channelLabel}` : nodeLabel;
+        const dataPath = source === 'mqtt'
+            ? [sensor.topic, sensor.jsonPath].filter(Boolean).join(' / ')
+            : (sensor.params || '--');
+        const mappingPath = typeof dataPath === 'object' ? JSON.stringify(dataPath) : dataPath;
+        let valueText = sensor.hasValue ? sensor.value : '--';
+        if (valueText && typeof valueText === 'object') {
+            valueText = JSON.stringify(valueText);
+        }
+        const unit = sensor.unit || '';
+        const displayValue = sensor.hasValue ? `${valueText}${unit ? ' ' + unit : ''}` : '暂无数据';
+        const updateTime = sensor.updateTime || '--';
+        const statusClass = sensor.enabled === false ? 'offline' : '';
+        const statusText = sensor.enabled === false ? '已停用' : (sensor.hasValue ? '在线' : '待采集');
+
+        html += `
+            <tr>
+                <td>
+                    <strong>${name}</strong>
+                    <div style="font-size: 11px; color: #888;">${sensorId}</div>
+                </td>
+                <td><span class="sensor-mapping-tag ${sourceClass}">${sourceLabel}</span></td>
+                <td>${escapeHtml(nodeInfo)}</td>
+                <td style="color: #666;">${escapeHtml(String(mappingPath || '--'))}</td>
+                <td><strong>${escapeHtml(String(displayValue))}</strong></td>
+                <td>${escapeHtml(updateTime)}</td>
+                <td><span class="sensor-mapping-status ${statusClass}">${statusText}</span></td>
+            </tr>
+        `;
+    });
+
+    tableBody.innerHTML = html;
 }
 
 /* ========================================================

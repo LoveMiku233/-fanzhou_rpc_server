@@ -73,6 +73,9 @@
                 <button class="nav-btn" onclick="showPage('monitor')" data-page="monitor">
                     📊 监控
                 </button>
+                <button class="nav-btn" onclick="showPage('sensors')" data-page="sensors">
+                    🧭 传感器
+                </button>
                 <button class="nav-btn" onclick="showPage('blueprint')" data-page="blueprint">
                     🎨 蓝图
                 </button>
@@ -823,6 +826,50 @@ websocat --text ws-l:0.0.0.0:12346 tcp:192.168.0.104:12345
                         <div id="storageDetailsList">
                             <p style="color: #999;">加载中...</p>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==================== 传感器映射页面 ==================== -->
+            <div class="page-content" id="page-sensors">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="color: #333;">🧭 传感器映射</h3>
+                    <div class="btn-group">
+                        <button onclick="refreshSensorMapping()">🔄 刷新</button>
+                    </div>
+                </div>
+
+                <div style="background: #e3f2fd; padding: 15px 20px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
+                    <strong style="color: #1565c0;">📌 数据映射说明</strong>
+                    <p style="color: #666; font-size: 13px; margin-top: 5px;">
+                        汇总本地传感器与MQTT虚拟传感器，展示节点、来源、当前值与数据路径。
+                    </p>
+                </div>
+
+                <div id="sensorMappingEmpty" class="data-list-empty" style="display: none; background: #f8f9fa; border-radius: 12px; padding: 40px 20px;">
+                    <p>📭 暂无传感器数据</p>
+                    <p style="font-size: 12px; margin-top: 10px;">连接服务器后点击“刷新”获取最新映射</p>
+                </div>
+                <div class="sensor-mapping-card" id="sensorMappingCard">
+                    <div class="sensor-mapping-table-wrapper">
+                        <table class="sensor-mapping-table">
+                            <thead>
+                                <tr>
+                                    <th>传感器</th>
+                                    <th>来源</th>
+                                    <th>节点/通道</th>
+                                    <th>数据路径</th>
+                                    <th>当前值</th>
+                                    <th>更新时间</th>
+                                    <th>状态</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sensorMappingTableBody">
+                                <tr>
+                                    <td colspan="7" class="sensor-mapping-placeholder">加载传感器映射中...</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
