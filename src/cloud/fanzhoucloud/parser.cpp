@@ -4,6 +4,8 @@
 
 #include <QJsonDocument>
 #include <QJsonArray>
+#include <cmath>
+#include <limits>
 
 namespace fanzhou {
 namespace cloud {
@@ -354,7 +356,36 @@ bool parseDeleteCommand(const QString &type,
         return true;
     }
 
-    // @TODO ARRAY
+    if (data.isArray()) {
+        const QJsonArray arr = data.toArray();
+        for (const auto &value : arr) {
+            if (!value.isDouble()) {
+                if (error) *error = "scene id must be numeric";
+                return false;
+            }
+            const double rawId = value.toDouble();
+            const double truncatedId = std::trunc(rawId);
+            if (truncatedId != rawId) {
+                if (error) *error = "scene id must be an integer";
+                return false;
+            }
+            if (truncatedId <= 0) {
+                if (error) *error = "scene id must be positive";
+                return false;
+            }
+            if (truncatedId > static_cast<double>(std::numeric_limits<int>::max())) {
+                if (error) *error = "scene id out of range";
+                return false;
+            }
+            const int id = static_cast<int>(truncatedId);
+            sceneIds.append(id);
+        }
+        if (sceneIds.isEmpty()) {
+            if (error) *error = "scene id array cannot be empty";
+            return false;
+        }
+        return true;
+    }
 
     if (error) *error = "invalid delete data format";
     return false;

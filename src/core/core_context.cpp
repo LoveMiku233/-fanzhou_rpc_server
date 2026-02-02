@@ -304,6 +304,7 @@ bool CoreContext::initDevices()
 bool CoreContext::initStrategy()
 {
     strategys_ = coreConfig.strategies;
+    deletedStrategies_.clear();
 
     autoStrategyScheduler_ = new QTimer(this);
     autoStrategyScheduler_->setInterval(1000); // 每秒扫描一次
@@ -629,6 +630,21 @@ bool CoreContext::triggerStrategy(int strategyId)
 bool CoreContext::createStrategy(const AutoStrategy &config, bool *isUpdate, QString *error)
 {
     // 检查是否存在同名ID
+    const auto deleteIt = deletedStrategies_.constFind(config.strategyId);
+    if (deleteIt != deletedStrategies_.constEnd()) {
+        if (config.version <= deleteIt->version) {
+            if (error) {
+                *error = QStringLiteral("Strategy %1 was deleted").arg(config.strategyId);
+            }
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("Skip update for deleted strategy %1, version=%2 deletedVersion=%3")
+                            .arg(config.strategyId)
+                            .arg(config.version)
+                            .arg(deleteIt->version));
+            return false;
+        }
+        deletedStrategies_.remove(config.strategyId);
+    }
     for (auto &s : strategys_) {
         if (s.strategyId == config.strategyId && s.version < config.version) {
             AutoStrategy old = s;
@@ -653,15 +669,27 @@ bool CoreContext::createStrategy(const AutoStrategy &config, bool *isUpdate, QSt
     return true;
 }
 
-bool CoreContext::deleteStrategy(int strategyId, QString *error)
+bool CoreContext::deleteStrategy(int strategyId, QString *error, bool *alreadyDeleted)
 {
+    const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+    if (alreadyDeleted) *alreadyDeleted = false;
     for (int i = 0; i < strategys_.size(); ++i) {
         if (strategys_[i].strategyId == strategyId) {
+            deletedStrategies_.insert(strategyId,
+                                      { strategys_[i].version, nowMs });
             strategys_.removeAt(i);
             LOG_INFO(kLogSource, QStringLiteral("Deleted strategy %1").arg(strategyId));
             return true;
         }
     }
+    auto it = deletedStrategies_.find(strategyId);
+    if (it != deletedStrategies_.end()) {
+        it->deleteMs = nowMs;
+        if (alreadyDeleted) *alreadyDeleted = true;
+        if (error) *error = QStringLiteral("Strategy %1 already deleted").arg(strategyId);
+        return false;
+    }
+    deletedStrategies_.insert(strategyId, { 0, nowMs });
     if (error) *error = QStringLiteral("StrategyId %1 not found").arg(strategyId);
     return false;
 }

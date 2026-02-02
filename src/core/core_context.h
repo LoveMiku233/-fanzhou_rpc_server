@@ -333,7 +333,7 @@ public:
     bool setStrategyEnabled(int strategyId, bool enabled);
     bool triggerStrategy(int strategyId);
     bool createStrategy(const AutoStrategy &config, bool *isUpdate, QString *error = nullptr);
-    bool deleteStrategy(int strategyId, QString *error = nullptr);
+    bool deleteStrategy(int strategyId, QString *error = nullptr, bool *alreadyDeleted = nullptr);
     //
     bool isInEffectiveTime(const AutoStrategy &s, const QTime &now) const;
     void executeActions(const QList<StrategyAction> &actions);
@@ -378,6 +378,11 @@ public:
     bool isIpWhitelisted(const QString &ip) const;
 
 private:
+    struct DeletedStrategyInfo {
+        int version = 0;
+        qint64 deleteMs = 0;
+    };
+
     bool initSystemSettings();
     bool initCan();
     bool initDevices();
@@ -394,6 +399,7 @@ private:
     bool evaluateSensorCondition(const QString &condition, double value, double threshold) const;
 
     QList<AutoStrategy> strategys_;
+    QHash<int, DeletedStrategyInfo> deletedStrategies_;
     QTimer *autoStrategyScheduler_;
 
     QQueue<ControlJob> controlQueue_;

@@ -207,9 +207,17 @@ bool CloudMessageHandler::handleStrategyCommand(
 
         QString delErr;
         for (int id : ids) {
-            if (!ctx_->deleteStrategy(id, &delErr)) {
+            bool alreadyDeleted = false;
+            if (!ctx_->deleteStrategy(id, &delErr, &alreadyDeleted)) {
+                if (alreadyDeleted) {
+                    LOG_INFO(kLogSource,
+                             QStringLiteral("Skip delete for %1: %2")
+                                 .arg(id)
+                                 .arg(delErr));
+                    continue;
+                }
                 ok = false;
-                errCode = 4002;     // 场景不存在 / 不可删除
+                errCode = 4002;     // 场景不存在或其他删除错误
                 errMsg = delErr;
                 goto REPLY;
             }

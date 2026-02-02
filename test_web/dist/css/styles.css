@@ -458,6 +458,91 @@ button:disabled {
     color: #999;
 }
 
+/* ==================== 传感器映射表样式 ==================== */
+.sensor-mapping-card {
+    background: white;
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+}
+
+.sensor-mapping-table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.sensor-mapping-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 720px;
+    font-size: 13px;
+}
+
+.sensor-mapping-table th,
+.sensor-mapping-table td {
+    text-align: left;
+}
+
+.sensor-mapping-table td strong {
+    color: #222;
+}
+
+.sensor-mapping-table thead th {
+    text-align: left;
+    padding: 12px 14px;
+    background: #f5f6fb;
+    color: #333;
+    font-weight: 600;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.sensor-mapping-table tbody td {
+    padding: 12px 14px;
+    border-bottom: 1px solid #eee;
+    color: #444;
+    vertical-align: top;
+}
+
+.sensor-mapping-table tbody tr:hover {
+    background: #f9fafc;
+}
+
+.sensor-mapping-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.sensor-mapping-tag.mqtt {
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+.sensor-mapping-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #2e7d32;
+}
+
+.sensor-mapping-status.offline {
+    color: #b71c1c;
+}
+
+.sensor-mapping-placeholder {
+    text-align: center;
+    color: #888;
+    padding: 20px;
+}
+
 /* ==================== 日志样式 ==================== */
 .log-container {
     background: #1e1e1e;
