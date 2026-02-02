@@ -193,6 +193,7 @@
     {
       "channelId": 1,
       "name": "云平台主通道",
+      "type": 0,
       "enabled": true,
       "broker": "mqtt.example.com",
       "port": 1883,
@@ -200,10 +201,48 @@
       "username": "",
       "password": "",
       "topicPrefix": "fanzhou/greenhouse/",
+      "topicControlSub": "$thing/down/property/A133",
+      "topicStrategySub": "",
+      "topicStatusPub": "$thing/up/property/A133",
+      "topicEventPub": "",
+      "topicSettingSub": "",
+      "topicSettingPub": "",
       "keepAliveSec": 60,
       "autoReconnect": true,
       "reconnectIntervalSec": 5,
       "qos": 1
+    }
+  ],
+  "sensors": [
+    {
+      "sensorId": "temperature",
+      "name": "MQTT温度",
+      "source": "mqtt",
+      "enabled": true,
+      "mqttChannelId": 1,
+      "topic": "$thing/down/property/A133",
+      "jsonPath": "temperature",
+      "unit": "℃"
+    },
+    {
+      "sensorId": "humidity",
+      "name": "MQTT湿度",
+      "source": "mqtt",
+      "enabled": true,
+      "mqttChannelId": 1,
+      "topic": "$thing/down/property/A133",
+      "jsonPath": "humidity",
+      "unit": "%"
+    },
+    {
+      "sensorId": "light",
+      "name": "MQTT光照",
+      "source": "mqtt",
+      "enabled": true,
+      "mqttChannelId": 1,
+      "topic": "$thing/down/property/A133",
+      "jsonPath": "light",
+      "unit": "lux"
     }
   ]
 }
