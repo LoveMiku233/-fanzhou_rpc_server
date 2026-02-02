@@ -304,13 +304,6 @@ bool CoreContext::initDevices()
 bool CoreContext::initStrategy()
 {
     strategys_ = coreConfig.strategies;
-//    ;dont add Group
-//    for (auto &s : strategys_) {
-//        QString err;
-//        if (!ensureGroupForStrategy(s, &err)) {
-//            LOG_ERROR(kLogSource, QStringLiteral("Failed to ensure group for strategy: %1 error: %2").arg(s.strategyId).arg(err));
-//        }
-//    }
 
     autoStrategyScheduler_ = new QTimer(this);
     autoStrategyScheduler_->setInterval(1000); // 每秒扫描一次
@@ -318,7 +311,9 @@ bool CoreContext::initStrategy()
             this, &CoreContext::evaluateAllStrategies);
     autoStrategyScheduler_->start();
 
-    return false;
+    LOG_INFO(kLogSource, QStringLiteral("Strategy scheduler initialized with %1 strategies")
+                 .arg(strategys_.size()));
+    return true;
 }
 
 bool CoreContext::initMqtt()
@@ -383,7 +378,11 @@ bool CoreContext::initMqtt()
         connect(relay, &device::RelayGd427::statusUpdated,
                 this,
                 [this, nodeId](quint8 ch,
-                               fanzhou::device::RelayProtocol::Status /*status*/) {
+                               fanzhou::device::RelayProtocol::Status status) {
+                    // 更新传感器值（用于策略调用）
+                    updateRelaySensorValue(nodeId, ch, status);
+                    
+                    // 云端上报
                     if (cloudUploader)
                         cloudUploader->onChannelValueChanged(nodeId, ch);
                 });
@@ -391,12 +390,24 @@ bool CoreContext::initMqtt()
         connect(relay, &device::RelayGd427::autoStatusReceived,
                 this,
                 [this, nodeId](
-                    fanzhou::device::RelayProtocol::AutoStatusReport /*report*/) {
+                    fanzhou::device::RelayProtocol::AutoStatusReport report) {
+                    // 更新所有通道的传感器值
+                    for (int ch = 0; ch < 4; ++ch) {
+                        device::RelayProtocol::Status status;
+                        status.channel = static_cast<quint8>(ch);
+                        status.statusByte = static_cast<quint8>(report.status[ch]);
+                        status.currentA = report.currentA[ch];
+                        updateRelaySensorValue(nodeId, static_cast<quint8>(ch), status);
+                    }
+                    
                     if (cloudUploader)
                         cloudUploader->onDeviceStatusChanged(nodeId);
                 });
 
     }
+
+    LOG_INFO(kLogSource, QStringLiteral("MQTT initialization complete"));
+    return true;
 }
 
 void CoreContext::initQueue()
@@ -1493,6 +1504,63 @@ void CoreContext::onMqttSensorMessage(const int channelId,
     }
 }
 
+void CoreContext::updateRelaySensorValue(quint8 nodeId, quint8 channel,
+                                         const device::RelayProtocol::Status &status)
+{
+    // 为继电器状态自动生成传感器ID格式: node_{nodeId}_sw{channel+1}_status
+    // 以及电流值: node_{nodeId}_sw{channel+1}_current
+    const QString statusSensorId = QStringLiteral("node_%1_sw%2_status")
+                                       .arg(nodeId)
+                                       .arg(channel + 1);
+    const QString currentSensorId = QStringLiteral("node_%1_sw%2_current")
+                                        .arg(nodeId)
+                                        .arg(channel + 1);
+
+    const QDateTime now = QDateTime::currentDateTime();
+
+    // 更新状态值（0=停止，1=正转，2=反转）
+    const int modeValue = device::RelayProtocol::modeBits(status.statusByte);
+    sensorValues[statusSensorId] = modeValue;
+    sensorUpdateTime[statusSensorId] = now;
+
+    // 更新电流值
+    sensorValues[currentSensorId] = status.currentA;
+    sensorUpdateTime[currentSensorId] = now;
+
+    // 如果传感器配置不存在，自动创建（用于策略调用）
+    if (!sensorConfigs.contains(statusSensorId)) {
+        SensorNodeConfig cfg;
+        cfg.sensorId = statusSensorId;
+        cfg.name = QStringLiteral("Node%1 Ch%2 Status").arg(nodeId).arg(channel);
+        cfg.source = SensorSource::Local;
+        cfg.valueType = SensorValueType::Int;
+        cfg.nodeId = nodeId;
+        cfg.channel = channel;
+        cfg.unit = QStringLiteral("");
+        cfg.enabled = true;
+        sensorConfigs.insert(statusSensorId, cfg);
+    }
+
+    if (!sensorConfigs.contains(currentSensorId)) {
+        SensorNodeConfig cfg;
+        cfg.sensorId = currentSensorId;
+        cfg.name = QStringLiteral("Node%1 Ch%2 Current").arg(nodeId).arg(channel);
+        cfg.source = SensorSource::Local;
+        cfg.valueType = SensorValueType::Double;
+        cfg.nodeId = nodeId;
+        cfg.channel = channel;
+        cfg.unit = QStringLiteral("A");
+        cfg.enabled = true;
+        sensorConfigs.insert(currentSensorId, cfg);
+    }
+
+    LOG_DEBUG(kLogSource,
+              QStringLiteral("relay sensor update: node=%1 ch=%2 status=%3 current=%4A")
+                  .arg(nodeId)
+                  .arg(channel)
+                  .arg(modeValue)
+                  .arg(status.currentA, 0, 'f', 2));
+}
 
 
 ScreenConfig CoreContext::getScreenConfig() const

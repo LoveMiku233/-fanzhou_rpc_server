@@ -58,6 +58,7 @@ signals:
     void disconnected();
     void messageReceived(const QByteArray &message, const QString &topic);
     void errorOccurred(const QString &error);
+    void stateChanged(QMqttClient::ClientState state);
 
 private slots:
     void onConnected();
@@ -65,6 +66,7 @@ private slots:
     void onMessageReceived(const QByteArray &message,
                            const QMqttTopicName &topic);
     void onError(QMqttClient::ClientError error);
+    void onStateChanged(QMqttClient::ClientState state);
 
 private:
     QMqttClient *m_client;

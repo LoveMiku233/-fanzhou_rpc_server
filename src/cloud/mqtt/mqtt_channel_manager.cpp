@@ -78,6 +78,8 @@ bool MqttChannelManager::addChannel(const core::MqttChannelConfig &config, QStri
             this, &MqttChannelManager::onClientDisconnected);
     connect(data.client, &MqttClient::messageReceived,
             this, &MqttChannelManager::onClientMessageReceived);
+    connect(data.client, &MqttClient::errorOccurred,
+            this, &MqttChannelManager::onClientError);
 
     channels_.insert(config.channelId, data);
 
@@ -811,6 +813,20 @@ QString MqttChannelManager::getSettingSubTopicFromConfig(int channelId)
         return "";
     }
     return getChannelConfig(channelId).topicSettingSub;
+}
+
+void MqttChannelManager::onClientError(const QString &error)
+{
+    auto *client = qobject_cast<MqttClient *>(sender());
+    if (!client) return;
+
+    const int channelId = client->property("channelId").toInt();
+    LOG_ERROR(kLogSource,
+              QStringLiteral("MQTT channel %1 error: %2")
+                  .arg(channelId)
+                  .arg(error));
+
+    emit errorOccurred(channelId, error);
 }
 
 
