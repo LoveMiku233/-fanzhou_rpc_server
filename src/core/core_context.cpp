@@ -35,7 +35,7 @@ const QString kErrUnknownNode = QStringLiteral("unknown node");
 const QString kErrDeviceNotFound = QStringLiteral("device not found");
 const QString kErrDeviceRejected = QStringLiteral("device rejected");
 constexpr int kMaxChannelId = 3;  ///< 最大通道ID（0-3表示4个通道）
-constexpr double kFloatCompareEpsilon = 0.001;  ///< 浮点数比较精度
+constexpr double kFloatCompareEpsilon = 0.1;  ///< 浮点数比较精度
 constexpr int kChannelKeyMultiplier = 256;  ///< 通道键编码乘数：channelKey = nodeId * 256 + channel
 constexpr int kMinChannelsForMultiControl = 2;  ///< 触发controlMulti合并的最小通道数
 }  // namespace
@@ -555,6 +555,7 @@ void CoreContext::evaluateAllStrategies()
             cnt++;
             const QString source = QStringLiteral("auto:%1 count:%2").arg(s.strategyName).arg(cnt);
             enqueueControl(a.node, a.channel, static_cast<device::RelayProtocol::Action>(a.identifierValue), source, true);
+            LOG_DEBUG(kLogSource, source);
         }
 
 
@@ -704,8 +705,8 @@ bool CoreContext::evaluateSensorCondition(const QString &op,
     if (op == "gt")   return value > threshold;
     if (op == "lt")   return value < threshold;
     if (op == "eq")   return qAbs(value - threshold) < kFloatCompareEpsilon;
-    if (op == "ne")   return qAbs(value - threshold) >= kFloatCompareEpsilon;
-    if (op == "egt")  return value >= threshold;
+    if (op == "ne" || op == "neq")   return qAbs(value - threshold) >= kFloatCompareEpsilon;
+    if (op == "egt" || op == "ge")  return value >= threshold;
     if (op == "elt" || op == "le")  return value <= threshold;
 
     LOG_WARNING(kLogSource,
