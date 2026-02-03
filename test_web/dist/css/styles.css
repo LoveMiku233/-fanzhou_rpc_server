@@ -1785,3 +1785,66 @@ select {
     border-color: #667eea;
     box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.15);
 }
+
+/* ==================== 场景管理页面样式 ==================== */
+/* 场景卡片样式 */
+.scene-card,
+.timer-card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.scene-card:hover,
+.timer-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+/* 传感器设备卡片样式 */
+.sensor-device-card {
+    transition: all 0.2s ease;
+    cursor: default;
+}
+
+.sensor-device-card:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* 快速模板卡片样式 */
+.quick-template-card {
+    transition: all 0.2s ease;
+}
+
+/* 场景卡片网格 */
+.scene-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 12px;
+}
+
+/* 条件和动作项样式 */
+.scene-condition-item,
+.scene-action-item {
+    transition: background 0.2s ease;
+}
+
+.scene-condition-item:hover,
+.scene-action-item:hover {
+    background: #f5f5f5 !important;
+}
+
+/* MQTT通道卡片网格 */
+.mqtt-channels {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 15px;
+}
+
+.mqtt-channel-card {
+    transition: all 0.3s ease;
+}
+
+.mqtt-channel-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+}

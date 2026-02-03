@@ -61,6 +61,9 @@
                 <button class="nav-btn" onclick="showPage('sensors')" data-page="sensors">
                     📡 传感器
                 </button>
+                <button class="nav-btn" onclick="showPage('mqtt')" data-page="mqtt">
+                    ☁️ MQTT
+                </button>
                 <button class="nav-btn" onclick="showPage('monitor')" data-page="monitor">
                     📊 监控
                 </button>
@@ -332,94 +335,167 @@ websocat --text ws-l:0.0.0.0:12346 tcp:192.168.0.104:12345
                 </div>
             </div>
 
-            <!-- ==================== 策略管理页面 ==================== -->
+            <!-- ==================== 策略管理页面（泛舟云协议） ==================== -->
             <div class="page-content" id="page-strategy">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-                    <h3 style="color: #333; font-size: 1.1em;">⚡ 策略管理</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+                    <h3 style="color: #333; font-size: 1.2em;">⚡ 场景/策略管理</h3>
                     <div class="btn-group">
-                        <button onclick="refreshStrategyList()">🔄 刷新</button>
-                        <button onclick="openSimpleStrategyWizard()" class="success">➕ 新建</button>
+                        <button onclick="refreshSceneList()">🔄 刷新</button>
+                        <button onclick="syncSceneFromCloud()">☁️ 同步</button>
+                        <button onclick="openSceneEditorModal()" class="success">➕ 新建场景</button>
                     </div>
                 </div>
 
-                <!-- 快速创建卡片区 - 更紧凑 -->
+                <!-- 系统架构说明 -->
+                <div style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); padding: 16px 20px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
+                    <strong style="color: #1565c0;">💡 泛舟云IoT场景管理</strong>
+                    <p style="color: #666; font-size: 13px; margin-top: 8px;">
+                        基于云-边-端三层架构，支持自动场景(auto)和手动场景(manual)。场景通过MQTT协议与云端同步，支持离线自治模式。
+                    </p>
+                </div>
+
+                <!-- 传感器设备卡片 -->
+                <div style="margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                        <span style="font-size: 14px; font-weight: 600; color: #333;">📡 设备数据源</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px;">
+                        <!-- 环境传感器卡片 -->
+                        <div class="sensor-device-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 14px; color: white;">
+                            <div style="font-size: 24px; margin-bottom: 6px;">🌡️</div>
+                            <div style="font-weight: 600; font-size: 13px;">环境传感器</div>
+                            <div style="font-size: 11px; opacity: 0.85; margin-top: 4px;">温湿度/光照/CO₂</div>
+                            <div id="envSensorStatus" style="font-size: 10px; margin-top: 6px; padding: 3px 8px; background: rgba(255,255,255,0.2); border-radius: 8px; display: inline-block;">--</div>
+                        </div>
+                        <!-- 土壤传感器卡片 -->
+                        <div class="sensor-device-card" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); border-radius: 12px; padding: 14px; color: white;">
+                            <div style="font-size: 24px; margin-bottom: 6px;">🌱</div>
+                            <div style="font-weight: 600; font-size: 13px;">土壤传感器</div>
+                            <div style="font-size: 11px; opacity: 0.85; margin-top: 4px;">温湿度/氮磷钾</div>
+                            <div id="soilSensorStatus" style="font-size: 10px; margin-top: 6px; padding: 3px 8px; background: rgba(255,255,255,0.2); border-radius: 8px; display: inline-block;">--</div>
+                        </div>
+                        <!-- 水质传感器卡片 -->
+                        <div class="sensor-device-card" style="background: linear-gradient(135deg, #00b4db 0%, #0083b0 100%); border-radius: 12px; padding: 14px; color: white;">
+                            <div style="font-size: 24px; margin-bottom: 6px;">💧</div>
+                            <div style="font-weight: 600; font-size: 13px;">水质传感器</div>
+                            <div style="font-size: 11px; opacity: 0.85; margin-top: 4px;">溶解氧/PH值</div>
+                            <div id="waterSensorStatus" style="font-size: 10px; margin-top: 6px; padding: 3px 8px; background: rgba(255,255,255,0.2); border-radius: 8px; display: inline-block;">--</div>
+                        </div>
+                        <!-- 气象站卡片 -->
+                        <div class="sensor-device-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border-radius: 12px; padding: 14px; color: white;">
+                            <div style="font-size: 24px; margin-bottom: 6px;">🌤️</div>
+                            <div style="font-weight: 600; font-size: 13px;">气象站</div>
+                            <div style="font-size: 11px; opacity: 0.85; margin-top: 4px;">风速/风向/气压</div>
+                            <div id="weatherStationStatus" style="font-size: 10px; margin-top: 6px; padding: 3px 8px; background: rgba(255,255,255,0.2); border-radius: 8px; display: inline-block;">--</div>
+                        </div>
+                        <!-- 执行机构卡片 -->
+                        <div class="sensor-device-card" style="background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%); border-radius: 12px; padding: 14px; color: white;">
+                            <div style="font-size: 24px; margin-bottom: 6px;">⚙️</div>
+                            <div style="font-weight: 600; font-size: 13px;">执行机构</div>
+                            <div style="font-size: 11px; opacity: 0.85; margin-top: 4px;">继电器/风机/水泵</div>
+                            <div id="actuatorStatus" style="font-size: 10px; margin-top: 6px; padding: 3px 8px; background: rgba(255,255,255,0.2); border-radius: 8px; display: inline-block;">--</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 快速场景模板 -->
+                <div style="margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                        <span style="font-size: 14px; font-weight: 600; color: #333;">⚡ 快速创建模板</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px;">
+                        <div onclick="createQuickScene('hightemp_vent')" class="quick-template-card" style="background: #fff; border: 2px solid #eb3349; border-radius: 10px; padding: 12px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.transform='scale(1.02)';this.style.background='#fef1f2'" onmouseout="this.style.transform='scale(1)';this.style.background='#fff'">
+                            <div style="font-size: 22px; margin-bottom: 4px;">🌡️🌬️</div>
+                            <div style="font-weight: 600; font-size: 12px; color: #eb3349;">高温通风</div>
+                            <div style="font-size: 10px; color: #888; margin-top: 2px;">温度&gt;30°C启动风机</div>
+                        </div>
+                        <div onclick="createQuickScene('lowtemp_heat')" class="quick-template-card" style="background: #fff; border: 2px solid #00b4db; border-radius: 10px; padding: 12px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.transform='scale(1.02)';this.style.background='#e6f7fb'" onmouseout="this.style.transform='scale(1)';this.style.background='#fff'">
+                            <div style="font-size: 22px; margin-bottom: 4px;">❄️🔥</div>
+                            <div style="font-weight: 600; font-size: 12px; color: #00b4db;">低温保暖</div>
+                            <div style="font-size: 10px; color: #888; margin-top: 2px;">温度&lt;10°C启动加热</div>
+                        </div>
+                        <div onclick="createQuickScene('dry_irrigation')" class="quick-template-card" style="background: #fff; border: 2px solid #11998e; border-radius: 10px; padding: 12px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.transform='scale(1.02)';this.style.background='#e6f7f5'" onmouseout="this.style.transform='scale(1)';this.style.background='#fff'">
+                            <div style="font-size: 22px; margin-bottom: 4px;">🌱💧</div>
+                            <div style="font-weight: 600; font-size: 12px; color: #11998e;">干旱灌溉</div>
+                            <div style="font-size: 10px; color: #888; margin-top: 2px;">土壤湿度&lt;30%浇水</div>
+                        </div>
+                        <div onclick="createQuickScene('light_shade')" class="quick-template-card" style="background: #fff; border: 2px solid #f093fb; border-radius: 10px; padding: 12px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.transform='scale(1.02)';this.style.background='#fdf2fc'" onmouseout="this.style.transform='scale(1)';this.style.background='#fff'">
+                            <div style="font-size: 22px; margin-bottom: 4px;">☀️🌂</div>
+                            <div style="font-weight: 600; font-size: 12px; color: #f093fb;">强光遮阳</div>
+                            <div style="font-size: 10px; color: #888; margin-top: 2px;">光照&gt;50000lx遮阳</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 自动场景列表 -->
                 <div style="margin-bottom: 16px;">
-                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px;">
-                        <!-- 定时通风模板 -->
-                        <div onclick="createQuickStrategy('ventilation')" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; padding: 12px; color: white; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-                            <div style="font-size: 20px; margin-bottom: 4px;">🌬️</div>
-                            <div style="font-weight: 600; font-size: 12px;">定时通风</div>
-                            <div style="font-size: 10px; opacity: 0.8;">每小时5分钟</div>
-                        </div>
-                        <!-- 定时浇水模板 -->
-                        <div onclick="createQuickStrategy('irrigation')" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); border-radius: 10px; padding: 12px; color: white; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-                            <div style="font-size: 20px; margin-bottom: 4px;">💧</div>
-                            <div style="font-weight: 600; font-size: 12px;">定时浇水</div>
-                            <div style="font-size: 10px; opacity: 0.8;">每天8点</div>
-                        </div>
-                        <!-- 高温报警模板 -->
-                        <div onclick="createQuickStrategy('hightemp')" style="background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%); border-radius: 10px; padding: 12px; color: white; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-                            <div style="font-size: 20px; margin-bottom: 4px;">🌡️</div>
-                            <div style="font-weight: 600; font-size: 12px;">高温降温</div>
-                            <div style="font-size: 10px; opacity: 0.8;">&gt;30°C启动</div>
-                        </div>
-                        <!-- 低温保护模板 -->
-                        <div onclick="createQuickStrategy('lowtemp')" style="background: linear-gradient(135deg, #00b4db 0%, #0083b0 100%); border-radius: 10px; padding: 12px; color: white; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-                            <div style="font-size: 20px; margin-bottom: 4px;">❄️</div>
-                            <div style="font-weight: 600; font-size: 12px;">低温保暖</div>
-                            <div style="font-size: 10px; opacity: 0.8;">&lt;10°C启动</div>
-                        </div>
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                        <span style="font-size: 14px; font-weight: 600; color: #333;">🤖 自动场景 (Auto)</span>
+                        <span id="autoSceneCount" style="font-size: 11px; background: #667eea; color: white; padding: 2px 8px; border-radius: 10px;">0</span>
+                    </div>
+                    <div id="autoSceneCardsEmpty" class="data-list-empty" style="display: none; background: #f8f9fa; border-radius: 10px; padding: 30px 16px; text-align: center;">
+                        <p style="font-size: 14px; color: #666;">📭 暂无自动场景</p>
+                        <p style="font-size: 12px; margin-top: 6px; color: #999;">自动场景会根据传感器条件自动触发执行</p>
+                    </div>
+                    <div class="scene-cards-grid" id="autoSceneCards" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px;">
+                        <!-- 自动场景卡片将由JavaScript动态生成 -->
                     </div>
                 </div>
 
-                <!-- 策略列表 -->
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                    <span style="font-size: 12px; font-weight: 600; color: #555;">📋 定时策略</span>
-                    <button class="secondary" onclick="openCreateStrategyModal()" style="padding: 4px 10px; font-size: 11px;">+ 添加</button>
-                </div>
-                <div id="strategyCardsEmpty" class="data-list-empty" style="display: none; background: #f8f9fa; border-radius: 10px; padding: 24px 12px;">
-                    <p style="font-size: 13px;">📭 暂无定时策略</p>
-                    <p style="font-size: 11px; margin-top: 4px; color: #999;">点击上方卡片快速创建</p>
-                </div>
-                <div class="strategy-cards" id="strategyCards">
-                    <!-- 策略卡片将由JavaScript动态生成 -->
-                </div>
-
-                <!-- 传感器策略 -->
-                <div style="display: flex; align-items: center; gap: 8px; margin: 16px 0 8px 0;">
-                    <span style="font-size: 12px; font-weight: 600; color: #555;">📡 传感器策略</span>
-                    <button class="warning" onclick="openCreateSensorStrategyModal()" style="padding: 4px 10px; font-size: 11px;">+ 添加</button>
-                </div>
-                <div id="sensorStrategyCardsEmpty" class="data-list-empty" style="display: none; background: #f8f9fa; border-radius: 10px; padding: 24px 12px;">
-                    <p style="font-size: 13px;">📭 暂无传感器策略</p>
-                    <p style="font-size: 11px; margin-top: 4px; color: #999;">点击上方卡片快速创建</p>
-                </div>
-                <div class="strategy-cards" id="sensorStrategyCards">
-                    <!-- 传感器策略卡片将由JavaScript动态生成 -->
+                <!-- 手动场景列表 -->
+                <div style="margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                        <span style="font-size: 14px; font-weight: 600; color: #333;">👆 手动场景 (Manual)</span>
+                        <span id="manualSceneCount" style="font-size: 11px; background: #e67e22; color: white; padding: 2px 8px; border-radius: 10px;">0</span>
+                    </div>
+                    <div id="manualSceneCardsEmpty" class="data-list-empty" style="display: none; background: #f8f9fa; border-radius: 10px; padding: 30px 16px; text-align: center;">
+                        <p style="font-size: 14px; color: #666;">📭 暂无手动场景</p>
+                        <p style="font-size: 12px; margin-top: 6px; color: #999;">手动场景需要用户手动触发执行</p>
+                    </div>
+                    <div class="scene-cards-grid" id="manualSceneCards" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px;">
+                        <!-- 手动场景卡片将由JavaScript动态生成 -->
+                    </div>
                 </div>
 
-                <!-- 开发者调试区 - 更紧凑 -->
-                <details style="margin-top: 16px; background: #fce4ec; padding: 12px; border-radius: 10px;">
-                    <summary style="cursor: pointer; font-weight: 600; color: #7b1fa2; font-size: 12px;">🔧 调试工具</summary>
-                    <div style="margin-top: 10px;">
+                <!-- 定时器列表 -->
+                <div style="margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                        <span style="font-size: 14px; font-weight: 600; color: #333;">⏰ 定时器 (Timer)</span>
+                        <span id="timerCount" style="font-size: 11px; background: #9c27b0; color: white; padding: 2px 8px; border-radius: 10px;">0</span>
+                        <button onclick="openTimerEditorModal()" class="secondary" style="padding: 4px 10px; font-size: 11px; margin-left: auto;">+ 添加定时</button>
+                    </div>
+                    <div id="timerCardsEmpty" class="data-list-empty" style="display: none; background: #f8f9fa; border-radius: 10px; padding: 30px 16px; text-align: center;">
+                        <p style="font-size: 14px; color: #666;">📭 暂无定时器</p>
+                        <p style="font-size: 12px; margin-top: 6px; color: #999;">定时器会在指定时间自动执行</p>
+                    </div>
+                    <div class="scene-cards-grid" id="timerCards" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px;">
+                        <!-- 定时器卡片将由JavaScript动态生成 -->
+                    </div>
+                </div>
+
+                <!-- 调试工具 -->
+                <details style="margin-top: 16px; background: #fce4ec; padding: 14px; border-radius: 12px;">
+                    <summary style="cursor: pointer; font-weight: 600; color: #7b1fa2; font-size: 13px;">🔧 开发者调试工具</summary>
+                    <div style="margin-top: 12px;">
                         <div class="form-row">
                             <div class="form-group">
-                                <label>传感器ID</label>
-                                <input type="text" id="debugSensorId" value="test_ab">
+                                <label>设备编码</label>
+                                <input type="text" id="debugDeviceCode" value="864708069172099" placeholder="设备编码">
                             </div>
                             <div class="form-group">
-                                <label>标识符</label>
-                                <input type="text" id="debugSensorIdentifier" value="temperature">
+                                <label>属性标识</label>
+                                <input type="text" id="debugIdentifier" value="airTemp" placeholder="如: airTemp, soilHum">
                             </div>
                             <div class="form-group">
                                 <label>数值</label>
-                                <input type="number" id="debugSensorValue" value="25" step="0.1">
+                                <input type="number" id="debugIdentifierValue" value="25" step="0.1">
                             </div>
                         </div>
-                        <div class="btn-group" style="margin-top: 8px;">
-                            <button class="success" onclick="setDebugSensorValue()" style="padding: 6px 12px; font-size: 11px;">设置</button>
-                            <button onclick="setDebugSensorQuick(30)" style="background: #f44336; color: white; padding: 6px 8px; font-size: 11px;">30°C</button>
-                            <button onclick="setDebugSensorQuick(15)" style="background: #2196f3; color: white; padding: 6px 8px; font-size: 11px;">15°C</button>
+                        <div class="btn-group" style="margin-top: 10px;">
+                            <button class="success" onclick="setDebugSensorValue()" style="padding: 8px 14px; font-size: 12px;">📤 模拟上报</button>
+                            <button onclick="setDebugSensorQuick(35)" style="background: #f44336; color: white; padding: 8px 10px; font-size: 12px;">🌡️ 35°C</button>
+                            <button onclick="setDebugSensorQuick(5)" style="background: #2196f3; color: white; padding: 8px 10px; font-size: 12px;">❄️ 5°C</button>
+                            <button onclick="testSceneTrigger()" style="background: #9c27b0; color: white; padding: 8px 10px; font-size: 12px;">⚡ 测试触发</button>
                         </div>
                     </div>
                 </details>
@@ -1209,6 +1285,244 @@ websocat --text ws-l:0.0.0.0:12346 tcp:192.168.0.104:12345
     </div>
 
     <!-- 创建定时策略弹窗 - 优化版 -->
+    <!-- 场景编辑器弹窗（泛舟云协议） -->
+    <div class="modal-overlay" id="sceneEditorModal" onclick="closeModalOnBackground(event, 'sceneEditorModal')">
+        <div class="modal-content modal-large" style="max-width: 700px;">
+            <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <h3 id="sceneEditorTitle">✨ 创建新场景</h3>
+                <button class="modal-close" onclick="closeModal('sceneEditorModal')">✕</button>
+            </div>
+            <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                <!-- 场景基本信息 -->
+                <div style="background: #f8f9fa; padding: 16px; border-radius: 10px; margin-bottom: 16px;">
+                    <div style="font-weight: 600; color: #333; margin-bottom: 12px;">📝 基本信息</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>场景ID <span style="color: #999; font-size: 11px;">（新建时留空）</span></label>
+                            <input type="number" id="sceneId" placeholder="自动分配" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label>场景名称 <span style="color: #c62828;">*</span></label>
+                            <input type="text" id="sceneName" placeholder="例如：高温通风">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>场景类型</label>
+                            <select id="sceneType" onchange="toggleSceneConditions()">
+                                <option value="auto">🤖 自动场景 (auto)</option>
+                                <option value="manual">👆 手动场景 (manual)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>触发方式</label>
+                            <select id="sceneMatchType">
+                                <option value="0">全部满足 (AND)</option>
+                                <option value="1">任一满足 (OR)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>状态</label>
+                            <select id="sceneStatus">
+                                <option value="0">✅ 启用</option>
+                                <option value="1">❌ 禁用</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>生效开始时间</label>
+                            <input type="time" id="sceneEffectiveBeginTime" value="00:00">
+                        </div>
+                        <div class="form-group">
+                            <label>生效结束时间</label>
+                            <input type="time" id="sceneEffectiveEndTime" value="23:59">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 触发条件 -->
+                <div id="sceneConditionsSection" style="background: #fff3e0; padding: 16px; border-radius: 10px; margin-bottom: 16px; border-left: 4px solid #ff9800;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <span style="font-weight: 600; color: #333;">📊 触发条件</span>
+                        <button onclick="addSceneCondition()" class="secondary" style="padding: 4px 10px; font-size: 11px;">+ 添加条件</button>
+                    </div>
+                    <div id="sceneConditionsList">
+                        <!-- 条件列表将由JavaScript动态生成 -->
+                        <div class="scene-condition-item" style="background: white; padding: 12px; border-radius: 8px; margin-bottom: 8px;">
+                            <div class="form-row" style="margin-bottom: 0;">
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 11px;">设备编码</label>
+                                    <input type="text" class="cond-device-code" placeholder="864708069172099" style="font-size: 12px;">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 11px;">属性标识</label>
+                                    <select class="cond-identifier" style="font-size: 12px;">
+                                        <option value="airTemp">🌡️ 空气温度</option>
+                                        <option value="airHum">💧 空气湿度</option>
+                                        <option value="light">☀️ 光照强度</option>
+                                        <option value="co2">🌫️ CO₂浓度</option>
+                                        <option value="soilTemp">🌱 土壤温度</option>
+                                        <option value="soilHum">🌾 土壤湿度</option>
+                                        <option value="soilEC">⚡ 土壤EC</option>
+                                        <option value="ph">🧪 PH值</option>
+                                        <option value="do">💨 溶解氧</option>
+                                        <option value="windSpeed">🌬️ 风速</option>
+                                        <option value="pressure">📊 气压</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 11px;">操作符</label>
+                                    <select class="cond-op" style="font-size: 12px;">
+                                        <option value="gt">大于 (&gt;)</option>
+                                        <option value="lt">小于 (&lt;)</option>
+                                        <option value="egt">大于等于 (≥)</option>
+                                        <option value="elt">小于等于 (≤)</option>
+                                        <option value="eq">等于 (=)</option>
+                                        <option value="ne">不等于 (≠)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 11px;">阈值</label>
+                                    <input type="number" class="cond-value" value="30" step="0.1" style="font-size: 12px;">
+                                </div>
+                                <button onclick="removeSceneCondition(this)" class="danger" style="padding: 6px 10px; font-size: 11px; align-self: flex-end;">✕</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 执行动作 -->
+                <div style="background: #e8f5e9; padding: 16px; border-radius: 10px; border-left: 4px solid #4caf50;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <span style="font-weight: 600; color: #333;">⚡ 执行动作</span>
+                        <button onclick="addSceneAction()" class="secondary" style="padding: 4px 10px; font-size: 11px;">+ 添加动作</button>
+                    </div>
+                    <div id="sceneActionsList">
+                        <!-- 动作列表将由JavaScript动态生成 -->
+                        <div class="scene-action-item" style="background: white; padding: 12px; border-radius: 8px; margin-bottom: 8px;">
+                            <div class="form-row" style="margin-bottom: 0;">
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 11px;">属性标识 <span style="color: #999;">(node_X_swY)</span></label>
+                                    <input type="text" class="action-identifier" placeholder="node_1_sw1" style="font-size: 12px;">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 11px;">动作值</label>
+                                    <select class="action-value" style="font-size: 12px;">
+                                        <option value="0">⏹️ 停止 (0)</option>
+                                        <option value="1">▶️ 正转 (1)</option>
+                                        <option value="2">◀️ 反转 (2)</option>
+                                    </select>
+                                </div>
+                                <button onclick="removeSceneAction(this)" class="danger" style="padding: 6px 10px; font-size: 11px; align-self: flex-end;">✕</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="secondary" onclick="closeModal('sceneEditorModal')">取消</button>
+                <button class="warning" onclick="previewSceneJson()">📋 预览JSON</button>
+                <button class="success" onclick="saveScene()">💾 保存场景</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 定时器编辑器弹窗 -->
+    <div class="modal-overlay" id="timerEditorModal" onclick="closeModalOnBackground(event, 'timerEditorModal')">
+        <div class="modal-content modal-large" style="max-width: 600px;">
+            <div class="modal-header" style="background: linear-gradient(135deg, #9c27b0 0%, #e040fb 100%);">
+                <h3 id="timerEditorTitle">⏰ 创建定时器</h3>
+                <button class="modal-close" onclick="closeModal('timerEditorModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div style="background: #f3e5f5; padding: 14px; border-radius: 10px; margin-bottom: 16px; border-left: 4px solid #9c27b0;">
+                    <strong style="color: #7b1fa2;">💡 定时器说明</strong>
+                    <p style="font-size: 12px; color: #666; margin-top: 6px;">定时器会在指定时间或间隔自动执行动作，支持每日定时和间隔执行两种模式。</p>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>定时器ID</label>
+                        <input type="number" id="timerId" placeholder="自动分配" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>定时器名称 <span style="color: #c62828;">*</span></label>
+                        <input type="text" id="timerName" placeholder="例如：每日浇水">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>触发类型</label>
+                        <select id="timerTriggerType" onchange="toggleTimerInputs()">
+                            <option value="interval">⏱️ 间隔执行</option>
+                            <option value="daily">📅 每日定时</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="timerIntervalGroup">
+                        <label>执行间隔（秒）</label>
+                        <input type="number" id="timerInterval" value="3600" min="1">
+                        <div style="font-size: 11px; color: #666; margin-top: 4px;">3600秒=1小时</div>
+                    </div>
+                    <div class="form-group" id="timerDailyGroup" style="display: none;">
+                        <label>每日执行时间</label>
+                        <input type="time" id="timerDailyTime" value="08:00">
+                    </div>
+                </div>
+                
+                <div style="background: #e8f5e9; padding: 14px; border-radius: 10px; border-left: 4px solid #4caf50;">
+                    <div style="font-weight: 600; color: #333; margin-bottom: 10px;">⚡ 执行动作</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>属性标识</label>
+                            <input type="text" id="timerActionIdentifier" placeholder="node_1_sw1">
+                        </div>
+                        <div class="form-group">
+                            <label>动作值</label>
+                            <select id="timerActionValue">
+                                <option value="0">⏹️ 停止 (0)</option>
+                                <option value="1">▶️ 正转 (1)</option>
+                                <option value="2">◀️ 反转 (2)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>状态</label>
+                            <select id="timerStatus">
+                                <option value="0">✅ 启用</option>
+                                <option value="1">❌ 禁用</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="secondary" onclick="closeModal('timerEditorModal')">取消</button>
+                <button class="success" onclick="saveTimer()">💾 保存定时器</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JSON预览弹窗 -->
+    <div class="modal-overlay" id="jsonPreviewModal" onclick="closeModalOnBackground(event, 'jsonPreviewModal')">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>📋 JSON预览</h3>
+                <button class="modal-close" onclick="closeModal('jsonPreviewModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div style="background: #1e1e1e; border-radius: 8px; padding: 16px; max-height: 400px; overflow-y: auto;">
+                    <pre id="jsonPreviewContent" style="color: #d4d4d4; font-family: 'Fira Code', 'Consolas', monospace; font-size: 12px; margin: 0; white-space: pre-wrap; word-break: break-all;"></pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="copyJsonToClipboard()" class="secondary">📋 复制</button>
+                <button onclick="closeModal('jsonPreviewModal')">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 保留旧的定时策略弹窗以兼容 -->
     <div class="modal-overlay" id="strategyModal" onclick="closeModalOnBackground(event, 'strategyModal')">
         <div class="modal-content modal-large">
             <div class="modal-header">
