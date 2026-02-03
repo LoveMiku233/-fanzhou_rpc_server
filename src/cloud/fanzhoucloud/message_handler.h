@@ -29,6 +29,13 @@ public:
 
     void setChannelId(int channel);
 
+    /**
+     * @brief Send strategy changes to cloud
+     * @param strategy The strategy to sync
+     * @param msg Message containing method (set/delete)
+     * @return true if sent successfully
+     */
+    bool sendStrategyCommand(const core::AutoStrategy &strategy, const QJsonObject &msg);
 
 public slots:
     void onMqttMessage(int channelId, const QString &topic, const QByteArray &payload);
@@ -49,7 +56,6 @@ private:
 
 
     bool handleStrategyCommand(const int channelId, const QJsonObject &msg);
-    bool sendStrategyCommand(const core::AutoStrategy &a, const QJsonObject &msg);
 
     bool handleControlCommand(const int channelId, const QJsonObject &msg);
     bool handleSettingCommand(const int channelId, const QJsonObject &msg);

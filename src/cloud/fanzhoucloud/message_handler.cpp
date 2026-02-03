@@ -117,9 +117,72 @@ bool CloudMessageHandler::applyStrategies(
     return true;
 }
 
-bool CloudMessageHandler::sendStrategyCommand(const core::AutoStrategy &a, const QJsonObject &msg)
+bool CloudMessageHandler::sendStrategyCommand(const core::AutoStrategy &strategy, const QJsonObject &msg)
 {
+    if (!ctx_ || !ctx_->mqttManager || channelId_ < 0) {
+        LOG_WARNING(kLogSource, "Cannot send strategy command: MQTT not ready");
+        return false;
+    }
 
+    // Build the strategy message
+    QJsonObject payload;
+    payload.insert("method", msg.value("method").toString("set"));
+    payload.insert("type", strategy.type);
+    
+    // Build data object based on strategy type
+    QJsonObject data;
+    if (strategy.type == "scene") {
+        data.insert("sceneId", strategy.strategyId);
+        data.insert("sceneName", strategy.strategyName);
+        data.insert("matchType", static_cast<int>(strategy.matchType));
+        data.insert("enabled", strategy.enabled);
+        data.insert("version", strategy.version);
+        
+        // Build actions array
+        QJsonArray actionsArr;
+        for (const auto &act : strategy.actions) {
+            QJsonObject actObj;
+            actObj.insert("identifier", act.identifier);
+            actObj.insert("identifierValue", act.identifierValue);
+            actionsArr.append(actObj);
+        }
+        data.insert("actions", actionsArr);
+        
+        // Build conditions array
+        QJsonArray conditionsArr;
+        for (const auto &cond : strategy.conditions) {
+            QJsonObject condObj;
+            condObj.insert("device", cond.sensor_dev);
+            condObj.insert("identifier", cond.identifier);
+            condObj.insert("op", cond.op);
+            condObj.insert("identifierValue", cond.identifierValue);
+            conditionsArr.append(condObj);
+        }
+        data.insert("conditions", conditionsArr);
+        
+        // Effective time
+        if (!strategy.effectiveBeginTime.isEmpty()) {
+            data.insert("effectiveBeginTime", strategy.effectiveBeginTime);
+        }
+        if (!strategy.effectiveEndTime.isEmpty()) {
+            data.insert("effectiveEndTime", strategy.effectiveEndTime);
+        }
+    }
+    
+    payload.insert("data", data);
+    
+    // Add requestId and timestamp
+    const QString requestId = QStringLiteral("local_%1").arg(QDateTime::currentMSecsSinceEpoch());
+    payload.insert("requestId", requestId);
+    payload.insert("timestamp", QDateTime::currentMSecsSinceEpoch());
+    
+    QByteArray payloadBytes = QJsonDocument(payload).toJson(QJsonDocument::Compact);
+    
+    LOG_DEBUG(kLogSource,
+              QStringLiteral("Sending strategy to cloud: %1")
+              .arg(QString(payloadBytes)));
+    
+    return ctx_->mqttManager->publishSetting(channelId_, payloadBytes, 0);
 }
 
 bool CloudMessageHandler::handleStrategyCommand(
