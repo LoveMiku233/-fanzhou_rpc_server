@@ -4594,3 +4594,142 @@ function connect4G() {
         }
     });
 }
+
+/* ========================================================
+ * 设置页面功能函数
+ * ======================================================== */
+
+/**
+ * 从设置页面连接/断开
+ */
+function toggleConnectionFromSettings() {
+    // 同步设置页面的值到主页面
+    const settingsHost = document.getElementById('settingsHost');
+    const settingsRpcPort = document.getElementById('settingsRpcPort');
+    const settingsWsPort = document.getElementById('settingsWsPort');
+    const mainHost = document.getElementById('serverHost');
+    const mainRpcPort = document.getElementById('rpcPort');
+    const mainWsPort = document.getElementById('serverPort');
+    
+    if (settingsHost && settingsHost.value) {
+        if (mainHost) mainHost.value = settingsHost.value;
+    }
+    if (settingsRpcPort && settingsRpcPort.value) {
+        if (mainRpcPort) mainRpcPort.value = settingsRpcPort.value;
+    }
+    if (settingsWsPort && settingsWsPort.value) {
+        if (mainWsPort) mainWsPort.value = settingsWsPort.value;
+    }
+    
+    toggleConnection();
+}
+
+/**
+ * 从设置页面启动/停止代理
+ */
+function toggleWebsocatProxyFromSettings() {
+    // 同步设置页面的值到主页面
+    const settingsHost = document.getElementById('settingsHost');
+    const settingsRpcPort = document.getElementById('settingsRpcPort');
+    const settingsWsPort = document.getElementById('settingsWsPort');
+    const mainHost = document.getElementById('serverHost');
+    const mainRpcPort = document.getElementById('rpcPort');
+    const mainWsPort = document.getElementById('serverPort');
+    
+    if (settingsHost && settingsHost.value) {
+        if (mainHost) mainHost.value = settingsHost.value;
+    }
+    if (settingsRpcPort && settingsRpcPort.value) {
+        if (mainRpcPort) mainRpcPort.value = settingsRpcPort.value;
+    }
+    if (settingsWsPort && settingsWsPort.value) {
+        if (mainWsPort) mainWsPort.value = settingsWsPort.value;
+    }
+    
+    toggleWebsocatProxy();
+}
+
+/**
+ * 高级控制 - 继电器控制
+ */
+function controlRelayAdvanced() {
+    const node = parseInt(document.getElementById('advRelayNode').value) || 1;
+    const channel = parseInt(document.getElementById('advRelayChannel').value) || 0;
+    const action = document.getElementById('advRelayAction').value || 'stop';
+    
+    callMethod('relay.control', {
+        node: node,
+        ch: channel,
+        action: action
+    });
+}
+
+/**
+ * 高级控制 - 继电器查询
+ */
+function queryRelayAdvanced() {
+    const node = parseInt(document.getElementById('advRelayNode').value) || 1;
+    callMethod('relay.statusAll', { node: node });
+}
+
+/**
+ * 高级控制 - 自定义RPC调用
+ */
+function callCustomMethodAdvanced() {
+    const method = document.getElementById('advMethodName').value.trim();
+    if (!method) {
+        log('error', '请输入方法名');
+        return;
+    }
+    
+    let params = {};
+    try {
+        const paramsText = document.getElementById('advMethodParams').value.trim();
+        if (paramsText) {
+            params = JSON.parse(paramsText);
+        }
+    } catch (e) {
+        log('error', '参数格式错误，请使用有效的JSON格式');
+        return;
+    }
+    
+    callMethod(method, params);
+}
+
+/**
+ * 同步设置页面的连接信息
+ */
+function syncSettingsFields() {
+    const mainHost = document.getElementById('serverHost');
+    const mainRpcPort = document.getElementById('rpcPort');
+    const mainWsPort = document.getElementById('serverPort');
+    const settingsHost = document.getElementById('settingsHost');
+    const settingsRpcPort = document.getElementById('settingsRpcPort');
+    const settingsWsPort = document.getElementById('settingsWsPort');
+    
+    if (mainHost && settingsHost) {
+        settingsHost.value = mainHost.value;
+    }
+    if (mainRpcPort && settingsRpcPort) {
+        settingsRpcPort.value = mainRpcPort.value;
+    }
+    if (mainWsPort && settingsWsPort) {
+        settingsWsPort.value = mainWsPort.value;
+    }
+}
+
+// 在页面切换时同步设置
+const originalShowPage = typeof showPage === 'function' ? showPage : null;
+if (originalShowPage) {
+    window.showPage = function(pageName) {
+        originalShowPage(pageName);
+        if (pageName === 'settings') {
+            syncSettingsFields();
+            // 显示/隐藏代理按钮
+            const websocatBtn = document.getElementById('settingsWebsocatBtn');
+            if (websocatBtn) {
+                websocatBtn.style.display = isTauri ? 'inline-flex' : 'none';
+            }
+        }
+    };
+}
