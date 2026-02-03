@@ -4731,5 +4731,825 @@ if (originalShowPage) {
                 websocatBtn.style.display = isTauri ? 'inline-flex' : 'none';
             }
         }
+        // 刷新场景列表页面
+        if (pageName === 'strategy') {
+            refreshSceneList();
+        }
+        // 刷新MQTT页面
+        if (pageName === 'mqtt') {
+            refreshMqttChannels();
+        }
     };
+}
+
+/* ========================================================
+ * 泛舟云协议 - 场景管理功能
+ * 符合 fanzhoucloud 协议规范
+ * ======================================================== */
+
+// 场景数据缓存
+let sceneListCache = [];
+let timerListCache = [];
+
+/**
+ * 刷新场景列表
+ */
+function refreshSceneList() {
+    // 从服务器获取场景列表
+    callMethod('cloud.scene.list', {}, function(response) {
+        if (response.result) {
+            sceneListCache = response.result.scenes || [];
+            renderSceneList();
+        } else {
+            log('error', `获取场景列表失败: ${response.error?.message || '未知错误'}`);
+            // 显示空列表
+            sceneListCache = [];
+            renderSceneList();
+        }
+    });
+    
+    // 刷新定时器列表
+    callMethod('auto.strategy.list', {}, function(response) {
+        if (response.result) {
+            timerListCache = response.result.strategies || [];
+            renderTimerList();
+        }
+    });
+}
+
+/**
+ * 从云端同步场景
+ */
+function syncSceneFromCloud() {
+    log('info', '正在从云端同步场景配置...');
+    callMethod('cloud.scene.sync', { id: 0 }, function(response) {
+        if (response.result) {
+            log('info', '✅ 场景同步成功');
+            refreshSceneList();
+        } else {
+            log('error', `场景同步失败: ${response.error?.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 渲染场景列表
+ */
+function renderSceneList() {
+    const autoContainer = document.getElementById('autoSceneCards');
+    const autoEmptyEl = document.getElementById('autoSceneCardsEmpty');
+    const autoCountEl = document.getElementById('autoSceneCount');
+    
+    const manualContainer = document.getElementById('manualSceneCards');
+    const manualEmptyEl = document.getElementById('manualSceneCardsEmpty');
+    const manualCountEl = document.getElementById('manualSceneCount');
+    
+    // 分类场景
+    const autoScenes = sceneListCache.filter(s => s.sceneType === 'auto' || s.strategyType === 'auto');
+    const manualScenes = sceneListCache.filter(s => s.sceneType === 'manual' || s.strategyType === 'manual');
+    
+    // 更新计数
+    if (autoCountEl) autoCountEl.textContent = autoScenes.length;
+    if (manualCountEl) manualCountEl.textContent = manualScenes.length;
+    
+    // 渲染自动场景
+    if (autoScenes.length === 0) {
+        if (autoContainer) autoContainer.innerHTML = '';
+        if (autoEmptyEl) autoEmptyEl.style.display = 'block';
+    } else {
+        if (autoEmptyEl) autoEmptyEl.style.display = 'none';
+        if (autoContainer) autoContainer.innerHTML = autoScenes.map(scene => renderSceneCard(scene)).join('');
+    }
+    
+    // 渲染手动场景
+    if (manualScenes.length === 0) {
+        if (manualContainer) manualContainer.innerHTML = '';
+        if (manualEmptyEl) manualEmptyEl.style.display = 'block';
+    } else {
+        if (manualEmptyEl) manualEmptyEl.style.display = 'none';
+        if (manualContainer) manualContainer.innerHTML = manualScenes.map(scene => renderSceneCard(scene)).join('');
+    }
+}
+
+/**
+ * 渲染单个场景卡片
+ */
+function renderSceneCard(scene) {
+    const id = scene.sceneId || scene.strategyId || 0;
+    const name = scene.sceneName || scene.strategyName || `场景${id}`;
+    const type = scene.sceneType || scene.strategyType || 'auto';
+    const enabled = scene.status === 0 || scene.enabled !== false;
+    const version = scene.version || 1;
+    const matchType = scene.matchType === 1 ? 'OR' : 'AND';
+    const conditions = scene.conditions || [];
+    const actions = scene.actions || [];
+    const effectiveTime = (scene.effectiveBeginTime && scene.effectiveEndTime) 
+        ? `${scene.effectiveBeginTime} - ${scene.effectiveEndTime}` 
+        : '全天';
+    
+    const statusClass = enabled ? 'enabled' : 'disabled';
+    const statusText = enabled ? '🟢 启用' : '🔴 禁用';
+    const typeIcon = type === 'auto' ? '🤖' : '👆';
+    const borderColor = enabled ? (type === 'auto' ? '#667eea' : '#e67e22') : '#9e9e9e';
+    
+    // 生成条件描述
+    let conditionDesc = '无条件';
+    if (conditions.length > 0) {
+        const condTexts = conditions.slice(0, 2).map(c => {
+            const opText = { gt: '>', lt: '<', egt: '≥', elt: '≤', eq: '=', ne: '≠' }[c.op] || c.op;
+            return `${c.identifier} ${opText} ${c.identifierValue}`;
+        });
+        conditionDesc = condTexts.join(matchType === 'OR' ? ' 或 ' : ' 且 ');
+        if (conditions.length > 2) conditionDesc += ` +${conditions.length - 2}条`;
+    }
+    
+    // 生成动作描述
+    let actionDesc = '无动作';
+    if (actions.length > 0) {
+        const actTexts = actions.slice(0, 2).map(a => {
+            const valText = { 0: '停止', 1: '正转', 2: '反转' }[a.identifierValue] || a.identifierValue;
+            return `${a.identifier}→${valText}`;
+        });
+        actionDesc = actTexts.join(', ');
+        if (actions.length > 2) actionDesc += ` +${actions.length - 2}个`;
+    }
+    
+    return `
+        <div class="scene-card" style="background: white; border-radius: 12px; padding: 16px; border: 2px solid ${borderColor}; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                <div>
+                    <div style="font-size: 15px; font-weight: 600; color: #333;">
+                        ${typeIcon} ${escapeHtml(name)}
+                    </div>
+                    <div style="font-size: 11px; color: #999; margin-top: 2px;">ID: ${id} | v${version}</div>
+                </div>
+                <span style="font-size: 11px; padding: 3px 8px; border-radius: 8px; background: ${enabled ? '#e8f5e9' : '#f5f5f5'}; color: ${enabled ? '#2e7d32' : '#666'};">
+                    ${statusText}
+                </span>
+            </div>
+            
+            <div style="background: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 10px;">
+                <div style="font-size: 11px; color: #666; margin-bottom: 4px;">📊 触发条件 (${matchType})</div>
+                <div style="font-size: 12px; color: #333;">${escapeHtml(conditionDesc)}</div>
+            </div>
+            
+            <div style="background: #e8f5e9; padding: 10px; border-radius: 8px; margin-bottom: 10px;">
+                <div style="font-size: 11px; color: #666; margin-bottom: 4px;">⚡ 执行动作</div>
+                <div style="font-size: 12px; color: #333;">${escapeHtml(actionDesc)}</div>
+            </div>
+            
+            <div style="font-size: 11px; color: #888; margin-bottom: 10px;">
+                ⏰ 生效时间: ${effectiveTime}
+            </div>
+            
+            <div style="display: flex; gap: 8px;">
+                <button onclick="editScene(${id})" class="secondary" style="flex: 1; padding: 6px; font-size: 11px;">✏️ 编辑</button>
+                <button onclick="toggleSceneStatus(${id}, ${enabled ? 1 : 0})" style="flex: 1; padding: 6px; font-size: 11px; background: ${enabled ? '#ff9800' : '#4caf50'}; color: white;">
+                    ${enabled ? '⏸️ 禁用' : '▶️ 启用'}
+                </button>
+                ${type === 'manual' ? `<button onclick="triggerScene(${id})" class="success" style="flex: 1; padding: 6px; font-size: 11px;">🚀 执行</button>` : ''}
+                <button onclick="deleteScene(${id})" class="danger" style="padding: 6px 10px; font-size: 11px;">🗑️</button>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * 渲染定时器列表
+ */
+function renderTimerList() {
+    const container = document.getElementById('timerCards');
+    const emptyEl = document.getElementById('timerCardsEmpty');
+    const countEl = document.getElementById('timerCount');
+    
+    // 过滤定时器类型的策略
+    const timers = timerListCache.filter(t => t.triggerType || t.dailyTime || t.intervalSec);
+    
+    if (countEl) countEl.textContent = timers.length;
+    
+    if (timers.length === 0) {
+        if (container) container.innerHTML = '';
+        if (emptyEl) emptyEl.style.display = 'block';
+        return;
+    }
+    
+    if (emptyEl) emptyEl.style.display = 'none';
+    
+    let html = '';
+    timers.forEach(timer => {
+        const id = timer.id || timer.strategyId || 0;
+        const name = timer.name || timer.strategyName || `定时器${id}`;
+        const enabled = timer.enabled !== false;
+        const running = timer.running === true;
+        const triggerType = timer.triggerType || (timer.dailyTime ? 'daily' : 'interval');
+        const triggerDesc = triggerType === 'daily' 
+            ? `每日 ${timer.dailyTime}` 
+            : `每 ${formatInterval(timer.intervalSec)} 执行`;
+        
+        const statusText = running ? '🏃 运行中' : (enabled ? '⏸️ 就绪' : '⚪ 禁用');
+        const borderColor = running ? '#4caf50' : (enabled ? '#9c27b0' : '#9e9e9e');
+        
+        html += `
+            <div class="timer-card" style="background: white; border-radius: 12px; padding: 16px; border: 2px solid ${borderColor}; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                    <div>
+                        <div style="font-size: 15px; font-weight: 600; color: #333;">
+                            ⏰ ${escapeHtml(name)}
+                        </div>
+                        <div style="font-size: 11px; color: #999; margin-top: 2px;">ID: ${id}</div>
+                    </div>
+                    <span style="font-size: 11px; padding: 3px 8px; border-radius: 8px; background: ${running ? '#e8f5e9' : '#f5f5f5'}; color: ${running ? '#2e7d32' : '#666'};">
+                        ${statusText}
+                    </span>
+                </div>
+                
+                <div style="background: #f3e5f5; padding: 10px; border-radius: 8px; margin-bottom: 10px;">
+                    <div style="font-size: 12px; color: #333;">🔄 ${triggerDesc}</div>
+                </div>
+                
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="toggleTimerEnabled(${id}, ${!enabled})" style="flex: 1; padding: 6px; font-size: 11px; background: ${enabled ? '#ff9800' : '#4caf50'}; color: white;">
+                        ${enabled ? '⏸️ 禁用' : '▶️ 启用'}
+                    </button>
+                    <button onclick="triggerTimer(${id})" class="success" style="flex: 1; padding: 6px; font-size: 11px;">🚀 执行</button>
+                    <button onclick="deleteTimer(${id})" class="danger" style="padding: 6px 10px; font-size: 11px;">🗑️</button>
+                </div>
+            </div>
+        `;
+    });
+    
+    if (container) container.innerHTML = html;
+}
+
+/**
+ * 格式化时间间隔
+ */
+function formatInterval(seconds) {
+    if (!seconds) return '--';
+    if (seconds < 60) return `${seconds}秒`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}分钟`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}小时`;
+    return `${Math.floor(seconds / 86400)}天`;
+}
+
+/**
+ * 打开场景编辑器
+ */
+function openSceneEditorModal(scene = null) {
+    const title = document.getElementById('sceneEditorTitle');
+    if (title) title.textContent = scene ? '✏️ 编辑场景' : '✨ 创建新场景';
+    
+    // 清空表单
+    document.getElementById('sceneId').value = scene?.sceneId || scene?.strategyId || '';
+    document.getElementById('sceneName').value = scene?.sceneName || scene?.strategyName || '';
+    document.getElementById('sceneType').value = scene?.sceneType || scene?.strategyType || 'auto';
+    document.getElementById('sceneMatchType').value = scene?.matchType || 0;
+    document.getElementById('sceneStatus').value = scene?.status ?? 0;
+    document.getElementById('sceneEffectiveBeginTime').value = scene?.effectiveBeginTime || '00:00';
+    document.getElementById('sceneEffectiveEndTime').value = scene?.effectiveEndTime || '23:59';
+    
+    // 渲染条件和动作
+    renderSceneConditions(scene?.conditions || []);
+    renderSceneActions(scene?.actions || []);
+    
+    // 显示/隐藏条件区域
+    toggleSceneConditions();
+    
+    openModal('sceneEditorModal');
+}
+
+/**
+ * 切换条件区域显示
+ */
+function toggleSceneConditions() {
+    const sceneType = document.getElementById('sceneType').value;
+    const conditionsSection = document.getElementById('sceneConditionsSection');
+    if (conditionsSection) {
+        conditionsSection.style.display = sceneType === 'manual' ? 'none' : 'block';
+    }
+}
+
+/**
+ * 渲染条件列表
+ */
+function renderSceneConditions(conditions) {
+    const container = document.getElementById('sceneConditionsList');
+    if (!container) return;
+    
+    if (conditions.length === 0) {
+        // 添加一个空条件模板
+        container.innerHTML = getConditionItemHtml();
+        return;
+    }
+    
+    container.innerHTML = conditions.map(cond => getConditionItemHtml(cond)).join('');
+}
+
+/**
+ * 获取条件项HTML
+ */
+function getConditionItemHtml(cond = {}) {
+    return `
+        <div class="scene-condition-item" style="background: white; padding: 12px; border-radius: 8px; margin-bottom: 8px;">
+            <div class="form-row" style="margin-bottom: 0;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 11px;">设备编码</label>
+                    <input type="text" class="cond-device-code" value="${escapeHtml(cond.deviceCode || cond.sensor_dev || '')}" placeholder="864708069172099" style="font-size: 12px;">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 11px;">属性标识</label>
+                    <select class="cond-identifier" style="font-size: 12px;">
+                        <option value="airTemp" ${cond.identifier === 'airTemp' ? 'selected' : ''}>🌡️ 空气温度</option>
+                        <option value="airHum" ${cond.identifier === 'airHum' ? 'selected' : ''}>💧 空气湿度</option>
+                        <option value="light" ${cond.identifier === 'light' ? 'selected' : ''}>☀️ 光照强度</option>
+                        <option value="co2" ${cond.identifier === 'co2' ? 'selected' : ''}>🌫️ CO₂浓度</option>
+                        <option value="soilTemp" ${cond.identifier === 'soilTemp' ? 'selected' : ''}>🌱 土壤温度</option>
+                        <option value="soilHum" ${cond.identifier === 'soilHum' ? 'selected' : ''}>🌾 土壤湿度</option>
+                        <option value="soilEC" ${cond.identifier === 'soilEC' ? 'selected' : ''}>⚡ 土壤EC</option>
+                        <option value="ph" ${cond.identifier === 'ph' ? 'selected' : ''}>🧪 PH值</option>
+                        <option value="do" ${cond.identifier === 'do' ? 'selected' : ''}>💨 溶解氧</option>
+                        <option value="windSpeed" ${cond.identifier === 'windSpeed' ? 'selected' : ''}>🌬️ 风速</option>
+                        <option value="pressure" ${cond.identifier === 'pressure' ? 'selected' : ''}>📊 气压</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 11px;">操作符</label>
+                    <select class="cond-op" style="font-size: 12px;">
+                        <option value="gt" ${cond.op === 'gt' ? 'selected' : ''}>大于 (&gt;)</option>
+                        <option value="lt" ${cond.op === 'lt' ? 'selected' : ''}>小于 (&lt;)</option>
+                        <option value="egt" ${cond.op === 'egt' ? 'selected' : ''}>大于等于 (≥)</option>
+                        <option value="elt" ${cond.op === 'elt' ? 'selected' : ''}>小于等于 (≤)</option>
+                        <option value="eq" ${cond.op === 'eq' ? 'selected' : ''}>等于 (=)</option>
+                        <option value="ne" ${cond.op === 'ne' ? 'selected' : ''}>不等于 (≠)</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 11px;">阈值</label>
+                    <input type="number" class="cond-value" value="${cond.identifierValue || 30}" step="0.1" style="font-size: 12px;">
+                </div>
+                <button onclick="removeSceneCondition(this)" class="danger" style="padding: 6px 10px; font-size: 11px; align-self: flex-end;">✕</button>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * 添加条件
+ */
+function addSceneCondition() {
+    const container = document.getElementById('sceneConditionsList');
+    if (!container) return;
+    const div = document.createElement('div');
+    div.innerHTML = getConditionItemHtml();
+    container.appendChild(div.firstElementChild);
+}
+
+/**
+ * 移除条件
+ */
+function removeSceneCondition(btn) {
+    const item = btn.closest('.scene-condition-item');
+    if (item) item.remove();
+}
+
+/**
+ * 渲染动作列表
+ */
+function renderSceneActions(actions) {
+    const container = document.getElementById('sceneActionsList');
+    if (!container) return;
+    
+    if (actions.length === 0) {
+        container.innerHTML = getActionItemHtml();
+        return;
+    }
+    
+    container.innerHTML = actions.map(act => getActionItemHtml(act)).join('');
+}
+
+/**
+ * 获取动作项HTML
+ */
+function getActionItemHtml(act = {}) {
+    return `
+        <div class="scene-action-item" style="background: white; padding: 12px; border-radius: 8px; margin-bottom: 8px;">
+            <div class="form-row" style="margin-bottom: 0;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 11px;">属性标识 <span style="color: #999;">(node_X_swY)</span></label>
+                    <input type="text" class="action-identifier" value="${escapeHtml(act.identifier || '')}" placeholder="node_1_sw1" style="font-size: 12px;">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 11px;">动作值</label>
+                    <select class="action-value" style="font-size: 12px;">
+                        <option value="0" ${act.identifierValue === 0 ? 'selected' : ''}>⏹️ 停止 (0)</option>
+                        <option value="1" ${act.identifierValue === 1 ? 'selected' : ''}>▶️ 正转 (1)</option>
+                        <option value="2" ${act.identifierValue === 2 ? 'selected' : ''}>◀️ 反转 (2)</option>
+                    </select>
+                </div>
+                <button onclick="removeSceneAction(this)" class="danger" style="padding: 6px 10px; font-size: 11px; align-self: flex-end;">✕</button>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * 添加动作
+ */
+function addSceneAction() {
+    const container = document.getElementById('sceneActionsList');
+    if (!container) return;
+    const div = document.createElement('div');
+    div.innerHTML = getActionItemHtml();
+    container.appendChild(div.firstElementChild);
+}
+
+/**
+ * 移除动作
+ */
+function removeSceneAction(btn) {
+    const item = btn.closest('.scene-action-item');
+    if (item) item.remove();
+}
+
+/**
+ * 收集场景数据
+ */
+function collectSceneData() {
+    const sceneId = document.getElementById('sceneId').value;
+    const sceneName = document.getElementById('sceneName').value.trim();
+    const sceneType = document.getElementById('sceneType').value;
+    const matchType = parseInt(document.getElementById('sceneMatchType').value);
+    const status = parseInt(document.getElementById('sceneStatus').value);
+    const effectiveBeginTime = document.getElementById('sceneEffectiveBeginTime').value;
+    const effectiveEndTime = document.getElementById('sceneEffectiveEndTime').value;
+    
+    // 收集条件
+    const conditions = [];
+    document.querySelectorAll('#sceneConditionsList .scene-condition-item').forEach(item => {
+        const deviceCode = item.querySelector('.cond-device-code').value.trim();
+        const identifier = item.querySelector('.cond-identifier').value;
+        const op = item.querySelector('.cond-op').value;
+        const value = parseFloat(item.querySelector('.cond-value').value);
+        
+        if (identifier) {
+            conditions.push({
+                deviceCode: deviceCode,
+                identifier: identifier,
+                op: op,
+                identifierValue: value
+            });
+        }
+    });
+    
+    // 收集动作
+    const actions = [];
+    document.querySelectorAll('#sceneActionsList .scene-action-item').forEach(item => {
+        const identifier = item.querySelector('.action-identifier').value.trim();
+        const value = parseInt(item.querySelector('.action-value').value);
+        
+        if (identifier) {
+            actions.push({
+                identifier: identifier,
+                identifierValue: value
+            });
+        }
+    });
+    
+    return {
+        sceneId: sceneId ? parseInt(sceneId) : null,
+        sceneName: sceneName,
+        sceneType: sceneType,
+        matchType: matchType,
+        status: status,
+        effectiveBeginTime: effectiveBeginTime,
+        effectiveEndTime: effectiveEndTime,
+        conditions: conditions,
+        actions: actions,
+        version: 1
+    };
+}
+
+/**
+ * 预览场景JSON
+ */
+function previewSceneJson() {
+    const data = collectSceneData();
+    const json = JSON.stringify(data, null, 2);
+    
+    const content = document.getElementById('jsonPreviewContent');
+    if (content) {
+        content.textContent = json;
+    }
+    
+    openModal('jsonPreviewModal');
+}
+
+/**
+ * 复制JSON到剪贴板
+ */
+function copyJsonToClipboard() {
+    const content = document.getElementById('jsonPreviewContent');
+    if (content) {
+        navigator.clipboard.writeText(content.textContent).then(() => {
+            log('info', '✅ JSON已复制到剪贴板');
+        }).catch(err => {
+            log('error', '复制失败: ' + err);
+        });
+    }
+}
+
+/**
+ * 保存场景
+ */
+function saveScene() {
+    const data = collectSceneData();
+    
+    if (!data.sceneName) {
+        alert('请输入场景名称');
+        return;
+    }
+    
+    if (data.actions.length === 0) {
+        alert('请至少添加一个执行动作');
+        return;
+    }
+    
+    // 构建请求报文
+    const method = data.sceneId ? 'set' : 'set';  // 新建和编辑都用set
+    const requestId = `req_${Date.now()}`;
+    
+    const payload = {
+        method: method,
+        type: 'scene',
+        data: data,
+        requestId: requestId,
+        timestamp: Date.now()
+    };
+    
+    log('info', `正在${data.sceneId ? '更新' : '创建'}场景...`);
+    
+    callMethod('cloud.scene.set', payload, function(response) {
+        if (response.result && response.result.code === 0) {
+            log('info', `✅ 场景${data.sceneId ? '更新' : '创建'}成功`);
+            closeModal('sceneEditorModal');
+            refreshSceneList();
+        } else {
+            const errMsg = response.result?.message || response.error?.message || '未知错误';
+            log('error', `场景保存失败: ${errMsg}`);
+            alert(`保存失败: ${errMsg}`);
+        }
+    });
+}
+
+/**
+ * 编辑场景
+ */
+function editScene(id) {
+    const scene = sceneListCache.find(s => (s.sceneId || s.strategyId) === id);
+    if (scene) {
+        openSceneEditorModal(scene);
+    } else {
+        log('error', `未找到场景 ID: ${id}`);
+    }
+}
+
+/**
+ * 切换场景状态
+ */
+function toggleSceneStatus(id, newStatus) {
+    callMethod('cloud.scene.status', { sceneId: id, status: newStatus }, function(response) {
+        if (response.result) {
+            log('info', `✅ 场景状态已${newStatus === 0 ? '启用' : '禁用'}`);
+            refreshSceneList();
+        } else {
+            log('error', `状态切换失败: ${response.error?.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 删除场景
+ */
+function deleteScene(id) {
+    if (!confirm(`确定要删除场景 ID: ${id} 吗？`)) return;
+    
+    const requestId = `del_${Date.now()}`;
+    const payload = {
+        method: 'delete',
+        type: 'scene',
+        data: id,
+        requestId: requestId,
+        timestamp: Date.now()
+    };
+    
+    callMethod('cloud.scene.delete', payload, function(response) {
+        if (response.result && response.result.code === 0) {
+            log('info', `✅ 场景已删除`);
+            refreshSceneList();
+        } else {
+            log('error', `删除失败: ${response.result?.message || response.error?.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 触发手动场景
+ */
+function triggerScene(id) {
+    callMethod('cloud.scene.trigger', { sceneId: id }, function(response) {
+        if (response.result) {
+            log('info', `✅ 场景 ${id} 已触发执行`);
+        } else {
+            log('error', `触发失败: ${response.error?.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 快速创建场景模板
+ */
+function createQuickScene(template) {
+    const templates = {
+        'hightemp_vent': {
+            sceneName: '高温通风',
+            sceneType: 'auto',
+            matchType: 0,
+            conditions: [{ identifier: 'airTemp', op: 'gt', identifierValue: 30 }],
+            actions: [{ identifier: 'node_1_sw1', identifierValue: 1 }]
+        },
+        'lowtemp_heat': {
+            sceneName: '低温保暖',
+            sceneType: 'auto',
+            matchType: 0,
+            conditions: [{ identifier: 'airTemp', op: 'lt', identifierValue: 10 }],
+            actions: [{ identifier: 'node_1_sw2', identifierValue: 1 }]
+        },
+        'dry_irrigation': {
+            sceneName: '干旱灌溉',
+            sceneType: 'auto',
+            matchType: 0,
+            conditions: [{ identifier: 'soilHum', op: 'lt', identifierValue: 30 }],
+            actions: [{ identifier: 'node_1_sw3', identifierValue: 1 }]
+        },
+        'light_shade': {
+            sceneName: '强光遮阳',
+            sceneType: 'auto',
+            matchType: 0,
+            conditions: [{ identifier: 'light', op: 'gt', identifierValue: 50000 }],
+            actions: [{ identifier: 'node_1_sw4', identifierValue: 1 }]
+        }
+    };
+    
+    const sceneData = templates[template];
+    if (sceneData) {
+        openSceneEditorModal(sceneData);
+    }
+}
+
+/**
+ * 打开定时器编辑器
+ */
+function openTimerEditorModal(timer = null) {
+    const title = document.getElementById('timerEditorTitle');
+    if (title) title.textContent = timer ? '✏️ 编辑定时器' : '⏰ 创建定时器';
+    
+    document.getElementById('timerId').value = timer?.id || timer?.strategyId || '';
+    document.getElementById('timerName').value = timer?.name || timer?.strategyName || '';
+    document.getElementById('timerTriggerType').value = timer?.triggerType || 'interval';
+    document.getElementById('timerInterval').value = timer?.intervalSec || 3600;
+    document.getElementById('timerDailyTime').value = timer?.dailyTime || '08:00';
+    document.getElementById('timerActionIdentifier').value = timer?.actionIdentifier || 'node_1_sw1';
+    document.getElementById('timerActionValue').value = timer?.actionValue || 1;
+    document.getElementById('timerStatus').value = timer?.status || 0;
+    
+    toggleTimerInputs();
+    openModal('timerEditorModal');
+}
+
+/**
+ * 切换定时器输入框
+ */
+function toggleTimerInputs() {
+    const triggerType = document.getElementById('timerTriggerType').value;
+    const intervalGroup = document.getElementById('timerIntervalGroup');
+    const dailyGroup = document.getElementById('timerDailyGroup');
+    
+    if (intervalGroup) intervalGroup.style.display = triggerType === 'interval' ? 'block' : 'none';
+    if (dailyGroup) dailyGroup.style.display = triggerType === 'daily' ? 'block' : 'none';
+}
+
+/**
+ * 保存定时器
+ */
+function saveTimer() {
+    const id = document.getElementById('timerId').value;
+    const name = document.getElementById('timerName').value.trim();
+    const triggerType = document.getElementById('timerTriggerType').value;
+    const intervalSec = parseInt(document.getElementById('timerInterval').value);
+    const dailyTime = document.getElementById('timerDailyTime').value;
+    const actionIdentifier = document.getElementById('timerActionIdentifier').value.trim();
+    const actionValue = parseInt(document.getElementById('timerActionValue').value);
+    const status = parseInt(document.getElementById('timerStatus').value);
+    
+    if (!name) {
+        alert('请输入定时器名称');
+        return;
+    }
+    
+    if (!actionIdentifier) {
+        alert('请输入执行动作标识');
+        return;
+    }
+    
+    const params = {
+        id: id ? parseInt(id) : undefined,
+        name: name,
+        groupId: 1,
+        channel: -1,
+        action: actionValue === 1 ? 'fwd' : (actionValue === 2 ? 'rev' : 'stop'),
+        triggerType: triggerType,
+        intervalSec: triggerType === 'interval' ? intervalSec : undefined,
+        dailyTime: triggerType === 'daily' ? dailyTime : undefined,
+        enabled: status === 0,
+        autoStart: true
+    };
+    
+    callMethod('auto.strategy.create', params, function(response) {
+        if (response.result) {
+            log('info', `✅ 定时器${id ? '更新' : '创建'}成功`);
+            closeModal('timerEditorModal');
+            refreshSceneList();
+        } else {
+            log('error', `定时器保存失败: ${response.error?.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 切换定时器启用状态
+ */
+function toggleTimerEnabled(id, enabled) {
+    callMethod('auto.strategy.enable', { id: id, enabled: enabled }, function(response) {
+        if (response.result) {
+            log('info', `✅ 定时器已${enabled ? '启用' : '禁用'}`);
+            refreshSceneList();
+        } else {
+            log('error', `状态切换失败: ${response.error?.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 触发定时器
+ */
+function triggerTimer(id) {
+    callMethod('auto.strategy.trigger', { id: id }, function(response) {
+        if (response.result) {
+            log('info', `✅ 定时器 ${id} 已触发执行`);
+        } else {
+            log('error', `触发失败: ${response.error?.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 删除定时器
+ */
+function deleteTimer(id) {
+    if (!confirm(`确定要删除定时器 ID: ${id} 吗？`)) return;
+    
+    callMethod('auto.strategy.delete', { id: id }, function(response) {
+        if (response.result) {
+            log('info', `✅ 定时器已删除`);
+            refreshSceneList();
+        } else {
+            log('error', `删除失败: ${response.error?.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 测试场景触发（调试用）
+ */
+function testSceneTrigger() {
+    const deviceCode = document.getElementById('debugDeviceCode')?.value || '';
+    const identifier = document.getElementById('debugIdentifier')?.value || 'airTemp';
+    const value = parseFloat(document.getElementById('debugIdentifierValue')?.value || 25);
+    
+    log('info', `模拟上报数据: ${identifier} = ${value}`);
+    
+    // 构造模拟数据
+    const data = {};
+    data[identifier] = value;
+    
+    callMethod('sensor.report', {
+        deviceCode: deviceCode,
+        data: data
+    }, function(response) {
+        if (response.result) {
+            log('info', '✅ 模拟数据上报成功');
+        } else {
+            log('error', `上报失败: ${response.error?.message || '未知错误'}`);
+        }
+    });
 }
