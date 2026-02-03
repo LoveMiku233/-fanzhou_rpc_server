@@ -509,7 +509,7 @@ function initButtonClickHandlers() {
      * 1. 在 document.body 上监听 click 事件（捕获阶段）
      * 2. 当点击发生时，检查目标元素是否有 onclick 属性
      * 3. 如果有，使用 Function 构造器执行 onclick 代码
-     * 4. 这样可以让所有使用 onclick 属性的元素正常工作
+     * 4. 停止事件传播，防止重复触发
      * 
      * 使用捕获阶段的原因：
      * 在 Tauri 中 inline onclick 可能根本不触发，我们需要在事件传播的最早阶段拦截
@@ -524,6 +524,11 @@ function initButtonClickHandlers() {
             var onclickAttr = target.getAttribute('onclick');
             
             if (onclickAttr) {
+                // 阻止事件继续传播，避免重复触发
+                // 这可以防止 native onclick 再次触发同一事件
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                
                 try {
                     // 使用 Function 构造器执行 onclick 代码
                     // 安全说明：onclick 属性中的代码都是开发者自己编写的可信代码
@@ -4804,9 +4809,9 @@ function renderSceneList() {
     const manualEmptyEl = document.getElementById('manualSceneCardsEmpty');
     const manualCountEl = document.getElementById('manualSceneCount');
     
-    // 分类场景
-    const autoScenes = sceneListCache.filter(s => s.sceneType === 'auto' || s.strategyType === 'auto');
-    const manualScenes = sceneListCache.filter(s => s.sceneType === 'manual' || s.strategyType === 'manual');
+    // 分类场景 (兼容服务器字段名: type -> sceneType)
+    const autoScenes = sceneListCache.filter(s => s.sceneType === 'auto' || s.strategyType === 'auto' || s.type === 'auto');
+    const manualScenes = sceneListCache.filter(s => s.sceneType === 'manual' || s.strategyType === 'manual' || s.type === 'manual');
     
     // 更新计数
     if (autoCountEl) autoCountEl.textContent = autoScenes.length;
@@ -4833,11 +4838,13 @@ function renderSceneList() {
 
 /**
  * 渲染单个场景卡片
+ * 兼容服务器返回的字段名 (id -> sceneId, name -> sceneName, type -> sceneType)
  */
 function renderSceneCard(scene) {
-    const id = scene.sceneId || scene.strategyId || 0;
-    const name = scene.sceneName || scene.strategyName || `场景${id}`;
-    const type = scene.sceneType || scene.strategyType || 'auto';
+    // 兼容服务器字段名
+    const id = scene.sceneId || scene.strategyId || scene.id || 0;
+    const name = scene.sceneName || scene.strategyName || scene.name || `场景${id}`;
+    const type = scene.sceneType || scene.strategyType || scene.type || 'auto';
     const enabled = scene.status === 0 || scene.enabled !== false;
     const version = scene.version || 1;
     const matchType = scene.matchType === 1 ? 'OR' : 'AND';
@@ -4852,23 +4859,29 @@ function renderSceneCard(scene) {
     const typeIcon = type === 'auto' ? '🤖' : '👆';
     const borderColor = enabled ? (type === 'auto' ? '#667eea' : '#e67e22') : '#9e9e9e';
     
-    // 生成条件描述
+    // 生成条件描述 (兼容服务器字段名: value -> identifierValue, le/ge -> elt/egt)
     let conditionDesc = '无条件';
     if (conditions.length > 0) {
         const condTexts = conditions.slice(0, 2).map(c => {
-            const opText = { gt: '>', lt: '<', egt: '≥', elt: '≤', eq: '=', ne: '≠' }[c.op] || c.op;
-            return `${c.identifier} ${opText} ${c.identifierValue}`;
+            const opText = { gt: '>', lt: '<', ge: '≥', le: '≤', egt: '≥', elt: '≤', eq: '=', ne: '≠' }[c.op] || c.op;
+            // 兼容 value 和 identifierValue 两种字段名
+            const condValue = c.identifierValue !== undefined ? c.identifierValue : c.value;
+            return `${c.identifier} ${opText} ${condValue}`;
         });
         conditionDesc = condTexts.join(matchType === 'OR' ? ' 或 ' : ' 且 ');
         if (conditions.length > 2) conditionDesc += ` +${conditions.length - 2}条`;
     }
     
-    // 生成动作描述
+    // 生成动作描述 (兼容服务器字段名)
     let actionDesc = '无动作';
     if (actions.length > 0) {
         const actTexts = actions.slice(0, 2).map(a => {
-            const valText = { 0: '停止', 1: '正转', 2: '反转' }[a.identifierValue] || a.identifierValue;
-            return `${a.identifier}→${valText}`;
+            // 兼容 identifierValue 和 value 两种字段名
+            const actValue = a.identifierValue !== undefined ? a.identifierValue : a.value;
+            const valText = { 0: '停止', 1: '正转', 2: '反转' }[actValue] || actValue;
+            // 兼容 identifier 和 node/channel 两种格式
+            const actId = a.identifier || (a.node !== undefined ? `node_${a.node}_ch${a.channel}` : '');
+            return `${actId}→${valText}`;
         });
         actionDesc = actTexts.join(', ');
         if (actions.length > 2) actionDesc += ` +${actions.length - 2}个`;
@@ -4994,17 +5007,20 @@ function formatInterval(seconds) {
 
 /**
  * 打开场景编辑器
+ * 兼容服务器返回的字段名 (id -> sceneId, name -> sceneName, type -> sceneType)
  */
 function openSceneEditorModal(scene = null) {
     const title = document.getElementById('sceneEditorTitle');
     if (title) title.textContent = scene ? '✏️ 编辑场景' : '✨ 创建新场景';
     
-    // 清空表单
-    document.getElementById('sceneId').value = scene?.sceneId || scene?.strategyId || '';
-    document.getElementById('sceneName').value = scene?.sceneName || scene?.strategyName || '';
-    document.getElementById('sceneType').value = scene?.sceneType || scene?.strategyType || 'auto';
+    // 清空表单 - 兼容服务器字段名
+    document.getElementById('sceneId').value = scene?.sceneId || scene?.strategyId || scene?.id || '';
+    document.getElementById('sceneName').value = scene?.sceneName || scene?.strategyName || scene?.name || '';
+    document.getElementById('sceneType').value = scene?.sceneType || scene?.strategyType || scene?.type || 'auto';
     document.getElementById('sceneMatchType').value = scene?.matchType || 0;
-    document.getElementById('sceneStatus').value = scene?.status ?? 0;
+    // 兼容 status 和 enabled 字段
+    const statusValue = scene?.status !== undefined ? scene.status : (scene?.enabled === false ? 1 : 0);
+    document.getElementById('sceneStatus').value = statusValue;
     document.getElementById('sceneEffectiveBeginTime').value = scene?.effectiveBeginTime || '00:00';
     document.getElementById('sceneEffectiveEndTime').value = scene?.effectiveEndTime || '23:59';
     
@@ -5047,45 +5063,55 @@ function renderSceneConditions(conditions) {
 
 /**
  * 获取条件项HTML
+ * 支持自定义属性标识字符串，同时兼容服务器返回的数据格式
+ * 服务器字段映射: device -> deviceCode, value -> identifierValue
  */
 function getConditionItemHtml(cond = {}) {
+    // 兼容服务器返回的字段名 (device -> deviceCode, value -> identifierValue)
+    const deviceCode = cond.deviceCode || cond.device || cond.sensor_dev || '';
+    const identifier = cond.identifier || '';
+    const condValue = cond.identifierValue !== undefined ? cond.identifierValue : (cond.value !== undefined ? cond.value : 30);
+    
     return `
         <div class="scene-condition-item" style="background: white; padding: 12px; border-radius: 8px; margin-bottom: 8px;">
             <div class="form-row" style="margin-bottom: 0;">
                 <div class="form-group" style="margin-bottom: 0;">
-                    <label style="font-size: 11px;">设备编码</label>
-                    <input type="text" class="cond-device-code" value="${escapeHtml(cond.deviceCode || cond.sensor_dev || '')}" placeholder="864708069172099" style="font-size: 12px;">
+                    <label style="font-size: 11px;">设备编码 <span style="color: #999;">(空则查本地)</span></label>
+                    <input type="text" class="cond-device-code" value="${escapeHtml(deviceCode)}" placeholder="空则查本地传感器" style="font-size: 12px;">
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
-                    <label style="font-size: 11px;">属性标识</label>
-                    <select class="cond-identifier" style="font-size: 12px;">
-                        <option value="airTemp" ${cond.identifier === 'airTemp' ? 'selected' : ''}>🌡️ 空气温度</option>
-                        <option value="airHum" ${cond.identifier === 'airHum' ? 'selected' : ''}>💧 空气湿度</option>
-                        <option value="light" ${cond.identifier === 'light' ? 'selected' : ''}>☀️ 光照强度</option>
-                        <option value="co2" ${cond.identifier === 'co2' ? 'selected' : ''}>🌫️ CO₂浓度</option>
-                        <option value="soilTemp" ${cond.identifier === 'soilTemp' ? 'selected' : ''}>🌱 土壤温度</option>
-                        <option value="soilHum" ${cond.identifier === 'soilHum' ? 'selected' : ''}>🌾 土壤湿度</option>
-                        <option value="soilEC" ${cond.identifier === 'soilEC' ? 'selected' : ''}>⚡ 土壤EC</option>
-                        <option value="ph" ${cond.identifier === 'ph' ? 'selected' : ''}>🧪 PH值</option>
-                        <option value="do" ${cond.identifier === 'do' ? 'selected' : ''}>💨 溶解氧</option>
-                        <option value="windSpeed" ${cond.identifier === 'windSpeed' ? 'selected' : ''}>🌬️ 风速</option>
-                        <option value="pressure" ${cond.identifier === 'pressure' ? 'selected' : ''}>📊 气压</option>
-                    </select>
+                    <label style="font-size: 11px;">属性标识 <span style="color: #999;">(可自定义)</span></label>
+                    <input type="text" class="cond-identifier" value="${escapeHtml(identifier)}" placeholder="temperature" style="font-size: 12px;" list="identifierSuggestions">
+                    <datalist id="identifierSuggestions">
+                        <option value="airTemp">空气温度</option>
+                        <option value="airHum">空气湿度</option>
+                        <option value="light">光照强度</option>
+                        <option value="co2">CO₂浓度</option>
+                        <option value="soilTemp">土壤温度</option>
+                        <option value="soilHum">土壤湿度</option>
+                        <option value="soilEC">土壤EC</option>
+                        <option value="ph">PH值</option>
+                        <option value="do">溶解氧</option>
+                        <option value="windSpeed">风速</option>
+                        <option value="pressure">气压</option>
+                        <option value="temperature">温度</option>
+                        <option value="humidity">湿度</option>
+                    </datalist>
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
                     <label style="font-size: 11px;">操作符</label>
                     <select class="cond-op" style="font-size: 12px;">
                         <option value="gt" ${cond.op === 'gt' ? 'selected' : ''}>大于 (&gt;)</option>
                         <option value="lt" ${cond.op === 'lt' ? 'selected' : ''}>小于 (&lt;)</option>
-                        <option value="egt" ${cond.op === 'egt' ? 'selected' : ''}>大于等于 (≥)</option>
-                        <option value="elt" ${cond.op === 'elt' ? 'selected' : ''}>小于等于 (≤)</option>
+                        <option value="ge" ${cond.op === 'ge' || cond.op === 'egt' ? 'selected' : ''}>大于等于 (≥)</option>
+                        <option value="le" ${cond.op === 'le' || cond.op === 'elt' ? 'selected' : ''}>小于等于 (≤)</option>
                         <option value="eq" ${cond.op === 'eq' ? 'selected' : ''}>等于 (=)</option>
                         <option value="ne" ${cond.op === 'ne' ? 'selected' : ''}>不等于 (≠)</option>
                     </select>
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
                     <label style="font-size: 11px;">阈值</label>
-                    <input type="number" class="cond-value" value="${cond.identifierValue || 30}" step="0.1" style="font-size: 12px;">
+                    <input type="number" class="cond-value" value="${condValue}" step="0.1" style="font-size: 12px;">
                 </div>
                 <button onclick="removeSceneCondition(this)" class="danger" style="padding: 6px 10px; font-size: 11px; align-self: flex-end;">✕</button>
             </div>
@@ -5129,21 +5155,27 @@ function renderSceneActions(actions) {
 
 /**
  * 获取动作项HTML
+ * 兼容服务器返回的数据格式 (value -> identifierValue, node/channel -> identifier)
  */
 function getActionItemHtml(act = {}) {
+    // 兼容服务器返回的字段名 (value -> identifierValue, node/channel -> identifier)
+    const actionValue = act.identifierValue !== undefined ? act.identifierValue : (act.value !== undefined ? act.value : 0);
+    // 兼容 node/channel 格式
+    const actionId = act.identifier || (act.node !== undefined ? `node_${act.node}_ch${act.channel}` : '');
+    
     return `
         <div class="scene-action-item" style="background: white; padding: 12px; border-radius: 8px; margin-bottom: 8px;">
             <div class="form-row" style="margin-bottom: 0;">
                 <div class="form-group" style="margin-bottom: 0;">
                     <label style="font-size: 11px;">属性标识 <span style="color: #999;">(node_X_swY)</span></label>
-                    <input type="text" class="action-identifier" value="${escapeHtml(act.identifier || '')}" placeholder="node_1_sw1" style="font-size: 12px;">
+                    <input type="text" class="action-identifier" value="${escapeHtml(actionId)}" placeholder="node_1_sw1" style="font-size: 12px;">
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
                     <label style="font-size: 11px;">动作值</label>
                     <select class="action-value" style="font-size: 12px;">
-                        <option value="0" ${act.identifierValue === 0 ? 'selected' : ''}>⏹️ 停止 (0)</option>
-                        <option value="1" ${act.identifierValue === 1 ? 'selected' : ''}>▶️ 正转 (1)</option>
-                        <option value="2" ${act.identifierValue === 2 ? 'selected' : ''}>◀️ 反转 (2)</option>
+                        <option value="0" ${actionValue === 0 ? 'selected' : ''}>⏹️ 停止 (0)</option>
+                        <option value="1" ${actionValue === 1 ? 'selected' : ''}>▶️ 正转 (1)</option>
+                        <option value="2" ${actionValue === 2 ? 'selected' : ''}>◀️ 反转 (2)</option>
                     </select>
                 </div>
                 <button onclick="removeSceneAction(this)" class="danger" style="padding: 6px 10px; font-size: 11px; align-self: flex-end;">✕</button>
@@ -5173,6 +5205,7 @@ function removeSceneAction(btn) {
 
 /**
  * 收集场景数据
+ * 当设备编码为空时，使用 'local' 标识符表示查询本地传感器
  */
 function collectSceneData() {
     const sceneId = document.getElementById('sceneId').value;
@@ -5187,17 +5220,24 @@ function collectSceneData() {
     const conditions = [];
     document.querySelectorAll('#sceneConditionsList .scene-condition-item').forEach(item => {
         const deviceCode = item.querySelector('.cond-device-code').value.trim();
-        const identifier = item.querySelector('.cond-identifier').value;
+        const identifier = item.querySelector('.cond-identifier').value.trim();
         const op = item.querySelector('.cond-op').value;
         const value = parseFloat(item.querySelector('.cond-value').value);
         
         if (identifier) {
-            conditions.push({
-                deviceCode: deviceCode,
+            const cond = {
                 identifier: identifier,
                 op: op,
-                identifierValue: value
-            });
+                value: value  // 使用服务器期望的字段名 'value'
+            };
+            // 当设备编码为空时，使用 'local' 表示查询本地传感器
+            // 服务器会根据此标识使用本地传感器数据
+            if (deviceCode) {
+                cond.device = deviceCode;  // 使用服务器期望的字段名 'device'
+            } else {
+                cond.device = 'local';  // 空设备编码时查询本地传感器
+            }
+            conditions.push(cond);
         }
     });
     
@@ -5210,7 +5250,7 @@ function collectSceneData() {
         if (identifier) {
             actions.push({
                 identifier: identifier,
-                identifierValue: value
+                value: value  // 使用服务器期望的字段名 'value'
             });
         }
     });
@@ -5303,9 +5343,10 @@ function saveScene() {
 
 /**
  * 编辑场景
+ * 兼容服务器返回的字段名 (id -> sceneId)
  */
 function editScene(id) {
-    const scene = sceneListCache.find(s => (s.sceneId || s.strategyId) === id);
+    const scene = sceneListCache.find(s => (s.sceneId || s.strategyId || s.id) === id);
     if (scene) {
         openSceneEditorModal(scene);
     } else {
@@ -5367,6 +5408,7 @@ function triggerScene(id) {
 
 /**
  * 快速创建场景模板
+ * 使用服务器期望的字段名 (device, value)
  */
 function createQuickScene(template) {
     const templates = {
@@ -5374,29 +5416,29 @@ function createQuickScene(template) {
             sceneName: '高温通风',
             sceneType: 'auto',
             matchType: 0,
-            conditions: [{ identifier: 'airTemp', op: 'gt', identifierValue: 30 }],
-            actions: [{ identifier: 'node_1_sw1', identifierValue: 1 }]
+            conditions: [{ device: 'local', identifier: 'airTemp', op: 'gt', value: 30 }],
+            actions: [{ identifier: 'node_1_sw1', value: 1 }]
         },
         'lowtemp_heat': {
             sceneName: '低温保暖',
             sceneType: 'auto',
             matchType: 0,
-            conditions: [{ identifier: 'airTemp', op: 'lt', identifierValue: 10 }],
-            actions: [{ identifier: 'node_1_sw2', identifierValue: 1 }]
+            conditions: [{ device: 'local', identifier: 'airTemp', op: 'lt', value: 10 }],
+            actions: [{ identifier: 'node_1_sw2', value: 1 }]
         },
         'dry_irrigation': {
             sceneName: '干旱灌溉',
             sceneType: 'auto',
             matchType: 0,
-            conditions: [{ identifier: 'soilHum', op: 'lt', identifierValue: 30 }],
-            actions: [{ identifier: 'node_1_sw3', identifierValue: 1 }]
+            conditions: [{ device: 'local', identifier: 'soilHum', op: 'lt', value: 30 }],
+            actions: [{ identifier: 'node_1_sw3', value: 1 }]
         },
         'light_shade': {
             sceneName: '强光遮阳',
             sceneType: 'auto',
             matchType: 0,
-            conditions: [{ identifier: 'light', op: 'gt', identifierValue: 50000 }],
-            actions: [{ identifier: 'node_1_sw4', identifierValue: 1 }]
+            conditions: [{ device: 'local', identifier: 'light', op: 'gt', value: 50000 }],
+            actions: [{ identifier: 'node_1_sw4', value: 1 }]
         }
     };
     
