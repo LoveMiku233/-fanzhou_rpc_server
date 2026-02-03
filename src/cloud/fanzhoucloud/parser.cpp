@@ -108,7 +108,19 @@ bool parseAutoStrategyFromJson(const QJsonObject &obj, core::AutoStrategy &s, QS
             core::StrategyCondition c;
 
             c.op = cobj.value("op").toString();  // gt lt eq egt elt
-            c.identifierValue = cobj.value("identifierValue").toDouble();
+            // Handle identifierValue as either number or string
+            const QJsonValue idVal = cobj.value("identifierValue");
+            if (idVal.isString()) {
+                bool ok = false;
+                c.identifierValue = idVal.toString().toDouble(&ok);
+                if (!ok) {
+                    LOG_WARNING(kLogSource,
+                                QStringLiteral("invalid condition identifierValue string: %1")
+                                    .arg(idVal.toString()));
+                }
+            } else {
+                c.identifierValue = idVal.toDouble();
+            }
             c.sensor_dev = cobj.value("deviceCode").toString();
             c.identifier = cobj.value("identifier").toString();
 
