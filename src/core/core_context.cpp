@@ -536,6 +536,7 @@ void CoreContext::evaluateAllStrategies()
     const QDateTime now = QDateTime::currentDateTime();
 
     for (AutoStrategy &s : strategys_) {
+        if (deletedStrategies_.contains(s.strategyId)) continue;
         if (s.enabled == false) continue;                  // not enabled, skip
 
         if (!isInEffectiveTime(s, now.time()))   // not within the effective time
@@ -579,6 +580,7 @@ QList<AutoStrategyState> CoreContext::strategyStates() const
 {
     QList<AutoStrategyState> states;
     for (const auto &s: strategys_) {
+        if (deletedStrategies_.contains(s.strategyId)) continue;
         AutoStrategyState st;
         st.config = s;
         st.attached = (s.groupId > 0);       ///< 是否已绑定分组
