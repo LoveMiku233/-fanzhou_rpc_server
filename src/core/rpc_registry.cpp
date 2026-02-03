@@ -162,6 +162,7 @@ void RpcRegistry::registerAll()
     registerMqtt();    // 添加MQTT多通道管理RPC方法
     registerMonitor(); // 添加系统资源监控RPC方法
     registerAuth();    // 添加认证RPC方法
+    registerScene();   // 添加场景管理RPC方法
 }
 
 void RpcRegistry::registerBase()
@@ -3140,6 +3141,110 @@ void RpcRegistry::registerAuth()
         return QJsonObject{
             {kKeyOk, true},
             {QStringLiteral("totalWhitelist"), context_->authConfig.whitelist.size()}
+        };
+    });
+}
+
+void RpcRegistry::registerScene()
+{
+    // 云端场景设置/更新 (cloud.scene.set)
+    dispatcher_->registerMethod(QStringLiteral("cloud.scene.set"),
+                                 [this](const QJsonObject &params) {
+        // 验证必要参数
+        if (!params.contains(QStringLiteral("data"))) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, 
+                QStringLiteral("missing data"));
+        }
+        
+        const QJsonObject data = params.value(QStringLiteral("data")).toObject();
+        const QString requestId = params.value(QStringLiteral("requestId")).toString();
+        
+        // 解析场景数据
+        core::AutoStrategy strategy;
+        QString parseError;
+        if (!cloud::fanzhoucloud::parseSceneSetData(data, strategy, &parseError)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, parseError);
+        }
+        
+        // 创建或更新策略
+        bool isUpdate = false;
+        QString createError;
+        if (!context_->createStrategy(strategy, &isUpdate, &createError)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, createError);
+        }
+        
+        // 确保为该策略创建/更新分组
+        QString groupError;
+        if (!context_->ensureGroupForStrategy(strategy, &groupError)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue,
+                QStringLiteral("create group failed: %1").arg(groupError));
+        }
+        
+        // 保存配置
+        QString saveError;
+        context_->saveConfig(QString(), &saveError);
+        
+        return QJsonObject{
+            {kKeyOk, true},
+            {QStringLiteral("sceneId"), strategy.strategyId},
+            {QStringLiteral("version"), strategy.version},
+            {QStringLiteral("isUpdate"), isUpdate},
+            {QStringLiteral("requestId"), requestId}
+        };
+    });
+    
+    // 云端场景删除 (cloud.scene.delete)
+    dispatcher_->registerMethod(QStringLiteral("cloud.scene.delete"),
+                                 [this](const QJsonObject &params) {
+        // 验证必要参数
+        if (!params.contains(QStringLiteral("data"))) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, 
+                QStringLiteral("missing data"));
+        }
+        
+        const QString requestId = params.value(QStringLiteral("requestId")).toString();
+        const QJsonValue dataValue = params.value(QStringLiteral("data"));
+        
+        // 解析场景ID列表
+        QList<int> sceneIds;
+        QString parseError;
+        if (!cloud::fanzhoucloud::parseDeleteCommand(
+                QStringLiteral("scene"), dataValue, sceneIds, &parseError)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, parseError);
+        }
+        
+        // 删除场景
+        QJsonArray deletedIds;
+        QJsonArray failedIds;
+        for (int id : sceneIds) {
+            QString deleteError;
+            bool alreadyDeleted = false;
+            if (context_->deleteStrategy(id, &deleteError, &alreadyDeleted)) {
+                deletedIds.append(id);
+            } else {
+                if (!alreadyDeleted) {
+                    failedIds.append(QJsonObject{
+                        {QStringLiteral("id"), id},
+                        {QStringLiteral("error"), deleteError}
+                    });
+                } else {
+                    // 已删除的也算成功
+                    deletedIds.append(id);
+                }
+            }
+        }
+        
+        // 保存配置
+        QString saveError;
+        context_->saveConfig(QString(), &saveError);
+        
+        const bool allSuccess = failedIds.isEmpty();
+        
+        return QJsonObject{
+            {kKeyOk, allSuccess},
+            {QStringLiteral("deletedIds"), deletedIds},
+            {QStringLiteral("failedIds"), failedIds},
+            {QStringLiteral("requestId"), requestId}
         };
     });
 }
