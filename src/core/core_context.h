@@ -334,6 +334,7 @@ public:
     bool triggerStrategy(int strategyId);
     bool createStrategy(const AutoStrategy &config, bool *isUpdate, QString *error = nullptr);
     bool deleteStrategy(int strategyId, QString *error = nullptr, bool *alreadyDeleted = nullptr);
+    bool setStrategyId(int old_id, int new_id);
     //
     bool isInEffectiveTime(const AutoStrategy &s, const QTime &now) const;
     void executeActions(const QList<StrategyAction> &actions);

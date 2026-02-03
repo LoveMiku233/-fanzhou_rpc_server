@@ -132,10 +132,9 @@ bool CloudMessageHandler::sendStrategyCommand(const core::AutoStrategy &strategy
     // Validate method - must be explicitly provided
     QString method = msg.value("method").toString();
     if (method.isEmpty()) {
-        method = QStringLiteral("set");  // Default to 'set' for new/update operations
+        method = QStringLiteral("set");
     }
     
-    // Only support 'set' and 'delete' methods
     if (method != "set" && method != "delete") {
         LOG_WARNING(kLogSource, 
                     QStringLiteral("Unsupported strategy method: %1").arg(method));
@@ -150,27 +149,31 @@ bool CloudMessageHandler::sendStrategyCommand(const core::AutoStrategy &strategy
     // Build data object based on strategy type
     QJsonObject data;
     if (strategy.type == "scene") {
-        data.insert("sceneId", strategy.strategyId);
+        if (strategy.strategyId > 0) {
+            data.insert("sceneId", strategy.strategyId);
+        } else {
+            last_wait_scene_id = strategy.strategyId;
+        }
         data.insert("sceneName", strategy.strategyName);
+        data.insert("sceneType", strategy.strategyType);
         data.insert("matchType", static_cast<int>(strategy.matchType));
-        data.insert("enabled", strategy.enabled);
+        data.insert("enabled", static_cast<bool>(strategy.enabled));
         data.insert("version", strategy.version);
         
-        // Build actions array
         QJsonArray actionsArr;
         for (const auto &act : strategy.actions) {
             QJsonObject actObj;
+            actObj.insert("deviceCode", ctx_->coreConfig.main.DeviceId);
             actObj.insert("identifier", act.identifier);
             actObj.insert("identifierValue", act.identifierValue);
             actionsArr.append(actObj);
         }
         data.insert("actions", actionsArr);
         
-        // Build conditions array
         QJsonArray conditionsArr;
         for (const auto &cond : strategy.conditions) {
             QJsonObject condObj;
-            condObj.insert("device", cond.sensor_dev);
+            condObj.insert("deviceCode", cond.sensor_dev);
             condObj.insert("identifier", cond.identifier);
             condObj.insert("op", cond.op);
             condObj.insert("identifierValue", cond.identifierValue);
@@ -330,6 +333,63 @@ bool CloudMessageHandler::handleStrategyCommand(
 
     else if (method == "get") {
 
+    } else if (method == "set_response") {
+        const QJsonObject data = msg.value("data").toObject();
+        if (data.isEmpty()) {
+            LOG_ERROR(kLogSource, "set_response without data");
+            return false;
+        }
+
+        // 只处理 scene
+        if (type != "scene") {
+            return true;    // 忽略其它类型
+        }
+
+        const int code = data.value("code").toInt(-1);
+        if (code != 0) {
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("scene set_response failed, code=%1, msg=%2")
+                        .arg(code)
+                        .arg(data.value("message").toString()));
+            return false;
+        }
+
+        // ===== 处理【新增场景】 =====
+        if (last_wait_scene_id < 0) {
+            // 没有等待中的新增场景，说明这是编辑场景的响应
+            LOG_DEBUG(kLogSource, "scene set_response ignored (edit scene)");
+            return true;
+        }
+
+        const QJsonObject result = data.value("result").toObject();
+        if (result.isEmpty()) {
+            LOG_ERROR(kLogSource, "set_response result is empty");
+            return false;
+        }
+
+        const int newSceneId = result.value("sceneId").toInt(-1);
+        if (newSceneId <= 0) {
+            LOG_ERROR(kLogSource, "invalid sceneId in set_response");
+            return false;
+        }
+
+        // old_id -> new_id 映射
+        if (!ctx_->setStrategyId(last_wait_scene_id, newSceneId)) {
+            LOG_ERROR(kLogSource,
+                      QStringLiteral("setStrategy failed: old=%1 new=%2")
+                      .arg(last_wait_scene_id)
+                      .arg(newSceneId));
+            return false;
+        }
+
+        LOG_INFO(kLogSource,
+                 QStringLiteral("scene created: localId=%1 cloudId=%2")
+                 .arg(last_wait_scene_id)
+                 .arg(newSceneId));
+
+        last_wait_scene_id = -1;
+
+        return true;
     }
 
     else {

@@ -14,6 +14,10 @@ bool CoreConfig::loadMain(const QJsonObject &root, QString *error)
                 static_cast<quint16>(mainObj[QStringLiteral("rpcPort")].toInt(main.rpcPort));
         }
 
+        if (mainObj.contains(QStringLiteral("deviceId"))) {
+            main.DeviceId = mainObj["deviceId"].toString();
+        }
+
         // 认证配置
         if (mainObj.contains(QStringLiteral("auth")) &&
             mainObj[QStringLiteral("auth")].isObject()) {
@@ -110,6 +114,7 @@ void CoreConfig::saveMain(QJsonObject &root) const
     // 主配置
     QJsonObject mainObj;
     mainObj[QStringLiteral("rpcPort")] = static_cast<int>(main.rpcPort);
+    mainObj[QStringLiteral("deviceId")] = main.DeviceId;
 
     // 认证配置
     if (main.auth.enabled || !main.auth.secret.isEmpty() ||
@@ -119,6 +124,7 @@ void CoreConfig::saveMain(QJsonObject &root) const
         if (!main.auth.secret.isEmpty()) {
             authObj[QStringLiteral("secret")] = main.auth.secret;
         }
+
         authObj[QStringLiteral("tokenExpireSec")] = main.auth.tokenExpireSec;
 
         if (!main.auth.allowedTokens.isEmpty()) {

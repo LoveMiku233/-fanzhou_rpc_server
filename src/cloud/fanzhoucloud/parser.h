@@ -63,6 +63,7 @@ bool parseDeleteCommand(const QString &type,
                         QList<int> &sceneIds,
                         QString *error);
 
+
 }
 }
 }

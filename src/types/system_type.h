@@ -49,6 +49,7 @@ struct ScreenConfig {
 struct MainConfig {
     quint16 rpcPort = 12345;
     AuthConfig auth;
+    QString DeviceId = "NULL";
 };
 
 }

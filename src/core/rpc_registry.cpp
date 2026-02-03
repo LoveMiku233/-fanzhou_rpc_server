@@ -3174,11 +3174,11 @@ void RpcRegistry::registerScene()
         }
         
         // 确保为该策略创建/更新分组
-        QString groupError;
-        if (!context_->ensureGroupForStrategy(strategy, &groupError)) {
-            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue,
-                QStringLiteral("create group failed: %1").arg(groupError));
-        }
+//        QString groupError;
+//        if (!context_->ensureGroupForStrategy(strategy, &groupError)) {
+//            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue,
+//                QStringLiteral("create group failed: %1").arg(groupError));
+//        }
         
         // 保存配置
         QString saveError;

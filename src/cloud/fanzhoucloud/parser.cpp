@@ -27,9 +27,9 @@ bool parseAutoStrategyFromJson(const QJsonObject &obj, core::AutoStrategy &s, QS
     if (!obj.contains("sceneType"))     return fail("missing sceneType");
 
     // 必填字段
-    s.strategyId   = obj.value("sceneId").toInt();
-    if (s.strategyId <= 0)
-        return fail("invalid id");
+    s.strategyId   = obj.value("sceneId").toInt(-1);
+//    if (s.strategyId <= 0)
+//        return fail("invalid id");
     s.strategyName = obj.value("sceneName").toString();
     s.strategyType = obj.value("sceneType").toString(); // auto / manual
     s.matchType    = static_cast<qint8>(obj.value("matchType").toInt(0));
@@ -360,7 +360,7 @@ bool parseDeleteCommand(const QString &type,
 
     if (data.isDouble()) {
         int id = data.toInt();
-        if (id <= 0) {
+        if (id < 0) {
             if (error) *error = "invalid strategy id";
             return false;
         }

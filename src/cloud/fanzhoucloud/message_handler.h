@@ -44,6 +44,9 @@ public slots:
 
 private:
     int channelId_ = -1;
+
+    int last_wait_scene_id = -1;
+
     core::CoreContext *ctx_;
     //
     QList<core::AutoStrategy> parseStrategyByType(

@@ -630,6 +630,7 @@ bool CoreContext::triggerStrategy(int strategyId)
     return false;
 }
 
+// @
 bool CoreContext::createStrategy(const AutoStrategy &config, bool *isUpdate, QString *error)
 {
     // 查找现有策略（无视版本号，找到就更新）
@@ -661,6 +662,7 @@ bool CoreContext::createStrategy(const AutoStrategy &config, bool *isUpdate, QSt
                  .arg(s.version));
 
         // ========== 同步到云端（携带 +1 后的版本号）==========
+
         if (cloudMessageHandler) {
             QJsonObject msg;
             msg.insert("method", QStringLiteral("set"));
@@ -691,6 +693,7 @@ bool CoreContext::createStrategy(const AutoStrategy &config, bool *isUpdate, QSt
              .arg(strategys_.last().version));
 
     // ========== 同步新建到云端 ==========
+    // 删除sceneId
     if (cloudMessageHandler) {
         QJsonObject msg;
         msg.insert("method", QStringLiteral("set"));
@@ -746,7 +749,7 @@ bool CoreContext::deleteStrategy(int strategyId, QString *error, bool *alreadyDe
                     LOG_DEBUG(kLogSource,
                         QStringLiteral("Synced delete to cloud: strategy=%1, channel=%2")
                         .arg(strategyId)
-                        .arg(strategyId));
+                        .arg(channelId));
                 }
             }
             // ====================================
@@ -769,6 +772,61 @@ bool CoreContext::deleteStrategy(int strategyId, QString *error, bool *alreadyDe
     if (error) *error = QStringLiteral("StrategyId %1 not found").arg(strategyId);
     return false;
 }
+
+bool CoreContext::setStrategyId(int old_id, int new_id)
+{
+    if (old_id == -1 || new_id <= 0 || old_id == new_id) {
+        LOG_ERROR(kLogSource,
+                  QStringLiteral("invalid strategy id mapping: old=%1 new=%2")
+                  .arg(old_id)
+                  .arg(new_id));
+        return false;
+    }
+
+    // new_id 是否已经存在
+    for (const auto &s : strategys_) {
+        if (s.strategyId == new_id) {
+            LOG_ERROR(kLogSource,
+                      QStringLiteral("strategyId %1 already exists, cannot replace old %2")
+                      .arg(new_id)
+                      .arg(old_id));
+            return false;
+        }
+    }
+
+    for (AutoStrategy &strategy : strategys_) {
+        if (strategy.strategyId == old_id) {
+
+            strategy.strategyId = new_id;
+
+            // 云端刚创建，版本一般以云端为准（默认 1）
+            if (strategy.version <= 0) {
+                strategy.version = 1;
+            }
+
+            strategy.updateTime = QDateTime::currentDateTime()
+                    .toString("yyyy-MM-dd HH:mm:ss");
+
+            LOG_INFO(kLogSource,
+                     QStringLiteral("strategyId updated: %1 -> %2")
+                     .arg(old_id)
+                     .arg(new_id));
+
+            deletedStrategies_.remove(old_id);
+            deletedStrategies_.remove(new_id);
+
+            return true;
+        }
+    }
+
+    LOG_ERROR(kLogSource,
+              QStringLiteral("old strategyId %1 not found when setting newId %2")
+              .arg(old_id)
+              .arg(new_id));
+
+    return false;
+}
+
 
 bool CoreContext::evaluateSensorCondition(const QString &op,
                                           double value,
