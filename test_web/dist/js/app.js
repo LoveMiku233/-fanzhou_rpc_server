@@ -4892,7 +4892,7 @@ function renderSceneCard(scene) {
             const actValue = a.identifierValue !== undefined ? a.identifierValue : a.value;
             const valText = { 0: '停止', 1: '正转', 2: '反转' }[actValue] || actValue;
             // 兼容 identifier 和 node/channel 两种格式
-            const actId = a.identifier || (a.node !== undefined ? `node_${a.node}_ch${a.channel}` : '');
+            const actId = a.identifier || (a.node !== undefined ? `node_${a.node}_sw${a.channel + 1}` : '');
             return `${actId}→${valText}`;
         });
         actionDesc = actTexts.join(', ');
@@ -5172,8 +5172,8 @@ function renderSceneActions(actions) {
 function getActionItemHtml(act = {}) {
     // 兼容服务器返回的字段名 (value -> identifierValue, node/channel -> identifier)
     const actionValue = act.identifierValue !== undefined ? act.identifierValue : (act.value !== undefined ? act.value : 0);
-    // 兼容 node/channel 格式
-    const actionId = act.identifier || (act.node !== undefined ? `node_${act.node}_ch${act.channel}` : '');
+    // 兼容 node/channel 格式 (channel 是 0-based, sw 是 1-based)
+    const actionId = act.identifier || (act.node !== undefined ? `node_${act.node}_sw${act.channel + 1}` : '');
     
     return `
         <div class="scene-action-item" style="background: white; padding: 12px; border-radius: 8px; margin-bottom: 8px;">
