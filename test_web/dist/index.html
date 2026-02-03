@@ -351,6 +351,7 @@ websocat --text ws-l:0.0.0.0:12346 tcp:192.168.0.104:12345
                     <h3 style="color: #333;">⏱️ 策略管理</h3>
                     <div class="btn-group">
                         <button onclick="refreshStrategyList()">🔄 刷新</button>
+                        <button onclick="syncStrategiesToCloud()" style="background: #9c27b0; color: white;">☁️ 同步到云端</button>
                         <button class="secondary" onclick="showPage('blueprint')">🎨 可视化编辑器</button>
                     </div>
                 </div>
@@ -440,6 +441,81 @@ websocat --text ws-l:0.0.0.0:12346 tcp:192.168.0.104:12345
                 <div class="strategy-cards" id="sensorStrategyCards">
                     <!-- 传感器策略卡片将由JavaScript动态生成 -->
                 </div>
+
+                <!-- 开发者调试区 -->
+                <details style="margin-top: 25px; background: linear-gradient(135deg, #fce4ec 0%, #f3e5f5 100%); padding: 20px; border-radius: 12px; border: 2px solid #ce93d8;">
+                    <summary style="cursor: pointer; font-weight: 600; color: #7b1fa2;">🔧 开发者调试工具</summary>
+                    <div style="margin-top: 15px;">
+                        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                            ⚠️ 此区域用于开发调试，可以模拟传感器数据来测试策略触发条件
+                        </p>
+                        
+                        <!-- 模拟传感器值 -->
+                        <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                            <strong style="color: #333; display: block; margin-bottom: 10px;">📡 模拟传感器值</strong>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>传感器ID</label>
+                                    <input type="text" id="debugSensorId" placeholder="例如: test_ab, temp_1" value="test_ab">
+                                </div>
+                                <div class="form-group">
+                                    <label>标识符</label>
+                                    <input type="text" id="debugSensorIdentifier" placeholder="例如: temperature, humidity" value="temperature">
+                                </div>
+                                <div class="form-group">
+                                    <label>数值</label>
+                                    <input type="number" id="debugSensorValue" placeholder="例如: 25.5" value="25" step="0.1">
+                                </div>
+                            </div>
+                            <div class="btn-group" style="margin-top: 10px;">
+                                <button class="success" onclick="setDebugSensorValue()">📤 设置传感器值</button>
+                                <button onclick="getDebugSensorValue()">📥 读取当前值</button>
+                            </div>
+                        </div>
+                        
+                        <!-- 快速测试按钮 -->
+                        <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                            <strong style="color: #333; display: block; margin-bottom: 10px;">🎯 快速测试（温度策略）</strong>
+                            <div class="btn-group">
+                                <button onclick="setDebugSensorQuick(30)" style="background: #f44336; color: white;">🌡️ 设置30°C（高温）</button>
+                                <button onclick="setDebugSensorQuick(25)" style="background: #ff9800; color: white;">🌡️ 设置25°C（常温）</button>
+                                <button onclick="setDebugSensorQuick(15)" style="background: #2196f3; color: white;">🌡️ 设置15°C（低温）</button>
+                                <button onclick="setDebugSensorQuick(5)" style="background: #03a9f4; color: white;">❄️ 设置5°C（寒冷）</button>
+                            </div>
+                        </div>
+                        
+                        <!-- 亮度调节 -->
+                        <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                            <strong style="color: #333; display: block; margin-bottom: 10px;">💡 屏幕亮度调节</strong>
+                            <div class="form-row">
+                                <div class="form-group" style="flex: 2;">
+                                    <label>亮度 (0-255)</label>
+                                    <input type="range" id="debugBrightness" min="0" max="255" value="128" 
+                                           oninput="document.getElementById('debugBrightnessValue').textContent = this.value"
+                                           style="width: 100%;">
+                                </div>
+                                <div class="form-group" style="flex: 0 0 60px; text-align: center;">
+                                    <label>当前值</label>
+                                    <span id="debugBrightnessValue" style="font-size: 24px; font-weight: bold; color: #f57c00;">128</span>
+                                </div>
+                            </div>
+                            <div class="btn-group" style="margin-top: 10px;">
+                                <button class="success" onclick="setScreenBrightness()">💡 应用亮度</button>
+                                <button onclick="getScreenBrightness()">📖 读取亮度</button>
+                            </div>
+                        </div>
+                        
+                        <!-- 4G状态 -->
+                        <div style="background: white; padding: 15px; border-radius: 8px;">
+                            <strong style="color: #333; display: block; margin-bottom: 10px;">📶 4G模块状态</strong>
+                            <div class="btn-group">
+                                <button onclick="get4GStatus()">📊 查询4G状态</button>
+                                <button class="success" onclick="connect4G()">📡 拨号连接</button>
+                            </div>
+                            <div id="debug4GResult" style="margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 6px; font-family: monospace; font-size: 12px; white-space: pre-wrap; display: none;"></div>
+                        </div>
+                    </div>
+                </details>
             </div>
 
             <!-- ==================== 高级功能页面（合并继电器控制、自定义调用、帮助） ==================== -->

@@ -245,7 +245,10 @@ void SensorCard::updateData(const QJsonObject &data)
     if (!bus.isEmpty()) detailText += QStringLiteral(" | [线] %1").arg(bus);
     if (!addr.isEmpty()) detailText += QStringLiteral(" | [址] %1").arg(addr);
     
-    detailLabel_->setText(detailText);
+    // Use paramsLabel_ to display detail info (detailLabel_ was never initialized)
+    if (paramsLabel_) {
+        paramsLabel_->setText(detailText);
+    }
     
     qDebug() << "[SENSOR_CARD] 更新传感器" << nodeId_ << "数据:" << detailText;
 }

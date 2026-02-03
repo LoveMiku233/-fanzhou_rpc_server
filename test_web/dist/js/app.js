@@ -1811,6 +1811,25 @@ function deleteStrategy(id) {
 }
 
 /**
+ * 同步所有策略到云端
+ */
+function syncStrategiesToCloud() {
+    log('info', '正在同步策略到云端...');
+    
+    callMethod('auto.strategy.syncToCloud', {
+        method: 'set'
+    }, function(response) {
+        if (response.result && response.result.ok) {
+            const count = response.result.syncedCount || 0;
+            const ids = response.result.syncedIds || [];
+            log('info', `☁️ 已同步 ${count} 个策略到云端: [${ids.join(', ')}]`);
+        } else if (response.error) {
+            log('error', `同步失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
  * 切换定时策略触发类型的输入框显示
  * 根据选择的触发方式（间隔/每日定时）显示相应的配置选项
  */
@@ -4381,6 +4400,197 @@ function disconnectAllClients() {
             refreshConnectionList();
         } else if (response.error) {
             log('error', `断开失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/* ========================================================
+ * 开发者调试功能
+ * ======================================================== */
+
+/**
+ * 设置调试传感器值
+ */
+function setDebugSensorValue() {
+    const sensorId = document.getElementById('debugSensorId').value.trim();
+    const identifier = document.getElementById('debugSensorIdentifier').value.trim();
+    const value = parseFloat(document.getElementById('debugSensorValue').value);
+    
+    if (!identifier) {
+        log('error', '请填写标识符 (identifier)');
+        return;
+    }
+    
+    if (isNaN(value)) {
+        log('error', '请输入有效的数值');
+        return;
+    }
+    
+    // 策略条件使用 identifier 作为传感器值的键
+    // 所以我们直接使用 identifier 作为 sensorId 来设置值
+    callMethod('sensor.setValue', { 
+        sensorId: identifier, 
+        value: value 
+    }, function(response) {
+        if (response.result && response.result.ok) {
+            log('info', `✅ 已设置传感器 ${identifier} = ${value}`);
+            // 也显示设备ID信息
+            if (sensorId) {
+                log('info', `   (设备: ${sensorId})`);
+            }
+        } else if (response.error) {
+            log('error', `设置失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 获取调试传感器当前值
+ */
+function getDebugSensorValue() {
+    const identifier = document.getElementById('debugSensorIdentifier').value.trim();
+    
+    if (!identifier) {
+        log('error', '请填写标识符 (identifier)');
+        return;
+    }
+    
+    // 使用 sensor.value 获取传感器值
+    callMethod('sensor.value', { sensorId: identifier }, function(response) {
+        if (response.result) {
+            const result = response.result;
+            if (result.hasValue) {
+                log('info', `📊 传感器 ${identifier} 当前值: ${result.value} (更新时间: ${result.updateTime || 'N/A'})`);
+            } else {
+                log('warning', `⚠️ 传感器 ${identifier} 暂无数据`);
+            }
+        } else if (response.error) {
+            log('error', `读取失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 快速设置温度值
+ */
+function setDebugSensorQuick(temperature) {
+    document.getElementById('debugSensorId').value = 'test_ab';
+    document.getElementById('debugSensorIdentifier').value = 'temperature';
+    document.getElementById('debugSensorValue').value = temperature;
+    setDebugSensorValue();
+}
+
+/**
+ * 设置屏幕亮度
+ */
+function setScreenBrightness() {
+    const brightness = parseInt(document.getElementById('debugBrightness').value);
+    
+    callMethod('sys.brightness.set', { brightness: brightness }, function(response) {
+        if (response.result && response.result.ok) {
+            log('info', `✅ 亮度已设置为 ${brightness} (路径: ${response.result.path || 'unknown'})`);
+        } else if (response.error) {
+            log('error', `设置亮度失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 获取当前屏幕亮度
+ */
+function getScreenBrightness() {
+    callMethod('sys.brightness.get', {}, function(response) {
+        if (response.result && response.result.ok) {
+            const brightness = response.result.brightness;
+            document.getElementById('debugBrightness').value = brightness;
+            document.getElementById('debugBrightnessValue').textContent = brightness;
+            log('info', `📊 当前亮度: ${brightness}`);
+        } else if (response.error) {
+            log('error', `读取亮度失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 查询4G模块状态
+ */
+function get4GStatus() {
+    const resultEl = document.getElementById('debug4GResult');
+    resultEl.style.display = 'block';
+    resultEl.textContent = '正在查询4G状态...';
+    
+    callMethod('sys.4g.status', {}, function(response) {
+        if (response.result) {
+            const result = response.result;
+            let statusText = '';
+            
+            if (result.parsed) {
+                statusText += `=== 4G模块信息 ===\n`;
+                statusText += `制造商: ${result.parsed.manufacturer || 'N/A'}\n`;
+                statusText += `型号: ${result.parsed.model || 'N/A'}\n`;
+                statusText += `状态: ${result.parsed.state || 'N/A'}\n`;
+                if (result.parsed.failedReason) {
+                    statusText += `失败原因: ${result.parsed.failedReason}\n`;
+                }
+                statusText += `信号质量: ${result.parsed.signalQuality !== undefined ? result.parsed.signalQuality + '%' : 'N/A'}\n`;
+                statusText += `主端口: ${result.parsed.primaryPort || 'N/A'}\n`;
+                statusText += `设备ID: ${result.parsed.equipmentId || 'N/A'}\n`;
+            }
+            
+            statusText += `\n=== 网络接口 usb0 ===\n`;
+            if (result.usb0Ip) {
+                statusText += `IP地址: ${result.usb0Ip}\n`;
+            }
+            statusText += `状态: ${result.usb0Up ? '运行中' : '未运行'}\n`;
+            
+            if (result.usb0Info) {
+                statusText += `\n详细信息:\n${result.usb0Info}\n`;
+            }
+            
+            resultEl.textContent = statusText;
+            log('info', '✅ 4G状态查询完成');
+        } else if (response.error) {
+            resultEl.textContent = `查询失败: ${response.error.message || '未知错误'}`;
+            log('error', `查询4G状态失败: ${response.error.message || '未知错误'}`);
+        }
+    });
+}
+
+/**
+ * 4G拨号连接
+ */
+function connect4G() {
+    const resultEl = document.getElementById('debug4GResult');
+    resultEl.style.display = 'block';
+    resultEl.textContent = '正在执行4G拨号连接...';
+    
+    callMethod('sys.4g.connect', {}, function(response) {
+        if (response.result) {
+            const result = response.result;
+            let statusText = `=== 4G拨号结果 ===\n`;
+            statusText += `总体状态: ${result.ok ? '✅ 成功' : '❌ 失败'}\n\n`;
+            
+            if (result.steps) {
+                result.steps.forEach((step, index) => {
+                    statusText += `步骤 ${index + 1}: ${step.step}\n`;
+                    statusText += `  命令: ${step.command}\n`;
+                    statusText += `  状态: ${step.success ? '✅ 成功' : '❌ 失败'}\n`;
+                    if (step.output) statusText += `  输出: ${step.output}\n`;
+                    if (step.error) statusText += `  错误: ${step.error}\n`;
+                    statusText += '\n';
+                });
+            }
+            
+            resultEl.textContent = statusText;
+            
+            if (result.ok) {
+                log('info', '✅ 4G拨号连接成功');
+            } else {
+                log('warning', '⚠️ 4G拨号连接失败，请检查详细信息');
+            }
+        } else if (response.error) {
+            resultEl.textContent = `连接失败: ${response.error.message || '未知错误'}`;
+            log('error', `4G拨号失败: ${response.error.message || '未知错误'}`);
         }
     });
 }

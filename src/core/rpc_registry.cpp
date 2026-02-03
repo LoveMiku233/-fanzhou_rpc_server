@@ -13,6 +13,7 @@
 
 #include "cloud/mqtt/mqtt_channel_manager.h"
 #include "cloud/fanzhoucloud/parser.h"
+#include "cloud/fanzhoucloud/message_handler.h"
 #include "cloud/cloud_types.h"
 #include "comm/can/can_comm.h"
 #include "utils/system_monitor.h"
@@ -30,6 +31,8 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QProcess>
+#include <QFile>
 #include <limits>
 
 namespace fanzhou {
@@ -425,6 +428,225 @@ void RpcRegistry::registerSystem()
             {QStringLiteral("primary"), primary},
             {QStringLiteral("secondary"), secondary}
         };
+    });
+
+    // ===================== 亮度调整 =====================
+    // 设置屏幕亮度 (0-255)
+    // 使用命令: echo <brightness> > /sys/class/backlight/*/brightness
+    dispatcher_->registerMethod(QStringLiteral("sys.brightness.set"),
+                                 [](const QJsonObject &params) {
+        qint32 brightness = 0;
+        if (!rpc::RpcHelpers::getI32(params, "brightness", brightness))
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing brightness"));
+        if (brightness < 0 || brightness > 255)
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("brightness must be 0-255"));
+
+        // Try common backlight paths
+        QStringList backlightPaths = {
+            QStringLiteral("/sys/class/backlight/backlight/brightness"),
+            QStringLiteral("/sys/class/backlight/lcd-backlight/brightness"),
+            QStringLiteral("/sys/class/backlight/pwm-backlight/brightness")
+        };
+
+        bool success = false;
+        QString usedPath;
+        
+        for (const QString &path : backlightPaths) {
+            QFile file(path);
+            if (file.exists() && file.open(QIODevice::WriteOnly)) {
+                file.write(QString::number(brightness).toUtf8());
+                file.close();
+                success = true;
+                usedPath = path;
+                break;
+            }
+        }
+
+        if (!success) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, 
+                QStringLiteral("No backlight device found"));
+        }
+
+        return QJsonObject{
+            {QStringLiteral("ok"), true},
+            {QStringLiteral("brightness"), brightness},
+            {QStringLiteral("path"), usedPath}
+        };
+    });
+
+    // 获取当前屏幕亮度
+    dispatcher_->registerMethod(QStringLiteral("sys.brightness.get"),
+                                 [](const QJsonObject &) {
+        QStringList backlightPaths = {
+            QStringLiteral("/sys/class/backlight/backlight/brightness"),
+            QStringLiteral("/sys/class/backlight/lcd-backlight/brightness"),
+            QStringLiteral("/sys/class/backlight/pwm-backlight/brightness")
+        };
+
+        for (const QString &path : backlightPaths) {
+            QFile file(path);
+            if (file.exists() && file.open(QIODevice::ReadOnly)) {
+                QString content = QString::fromUtf8(file.readAll()).trimmed();
+                file.close();
+                bool ok = false;
+                int brightness = content.toInt(&ok);
+                if (ok) {
+                    return QJsonObject{
+                        {QStringLiteral("ok"), true},
+                        {QStringLiteral("brightness"), brightness},
+                        {QStringLiteral("path"), path}
+                    };
+                }
+            }
+        }
+
+        return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, 
+            QStringLiteral("No backlight device found"));
+    });
+
+    // ===================== 4G模块状态 =====================
+    // 查询4G模块状态 (使用mmcli命令)
+    dispatcher_->registerMethod(QStringLiteral("sys.4g.status"),
+                                 [](const QJsonObject &) {
+        QJsonObject result;
+        result[QStringLiteral("ok")] = true;
+
+        // 1. 获取modem列表
+        QProcess modemList;
+        modemList.start(QStringLiteral("mmcli"), QStringList() << QStringLiteral("-L"));
+        modemList.waitForFinished(5000);
+        QString modemListOutput = QString::fromUtf8(modemList.readAllStandardOutput()).trimmed();
+        result[QStringLiteral("modemList")] = modemListOutput;
+
+        // 2. 尝试获取第一个modem的详细信息
+        QProcess modemInfo;
+        modemInfo.start(QStringLiteral("mmcli"), QStringList() << QStringLiteral("-m") << QStringLiteral("0"));
+        modemInfo.waitForFinished(5000);
+        QString modemInfoOutput = QString::fromUtf8(modemInfo.readAllStandardOutput()).trimmed();
+        QString modemInfoError = QString::fromUtf8(modemInfo.readAllStandardError()).trimmed();
+        
+        if (!modemInfoOutput.isEmpty()) {
+            result[QStringLiteral("modemInfo")] = modemInfoOutput;
+            
+            // 解析关键信息
+            QJsonObject parsed;
+            
+            // 解析制造商
+            QRegExp mfgRx(QStringLiteral("manufacturer:\\s*(.+)"));
+            if (mfgRx.indexIn(modemInfoOutput) != -1) {
+                parsed[QStringLiteral("manufacturer")] = mfgRx.cap(1).trimmed();
+            }
+            
+            // 解析型号
+            QRegExp modelRx(QStringLiteral("model:\\s*(.+)"));
+            if (modelRx.indexIn(modemInfoOutput) != -1) {
+                parsed[QStringLiteral("model")] = modelRx.cap(1).trimmed();
+            }
+            
+            // 解析状态
+            QRegExp stateRx(QStringLiteral("state:\\s*(.+)"));
+            if (stateRx.indexIn(modemInfoOutput) != -1) {
+                parsed[QStringLiteral("state")] = stateRx.cap(1).trimmed();
+            }
+            
+            // 解析失败原因
+            QRegExp failedRx(QStringLiteral("failed reason:\\s*(.+)"));
+            if (failedRx.indexIn(modemInfoOutput) != -1) {
+                parsed[QStringLiteral("failedReason")] = failedRx.cap(1).trimmed();
+            }
+            
+            // 解析信号质量
+            QRegExp signalRx(QStringLiteral("signal quality:\\s*(\\d+)%"));
+            if (signalRx.indexIn(modemInfoOutput) != -1) {
+                parsed[QStringLiteral("signalQuality")] = signalRx.cap(1).toInt();
+            }
+            
+            // 解析主端口
+            QRegExp portRx(QStringLiteral("primary port:\\s*(.+)"));
+            if (portRx.indexIn(modemInfoOutput) != -1) {
+                parsed[QStringLiteral("primaryPort")] = portRx.cap(1).trimmed();
+            }
+            
+            // 解析设备ID
+            QRegExp equipRx(QStringLiteral("equipment id:\\s*(.+)"));
+            if (equipRx.indexIn(modemInfoOutput) != -1) {
+                parsed[QStringLiteral("equipmentId")] = equipRx.cap(1).trimmed();
+            }
+            
+            result[QStringLiteral("parsed")] = parsed;
+        } else if (!modemInfoError.isEmpty()) {
+            result[QStringLiteral("modemError")] = modemInfoError;
+        }
+
+        // 3. 获取网络接口状态 (usb0)
+        QProcess ifconfig;
+        ifconfig.start(QStringLiteral("ifconfig"), QStringList() << QStringLiteral("usb0"));
+        ifconfig.waitForFinished(3000);
+        QString ifconfigOutput = QString::fromUtf8(ifconfig.readAllStandardOutput()).trimmed();
+        if (!ifconfigOutput.isEmpty()) {
+            result[QStringLiteral("usb0Info")] = ifconfigOutput;
+            
+            // 检查是否有IP地址
+            QRegExp ipRx(QStringLiteral("inet\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+)"));
+            if (ipRx.indexIn(ifconfigOutput) != -1) {
+                result[QStringLiteral("usb0Ip")] = ipRx.cap(1);
+            }
+            
+            // 检查是否UP
+            result[QStringLiteral("usb0Up")] = ifconfigOutput.contains(QStringLiteral("RUNNING"));
+        } else {
+            result[QStringLiteral("usb0Info")] = QStringLiteral("Interface not found");
+        }
+
+        return result;
+    });
+
+    // 4G拨号连接
+    dispatcher_->registerMethod(QStringLiteral("sys.4g.connect"),
+                                 [](const QJsonObject &params) {
+        QString atPort = QStringLiteral("/dev/ttyUSB1");
+        QString netPort = QStringLiteral("usb0");
+        
+        // 可选参数
+        rpc::RpcHelpers::getString(params, "atPort", atPort);
+        rpc::RpcHelpers::getString(params, "netPort", netPort);
+
+        QJsonObject result;
+        result[QStringLiteral("ok")] = true;
+        result[QStringLiteral("steps")] = QJsonArray();
+
+        QJsonArray steps;
+
+        // Step 1: 发送AT命令启动拨号
+        QProcess atCmd;
+        atCmd.start(QStringLiteral("bash"), QStringList() 
+            << QStringLiteral("-c") 
+            << QStringLiteral("echo -e 'AT+QNETDEVCTL=3,1,1\\r' > %1").arg(atPort));
+        atCmd.waitForFinished(3000);
+        steps.append(QJsonObject{
+            {QStringLiteral("step"), QStringLiteral("AT command")},
+            {QStringLiteral("command"), QStringLiteral("AT+QNETDEVCTL=3,1,1")},
+            {QStringLiteral("success"), atCmd.exitCode() == 0}
+        });
+
+        // Step 2: 使用udhcpc获取IP
+        QProcess udhcpc;
+        udhcpc.start(QStringLiteral("udhcpc"), QStringList() << QStringLiteral("-i") << netPort << QStringLiteral("-n"));
+        udhcpc.waitForFinished(10000);
+        QString udhcpcOutput = QString::fromUtf8(udhcpc.readAllStandardOutput());
+        QString udhcpcError = QString::fromUtf8(udhcpc.readAllStandardError());
+        steps.append(QJsonObject{
+            {QStringLiteral("step"), QStringLiteral("DHCP")},
+            {QStringLiteral("command"), QStringLiteral("udhcpc -i %1").arg(netPort)},
+            {QStringLiteral("success"), udhcpc.exitCode() == 0},
+            {QStringLiteral("output"), udhcpcOutput},
+            {QStringLiteral("error"), udhcpcError}
+        });
+
+        result[QStringLiteral("steps")] = steps;
+        result[QStringLiteral("ok")] = (atCmd.exitCode() == 0 && udhcpc.exitCode() == 0);
+
+        return result;
     });
 }
 
@@ -2012,6 +2234,50 @@ void RpcRegistry::registerAuto()
         if (!context_->deleteStrategy(id, &error))
             return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, error);
         return QJsonObject{{kKeyOk, true}};
+    });
+
+    // 策略同步到云端
+    dispatcher_->registerMethod(QStringLiteral("auto.strategy.syncToCloud"),
+                                 [this](const QJsonObject &params) {
+        if (!context_->cloudMessageHandler) {
+            return rpc::RpcHelpers::err(rpc::RpcError::InvalidState, 
+                QStringLiteral("Cloud message handler not available"));
+        }
+        
+        QString syncMethod = QStringLiteral("set");
+        rpc::RpcHelpers::getString(params, "method", syncMethod);
+        
+        qint32 id = -1;
+        bool hasId = rpc::RpcHelpers::getI32(params, "id", id);
+        
+        int syncedCount = 0;
+        QJsonArray syncedIds;
+        
+        const auto states = context_->strategyStates();
+        
+        for (const auto &state : states) {
+            const auto &s = state.config;
+            
+            // If id specified, only sync that strategy
+            if (hasId && s.strategyId != id) {
+                continue;
+            }
+            
+            QJsonObject msgObj;
+            msgObj.insert(QStringLiteral("method"), syncMethod);
+            
+            if (context_->cloudMessageHandler->sendStrategyCommand(s, msgObj)) {
+                syncedCount++;
+                syncedIds.append(s.strategyId);
+            }
+        }
+        
+        return QJsonObject{
+            {kKeyOk, true},
+            {QStringLiteral("syncedCount"), syncedCount},
+            {QStringLiteral("syncedIds"), syncedIds},
+            {QStringLiteral("method"), syncMethod}
+        };
     });
 
 }
