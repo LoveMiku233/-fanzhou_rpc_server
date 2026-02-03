@@ -4758,6 +4758,7 @@ let timerListCache = [];
 
 /**
  * 刷新场景列表
+ * 优先使用 cloud.scene.list，如果不支持则使用 auto.strategy.list 作为降级方案
  */
 function refreshSceneList() {
     // 从服务器获取场景列表
@@ -4766,10 +4767,21 @@ function refreshSceneList() {
             sceneListCache = response.result.scenes || [];
             renderSceneList();
         } else {
-            log('error', `获取场景列表失败: ${response.error?.message || '未知错误'}`);
-            // 显示空列表
-            sceneListCache = [];
-            renderSceneList();
+            // cloud.scene.list 不支持时，使用 auto.strategy.list 作为降级方案
+            // auto.strategy.list 返回的策略包含 type 字段 (auto/manual)，可以作为场景显示
+            log('info', 'cloud.scene.list 不可用，使用 auto.strategy.list 获取场景数据');
+            callMethod('auto.strategy.list', {}, function(strategyResponse) {
+                if (strategyResponse.result) {
+                    // 过滤出 auto 和 manual 类型的策略作为场景
+                    const strategies = strategyResponse.result.strategies || [];
+                    sceneListCache = strategies.filter(s => s.type === 'auto' || s.type === 'manual');
+                    renderSceneList();
+                } else {
+                    log('error', `获取场景列表失败: ${strategyResponse.error?.message || '未知错误'}`);
+                    sceneListCache = [];
+                    renderSceneList();
+                }
+            });
         }
     });
     
