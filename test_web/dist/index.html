@@ -30,9 +30,9 @@
     <link rel="stylesheet" href="css/blueprint.css">
 </head>
 <body>
-    <!-- ==================== 页面头部 ==================== -->
+    <!-- ==================== 页面头部（紧凑版） ==================== -->
     <div class="header">
-        <h1>🚀 泛舟RPC服务器调试工具</h1>
+        <h1>🚀 泛舟RPC调试工具</h1>
         <div class="header-status">
             <span class="status-badge disconnected" id="headerConnectionStatus">
                 <span class="status-dot"></span>
@@ -41,14 +41,11 @@
         </div>
     </div>
 
-    <!-- ==================== 主布局容器 - 左右布局 ==================== -->
+    <!-- ==================== 主布局容器 ==================== -->
     <div class="main-layout">
         <!-- ==================== 左侧导航栏 ==================== -->
         <div class="sidebar">
             <div class="sidebar-nav">
-                <button class="nav-btn" onclick="showPage('connection')" data-page="connection">
-                    📡 连接
-                </button>
                 <button class="nav-btn active" onclick="showPage('quick')" data-page="quick">
                     🏠 主页
                 </button>
@@ -59,28 +56,16 @@
                     📂 分组
                 </button>
                 <button class="nav-btn" onclick="showPage('strategy')" data-page="strategy">
-                    ⏱️ 策略
+                    ⚡ 策略
                 </button>
-                <button class="nav-btn" onclick="showPage('mqtt')" data-page="mqtt">
-                    ☁️ MQTT
-                </button>
-                <button class="nav-btn" onclick="showPage('tokens')" data-page="tokens">
-                    🔑 Token
-                </button>
-                <button class="nav-btn" onclick="showPage('connections')" data-page="connections">
-                    🔗 连接管理
+                <button class="nav-btn" onclick="showPage('sensors')" data-page="sensors">
+                    📡 传感器
                 </button>
                 <button class="nav-btn" onclick="showPage('monitor')" data-page="monitor">
                     📊 监控
                 </button>
-                <button class="nav-btn" onclick="showPage('sensors')" data-page="sensors">
-                    🧭 传感器
-                </button>
-                <button class="nav-btn" onclick="showPage('blueprint')" data-page="blueprint">
-                    🎨 蓝图
-                </button>
-                <button class="nav-btn" onclick="showPage('custom')" data-page="custom">
-                    🛠️ 高级
+                <button class="nav-btn" onclick="showPage('settings')" data-page="settings">
+                    ⚙️ 设置
                 </button>
             </div>
         </div>
@@ -91,7 +76,7 @@
 
             <!-- ==================== 连接设置页面 ==================== -->
             <div class="page-content" id="page-connection">
-                <h3 style="margin-bottom: 20px; color: #333;">📡 连接设置</h3>
+                <h3 style="margin-bottom: 16px; color: #333;">📡 连接设置</h3>
                 
                 <div style="background: #f8f9fa; padding: 25px; border-radius: 12px; margin-bottom: 20px;">
                     <div class="form-row">
@@ -179,84 +164,86 @@ websocat --text ws-l:0.0.0.0:12346 tcp:192.168.0.104:12345
 
             <!-- ==================== 快捷操作页面 ==================== -->
             <div class="page-content active" id="page-quick">
-                <h3 style="margin-bottom: 20px; color: #333;">常用RPC方法快捷按钮</h3>
+                <!-- 连接状态栏 - 紧凑设计 -->
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding: 12px; background: #f8f9fa; border-radius: 10px; flex-wrap: wrap;">
+                    <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 140px;">
+                        <input type="text" id="serverHost" placeholder="设备IP地址" value="" style="padding: 8px 10px; font-size: 13px;">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0; width: 80px;">
+                        <input type="number" id="rpcPort" placeholder="RPC" value="12345" style="padding: 8px 10px; font-size: 13px;">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0; width: 80px;">
+                        <input type="number" id="serverPort" placeholder="WS" value="12346" style="padding: 8px 10px; font-size: 13px;">
+                    </div>
+                    <button id="websocatToggleBtn" onclick="toggleWebsocatProxy()" class="success" style="display: none; padding: 8px 12px;">🚀 代理</button>
+                    <button id="connectBtn" onclick="toggleConnection()" style="padding: 8px 14px;">🔌 连接</button>
+                    <span class="status-badge disconnected" id="connectionStatus">
+                        <span class="status-dot"></span>
+                        <span>未连接</span>
+                    </span>
+                </div>
                 
-                <!-- 急停按钮区域 - 最醒目的红色大按钮 -->
-                <div style="margin-bottom: 25px;">
+                <!-- 急停按钮 - 紧凑版 -->
+                <div style="margin-bottom: 16px;">
                     <button id="emergencyStopBtn" onclick="emergencyStop()" style="
                         width: 100%;
-                        padding: 20px;
-                        font-size: 24px;
+                        padding: 14px;
+                        font-size: 18px;
                         font-weight: bold;
                         color: white;
                         background: linear-gradient(135deg, #c0392b 0%, #e74c3c 100%);
-                        border: 3px solid #922b21;
-                        border-radius: 12px;
+                        border: 2px solid #922b21;
+                        border-radius: 10px;
                         cursor: pointer;
-                        box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
-                        transition: all 0.3s ease;
-                    " onmouseover="this.style.transform='scale(1.02)'; this.style.boxShadow='0 6px 20px rgba(231, 76, 60, 0.6)';"
-                       onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 4px 15px rgba(231, 76, 60, 0.4)';">
-                        🛑 急 停
+                        box-shadow: 0 3px 12px rgba(231, 76, 60, 0.35);
+                        transition: all 0.2s ease;
+                    " onmouseover="this.style.transform='scale(1.01)'; this.style.boxShadow='0 4px 15px rgba(231, 76, 60, 0.5)';"
+                       onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 3px 12px rgba(231, 76, 60, 0.35)';">
+                        🛑 急停
                     </button>
-                    <p style="text-align: center; color: #e74c3c; font-size: 12px; margin-top: 8px;">
-                        点击立即停止所有设备的所有通道
-                    </p>
                 </div>
 
-                <!-- 快速状态卡片 -->
-                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px;">
-                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 12px; color: white;">
-                        <div style="font-size: 24px; margin-bottom: 8px;">🔌</div>
-                        <div style="font-size: 13px; opacity: 0.9;">设备管理</div>
-                        <button onclick="showPage('devices'); refreshDeviceList()" style="margin-top: 10px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); width: 100%;">打开</button>
+                <!-- 快速导航卡片 - 更紧凑 -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px;">
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 14px; border-radius: 10px; color: white; cursor: pointer; transition: transform 0.2s;" onclick="showPage('devices'); refreshDeviceList()" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                        <div style="font-size: 20px; margin-bottom: 4px;">🔌</div>
+                        <div style="font-size: 12px; font-weight: 600;">设备管理</div>
                     </div>
-                    <div style="background: linear-gradient(135deg, #27ae60 0%, #1e8449 100%); padding: 20px; border-radius: 12px; color: white;">
-                        <div style="font-size: 24px; margin-bottom: 8px;">📂</div>
-                        <div style="font-size: 13px; opacity: 0.9;">分组控制</div>
-                        <button onclick="showPage('groups'); refreshGroupList()" style="margin-top: 10px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); width: 100%;">打开</button>
+                    <div style="background: linear-gradient(135deg, #27ae60 0%, #1e8449 100%); padding: 14px; border-radius: 10px; color: white; cursor: pointer; transition: transform 0.2s;" onclick="showPage('groups'); refreshGroupList()" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                        <div style="font-size: 20px; margin-bottom: 4px;">📂</div>
+                        <div style="font-size: 12px; font-weight: 600;">分组控制</div>
                     </div>
-                    <div style="background: linear-gradient(135deg, #e67e22 0%, #d35400 100%); padding: 20px; border-radius: 12px; color: white;">
-                        <div style="font-size: 24px; margin-bottom: 8px;">⏱️</div>
-                        <div style="font-size: 13px; opacity: 0.9;">自动策略</div>
-                        <button onclick="showPage('strategy'); refreshStrategyList()" style="margin-top: 10px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); width: 100%;">打开</button>
+                    <div style="background: linear-gradient(135deg, #e67e22 0%, #d35400 100%); padding: 14px; border-radius: 10px; color: white; cursor: pointer; transition: transform 0.2s;" onclick="showPage('strategy'); refreshStrategyList()" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                        <div style="font-size: 20px; margin-bottom: 4px;">⚡</div>
+                        <div style="font-size: 12px; font-weight: 600;">自动策略</div>
                     </div>
-                    <div style="background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); padding: 20px; border-radius: 12px; color: white;">
-                        <div style="font-size: 24px; margin-bottom: 8px;">🎨</div>
-                        <div style="font-size: 13px; opacity: 0.9;">可视化蓝图</div>
-                        <button onclick="showPage('blueprint')" style="margin-top: 10px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); width: 100%;">打开</button>
+                    <div style="background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); padding: 14px; border-radius: 10px; color: white; cursor: pointer; transition: transform 0.2s;" onclick="showPage('sensors'); refreshSensorMapping()" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                        <div style="font-size: 20px; margin-bottom: 4px;">📡</div>
+                        <div style="font-size: 12px; font-weight: 600;">传感器</div>
                     </div>
                 </div>
 
-                <!-- 配置保存提示 -->
-                <div style="background: #e8f5e9; padding: 15px 20px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #4caf50;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-                        <div>
-                            <strong style="color: #2e7d32;">💡 修改后别忘了保存配置！</strong>
-                            <span style="color: #666; font-size: 13px; margin-left: 10px;">否则重启后会丢失</span>
-                        </div>
-                        <button class="success" onclick="saveConfig()" style="min-width: 120px;">💾 保存配置</button>
-                    </div>
-                </div>
-                
                 <!-- 快捷操作按钮 -->
-                <h4 style="margin-bottom: 15px; color: #333;">🚀 快捷操作</h4>
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+                    <span style="font-size: 13px; font-weight: 600; color: #333;">快捷操作</span>
+                    <button class="success" onclick="saveConfig()" style="padding: 6px 12px; font-size: 12px;">💾 保存</button>
+                </div>
                 <div class="quick-actions-grid">
                     <button class="quick-action-btn" onclick="callMethod('rpc.ping', {})">
                         <span class="icon">🔔</span>
-                        Ping测试
+                        Ping
                     </button>
                     <button class="quick-action-btn" onclick="callMethod('sys.info', {})">
                         <span class="icon">ℹ️</span>
-                        系统信息
+                        系统
                     </button>
                     <button class="quick-action-btn warning" onclick="checkCanStatus()">
                         <span class="icon">🔧</span>
-                        CAN诊断
+                        CAN
                     </button>
                     <button class="quick-action-btn success" onclick="callMethod('relay.queryAll', {})">
                         <span class="icon">🔍</span>
-                        查询全部设备
+                        查询
                     </button>
                 </div>
             </div>
@@ -321,24 +308,24 @@ websocat --text ws-l:0.0.0.0:12346 tcp:192.168.0.104:12345
                     <button class="success" onclick="openCreateGroupModal()" style="min-width: 120px;">
                         ➕ 创建分组
                     </button>
-                    <button class="secondary" onclick="openManageChannelModal()" style="min-width: 140px;">
-                        🔧 管理设备通道
+                    <button class="secondary" onclick="openManageChannelModal()" style="min-width: 120px;">
+                        🔧 通道管理
                     </button>
-                    <button class="warning" onclick="batchControlGroups('stop')" style="min-width: 100px;">
-                        ⏹️ 全部停止
+                    <button class="warning" onclick="batchControlGroups('stop')">
+                        ⏹️ 停止
                     </button>
-                    <button class="success" onclick="batchControlGroups('fwd')" style="min-width: 100px;">
-                        ▶️ 全部正转
+                    <button class="success" onclick="batchControlGroups('fwd')">
+                        ▶️ 正转
                     </button>
-                    <button onclick="batchControlGroups('rev')" style="min-width: 100px;">
-                        ◀️ 全部反转
+                    <button onclick="batchControlGroups('rev')">
+                        ◀️ 反转
                     </button>
                 </div>
 
                 <!-- 分组卡片视图 -->
-                <div id="groupCardsEmpty" class="data-list-empty" style="display: none; background: #f8f9fa; border-radius: 12px; padding: 40px 20px;">
-                    <p>📭 暂无分组数据</p>
-                    <p style="font-size: 12px; margin-top: 10px;">请先连接服务器并点击"刷新"按钮</p>
+                <div id="groupCardsEmpty" class="data-list-empty" style="display: none; background: #f8f9fa; border-radius: 10px; padding: 30px 16px;">
+                    <p>📭 暂无分组</p>
+                    <p style="font-size: 11px; margin-top: 6px;">点击"刷新"获取数据</p>
                 </div>
                 <div class="group-cards" id="groupCards">
                     <!-- 分组卡片将由JavaScript动态生成 -->
@@ -347,172 +334,92 @@ websocat --text ws-l:0.0.0.0:12346 tcp:192.168.0.104:12345
 
             <!-- ==================== 策略管理页面 ==================== -->
             <div class="page-content" id="page-strategy">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="color: #333;">⏱️ 策略管理</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                    <h3 style="color: #333; font-size: 1.1em;">⚡ 策略管理</h3>
                     <div class="btn-group">
                         <button onclick="refreshStrategyList()">🔄 刷新</button>
-                        <button onclick="syncStrategiesToCloud()" style="background: #9c27b0; color: white;">☁️ 同步到云端</button>
-                        <button class="secondary" onclick="showPage('blueprint')">🎨 可视化编辑器</button>
+                        <button onclick="openSimpleStrategyWizard()" class="success">➕ 新建</button>
                     </div>
                 </div>
 
-                <!-- 快速创建卡片区 - 新手友好的一键创建 -->
-                <div style="margin-bottom: 25px;">
-                    <h4 style="color: #555; margin-bottom: 12px; font-size: 14px;">🚀 快速创建 <span style="color: #999; font-weight: normal; font-size: 12px;">（选择场景，一键添加策略）</span></h4>
-                    <div class="quick-strategy-cards" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px;">
+                <!-- 快速创建卡片区 - 更紧凑 -->
+                <div style="margin-bottom: 16px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px;">
                         <!-- 定时通风模板 -->
-                        <div class="quick-strategy-card" onclick="createQuickStrategy('ventilation')" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 20px; color: white; cursor: pointer; transition: all 0.3s;">
-                            <div style="font-size: 28px; margin-bottom: 10px;">🌬️</div>
-                            <div style="font-weight: 600; margin-bottom: 5px;">定时通风</div>
-                            <div style="font-size: 12px; opacity: 0.9;">每小时运行5分钟</div>
+                        <div onclick="createQuickStrategy('ventilation')" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; padding: 12px; color: white; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                            <div style="font-size: 20px; margin-bottom: 4px;">🌬️</div>
+                            <div style="font-weight: 600; font-size: 12px;">定时通风</div>
+                            <div style="font-size: 10px; opacity: 0.8;">每小时5分钟</div>
                         </div>
                         <!-- 定时浇水模板 -->
-                        <div class="quick-strategy-card" onclick="createQuickStrategy('irrigation')" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); border-radius: 12px; padding: 20px; color: white; cursor: pointer; transition: all 0.3s;">
-                            <div style="font-size: 28px; margin-bottom: 10px;">💧</div>
-                            <div style="font-weight: 600; margin-bottom: 5px;">定时浇水</div>
-                            <div style="font-size: 12px; opacity: 0.9;">每天早上8点执行</div>
+                        <div onclick="createQuickStrategy('irrigation')" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); border-radius: 10px; padding: 12px; color: white; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                            <div style="font-size: 20px; margin-bottom: 4px;">💧</div>
+                            <div style="font-weight: 600; font-size: 12px;">定时浇水</div>
+                            <div style="font-size: 10px; opacity: 0.8;">每天8点</div>
                         </div>
                         <!-- 高温报警模板 -->
-                        <div class="quick-strategy-card" onclick="createQuickStrategy('hightemp')" style="background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%); border-radius: 12px; padding: 20px; color: white; cursor: pointer; transition: all 0.3s;">
-                            <div style="font-size: 28px; margin-bottom: 10px;">🌡️</div>
-                            <div style="font-weight: 600; margin-bottom: 5px;">高温自动降温</div>
-                            <div style="font-size: 12px; opacity: 0.9;">温度>30°C时启动风扇</div>
+                        <div onclick="createQuickStrategy('hightemp')" style="background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%); border-radius: 10px; padding: 12px; color: white; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                            <div style="font-size: 20px; margin-bottom: 4px;">🌡️</div>
+                            <div style="font-weight: 600; font-size: 12px;">高温降温</div>
+                            <div style="font-size: 10px; opacity: 0.8;">&gt;30°C启动</div>
                         </div>
                         <!-- 低温保护模板 -->
-                        <div class="quick-strategy-card" onclick="createQuickStrategy('lowtemp')" style="background: linear-gradient(135deg, #00b4db 0%, #0083b0 100%); border-radius: 12px; padding: 20px; color: white; cursor: pointer; transition: all 0.3s;">
-                            <div style="font-size: 28px; margin-bottom: 10px;">❄️</div>
-                            <div style="font-weight: 600; margin-bottom: 5px;">低温自动保暖</div>
-                            <div style="font-size: 12px; opacity: 0.9;">温度&lt;10°C时启动加热</div>
-                        </div>
-                        <!-- 自定义策略 -->
-                        <div class="quick-strategy-card" onclick="openSimpleStrategyWizard()" style="background: linear-gradient(135deg, #6c757d 0%, #495057 100%); border-radius: 12px; padding: 20px; color: white; cursor: pointer; transition: all 0.3s; border: 2px dashed rgba(255,255,255,0.5);">
-                            <div style="font-size: 28px; margin-bottom: 10px;">➕</div>
-                            <div style="font-weight: 600; margin-bottom: 5px;">自定义策略</div>
-                            <div style="font-size: 12px; opacity: 0.9;">按需配置参数</div>
+                        <div onclick="createQuickStrategy('lowtemp')" style="background: linear-gradient(135deg, #00b4db 0%, #0083b0 100%); border-radius: 10px; padding: 12px; color: white; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                            <div style="font-size: 20px; margin-bottom: 4px;">❄️</div>
+                            <div style="font-weight: 600; font-size: 12px;">低温保暖</div>
+                            <div style="font-size: 10px; opacity: 0.8;">&lt;10°C启动</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- 使用提示 -->
-                <div style="background: #e8f5e9; padding: 15px 20px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #4caf50;">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span style="font-size: 20px;">💡</span>
-                        <div>
-                            <strong style="color: #2e7d32;">新手提示</strong>
-                            <span style="color: #666; font-size: 13px; margin-left: 10px;">点击上方卡片可快速创建常用策略，或使用下方按钮自定义创建</span>
-                        </div>
-                    </div>
+                <!-- 策略列表 -->
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <span style="font-size: 12px; font-weight: 600; color: #555;">📋 定时策略</span>
+                    <button class="secondary" onclick="openCreateStrategyModal()" style="padding: 4px 10px; font-size: 11px;">+ 添加</button>
                 </div>
-
-                <!-- 操作按钮区 - 高级选项 -->
-                <details style="margin-bottom: 20px;">
-                    <summary style="cursor: pointer; padding: 12px 15px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 12px; font-weight: 600; color: #1565c0;">
-                        🛠️ 高级选项（展开查看更多创建方式）
-                    </summary>
-                    <div style="display: flex; flex-wrap: wrap; gap: 10px; padding: 15px; background: #f5f5f5; border-radius: 0 0 12px 12px; margin-top: -5px;">
-                        <button class="success" onclick="openCreateStrategyModal()" style="min-width: 140px;">
-                            ⏱️ 创建定时策略
-                        </button>
-                        <button class="warning" onclick="openCreateSensorStrategyModal()" style="min-width: 140px;">
-                            📡 创建传感器策略
-                        </button>
-                        <button class="secondary" onclick="showPage('blueprint')" style="min-width: 120px;">
-                            🎨 蓝图编辑器
-                        </button>
-                    </div>
-                </details>
-
-                <!-- 策略卡片视图 -->
-                <h4 style="color: #555; margin-bottom: 12px; font-size: 14px;">⏱️ 定时策略</h4>
-                <div id="strategyCardsEmpty" class="data-list-empty" style="display: none; background: #f8f9fa; border-radius: 12px; padding: 40px 20px;">
-                    <p>📭 暂无定时策略</p>
-                    <p style="font-size: 12px; margin-top: 10px;">点击上方的快速创建卡片添加策略</p>
+                <div id="strategyCardsEmpty" class="data-list-empty" style="display: none; background: #f8f9fa; border-radius: 10px; padding: 24px 12px;">
+                    <p style="font-size: 13px;">📭 暂无定时策略</p>
+                    <p style="font-size: 11px; margin-top: 4px; color: #999;">点击上方卡片快速创建</p>
                 </div>
                 <div class="strategy-cards" id="strategyCards">
                     <!-- 策略卡片将由JavaScript动态生成 -->
                 </div>
 
-                <!-- 传感器策略卡片视图 -->
-                <h4 style="color: #555; margin: 25px 0 12px 0; font-size: 14px;">📡 传感器策略</h4>
-                <div id="sensorStrategyCardsEmpty" class="data-list-empty" style="display: none; background: #f8f9fa; border-radius: 12px; padding: 40px 20px;">
-                    <p>📭 暂无传感器策略</p>
-                    <p style="font-size: 12px; margin-top: 10px;">点击上方的快速创建卡片添加传感器策略</p>
+                <!-- 传感器策略 -->
+                <div style="display: flex; align-items: center; gap: 8px; margin: 16px 0 8px 0;">
+                    <span style="font-size: 12px; font-weight: 600; color: #555;">📡 传感器策略</span>
+                    <button class="warning" onclick="openCreateSensorStrategyModal()" style="padding: 4px 10px; font-size: 11px;">+ 添加</button>
+                </div>
+                <div id="sensorStrategyCardsEmpty" class="data-list-empty" style="display: none; background: #f8f9fa; border-radius: 10px; padding: 24px 12px;">
+                    <p style="font-size: 13px;">📭 暂无传感器策略</p>
+                    <p style="font-size: 11px; margin-top: 4px; color: #999;">点击上方卡片快速创建</p>
                 </div>
                 <div class="strategy-cards" id="sensorStrategyCards">
                     <!-- 传感器策略卡片将由JavaScript动态生成 -->
                 </div>
 
-                <!-- 开发者调试区 -->
-                <details style="margin-top: 25px; background: linear-gradient(135deg, #fce4ec 0%, #f3e5f5 100%); padding: 20px; border-radius: 12px; border: 2px solid #ce93d8;">
-                    <summary style="cursor: pointer; font-weight: 600; color: #7b1fa2;">🔧 开发者调试工具</summary>
-                    <div style="margin-top: 15px;">
-                        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
-                            ⚠️ 此区域用于开发调试，可以模拟传感器数据来测试策略触发条件
-                        </p>
-                        
-                        <!-- 模拟传感器值 -->
-                        <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                            <strong style="color: #333; display: block; margin-bottom: 10px;">📡 模拟传感器值</strong>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label>传感器ID</label>
-                                    <input type="text" id="debugSensorId" placeholder="例如: test_ab, temp_1" value="test_ab">
-                                </div>
-                                <div class="form-group">
-                                    <label>标识符</label>
-                                    <input type="text" id="debugSensorIdentifier" placeholder="例如: temperature, humidity" value="temperature">
-                                </div>
-                                <div class="form-group">
-                                    <label>数值</label>
-                                    <input type="number" id="debugSensorValue" placeholder="例如: 25.5" value="25" step="0.1">
-                                </div>
+                <!-- 开发者调试区 - 更紧凑 -->
+                <details style="margin-top: 16px; background: #fce4ec; padding: 12px; border-radius: 10px;">
+                    <summary style="cursor: pointer; font-weight: 600; color: #7b1fa2; font-size: 12px;">🔧 调试工具</summary>
+                    <div style="margin-top: 10px;">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>传感器ID</label>
+                                <input type="text" id="debugSensorId" value="test_ab">
                             </div>
-                            <div class="btn-group" style="margin-top: 10px;">
-                                <button class="success" onclick="setDebugSensorValue()">📤 设置传感器值</button>
-                                <button onclick="getDebugSensorValue()">📥 读取当前值</button>
+                            <div class="form-group">
+                                <label>标识符</label>
+                                <input type="text" id="debugSensorIdentifier" value="temperature">
+                            </div>
+                            <div class="form-group">
+                                <label>数值</label>
+                                <input type="number" id="debugSensorValue" value="25" step="0.1">
                             </div>
                         </div>
-                        
-                        <!-- 快速测试按钮 -->
-                        <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                            <strong style="color: #333; display: block; margin-bottom: 10px;">🎯 快速测试（温度策略）</strong>
-                            <div class="btn-group">
-                                <button onclick="setDebugSensorQuick(30)" style="background: #f44336; color: white;">🌡️ 设置30°C（高温）</button>
-                                <button onclick="setDebugSensorQuick(25)" style="background: #ff9800; color: white;">🌡️ 设置25°C（常温）</button>
-                                <button onclick="setDebugSensorQuick(15)" style="background: #2196f3; color: white;">🌡️ 设置15°C（低温）</button>
-                                <button onclick="setDebugSensorQuick(5)" style="background: #03a9f4; color: white;">❄️ 设置5°C（寒冷）</button>
-                            </div>
-                        </div>
-                        
-                        <!-- 亮度调节 -->
-                        <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                            <strong style="color: #333; display: block; margin-bottom: 10px;">💡 屏幕亮度调节</strong>
-                            <div class="form-row">
-                                <div class="form-group" style="flex: 2;">
-                                    <label>亮度 (0-255)</label>
-                                    <input type="range" id="debugBrightness" min="0" max="255" value="128" 
-                                           oninput="document.getElementById('debugBrightnessValue').textContent = this.value"
-                                           style="width: 100%;">
-                                </div>
-                                <div class="form-group" style="flex: 0 0 60px; text-align: center;">
-                                    <label>当前值</label>
-                                    <span id="debugBrightnessValue" style="font-size: 24px; font-weight: bold; color: #f57c00;">128</span>
-                                </div>
-                            </div>
-                            <div class="btn-group" style="margin-top: 10px;">
-                                <button class="success" onclick="setScreenBrightness()">💡 应用亮度</button>
-                                <button onclick="getScreenBrightness()">📖 读取亮度</button>
-                            </div>
-                        </div>
-                        
-                        <!-- 4G状态 -->
-                        <div style="background: white; padding: 15px; border-radius: 8px;">
-                            <strong style="color: #333; display: block; margin-bottom: 10px;">📶 4G模块状态</strong>
-                            <div class="btn-group">
-                                <button onclick="get4GStatus()">📊 查询4G状态</button>
-                                <button class="success" onclick="connect4G()">📡 拨号连接</button>
-                            </div>
-                            <div id="debug4GResult" style="margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 6px; font-family: monospace; font-size: 12px; white-space: pre-wrap; display: none;"></div>
+                        <div class="btn-group" style="margin-top: 8px;">
+                            <button class="success" onclick="setDebugSensorValue()" style="padding: 6px 12px; font-size: 11px;">设置</button>
+                            <button onclick="setDebugSensorQuick(30)" style="background: #f44336; color: white; padding: 6px 8px; font-size: 11px;">30°C</button>
+                            <button onclick="setDebugSensorQuick(15)" style="background: #2196f3; color: white; padding: 6px 8px; font-size: 11px;">15°C</button>
                         </div>
                     </div>
                 </details>
@@ -948,6 +855,136 @@ websocat --text ws-l:0.0.0.0:12346 tcp:192.168.0.104:12345
                         </table>
                     </div>
                 </div>
+            </div>
+
+            <!-- ==================== 设置页面（合并连接、MQTT、Token、高级功能） ==================== -->
+            <div class="page-content" id="page-settings">
+                <h3 style="margin-bottom: 16px; color: #333;">⚙️ 系统设置</h3>
+                
+                <!-- 连接设置 -->
+                <details open style="background: #f8f9fa; padding: 16px; border-radius: 10px; margin-bottom: 12px;">
+                    <summary style="cursor: pointer; font-weight: 600; color: #333; font-size: 14px;">📡 连接设置</summary>
+                    <div style="margin-top: 12px;">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>RPC服务器地址</label>
+                                <input type="text" id="settingsHost" placeholder="如: 192.168.1.100" value="">
+                            </div>
+                            <div class="form-group">
+                                <label>RPC端口</label>
+                                <input type="number" id="settingsRpcPort" placeholder="RPC端口" value="12345">
+                            </div>
+                            <div class="form-group">
+                                <label>WS代理端口</label>
+                                <input type="number" id="settingsWsPort" placeholder="WS端口" value="12346">
+                            </div>
+                        </div>
+                        <div class="btn-group" style="margin-top: 8px;">
+                            <button id="settingsWebsocatBtn" onclick="toggleWebsocatProxyFromSettings()" class="success" style="display: none;">🚀 启动代理</button>
+                            <button id="settingsConnectBtn" onclick="toggleConnectionFromSettings()">🔌 连接</button>
+                        </div>
+                    </div>
+                </details>
+                
+                <!-- MQTT设置 -->
+                <details style="background: #e3f2fd; padding: 16px; border-radius: 10px; margin-bottom: 12px;">
+                    <summary style="cursor: pointer; font-weight: 600; color: #1565c0; font-size: 14px;">☁️ MQTT云连接</summary>
+                    <div style="margin-top: 12px;">
+                        <p style="color: #666; font-size: 12px; margin-bottom: 12px;">支持多通道MQTT连接，自动推送设备状态变化。</p>
+                        <div class="btn-group">
+                            <button onclick="refreshMqttChannels()">🔄 刷新</button>
+                            <button class="success" onclick="openAddMqttChannelModal()">➕ 添加通道</button>
+                        </div>
+                        <div id="mqttSettingsChannels" style="margin-top: 12px;"></div>
+                    </div>
+                </details>
+                
+                <!-- Token管理 -->
+                <details style="background: #fff3e0; padding: 16px; border-radius: 10px; margin-bottom: 12px;">
+                    <summary style="cursor: pointer; font-weight: 600; color: #e65100; font-size: 14px;">🔑 Token管理</summary>
+                    <div style="margin-top: 12px;">
+                        <p style="color: #666; font-size: 12px; margin-bottom: 12px;">Token用于API认证和设备授权。</p>
+                        <div class="btn-group">
+                            <button onclick="refreshTokenList()">🔄 刷新</button>
+                            <button class="success" onclick="openCreateTokenModal()">➕ 创建Token</button>
+                        </div>
+                        <div id="tokenSettingsList" style="margin-top: 12px;"></div>
+                    </div>
+                </details>
+                
+                <!-- 配置管理 -->
+                <details style="background: #e8f5e9; padding: 16px; border-radius: 10px; margin-bottom: 12px;">
+                    <summary style="cursor: pointer; font-weight: 600; color: #2e7d32; font-size: 14px;">💾 配置管理</summary>
+                    <div style="margin-top: 12px;">
+                        <p style="color: #666; font-size: 12px; margin-bottom: 12px;">修改默认只保存在内存，重启后丢失。点击保存永久生效。</p>
+                        <div class="btn-group">
+                            <button class="success" onclick="saveConfig()">💾 保存配置</button>
+                            <button onclick="getConfig()">📋 查看配置</button>
+                            <button class="warning" onclick="reloadConfig()">🔄 重载配置</button>
+                        </div>
+                    </div>
+                </details>
+                
+                <!-- 高级控制 -->
+                <details style="background: #f5f5f5; padding: 16px; border-radius: 10px; margin-bottom: 12px;">
+                    <summary style="cursor: pointer; font-weight: 600; color: #333; font-size: 14px;">🛠️ 高级控制</summary>
+                    <div style="margin-top: 12px;">
+                        <!-- 继电器直接控制 -->
+                        <div style="margin-bottom: 12px;">
+                            <div style="font-size: 12px; font-weight: 600; color: #666; margin-bottom: 8px;">继电器直接控制</div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>节点ID</label>
+                                    <input type="number" id="advRelayNode" value="1" min="1" max="255">
+                                </div>
+                                <div class="form-group">
+                                    <label>通道</label>
+                                    <select id="advRelayChannel">
+                                        <option value="0">CH0</option>
+                                        <option value="1">CH1</option>
+                                        <option value="2">CH2</option>
+                                        <option value="3">CH3</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>动作</label>
+                                    <select id="advRelayAction">
+                                        <option value="stop">⏹️ 停止</option>
+                                        <option value="fwd">▶️ 正转</option>
+                                        <option value="rev">◀️ 反转</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="btn-group">
+                                <button class="success" onclick="controlRelayAdvanced()">⚡ 执行</button>
+                                <button onclick="queryRelayAdvanced()">🔍 查询</button>
+                            </div>
+                        </div>
+                        
+                        <!-- 自定义RPC -->
+                        <div style="padding-top: 12px; border-top: 1px solid #ddd;">
+                            <div style="font-size: 12px; font-weight: 600; color: #666; margin-bottom: 8px;">自定义RPC调用</div>
+                            <div class="form-group">
+                                <label>方法名</label>
+                                <input type="text" id="advMethodName" placeholder="如: rpc.ping">
+                            </div>
+                            <div class="form-group">
+                                <label>参数 (JSON)</label>
+                                <textarea id="advMethodParams" placeholder='{"node": 1}' style="height: 60px;">{}</textarea>
+                            </div>
+                            <button onclick="callCustomMethodAdvanced()">🚀 发送</button>
+                        </div>
+                    </div>
+                </details>
+                
+                <!-- 蓝图编辑器入口 -->
+                <details style="background: linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%); padding: 16px; border-radius: 10px;">
+                    <summary style="cursor: pointer; font-weight: 600; color: #00796b; font-size: 14px;">🎨 可视化蓝图</summary>
+                    <div style="margin-top: 12px;">
+                        <p style="color: #666; font-size: 12px; margin-bottom: 12px;">通过拖放方式创建自动化策略流程。</p>
+                        <button class="success" onclick="showPage('blueprint')">打开蓝图编辑器</button>
+                    </div>
+                </details>
             </div>
 
             <!-- ==================== 蓝图编辑器页面 ==================== -->
