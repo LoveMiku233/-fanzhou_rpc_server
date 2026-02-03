@@ -5240,14 +5240,14 @@ function collectSceneData() {
             const cond = {
                 identifier: identifier,
                 op: op,
-                value: value  // 使用服务器期望的字段名 'value'
+                identifierValue: value  // 使用服务器期望的字段名 'identifierValue'
             };
             // 当设备编码为空时，使用 'local' 表示查询本地传感器
             // 服务器会根据此标识使用本地传感器数据
             if (deviceCode) {
-                cond.device = deviceCode;  // 使用服务器期望的字段名 'device'
+                cond.deviceCode = deviceCode;  // 使用服务器期望的字段名 'deviceCode'
             } else {
-                cond.device = 'local';  // 空设备编码时查询本地传感器
+                cond.deviceCode = 'local';  // 空设备编码时查询本地传感器
             }
             conditions.push(cond);
         }
@@ -5262,7 +5262,7 @@ function collectSceneData() {
         if (identifier) {
             actions.push({
                 identifier: identifier,
-                value: value  // 使用服务器期望的字段名 'value'
+                identifierValue: value  // 使用服务器期望的字段名 'identifierValue'
             });
         }
     });
