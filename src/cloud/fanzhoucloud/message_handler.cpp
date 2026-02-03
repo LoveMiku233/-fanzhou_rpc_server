@@ -72,6 +72,11 @@ void CloudMessageHandler::setChannelId(int channel)
     channelId_ = channel;
 }
 
+int CloudMessageHandler::getChannelId()
+{
+    return channelId_;
+}
+
 
 QList<core::AutoStrategy> parseStrategyByType(
     const QString &type,
@@ -566,6 +571,50 @@ bool CloudMessageHandler::handleSettingCommand(const int channelId, const QJsonO
     return false;
 }
 
+
+// TODO
+bool CloudMessageHandler::sendDeleteCommand(const int channelId, const QJsonObject &msg)
+{
+    if (!ctx_ || !ctx_->mqttManager || channelId < 0) {
+        LOG_WARNING(kLogSource, "Cannot send delete command: MQTT not ready");
+        return false;
+    }
+
+    // 验证必要字段：必须包含 data
+    if (!msg.contains("data")) {
+        LOG_WARNING(kLogSource, "Delete command missing 'data' field (scene/timer id)");
+        return false;
+    }
+
+    QJsonObject payload;
+
+    payload.insert("method", QStringLiteral("delete"));
+
+    const QString type = msg.value("type").toString("scene");
+    payload.insert("type", type);
+    payload.insert("data", msg.value("data"));
+
+    QString requestId = msg.value("requestId").toString();
+    if (requestId.isEmpty()) {
+        requestId = QStringLiteral("local_del_%1").arg(QDateTime::currentMSecsSinceEpoch());
+    }
+    payload.insert("requestId", requestId);
+    qint64 timestamp = msg.value("timestamp").toVariant().toLongLong();
+    if (timestamp <= 0) {
+        timestamp = QDateTime::currentMSecsSinceEpoch();
+    }
+    payload.insert("timestamp", timestamp);
+
+    QByteArray payloadBytes = QJsonDocument(payload).toJson(QJsonDocument::Compact);
+
+    LOG_INFO(kLogSource,
+             QStringLiteral("Sending delete command to cloud: type=%1, data=%2, requestId=%3")
+                 .arg(type)
+                 .arg(QString(QJsonDocument(msg.value("data").toObject()).toJson(QJsonDocument::Compact)))
+                 .arg(requestId));
+
+    return ctx_->mqttManager->publishSetting(channelId, payloadBytes, 0);
+}
 
 
 

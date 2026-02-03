@@ -28,6 +28,7 @@ public:
     explicit CloudMessageHandler(core::CoreContext *ctx, QObject *parent);
 
     void setChannelId(int channel);
+    int getChannelId();
 
     /**
      * @brief Send strategy changes to cloud
@@ -36,6 +37,7 @@ public:
      * @return true if sent successfully
      */
     bool sendStrategyCommand(const core::AutoStrategy &strategy, const QJsonObject &msg);
+    bool sendDeleteCommand(const int channelId, const QJsonObject &msg);
 
 public slots:
     void onMqttMessage(int channelId, const QString &topic, const QByteArray &payload);
@@ -67,7 +69,6 @@ private:
                            const QString &requestId,
                            int errCode,
                            const QString &errMsg);
-    // TODO
 };
 }
 } // namespace cloud

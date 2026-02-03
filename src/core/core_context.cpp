@@ -632,59 +632,130 @@ bool CoreContext::triggerStrategy(int strategyId)
 
 bool CoreContext::createStrategy(const AutoStrategy &config, bool *isUpdate, QString *error)
 {
-    // 检查是否存在同名ID
-    const auto deleteIt = deletedStrategies_.constFind(config.strategyId);
-    if (deleteIt != deletedStrategies_.constEnd()) {
-        if (config.version <= deleteIt->version) {
-            if (error) {
-                *error = QStringLiteral("Strategy %1 was deleted").arg(config.strategyId);
-            }
-            LOG_WARNING(kLogSource,
-                        QStringLiteral("Skip update for deleted strategy %1, version=%2 deletedVersion=%3")
+    // 查找现有策略（无视版本号，找到就更新）
+    for (int i = 0; i < strategys_.size(); ++i) {
+        auto &s = strategys_[i];
+        if (s.strategyId != config.strategyId) continue;
+
+        // 找到相同 ID，执行更新
+        AutoStrategy old = s;
+
+        // 先复制新配置
+        s = config;
+
+        // ===== 无视传入的 config.version =====
+        s.version = old.version + 1;
+        // =====================================================================
+
+        // 保留运行时状态（不覆盖）
+        s.lastTriggered = old.lastTriggered;
+        s.cloudChannelId = old.cloudChannelId;
+        // s.enabled = old.enabled;  // 如需接受云端的 enabled 状态，删除这行
+
+        if (isUpdate) *isUpdate = true;
+
+        LOG_INFO(kLogSource,
+                 QStringLiteral("Updated strategy %1: version %2 -> %3 (auto increment)")
+                 .arg(config.strategyId)
+                 .arg(old.version)
+                 .arg(s.version));
+
+        // ========== 同步到云端（携带 +1 后的版本号）==========
+        if (cloudMessageHandler) {
+            QJsonObject msg;
+            msg.insert("method", QStringLiteral("set"));
+            if (!cloudMessageHandler->sendStrategyCommand(s, msg)) {
+                LOG_WARNING(kLogSource,
+                            QStringLiteral("Failed to sync updated strategy %1 (v%2) to cloud")
                             .arg(config.strategyId)
-                            .arg(config.version)
-                            .arg(deleteIt->version));
-            return false;
+                            .arg(s.version));
+            }
         }
-        deletedStrategies_.remove(config.strategyId);
-    }
-    for (auto &s : strategys_) {
-        if (s.strategyId == config.strategyId && s.version < config.version) {
-            AutoStrategy old = s;
-            s = config;
-            s.lastTriggered = old.lastTriggered;
-            s.cloudChannelId = old.cloudChannelId;
-            s.enabled = old.enabled;
+        // ==================================================
 
-            if (isUpdate) *isUpdate = true;
-
-            LOG_INFO(kLogSource,
-                     QStringLiteral("Updated strategy %1, version=%2")
-                     .arg(config.strategyId)
-                     .arg(config.version));
-            return true;
-        }
+        return true;
     }
 
+    // 不存在：新建
     strategys_.append(config);
+
+    // 如果是新建且版本号无效，可设为 1
+    if (strategys_.last().version <= 0) {
+        strategys_.last().version = 1;
+    }
+
     if (isUpdate) *isUpdate = false;
-    LOG_INFO(kLogSource, QStringLiteral("Created strategy %1").arg(config.strategyId));
+
+    LOG_INFO(kLogSource, QStringLiteral("Created strategy %1, version=%2")
+             .arg(config.strategyId)
+             .arg(strategys_.last().version));
+
+    // ========== 同步新建到云端 ==========
+    if (cloudMessageHandler) {
+        QJsonObject msg;
+        msg.insert("method", QStringLiteral("set"));
+        if (!cloudMessageHandler->sendStrategyCommand(strategys_.last(), msg)) {
+            LOG_WARNING(kLogSource,
+                       QStringLiteral("Failed to sync created strategy %1 to cloud")
+                       .arg(config.strategyId));
+        }
+    }
+    // ====================================
+
     return true;
 }
+
 
 bool CoreContext::deleteStrategy(int strategyId, QString *error, bool *alreadyDeleted)
 {
     const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
     if (alreadyDeleted) *alreadyDeleted = false;
+
     for (int i = 0; i < strategys_.size(); ++i) {
         if (strategys_[i].strategyId == strategyId) {
+            // 保存策略信息用于云端同步（在移除前获取）
+            const int deletedVersion = strategys_[i].version;
+            const QString strategyType = strategys_[i].type.isEmpty()
+                ? QStringLiteral("scene")
+                : strategys_[i].type;
+
+            // 本地删除逻辑
             deletedStrategies_.insert(strategyId,
-                                      { strategys_[i].version, nowMs });
+                                      { deletedVersion, nowMs });
             strategys_.removeAt(i);
+
             LOG_INFO(kLogSource, QStringLiteral("Deleted strategy %1").arg(strategyId));
+
+            // ========== 同步删除到云端 ==========
+            int channelId = cloudMessageHandler->getChannelId();
+            if (cloudMessageHandler && channelId >= 0) {
+                QJsonObject cloudMsg;
+                cloudMsg.insert("data", strategyId);  // 单个ID直接传整数
+                cloudMsg.insert("type", strategyType);
+                cloudMsg.insert("requestId", QStringLiteral("local_del_%1_%2")
+                    .arg(strategyId)
+                    .arg(nowMs));
+                cloudMsg.insert("timestamp", nowMs);
+
+                if (!cloudMessageHandler->sendDeleteCommand(channelId, cloudMsg)) {
+                    LOG_WARNING(kLogSource,
+                        QStringLiteral("Failed to sync delete to cloud for strategy %1")
+                        .arg(strategyId));
+                    // 继续返回 true，本地删除已成功，云端同步失败可重试或记录
+                } else {
+                    LOG_DEBUG(kLogSource,
+                        QStringLiteral("Synced delete to cloud: strategy=%1, channel=%2")
+                        .arg(strategyId)
+                        .arg(strategyId));
+                }
+            }
+            // ====================================
+
             return true;
         }
     }
+
+    // 已删除的情况（更新标记但不重复通知云端）
     auto it = deletedStrategies_.find(strategyId);
     if (it != deletedStrategies_.end()) {
         it->deleteMs = nowMs;
@@ -692,11 +763,12 @@ bool CoreContext::deleteStrategy(int strategyId, QString *error, bool *alreadyDe
         if (error) *error = QStringLiteral("Strategy %1 already deleted").arg(strategyId);
         return false;
     }
+
+    // 不存在的情况
     deletedStrategies_.insert(strategyId, { 0, nowMs });
     if (error) *error = QStringLiteral("StrategyId %1 not found").arg(strategyId);
     return false;
 }
-
 
 bool CoreContext::evaluateSensorCondition(const QString &op,
                                           double value,
