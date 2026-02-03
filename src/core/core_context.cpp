@@ -706,7 +706,7 @@ bool CoreContext::evaluateSensorCondition(const QString &op,
     if (op == "eq")   return qAbs(value - threshold) < kFloatCompareEpsilon;
     if (op == "ne")   return qAbs(value - threshold) >= kFloatCompareEpsilon;
     if (op == "egt")  return value >= threshold;
-    if (op == "elt")  return value <= threshold;
+    if (op == "elt" || op == "le")  return value <= threshold;
 
     LOG_WARNING(kLogSource,
                 QStringLiteral("unknown condition op: %1").arg(op));
