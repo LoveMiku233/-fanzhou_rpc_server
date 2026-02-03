@@ -124,9 +124,22 @@ bool CloudMessageHandler::sendStrategyCommand(const core::AutoStrategy &strategy
         return false;
     }
 
+    // Validate method - must be explicitly provided
+    QString method = msg.value("method").toString();
+    if (method.isEmpty()) {
+        method = QStringLiteral("set");  // Default to 'set' for new/update operations
+    }
+    
+    // Only support 'set' and 'delete' methods
+    if (method != "set" && method != "delete") {
+        LOG_WARNING(kLogSource, 
+                    QStringLiteral("Unsupported strategy method: %1").arg(method));
+        return false;
+    }
+
     // Build the strategy message
     QJsonObject payload;
-    payload.insert("method", msg.value("method").toString("set"));
+    payload.insert("method", method);
     payload.insert("type", strategy.type);
     
     // Build data object based on strategy type
@@ -167,6 +180,22 @@ bool CloudMessageHandler::sendStrategyCommand(const core::AutoStrategy &strategy
         if (!strategy.effectiveEndTime.isEmpty()) {
             data.insert("effectiveEndTime", strategy.effectiveEndTime);
         }
+    } else if (strategy.type == "timer") {
+        // Timer strategy support (basic structure)
+        data.insert("timerId", strategy.strategyId);
+        data.insert("timerName", strategy.strategyName);
+        data.insert("enabled", strategy.enabled);
+        data.insert("version", strategy.version);
+        
+        // Timer-specific fields would go here
+        LOG_INFO(kLogSource, 
+                 QStringLiteral("Timer strategy sync not fully implemented: id=%1")
+                     .arg(strategy.strategyId));
+    } else {
+        LOG_WARNING(kLogSource, 
+                    QStringLiteral("Unsupported strategy type for cloud sync: %1")
+                        .arg(strategy.type));
+        return false;
     }
     
     payload.insert("data", data);
