@@ -1,10 +1,11 @@
 /**
  * @file group_widget.cpp
- * @brief 分组管理页面实现 - 卡片式布局（美化版）
+ * @brief 分组管理页面实现 - 卡片式布局（1024x600低分辨率优化版）
  */
 
 #include "group_widget.h"
 #include "rpc_client.h"
+#include "style_constants.h"
 
 #include <QScroller>
 
@@ -26,6 +27,8 @@
 #include <QScrollArea>
 #include <QMouseEvent>
 #include <QGraphicsDropShadowEffect>
+
+using namespace UIConstants;
 
 // ==================== GroupCard Implementation ====================
 
@@ -49,41 +52,41 @@ void GroupCard::setupUi()
     setStyleSheet(QStringLiteral(
         "#groupCard {"
         "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);"
-        "  border: 2px solid #e0e0e0;"
-        "  border-radius: 14px;"
+        "  border: 1px solid #e0e0e0;"
+        "  border-radius: %1px;"
         "}"
         "#groupCard:hover {"
         "  border-color: #9b59b6;"
         "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f5eef8);"
-        "}"));
+        "}").arg(BORDER_RADIUS_CARD));
     setCursor(Qt::PointingHandCursor);
-    setMinimumHeight(160);
+    setMinimumHeight(CARD_MIN_HEIGHT);
     
     // 阴影效果
     QGraphicsDropShadowEffect *shadow = new QGraphicsDropShadowEffect(this);
-    shadow->setBlurRadius(12);
-    shadow->setColor(QColor(0, 0, 0, 35));
-    shadow->setOffset(0, 3);
+    shadow->setBlurRadius(8);
+    shadow->setColor(QColor(0, 0, 0, 25));
+    shadow->setOffset(0, 2);
     setGraphicsEffect(shadow);
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(14, 12, 14, 12);
-    mainLayout->setSpacing(10);
+    mainLayout->setContentsMargins(CARD_MARGIN, CARD_MARGIN, CARD_MARGIN, CARD_MARGIN);
+    mainLayout->setSpacing(CARD_SPACING);
 
     // 顶部行：名称和ID
     QHBoxLayout *topRow = new QHBoxLayout();
     
     nameLabel_ = new QLabel(QStringLiteral("[组] %1").arg(name_), this);
     nameLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 16px; font-weight: bold; color: #2c3e50;"));
+        "font-size: %1px; font-weight: bold; color: #2c3e50;").arg(FONT_SIZE_CARD_TITLE));
     topRow->addWidget(nameLabel_);
     
     topRow->addStretch();
     
     idLabel_ = new QLabel(QStringLiteral("ID:%1").arg(groupId_), this);
     idLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 12px; color: #7f8c8d; background-color: #ecf0f1; "
-        "padding: 4px 10px; border-radius: 6px; font-weight: 500;"));
+        "font-size: %1px; color: #7f8c8d; background-color: #ecf0f1; "
+        "padding: 2px 6px; border-radius: 4px;").arg(FONT_SIZE_SMALL));
     topRow->addWidget(idLabel_);
     
     mainLayout->addLayout(topRow);
@@ -91,14 +94,14 @@ void GroupCard::setupUi()
     // 中间行：设备数和通道数
     QHBoxLayout *middleRow = new QHBoxLayout();
     
-    deviceCountLabel_ = new QLabel(QStringLiteral("[设] 0 设备"), this);
+    deviceCountLabel_ = new QLabel(QStringLiteral("0设备"), this);
     deviceCountLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 14px; color: #3498db; font-weight: 500;"));
+        "font-size: %1px; color: #3498db;").arg(FONT_SIZE_BODY));
     middleRow->addWidget(deviceCountLabel_);
     
-    channelCountLabel_ = new QLabel(QStringLiteral("[通] 0 通道"), this);
+    channelCountLabel_ = new QLabel(QStringLiteral("0通道"), this);
     channelCountLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 14px; color: #9b59b6; font-weight: 500;"));
+        "font-size: %1px; color: #9b59b6;").arg(FONT_SIZE_BODY));
     middleRow->addWidget(channelCountLabel_);
     
     middleRow->addStretch();
@@ -106,12 +109,12 @@ void GroupCard::setupUi()
     mainLayout->addLayout(middleRow);
 
     // 通道信息行
-    channelsLabel_ = new QLabel(QStringLiteral("暂无绑定通道"), this);
+    channelsLabel_ = new QLabel(QStringLiteral("暂无绑定"), this);
     channelsLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 12px; color: #95a5a6; padding: 6px 10px; "
-        "background-color: #f8f9fa; border-radius: 6px;"));
+        "font-size: %1px; color: #95a5a6; padding: 4px 6px; "
+        "background-color: #f8f9fa; border-radius: 4px;").arg(FONT_SIZE_SMALL));
     channelsLabel_->setWordWrap(true);
-    channelsLabel_->setMinimumHeight(36);
+    channelsLabel_->setMinimumHeight(24);
     mainLayout->addWidget(channelsLabel_);
 
     // 底部分隔线
@@ -123,48 +126,48 @@ void GroupCard::setupUi()
 
     // 底部行：控制按钮
     QHBoxLayout *buttonRow = new QHBoxLayout();
-    buttonRow->setSpacing(8);
+    buttonRow->setSpacing(4);
     
-    QPushButton *stopBtn = new QPushButton(QStringLiteral("[停] 停止"), this);
-    stopBtn->setMinimumHeight(36);
+    QPushButton *stopBtn = new QPushButton(QStringLiteral("停"), this);
+    stopBtn->setMinimumHeight(BTN_HEIGHT_SMALL);
     stopBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #7f8c8d; color: white; border: none; "
-        "border-radius: 8px; font-weight: bold; font-size: 12px; padding: 0 16px; }"
-        "QPushButton:hover { background-color: #6c7a7d; }"));
+        "border-radius: %1px; font-weight: bold; font-size: %2px; padding: 0 8px; }"
+        "QPushButton:hover { background-color: #6c7a7d; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_SMALL));
     connect(stopBtn, &QPushButton::clicked, [this]() {
         emit controlClicked(groupId_, QStringLiteral("stop"));
     });
     buttonRow->addWidget(stopBtn);
     
-    QPushButton *fwdBtn = new QPushButton(QStringLiteral("[正] 正转"), this);
-    fwdBtn->setMinimumHeight(36);
+    QPushButton *fwdBtn = new QPushButton(QStringLiteral("正"), this);
+    fwdBtn->setMinimumHeight(BTN_HEIGHT_SMALL);
     fwdBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #27ae60; color: white; border: none; "
-        "border-radius: 8px; font-weight: bold; font-size: 12px; padding: 0 16px; }"
-        "QPushButton:hover { background-color: #229954; }"));
+        "border-radius: %1px; font-weight: bold; font-size: %2px; padding: 0 8px; }"
+        "QPushButton:hover { background-color: #229954; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_SMALL));
     connect(fwdBtn, &QPushButton::clicked, [this]() {
         emit controlClicked(groupId_, QStringLiteral("fwd"));
     });
     buttonRow->addWidget(fwdBtn);
     
-    QPushButton *revBtn = new QPushButton(QStringLiteral("[反] 反转"), this);
-    revBtn->setMinimumHeight(36);
+    QPushButton *revBtn = new QPushButton(QStringLiteral("反"), this);
+    revBtn->setMinimumHeight(BTN_HEIGHT_SMALL);
     revBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #f39c12; color: white; border: none; "
-        "border-radius: 8px; font-weight: bold; font-size: 12px; padding: 0 16px; }"
-        "QPushButton:hover { background-color: #d68910; }"));
+        "border-radius: %1px; font-weight: bold; font-size: %2px; padding: 0 8px; }"
+        "QPushButton:hover { background-color: #d68910; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_SMALL));
     connect(revBtn, &QPushButton::clicked, [this]() {
         emit controlClicked(groupId_, QStringLiteral("rev"));
     });
     buttonRow->addWidget(revBtn);
     
-    QPushButton *deleteBtn = new QPushButton(QStringLiteral("[删]"), this);
-    deleteBtn->setMinimumHeight(36);
-    deleteBtn->setMinimumWidth(44);
+    QPushButton *deleteBtn = new QPushButton(QStringLiteral("删"), this);
+    deleteBtn->setMinimumHeight(BTN_HEIGHT_SMALL);
+    deleteBtn->setMinimumWidth(BTN_MIN_WIDTH_SMALL);
     deleteBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #e74c3c; color: white; border: none; "
-        "border-radius: 8px; font-weight: bold; font-size: 14px; }"
-        "QPushButton:hover { background-color: #c0392b; }"));
+        "border-radius: %1px; font-weight: bold; font-size: %2px; }"
+        "QPushButton:hover { background-color: #c0392b; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
     connect(deleteBtn, &QPushButton::clicked, [this]() {
         emit deleteClicked(groupId_);
     });
@@ -178,26 +181,26 @@ void GroupCard::updateInfo(const QString &name, int deviceCount, int channelCoun
 {
     name_ = name;
     nameLabel_->setText(QStringLiteral("[组] %1").arg(name));
-    deviceCountLabel_->setText(QStringLiteral("[设] %1 设备").arg(deviceCount));
-    channelCountLabel_->setText(QStringLiteral("[通] %1 通道").arg(channelCount));
+    deviceCountLabel_->setText(QStringLiteral("%1设备").arg(deviceCount));
+    channelCountLabel_->setText(QStringLiteral("%1通道").arg(channelCount));
     
     if (channels.isEmpty()) {
-        channelsLabel_->setText(QStringLiteral("暂无绑定通道"));
+        channelsLabel_->setText(QStringLiteral("暂无绑定"));
         channelsLabel_->setStyleSheet(QStringLiteral(
-            "font-size: 12px; color: #95a5a6; padding: 6px 10px; "
-            "background-color: #f8f9fa; border-radius: 6px;"));
+            "font-size: %1px; color: #95a5a6; padding: 4px 6px; "
+            "background-color: #f8f9fa; border-radius: 4px;").arg(FONT_SIZE_SMALL));
     } else {
         QStringList channelTexts;
         for (const QJsonValue &v : channels) {
             QJsonObject ch = v.toObject();
             int node = ch.value(QStringLiteral("node")).toInt();
             int channel = ch.value(QStringLiteral("channel")).toInt();
-            channelTexts << QStringLiteral("节点%1:通道%2").arg(node).arg(channel);
+            channelTexts << QStringLiteral("%1:%2").arg(node).arg(channel);
         }
-        channelsLabel_->setText(channelTexts.join(QStringLiteral(" | ")));
+        channelsLabel_->setText(channelTexts.join(QStringLiteral(",")));
         channelsLabel_->setStyleSheet(QStringLiteral(
-            "font-size: 12px; color: #2c3e50; padding: 6px 10px; "
-            "background-color: #e8f5e9; border-radius: 6px;"));
+            "font-size: %1px; color: #2c3e50; padding: 4px 6px; "
+            "background-color: #e8f5e9; border-radius: 4px;").arg(FONT_SIZE_SMALL));
     }
 }
 
@@ -226,43 +229,43 @@ GroupWidget::GroupWidget(RpcClient *rpcClient, QWidget *parent)
 void GroupWidget::setupUi()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(16, 16, 16, 16);
-    mainLayout->setSpacing(16);
+    mainLayout->setContentsMargins(PAGE_MARGIN, PAGE_MARGIN, PAGE_MARGIN, PAGE_MARGIN);
+    mainLayout->setSpacing(PAGE_SPACING);
 
-    // 页面标题 - 美化
+    // 页面标题
     QLabel *titleLabel = new QLabel(QStringLiteral("[组] 分组管理"), this);
     titleLabel->setStyleSheet(QStringLiteral(
-        "font-size: 26px; font-weight: bold; color: #2c3e50; padding: 4px 0;"));
+        "font-size: %1px; font-weight: bold; color: #2c3e50; padding: 2px 0;").arg(FONT_SIZE_TITLE));
     mainLayout->addWidget(titleLabel);
 
-    // 工具栏 - 美化
+    // 工具栏
     QHBoxLayout *toolbarLayout = new QHBoxLayout();
-    toolbarLayout->setSpacing(12);
+    toolbarLayout->setSpacing(CARD_SPACING);
 
-    QPushButton *refreshButton = new QPushButton(QStringLiteral("[刷] 刷新"), this);
-    refreshButton->setMinimumHeight(44);
+    QPushButton *refreshButton = new QPushButton(QStringLiteral("[刷]刷新"), this);
+    refreshButton->setMinimumHeight(BTN_HEIGHT);
     refreshButton->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #3498db; color: white; border: none; "
-        "border-radius: 10px; padding: 0 20px; font-weight: bold; font-size: 14px; }"
-        "QPushButton:hover { background-color: #2980b9; }"));
+        "border-radius: %1px; padding: 0 12px; font-weight: bold; font-size: %2px; }"
+        "QPushButton:hover { background-color: #2980b9; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
     connect(refreshButton, &QPushButton::clicked, this, &GroupWidget::refreshGroupList);
     toolbarLayout->addWidget(refreshButton);
 
-    QPushButton *createButton = new QPushButton(QStringLiteral("[+] 创建分组"), this);
-    createButton->setMinimumHeight(44);
+    QPushButton *createButton = new QPushButton(QStringLiteral("[+]创建"), this);
+    createButton->setMinimumHeight(BTN_HEIGHT);
     createButton->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #27ae60; color: white; border: none; "
-        "border-radius: 10px; padding: 0 20px; font-weight: bold; font-size: 14px; }"
-        "QPushButton:hover { background-color: #229954; }"));
+        "border-radius: %1px; padding: 0 12px; font-weight: bold; font-size: %2px; }"
+        "QPushButton:hover { background-color: #229954; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
     connect(createButton, &QPushButton::clicked, this, &GroupWidget::onCreateGroupClicked);
     toolbarLayout->addWidget(createButton);
 
-    QPushButton *manageChannelsBtn = new QPushButton(QStringLiteral("[置] 管理通道"), this);
-    manageChannelsBtn->setMinimumHeight(44);
+    QPushButton *manageChannelsBtn = new QPushButton(QStringLiteral("[置]管理"), this);
+    manageChannelsBtn->setMinimumHeight(BTN_HEIGHT);
     manageChannelsBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #f39c12; color: white; border: none; "
-        "border-radius: 10px; padding: 0 20px; font-weight: bold; font-size: 14px; }"
-        "QPushButton:hover { background-color: #d68910; }"));
+        "border-radius: %1px; padding: 0 12px; font-weight: bold; font-size: %2px; }"
+        "QPushButton:hover { background-color: #d68910; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
     connect(manageChannelsBtn, &QPushButton::clicked, this, &GroupWidget::onManageChannelsClicked);
     toolbarLayout->addWidget(manageChannelsBtn);
 
@@ -270,7 +273,7 @@ void GroupWidget::setupUi()
 
     statusLabel_ = new QLabel(this);
     statusLabel_->setStyleSheet(QStringLiteral(
-        "color: #7f8c8d; font-size: 14px; padding: 8px 12px; background-color: #f8f9fa; border-radius: 6px;"));
+        "color: #7f8c8d; font-size: %1px; padding: 4px 8px; background-color: #f8f9fa; border-radius: 4px;").arg(FONT_SIZE_SMALL));
     toolbarLayout->addWidget(statusLabel_);
 
     mainLayout->addLayout(toolbarLayout);
@@ -282,31 +285,31 @@ void GroupWidget::setupUi()
     scrollArea->setFrameShape(QFrame::NoFrame);
     scrollArea->setStyleSheet(QStringLiteral(
         "QScrollArea { background: transparent; border: none; }"
-        "QScrollBar:vertical { width: 10px; background: #f0f0f0; border-radius: 5px; margin: 4px; }"
-        "QScrollBar::handle:vertical { background: #c0c0c0; border-radius: 5px; min-height: 40px; }"
-    ));
+        "QScrollBar:vertical { width: %1px; background: #f0f0f0; border-radius: %2px; margin: 2px; }"
+        "QScrollBar::handle:vertical { background: #c0c0c0; border-radius: %2px; min-height: 30px; }"
+    ).arg(SCROLLBAR_WIDTH).arg(SCROLLBAR_WIDTH/2));
     
     // 启用触控滚动
     QScroller::grabGesture(scrollArea->viewport(), QScroller::LeftMouseButtonGesture);
 
-    // 分组卡片容器 - 使用网格布局（一行两个）
+    // 分组卡片容器
     cardsContainer_ = new QWidget();
     cardsContainer_->setStyleSheet(QStringLiteral("background: transparent;"));
     cardsLayout_ = new QGridLayout(cardsContainer_);
     cardsLayout_->setContentsMargins(0, 0, 0, 0);
-    cardsLayout_->setSpacing(16);
+    cardsLayout_->setSpacing(PAGE_SPACING);
     cardsLayout_->setColumnStretch(0, 1);
     cardsLayout_->setColumnStretch(1, 1);
     
     scrollArea->setWidget(cardsContainer_);
     mainLayout->addWidget(scrollArea, 1);
 
-    // 提示 - 美化
+    // 提示
     QLabel *helpLabel = new QLabel(
-        QStringLiteral("[示] 提示：点击分组卡片管理通道绑定，分组通过绑定特定通道来控制设备"),
+        QStringLiteral("[示] 点击卡片管理通道绑定"),
         this);
     helpLabel->setStyleSheet(QStringLiteral(
-        "color: #5d6d7e; font-size: 13px; padding: 10px; background-color: #eaf2f8; border-radius: 8px;"));
+        "color: #5d6d7e; font-size: %1px; padding: 6px; background-color: #eaf2f8; border-radius: 4px;").arg(FONT_SIZE_SMALL));
     helpLabel->setAlignment(Qt::AlignCenter);
     mainLayout->addWidget(helpLabel);
 }

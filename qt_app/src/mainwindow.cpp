@@ -1,6 +1,6 @@
 /**
  * @file mainwindow.cpp
- * @brief 主窗口实现 - 大棚控制系统（美化版）
+ * @brief 主窗口实现 - 大棚控制系统（1024x600低分辨率优化版）
  */
 
 #include "mainwindow.h"
@@ -12,6 +12,7 @@
 #include "sensor_widget.h"
 #include "log_widget.h"
 #include "settings_widget.h"
+#include "style_constants.h"
 
 #include <QStatusBar>
 #include <QVBoxLayout>
@@ -24,6 +25,8 @@
 #include <QJsonArray>
 #include <QJsonValue>
 #include <QJsonDocument>
+
+using namespace UIConstants;
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -182,26 +185,26 @@ void MainWindow::createSidebar()
 {
     sidebar_ = new QWidget(this);
     sidebar_->setObjectName(QStringLiteral("sidebar"));
-    sidebar_->setFixedWidth(100);
+    sidebar_->setFixedWidth(SIDEBAR_WIDTH);
     sidebar_->setStyleSheet(QStringLiteral(
         "#sidebar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2c3e50, stop:1 #1a252f); }"));
 
     sidebarLayout_ = new QVBoxLayout(sidebar_);
-    sidebarLayout_->setContentsMargins(6, 12, 6, 12);
-    sidebarLayout_->setSpacing(6);
+    sidebarLayout_->setContentsMargins(4, 6, 4, 6);
+    sidebarLayout_->setSpacing(2);
 
-    // Logo/标题 - 使用纯文本
-    QLabel *logoLabel = new QLabel(QStringLiteral("[棚]\n大棚\n控制"), sidebar_);
+    // Logo/标题
+    QLabel *logoLabel = new QLabel(QStringLiteral("[棚]\n控制"), sidebar_);
     logoLabel->setObjectName(QStringLiteral("sidebarLogo"));
     logoLabel->setAlignment(Qt::AlignCenter);
     logoLabel->setWordWrap(true);
     logoLabel->setStyleSheet(QStringLiteral(
-        "font-size: 16px; font-weight: bold; color: #27ae60; padding: 8px;"));
+        "font-size: %1px; font-weight: bold; color: #27ae60; padding: 4px;").arg(FONT_SIZE_BODY));
     sidebarLayout_->addWidget(logoLabel);
 
-    sidebarLayout_->addSpacing(12);
+    sidebarLayout_->addSpacing(4);
 
-    // 菜单按钮 - 使用纯文本，添加传感器菜单
+    // 菜单按钮
     struct MenuItem {
         QString text;
         QString icon;
@@ -212,7 +215,7 @@ void MainWindow::createSidebar()
         {QStringLiteral("设备"), QStringLiteral("[设]")},
         {QStringLiteral("分组"), QStringLiteral("[组]")},
         {QStringLiteral("策略"), QStringLiteral("[策]")},
-        {QStringLiteral("传感器"), QStringLiteral("[感]")},
+        {QStringLiteral("传感"), QStringLiteral("[感]")},
         {QStringLiteral("日志"), QStringLiteral("[志]")},
         {QStringLiteral("设置"), QStringLiteral("[置]")}
     };
@@ -223,15 +226,15 @@ void MainWindow::createSidebar()
         btn->setObjectName(QStringLiteral("menuButton"));
         btn->setProperty("menuIndex", i);
         btn->setCheckable(true);
-        btn->setMinimumHeight(64);
+        btn->setMinimumHeight(BTN_HEIGHT_LARGE + 12);
         btn->setStyleSheet(QStringLiteral(
             "QPushButton { "
             "  background-color: transparent; "
             "  color: #bdc3c7; "
             "  border: none; "
-            "  border-radius: 8px; "
-            "  font-size: 11px; "
-            "  padding: 8px 4px; "
+            "  border-radius: 6px; "
+            "  font-size: %1px; "
+            "  padding: 4px 2px; "
             "}"
             "QPushButton:hover { "
             "  background-color: rgba(255,255,255,0.1); "
@@ -241,7 +244,7 @@ void MainWindow::createSidebar()
             "  background-color: #3498db; "
             "  color: white; "
             "  font-weight: bold; "
-            "}"));
+            "}").arg(FONT_SIZE_SMALL));
         connect(btn, &QPushButton::clicked, this, &MainWindow::onMenuButtonClicked);
         sidebarLayout_->addWidget(btn);
         menuButtons_.append(btn);
@@ -253,7 +256,7 @@ void MainWindow::createSidebar()
     QLabel *versionLabel = new QLabel(QStringLiteral("v1.1"), sidebar_);
     versionLabel->setObjectName(QStringLiteral("sidebarVersion"));
     versionLabel->setAlignment(Qt::AlignCenter);
-    versionLabel->setStyleSheet(QStringLiteral("color: #7f8c8d; font-size: 10px;"));
+    versionLabel->setStyleSheet(QStringLiteral("color: #7f8c8d; font-size: 9px;"));
     sidebarLayout_->addWidget(versionLabel);
 
     // 默认选中第一个菜单

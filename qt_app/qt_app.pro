@@ -50,7 +50,8 @@ HEADERS += \
     src/home_widget.h \
     src/log_widget.h \
     src/settings_widget.h \
-    src/relay_control_dialog.h
+    src/relay_control_dialog.h \
+    src/style_constants.h
 
 # Resources
 RESOURCES += \

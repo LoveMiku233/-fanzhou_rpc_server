@@ -1,10 +1,11 @@
 /**
  * @file relay_control_dialog.cpp
- * @brief 继电器控制对话框实现
+ * @brief 继电器控制对话框实现（1024x600低分辨率优化版）
  */
 
 #include "relay_control_dialog.h"
 #include "rpc_client.h"
+#include "style_constants.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -14,6 +15,8 @@
 #include <QJsonObject>
 #include <QMessageBox>
 #include <QFrame>
+
+using namespace UIConstants;
 
 RelayControlDialog::RelayControlDialog(RpcClient *rpcClient, int nodeId,
                                          const QString &deviceName, QWidget *parent)
@@ -29,7 +32,7 @@ RelayControlDialog::RelayControlDialog(RpcClient *rpcClient, int nodeId,
     , currentLabel_(nullptr)
 {
     setWindowTitle(QStringLiteral("控制: %1 (#%2)").arg(deviceName).arg(nodeId));
-    setMinimumSize(580, 420);
+    setMinimumSize(DIALOG_WIDTH, DIALOG_HEIGHT);
     setModal(true);
     setupUi();
     
@@ -40,13 +43,13 @@ RelayControlDialog::RelayControlDialog(RpcClient *rpcClient, int nodeId,
 void RelayControlDialog::setupUi()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(12, 12, 12, 12);
-    mainLayout->setSpacing(8);
+    mainLayout->setContentsMargins(DIALOG_MARGIN, DIALOG_MARGIN, DIALOG_MARGIN, DIALOG_MARGIN);
+    mainLayout->setSpacing(DIALOG_SPACING);
 
-    // 设备信息 - 使用纯文本
-    QLabel *titleLabel = new QLabel(QStringLiteral("设备: %1 (节点 #%2)").arg(deviceName_).arg(nodeId_), this);
+    // 设备信息
+    QLabel *titleLabel = new QLabel(QStringLiteral("设备: %1 (#%2)").arg(deviceName_).arg(nodeId_), this);
     titleLabel->setStyleSheet(QStringLiteral(
-        "font-size: 16px; font-weight: bold; color: #2c3e50;"));
+        "font-size: %1px; font-weight: bold; color: #2c3e50;").arg(FONT_SIZE_CARD_TITLE));
     mainLayout->addWidget(titleLabel);
 
     // 左右布局：状态在左，控制在右

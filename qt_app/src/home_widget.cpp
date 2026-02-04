@@ -1,10 +1,11 @@
 /**
  * @file home_widget.cpp
- * @brief 主页实现 - 大棚控制系统总览（增强版）
+ * @brief 主页实现 - 大棚控制系统总览（1024x600低分辨率优化版）
  */
 
 #include "home_widget.h"
 #include "rpc_client.h"
+#include "style_constants.h"
 
 #include <QVBoxLayout>
 #include <QDebug>
@@ -20,6 +21,8 @@
 #include <QGraphicsDropShadowEffect>
 #include <QPainter>
 #include <QScrollArea>
+
+using namespace UIConstants;
 
 HomeWidget::HomeWidget(RpcClient *rpcClient, QWidget *parent)
     : QWidget(parent)
@@ -52,13 +55,13 @@ HomeWidget::HomeWidget(RpcClient *rpcClient, QWidget *parent)
 void HomeWidget::setupUi()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(16, 16, 16, 16);
-    mainLayout->setSpacing(16);
+    mainLayout->setContentsMargins(PAGE_MARGIN, PAGE_MARGIN, PAGE_MARGIN, PAGE_MARGIN);
+    mainLayout->setSpacing(PAGE_SPACING);
 
     // 页面标题
-    QLabel *titleLabel = new QLabel(QStringLiteral("大棚控制系统总览"), this);
+    QLabel *titleLabel = new QLabel(QStringLiteral("大棚控制系统"), this);
     titleLabel->setStyleSheet(QStringLiteral(
-        "font-size: 28px; font-weight: bold; color: #27ae60; padding: 8px 0;"));
+        "font-size: %1px; font-weight: bold; color: #27ae60; padding: 4px 0;").arg(FONT_SIZE_TITLE));
     mainLayout->addWidget(titleLabel);
 
     // 连接状态卡片
@@ -66,33 +69,33 @@ void HomeWidget::setupUi()
     statusCard->setObjectName(QStringLiteral("statusCard"));
     statusCard->setStyleSheet(QStringLiteral(
         "#statusCard { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #ecf0f1, stop:1 #d5dbdb); "
-        "border-radius: 12px; padding: 12px; border: 1px solid #bdc3c7; }"));
+        "border-radius: %1px; padding: 6px; border: 1px solid #bdc3c7; }").arg(BORDER_RADIUS_CARD));
     
     QGraphicsDropShadowEffect *statusShadow = new QGraphicsDropShadowEffect(this);
-    statusShadow->setBlurRadius(10);
-    statusShadow->setColor(QColor(0, 0, 0, 30));
-    statusShadow->setOffset(0, 3);
+    statusShadow->setBlurRadius(6);
+    statusShadow->setColor(QColor(0, 0, 0, 20));
+    statusShadow->setOffset(0, 2);
     statusCard->setGraphicsEffect(statusShadow);
     
     QHBoxLayout *statusLayout = new QHBoxLayout(statusCard);
-    statusLayout->setContentsMargins(16, 12, 16, 12);
+    statusLayout->setContentsMargins(CARD_MARGIN, CARD_MARGIN, CARD_MARGIN, CARD_MARGIN);
     
     connectionStatusLabel_ = new QLabel(QStringLiteral("未连接"), this);
     connectionStatusLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 18px; font-weight: bold; color: #e74c3c;"));
+        "font-size: %1px; font-weight: bold; color: #e74c3c;").arg(FONT_SIZE_CARD_TITLE));
     statusLayout->addWidget(connectionStatusLabel_);
     statusLayout->addStretch();
     
-    systemUptimeLabel_ = new QLabel(QStringLiteral("运行时间: --"), this);
+    systemUptimeLabel_ = new QLabel(QStringLiteral("运行: --"), this);
     systemUptimeLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 13px; color: #5d6d7e; padding: 6px 12px; background-color: white; border-radius: 6px;"));
+        "font-size: %1px; color: #5d6d7e; padding: 4px 8px; background-color: white; border-radius: 4px;").arg(FONT_SIZE_SMALL));
     statusLayout->addWidget(systemUptimeLabel_);
     
     mainLayout->addWidget(statusCard);
 
     // 统计信息卡片网格 - 2行4列
     QGridLayout *statsGrid = new QGridLayout();
-    statsGrid->setSpacing(12);
+    statsGrid->setSpacing(CARD_SPACING);
 
     auto createStatCard = [this](const QString &title, const QString &bgColor) -> QPair<QFrame*, QLabel*> {
         QFrame *card = new QFrame(this);
@@ -100,25 +103,25 @@ void HomeWidget::setupUi()
         darkerBg.replace(1, 1, QStringLiteral("d"));
         card->setStyleSheet(QStringLiteral(
             "QFrame { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 %1, stop:1 %2); "
-            "border-radius: 12px; padding: 12px; }").arg(bgColor, darkerBg));
+            "border-radius: %3px; padding: 4px; }").arg(bgColor, darkerBg).arg(BORDER_RADIUS_CARD));
         
         QGraphicsDropShadowEffect *shadow = new QGraphicsDropShadowEffect(this);
-        shadow->setBlurRadius(10);
-        shadow->setColor(QColor(0, 0, 0, 35));
-        shadow->setOffset(0, 3);
+        shadow->setBlurRadius(6);
+        shadow->setColor(QColor(0, 0, 0, 25));
+        shadow->setOffset(0, 2);
         card->setGraphicsEffect(shadow);
         
         QVBoxLayout *layout = new QVBoxLayout(card);
-        layout->setContentsMargins(12, 10, 12, 10);
-        layout->setSpacing(6);
+        layout->setContentsMargins(CARD_MARGIN, CARD_MARGIN, CARD_MARGIN, CARD_MARGIN);
+        layout->setSpacing(2);
         
         QLabel *titleLabel = new QLabel(title, card);
-        titleLabel->setStyleSheet(QStringLiteral("color: rgba(255,255,255,0.85); font-size: 12px;"));
+        titleLabel->setStyleSheet(QStringLiteral("color: rgba(255,255,255,0.85); font-size: %1px;").arg(FONT_SIZE_SMALL));
         layout->addWidget(titleLabel);
         
         QLabel *valueLabel = new QLabel(QStringLiteral("--"), card);
         valueLabel->setStyleSheet(QStringLiteral(
-            "color: white; font-size: 32px; font-weight: bold; background: transparent;"));
+            "color: white; font-size: %1px; font-weight: bold; background: transparent;").arg(FONT_SIZE_VALUE));
         layout->addWidget(valueLabel);
         
         return qMakePair(card, valueLabel);
@@ -154,7 +157,7 @@ void HomeWidget::setupUi()
     canStatusLabel_ = canCard.second;
     statsGrid->addWidget(canCard.first, 1, 2);
 
-    auto mqttCard = createStatCard(QStringLiteral("MQTT状态"), QStringLiteral("#16a085"));
+    auto mqttCard = createStatCard(QStringLiteral("MQTT"), QStringLiteral("#16a085"));
     mqttStatusLabel_ = mqttCard.second;
     statsGrid->addWidget(mqttCard.first, 1, 3);
 
@@ -163,30 +166,28 @@ void HomeWidget::setupUi()
     // 快捷操作区
     QGroupBox *actionsBox = new QGroupBox(QStringLiteral("快捷操作"), this);
     actionsBox->setStyleSheet(QStringLiteral(
-        "QGroupBox { font-weight: bold; font-size: 14px; border: 2px solid #e0e0e0; border-radius: 12px; margin-top: 12px; padding-top: 14px; }"
-        "QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 10px; color: #3498db; }"));
+        "QGroupBox { font-weight: bold; font-size: %1px; border: 1px solid #e0e0e0; border-radius: %2px; margin-top: 8px; padding-top: 10px; }"
+        "QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 6px; color: #3498db; }").arg(FONT_SIZE_BODY).arg(BORDER_RADIUS_CARD));
     
     QHBoxLayout *actionsLayout = new QHBoxLayout(actionsBox);
-    actionsLayout->setSpacing(12);
-    actionsLayout->setContentsMargins(16, 16, 16, 16);
+    actionsLayout->setSpacing(CARD_SPACING);
+    actionsLayout->setContentsMargins(CARD_MARGIN, CARD_MARGIN, CARD_MARGIN, CARD_MARGIN);
 
-    refreshButton_ = new QPushButton(QStringLiteral("刷新数据"), this);
-    refreshButton_->setMinimumHeight(48);
+    refreshButton_ = new QPushButton(QStringLiteral("刷新"), this);
+    refreshButton_->setMinimumHeight(BTN_HEIGHT);
     refreshButton_->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #3498db; color: white; border: none; "
-        "border-radius: 10px; padding: 0 24px; font-weight: bold; font-size: 14px; }"
-        "QPushButton:hover { background-color: #2980b9; }"
-        "QPushButton:pressed { background-color: #1c5a8a; }"));
+        "border-radius: %1px; padding: 0 16px; font-weight: bold; font-size: %2px; }"
+        "QPushButton:hover { background-color: #2980b9; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
     connect(refreshButton_, &QPushButton::clicked, this, &HomeWidget::refreshData);
     actionsLayout->addWidget(refreshButton_);
 
-    stopAllButton_ = new QPushButton(QStringLiteral("全部停止"), this);
-    stopAllButton_->setMinimumHeight(48);
+    stopAllButton_ = new QPushButton(QStringLiteral("全停"), this);
+    stopAllButton_->setMinimumHeight(BTN_HEIGHT);
     stopAllButton_->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #f39c12; color: white; border: none; "
-        "border-radius: 10px; padding: 0 24px; font-weight: bold; font-size: 14px; }"
-        "QPushButton:hover { background-color: #d68910; }"
-        "QPushButton:pressed { background-color: #b7791f; }"));
+        "border-radius: %1px; padding: 0 16px; font-weight: bold; font-size: %2px; }"
+        "QPushButton:hover { background-color: #d68910; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
     connect(stopAllButton_, &QPushButton::clicked, this, &HomeWidget::onStopAllClicked);
     actionsLayout->addWidget(stopAllButton_);
     
@@ -196,30 +197,27 @@ void HomeWidget::setupUi()
 
     // 急停按钮
     emergencyStopButton_ = new QPushButton(QStringLiteral("紧急停止"), this);
-    emergencyStopButton_->setMinimumHeight(70);
+    emergencyStopButton_->setMinimumHeight(BTN_HEIGHT_LARGE + 10);
     emergencyStopButton_->setStyleSheet(QStringLiteral(
         "QPushButton {"
         "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e74c3c, stop:1 #c0392b);"
         "  color: white;"
-        "  font-size: 22px;"
+        "  font-size: %1px;"
         "  font-weight: bold;"
-        "  border: 3px solid #922b21;"
-        "  border-radius: 12px;"
+        "  border: 2px solid #922b21;"
+        "  border-radius: %2px;"
         "}"
         "QPushButton:hover {"
         "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #c0392b, stop:1 #a93226);"
         "}"
-        "QPushButton:pressed {"
-        "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #922b21, stop:1 #7b241c);"
-        "}"
-    ));
+    ).arg(FONT_SIZE_TITLE).arg(BORDER_RADIUS_BTN));
     connect(emergencyStopButton_, &QPushButton::clicked, this, &HomeWidget::onEmergencyStopClicked);
     mainLayout->addWidget(emergencyStopButton_);
 
     // 最后更新时间
-    lastUpdateLabel_ = new QLabel(QStringLiteral("最后更新: --"), this);
+    lastUpdateLabel_ = new QLabel(QStringLiteral("更新: --"), this);
     lastUpdateLabel_->setStyleSheet(QStringLiteral(
-        "color: #7f8c8d; font-size: 12px; padding: 8px;"));
+        "color: #7f8c8d; font-size: %1px; padding: 4px;").arg(FONT_SIZE_SMALL));
     lastUpdateLabel_->setAlignment(Qt::AlignCenter);
     mainLayout->addWidget(lastUpdateLabel_);
 
