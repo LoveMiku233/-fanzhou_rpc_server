@@ -4,7 +4,7 @@
  */
 
 #include "strategy_dialog.h"
-#include "ui_constants.h"
+#include "style_constants.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>

@@ -6,7 +6,7 @@
 #include "device_widget.h"
 #include "rpc_client.h"
 #include "relay_control_dialog.h"
-#include "ui_constants.h"
+#include "style_constants.h"
 
 #include <QScroller>
 

@@ -12,7 +12,7 @@
 #include "sensor_widget.h"
 #include "log_widget.h"
 #include "settings_widget.h"
-#include "ui_constants.h"
+#include "style_constants.h"
 
 #include <QStatusBar>
 #include <QVBoxLayout>

@@ -8,7 +8,7 @@
 #include "strategy_widget.h"
 #include "rpc_client.h"
 #include "strategy_dialog.h"
-#include "ui_constants.h"
+#include "style_constants.h"
 
 #include <QScroller>
 
