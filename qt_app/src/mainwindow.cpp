@@ -190,8 +190,8 @@ void MainWindow::createSidebar()
         "#sidebar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2c3e50, stop:1 #1a252f); }"));
 
     sidebarLayout_ = new QVBoxLayout(sidebar_);
-    sidebarLayout_->setContentsMargins(4, 6, 4, 6);
-    sidebarLayout_->setSpacing(2);
+    sidebarLayout_->setContentsMargins(4, 8, 4, 8);
+    sidebarLayout_->setSpacing(4);  // 增加间距防止重叠
 
     // Logo/标题
     QLabel *logoLabel = new QLabel(QStringLiteral("[棚]\n控制"), sidebar_);
@@ -226,7 +226,8 @@ void MainWindow::createSidebar()
         btn->setObjectName(QStringLiteral("menuButton"));
         btn->setProperty("menuIndex", i);
         btn->setCheckable(true);
-        btn->setMinimumHeight(BTN_HEIGHT_LARGE + 12);
+        btn->setFixedHeight(MENU_BTN_HEIGHT);  // 侧边栏菜单按钮使用专用常量
+        btn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         btn->setStyleSheet(QStringLiteral(
             "QPushButton { "
             "  background-color: transparent; "

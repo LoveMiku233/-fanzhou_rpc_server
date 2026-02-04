@@ -123,7 +123,7 @@ void StrategyCard::setupUi()
     setStyleSheet(QStringLiteral(
         "#strategyCard {"
         "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);"
-        "  border: 1px solid #e0e0e0;"
+        "  border: 2px solid #e0e0e0;"
         "  border-radius: %1px;"
         "}"
         "#strategyCard:hover {"
@@ -132,13 +132,7 @@ void StrategyCard::setupUi()
         "}").arg(BORDER_RADIUS_CARD));
     setMinimumHeight(CARD_MIN_HEIGHT);
     setMaximumWidth(CARD_MAX_WIDTH);
-    
-    // 阴影效果
-    QGraphicsDropShadowEffect *shadow = new QGraphicsDropShadowEffect(this);
-    shadow->setBlurRadius(8);
-    shadow->setColor(QColor(0, 0, 0, 25));
-    shadow->setOffset(0, 2);
-    setGraphicsEffect(shadow);
+    setMinimumWidth(200);  // 确保卡片最小宽度
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(CARD_MARGIN, CARD_MARGIN, CARD_MARGIN, CARD_MARGIN);
@@ -201,7 +195,7 @@ void StrategyCard::setupUi()
     bottomRow->addStretch();
     
     toggleBtn_ = new QPushButton(QStringLiteral("启用"), this);
-    toggleBtn_->setMinimumHeight(BTN_HEIGHT_SMALL);
+    toggleBtn_->setFixedHeight(BTN_HEIGHT_SMALL);
     toggleBtn_->setMinimumWidth(BTN_MIN_WIDTH_SMALL);
     toggleBtn_->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #27ae60; color: white; border: none; "
@@ -213,7 +207,7 @@ void StrategyCard::setupUi()
     bottomRow->addWidget(toggleBtn_);
     
     QPushButton *triggerBtn = new QPushButton(QStringLiteral("触发"), this);
-    triggerBtn->setMinimumHeight(BTN_HEIGHT_SMALL);
+    triggerBtn->setFixedHeight(BTN_HEIGHT_SMALL);
     triggerBtn->setMinimumWidth(BTN_MIN_WIDTH_SMALL);
     triggerBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #e74c3c; color: white; border: none; "
@@ -225,7 +219,7 @@ void StrategyCard::setupUi()
     bottomRow->addWidget(triggerBtn);
     
     editBtn_ = new QPushButton(QStringLiteral("编"), this);
-    editBtn_->setMinimumHeight(BTN_HEIGHT_SMALL);
+    editBtn_->setFixedHeight(BTN_HEIGHT_SMALL);
     editBtn_->setMinimumWidth(BTN_MIN_WIDTH_SMALL);
     editBtn_->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #f39c12; color: white; border: none; "
@@ -237,7 +231,7 @@ void StrategyCard::setupUi()
     bottomRow->addWidget(editBtn_);
     
     QPushButton *deleteBtn = new QPushButton(QStringLiteral("删"), this);
-    deleteBtn->setMinimumHeight(BTN_HEIGHT_SMALL);
+    deleteBtn->setFixedHeight(BTN_HEIGHT_SMALL);
     deleteBtn->setMinimumWidth(BTN_MIN_WIDTH_SMALL);
     deleteBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #95a5a6; color: white; border: none; "
@@ -320,7 +314,8 @@ void StrategyWidget::setupUi()
     toolbarLayout->setSpacing(CARD_SPACING);
 
     QPushButton *refreshBtn = new QPushButton(QStringLiteral("[刷]刷新"), this);
-    refreshBtn->setMinimumHeight(BTN_HEIGHT);
+    refreshBtn->setFixedHeight(BTN_HEIGHT);
+    refreshBtn->setMinimumWidth(BTN_MIN_WIDTH);
     refreshBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #3498db; color: white; border: none; "
         "border-radius: %1px; padding: 0 12px; font-weight: bold; font-size: %2px; }"
@@ -329,7 +324,8 @@ void StrategyWidget::setupUi()
     toolbarLayout->addWidget(refreshBtn);
 
     QPushButton *createBtn = new QPushButton(QStringLiteral("[+]创建"), this);
-    createBtn->setMinimumHeight(BTN_HEIGHT);
+    createBtn->setFixedHeight(BTN_HEIGHT);
+    createBtn->setMinimumWidth(BTN_MIN_WIDTH);
     createBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #27ae60; color: white; border: none; "
         "border-radius: %1px; padding: 0 12px; font-weight: bold; font-size: %2px; }"

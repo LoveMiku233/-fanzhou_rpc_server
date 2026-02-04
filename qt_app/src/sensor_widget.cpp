@@ -5,6 +5,7 @@
 
 #include "sensor_widget.h"
 #include "rpc_client.h"
+#include "style_constants.h"
 
 #include <QVBoxLayout>
 #include <QScroller>
@@ -21,6 +22,8 @@
 #include <QDateTime>
 #include <QTimer>
 #include <QPropertyAnimation>
+
+using namespace UIConstants;
 
 // ==================== SensorCard Implementation ====================
 
@@ -57,21 +60,17 @@ void SensorCard::setupUi()
     setMaximumWidth(400);
     setCursor(Qt::PointingHandCursor);
     
-    // 设置卡片样式
+    // 设置卡片样式 - 使用边框代替shadow提升性能
     setStyleSheet(QStringLiteral(
         "#sensorCard {"
         "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);"
         "  border: 2px solid #e8e8e8;"
         "  border-radius: 16px;"
         "}"
+        "#sensorCard:hover {"
+        "  border-color: #3498db;"
+        "}"
     ));
-    
-    // 阴影效果
-    QGraphicsDropShadowEffect *shadow = new QGraphicsDropShadowEffect(this);
-    shadow->setBlurRadius(15);
-    shadow->setColor(QColor(0, 0, 0, 40));
-    shadow->setOffset(0, 4);
-    setGraphicsEffect(shadow);
     
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(16, 16, 16, 16);
@@ -342,27 +341,13 @@ void SensorCard::paintEvent(QPaintEvent *event)
 void SensorCard::enterEvent(QEvent *event)
 {
     QFrame::enterEvent(event);
-    // 悬停时提升效果
-    QGraphicsEffect *effect = this->graphicsEffect();
-    QGraphicsDropShadowEffect *shadow = qobject_cast<QGraphicsDropShadowEffect*>(effect);
-    if (shadow) {
-        shadow->setBlurRadius(25);
-        shadow->setColor(QColor(0, 0, 0, 60));
-        shadow->setOffset(0, 6);
-    }
+    // 悬停效果通过CSS实现，不再使用shadow提升性能
 }
 
 void SensorCard::leaveEvent(QEvent *event)
 {
     QFrame::leaveEvent(event);
-    // 恢复阴影
-    QGraphicsEffect *effect = this->graphicsEffect();
-    QGraphicsDropShadowEffect *shadow = qobject_cast<QGraphicsDropShadowEffect*>(effect);
-    if (shadow) {
-        shadow->setBlurRadius(15);
-        shadow->setColor(QColor(0, 0, 0, 40));
-        shadow->setOffset(0, 4);
-    }
+    // 悬停效果通过CSS实现，不再使用shadow提升性能
 }
 
 // ==================== SensorWidget Implementation ====================
@@ -406,7 +391,8 @@ void SensorWidget::setupUi()
     // 自动刷新按钮
     autoRefreshBtn_ = new QPushButton(QStringLiteral("[自] 自动刷新: 关"), this);
     autoRefreshBtn_->setCheckable(true);
-    autoRefreshBtn_->setFixedHeight(44);
+    autoRefreshBtn_->setFixedHeight(BTN_HEIGHT);
+    autoRefreshBtn_->setMinimumWidth(BTN_MIN_WIDTH_LARGE);
     autoRefreshBtn_->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #95a5a6; color: white; border: none; "
         "border-radius: 10px; padding: 0 24px; font-weight: bold; font-size: 13px; }"
@@ -417,7 +403,8 @@ void SensorWidget::setupUi()
     
     // 刷新按钮
     refreshBtn_ = new QPushButton(QStringLiteral("[刷] 刷新"), this);
-    refreshBtn_->setFixedHeight(44);
+    refreshBtn_->setFixedHeight(BTN_HEIGHT);
+    refreshBtn_->setMinimumWidth(BTN_MIN_WIDTH);
     refreshBtn_->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #3498db; color: white; border: none; "
         "border-radius: 10px; padding: 0 28px; font-weight: bold; font-size: 13px; }"

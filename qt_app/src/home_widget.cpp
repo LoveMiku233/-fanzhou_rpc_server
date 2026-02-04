@@ -64,18 +64,12 @@ void HomeWidget::setupUi()
         "font-size: %1px; font-weight: bold; color: #27ae60; padding: 4px 0;").arg(FONT_SIZE_TITLE));
     mainLayout->addWidget(titleLabel);
 
-    // 连接状态卡片
+    // 连接状态卡片 - 使用CSS边框阴影模拟，避免GPU消耗
     QFrame *statusCard = new QFrame(this);
     statusCard->setObjectName(QStringLiteral("statusCard"));
     statusCard->setStyleSheet(QStringLiteral(
         "#statusCard { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #ecf0f1, stop:1 #d5dbdb); "
-        "border-radius: %1px; padding: 6px; border: 1px solid #bdc3c7; }").arg(BORDER_RADIUS_CARD));
-    
-    QGraphicsDropShadowEffect *statusShadow = new QGraphicsDropShadowEffect(this);
-    statusShadow->setBlurRadius(6);
-    statusShadow->setColor(QColor(0, 0, 0, 20));
-    statusShadow->setOffset(0, 2);
-    statusCard->setGraphicsEffect(statusShadow);
+        "border-radius: %1px; padding: 6px; border: 2px solid #bdc3c7; }").arg(BORDER_RADIUS_CARD));
     
     QHBoxLayout *statusLayout = new QHBoxLayout(statusCard);
     statusLayout->setContentsMargins(CARD_MARGIN, CARD_MARGIN, CARD_MARGIN, CARD_MARGIN);
@@ -101,15 +95,10 @@ void HomeWidget::setupUi()
         QFrame *card = new QFrame(this);
         QString darkerBg = bgColor;
         darkerBg.replace(1, 1, QStringLiteral("d"));
+        // 使用border代替shadow效果，提升性能
         card->setStyleSheet(QStringLiteral(
             "QFrame { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 %1, stop:1 %2); "
-            "border-radius: %3px; padding: 4px; }").arg(bgColor, darkerBg).arg(BORDER_RADIUS_CARD));
-        
-        QGraphicsDropShadowEffect *shadow = new QGraphicsDropShadowEffect(this);
-        shadow->setBlurRadius(6);
-        shadow->setColor(QColor(0, 0, 0, 25));
-        shadow->setOffset(0, 2);
-        card->setGraphicsEffect(shadow);
+            "border-radius: %3px; padding: 4px; border: 2px solid rgba(0,0,0,0.1); }").arg(bgColor, darkerBg).arg(BORDER_RADIUS_CARD));
         
         QVBoxLayout *layout = new QVBoxLayout(card);
         layout->setContentsMargins(CARD_MARGIN, CARD_MARGIN, CARD_MARGIN, CARD_MARGIN);
@@ -175,6 +164,7 @@ void HomeWidget::setupUi()
 
     refreshButton_ = new QPushButton(QStringLiteral("刷新"), this);
     refreshButton_->setMinimumHeight(BTN_HEIGHT);
+    refreshButton_->setMinimumWidth(BTN_MIN_WIDTH);
     refreshButton_->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #3498db; color: white; border: none; "
         "border-radius: %1px; padding: 0 16px; font-weight: bold; font-size: %2px; }"
@@ -184,6 +174,7 @@ void HomeWidget::setupUi()
 
     stopAllButton_ = new QPushButton(QStringLiteral("全停"), this);
     stopAllButton_->setMinimumHeight(BTN_HEIGHT);
+    stopAllButton_->setMinimumWidth(BTN_MIN_WIDTH);
     stopAllButton_->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #f39c12; color: white; border: none; "
         "border-radius: %1px; padding: 0 16px; font-weight: bold; font-size: %2px; }"
@@ -195,9 +186,9 @@ void HomeWidget::setupUi()
     
     mainLayout->addWidget(actionsBox);
 
-    // 急停按钮
+    // 急停按钮 - 固定高度和宽度
     emergencyStopButton_ = new QPushButton(QStringLiteral("紧急停止"), this);
-    emergencyStopButton_->setMinimumHeight(BTN_HEIGHT_LARGE + 10);
+    emergencyStopButton_->setFixedHeight(BTN_HEIGHT_EMERGENCY);
     emergencyStopButton_->setStyleSheet(QStringLiteral(
         "QPushButton {"
         "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e74c3c, stop:1 #c0392b);"
