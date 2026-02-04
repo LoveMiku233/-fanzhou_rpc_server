@@ -46,7 +46,6 @@ MainWindow::MainWindow(QWidget *parent)
     , rpcClient_(new RpcClient(this))
     , autoRefreshTimer_(new QTimer(this))
     , statusBarTimer_(new QTimer(this))
-    , cloudStatusTimer_(nullptr)  // 不再使用单独的云状态定时器，合并到autoRefreshTimer中
     , currentPageIndex_(0)
 {
     setupUi();

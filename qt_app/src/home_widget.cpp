@@ -440,18 +440,20 @@ void HomeWidget::updateStatsLegacy()
 
     // 获取MQTT状态
     QJsonValue mqttResult = rpcClient_->call(QStringLiteral("mqtt.channels.list"), QJsonObject(), 2000);
+    int mqttConnected = 0;
+    int mqttTotal = 0;
     if (mqttResult.isObject()) {
         QJsonObject obj = mqttResult.toObject();
         if (obj.value(QStringLiteral("ok")).toBool()) {
             QJsonArray channels = obj.value(QStringLiteral("channels")).toArray();
-            int connected = 0;
+            mqttTotal = channels.size();
             for (const QJsonValue &ch : channels) {
                 if (ch.toObject().value(QStringLiteral("connected")).toBool()) {
-                    connected++;
+                    mqttConnected++;
                 }
             }
-            if (channels.size() > 0) {
-                mqttStatusLabel_->setText(QStringLiteral("%1/%2").arg(connected).arg(channels.size()));
+            if (mqttTotal > 0) {
+                mqttStatusLabel_->setText(QStringLiteral("%1/%2").arg(mqttConnected).arg(mqttTotal));
             } else {
                 mqttStatusLabel_->setText(QStringLiteral("未配置"));
             }
@@ -461,6 +463,9 @@ void HomeWidget::updateStatsLegacy()
     } else {
         mqttStatusLabel_->setText(QStringLiteral("未知"));
     }
+    
+    // 通知MainWindow更新状态栏的云状态
+    emit mqttStatusUpdated(mqttConnected, mqttTotal);
 
     // 获取系统信息
     QJsonValue sysInfo = rpcClient_->call(QStringLiteral("sys.info"), QJsonObject(), 2000);
