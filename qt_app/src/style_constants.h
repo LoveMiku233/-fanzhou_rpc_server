@@ -12,7 +12,7 @@
 namespace UIConstants {
 
 // ==================== 布局常量 ====================
-// 主窗口最大尺寸（适配1024x600屏幕，减去任务栏）
+// 主窗口最大尺寸（适配1024x600屏幕，减去40px任务栏高度）
 constexpr int MAX_WINDOW_WIDTH = 1024;
 constexpr int MAX_WINDOW_HEIGHT = 560;
 

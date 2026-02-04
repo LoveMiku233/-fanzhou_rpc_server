@@ -254,9 +254,9 @@ void StrategyDialog::setupUi()
     
     // 动作
     actionValueCombo_ = new QComboBox(actionsGroup);
-    actionValueCombo_->addItem(QStringLiteral("停止"), 0);
-    actionValueCombo_->addItem(QStringLiteral("正转"), 1);
-    actionValueCombo_->addItem(QStringLiteral("反转"), 2);
+    actionValueCombo_->addItem(QStringLiteral("[停]停止"), 0);
+    actionValueCombo_->addItem(QStringLiteral("[正]正转"), 1);
+    actionValueCombo_->addItem(QStringLiteral("[反]反转"), 2);
     actionValueCombo_->setCurrentIndex(1);
     actionValueCombo_->setFixedHeight(BTN_HEIGHT);
     actionValueCombo_->setStyleSheet(inputStyle);

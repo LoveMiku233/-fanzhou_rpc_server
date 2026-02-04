@@ -166,8 +166,8 @@ void DeviceCard::updateStatus(bool online, qint64 ageMs, double totalCurrent, co
             "font-size: %1px; font-weight: bold; color: #e74c3c;").arg(FONT_SIZE_BODY));
     }
 
-    // 更新总电流
-    currentLabel_->setText(QStringLiteral("%1mA").arg(totalCurrent, 0, 'f', 0));
+    // 更新总电流 - 保留1位小数
+    currentLabel_->setText(QStringLiteral("%1mA").arg(totalCurrent, 0, 'f', 1));
 
     // 更新通道状态
     QLabel *chLabels[] = {ch0Label_, ch1Label_, ch2Label_, ch3Label_};

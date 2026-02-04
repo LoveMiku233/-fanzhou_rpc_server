@@ -157,11 +157,11 @@ void StrategyCard::setupUi()
     
     typeLabel_ = new QLabel(type_, this);
     QString typeBg = (type_ == QStringLiteral("AUTO")) ? QStringLiteral("#3498db") : QStringLiteral("#9b59b6");
-    QString typeIcon = (type_ == QStringLiteral("AUTO")) ? QStringLiteral("[自]") : QStringLiteral("[手]");
+    QString typeText = (type_ == QStringLiteral("AUTO")) ? QStringLiteral("[自]自动") : QStringLiteral("[手]手动");
     typeLabel_->setStyleSheet(QStringLiteral(
         "font-size: %1px; color: white; background-color: %2; "
         "padding: 2px 6px; border-radius: 6px; font-weight: bold;").arg(FONT_SIZE_SMALL).arg(typeBg));
-    typeLabel_->setText(QStringLiteral("%1").arg(typeIcon));
+    typeLabel_->setText(typeText);
     topRow->addWidget(typeLabel_);
     
     idLabel_ = new QLabel(QStringLiteral("ID:%1").arg(strategyId_), this);
