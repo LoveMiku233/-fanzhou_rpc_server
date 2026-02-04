@@ -1,6 +1,6 @@
 /**
  * @file strategy_widget.cpp
- * @brief 策略管理页面实现 - 卡片式布局（美化版）
+ * @brief 策略管理页面实现 - 卡片式布局（1024x600低分辨率优化版）
  * 
  * 使用卡片式显示策略，参考Web端设计
  */
@@ -8,6 +8,7 @@
 #include "strategy_widget.h"
 #include "rpc_client.h"
 #include "strategy_dialog.h"
+#include "ui_constants.h"
 
 #include <QScroller>
 
@@ -32,6 +33,8 @@
 #include <QPainter>
 #include <QPropertyAnimation>
 #include <QGraphicsDropShadowEffect>
+
+using namespace UIConstants;
 
 // ==================== StrategyCard Implementation ====================
 
@@ -120,34 +123,34 @@ void StrategyCard::setupUi()
     setStyleSheet(QStringLiteral(
         "#strategyCard {"
         "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);"
-        "  border: 2px solid #e0e0e0;"
-        "  border-radius: 14px;"
+        "  border: 1px solid #e0e0e0;"
+        "  border-radius: %1px;"
         "}"
         "#strategyCard:hover {"
         "  border-color: #3498db;"
         "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #ebf5fb);"
-        "}"));
-    setMinimumHeight(160);
-    setMaximumWidth(420);
+        "}").arg(BORDER_RADIUS_CARD));
+    setMinimumHeight(CARD_MIN_HEIGHT);
+    setMaximumWidth(CARD_MAX_WIDTH);
     
     // 阴影效果
     QGraphicsDropShadowEffect *shadow = new QGraphicsDropShadowEffect(this);
-    shadow->setBlurRadius(12);
-    shadow->setColor(QColor(0, 0, 0, 35));
-    shadow->setOffset(0, 3);
+    shadow->setBlurRadius(8);
+    shadow->setColor(QColor(0, 0, 0, 25));
+    shadow->setOffset(0, 2);
     setGraphicsEffect(shadow);
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(14, 12, 14, 12);
-    mainLayout->setSpacing(10);
+    mainLayout->setContentsMargins(CARD_MARGIN, CARD_MARGIN, CARD_MARGIN, CARD_MARGIN);
+    mainLayout->setSpacing(CARD_SPACING);
 
     // 顶部行：名称、类型、ID
     QHBoxLayout *topRow = new QHBoxLayout();
-    topRow->setSpacing(8);
+    topRow->setSpacing(4);
     
     nameLabel_ = new QLabel(QStringLiteral("[策] %1").arg(name_), this);
     nameLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 16px; font-weight: bold; color: #2c3e50;"));
+        "font-size: %1px; font-weight: bold; color: #2c3e50;").arg(FONT_SIZE_CARD_TITLE));
     topRow->addWidget(nameLabel_);
     
     topRow->addStretch();
@@ -156,15 +159,15 @@ void StrategyCard::setupUi()
     QString typeBg = (type_ == QStringLiteral("AUTO")) ? QStringLiteral("#3498db") : QStringLiteral("#9b59b6");
     QString typeIcon = (type_ == QStringLiteral("AUTO")) ? QStringLiteral("[自]") : QStringLiteral("[手]");
     typeLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 11px; color: white; background-color: %1; "
-        "padding: 4px 10px; border-radius: 10px; font-weight: bold;").arg(typeBg));
-    typeLabel_->setText(QStringLiteral("%1 %2").arg(typeIcon, type_));
+        "font-size: %1px; color: white; background-color: %2; "
+        "padding: 2px 6px; border-radius: 6px; font-weight: bold;").arg(FONT_SIZE_SMALL).arg(typeBg));
+    typeLabel_->setText(QStringLiteral("%1").arg(typeIcon));
     topRow->addWidget(typeLabel_);
     
     idLabel_ = new QLabel(QStringLiteral("ID:%1").arg(strategyId_), this);
     idLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 12px; color: #7f8c8d; background-color: #ecf0f1; "
-        "padding: 4px 8px; border-radius: 6px; font-weight: 500;"));
+        "font-size: %1px; color: #7f8c8d; background-color: #ecf0f1; "
+        "padding: 2px 6px; border-radius: 4px;").arg(FONT_SIZE_SMALL));
     topRow->addWidget(idLabel_);
     
     mainLayout->addLayout(topRow);
@@ -172,10 +175,10 @@ void StrategyCard::setupUi()
     // 描述行
     descLabel_ = new QLabel(QStringLiteral("加载中..."), this);
     descLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 12px; color: #5d6d7e; padding: 8px; "
-        "background-color: #f8f9fa; border-radius: 8px;"));
+        "font-size: %1px; color: #5d6d7e; padding: 4px; "
+        "background-color: #f8f9fa; border-radius: 4px;").arg(FONT_SIZE_SMALL));
     descLabel_->setWordWrap(true);
-    descLabel_->setMinimumHeight(50);
+    descLabel_->setMinimumHeight(30);
     mainLayout->addWidget(descLabel_);
 
     // 底部分隔线
@@ -187,59 +190,59 @@ void StrategyCard::setupUi()
 
     // 状态和操作行
     QHBoxLayout *bottomRow = new QHBoxLayout();
-    bottomRow->setSpacing(8);
+    bottomRow->setSpacing(4);
     
-    statusLabel_ = new QLabel(QStringLiteral("[X] 禁用"), this);
+    statusLabel_ = new QLabel(QStringLiteral("[X]禁用"), this);
     statusLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 13px; font-weight: bold; color: #e74c3c; padding: 6px 12px;"
-        "background-color: #fdf2f2; border-radius: 8px;"));
+        "font-size: %1px; font-weight: bold; color: #e74c3c; padding: 4px 8px;"
+        "background-color: #fdf2f2; border-radius: 4px;").arg(FONT_SIZE_SMALL));
     bottomRow->addWidget(statusLabel_);
     
     bottomRow->addStretch();
     
-    toggleBtn_ = new QPushButton(QStringLiteral("[启] 启用"), this);
-    toggleBtn_->setMinimumHeight(36);
-    toggleBtn_->setMinimumWidth(70);
+    toggleBtn_ = new QPushButton(QStringLiteral("启用"), this);
+    toggleBtn_->setMinimumHeight(BTN_HEIGHT_SMALL);
+    toggleBtn_->setMinimumWidth(BTN_MIN_WIDTH_SMALL);
     toggleBtn_->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #27ae60; color: white; border: none; "
-        "border-radius: 8px; font-weight: bold; font-size: 12px; padding: 0 16px; }"
-        "QPushButton:hover { background-color: #229954; }"));
+        "border-radius: %1px; font-weight: bold; font-size: %2px; padding: 0 8px; }"
+        "QPushButton:hover { background-color: #229954; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_SMALL));
     connect(toggleBtn_, &QPushButton::clicked, [this]() {
         emit toggleClicked(strategyId_, !enabled_);
     });
     bottomRow->addWidget(toggleBtn_);
     
-    QPushButton *triggerBtn = new QPushButton(QStringLiteral("[触] 触发"), this);
-    triggerBtn->setMinimumHeight(36);
-    triggerBtn->setMinimumWidth(60);
+    QPushButton *triggerBtn = new QPushButton(QStringLiteral("触发"), this);
+    triggerBtn->setMinimumHeight(BTN_HEIGHT_SMALL);
+    triggerBtn->setMinimumWidth(BTN_MIN_WIDTH_SMALL);
     triggerBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #e74c3c; color: white; border: none; "
-        "border-radius: 8px; font-size: 12px; padding: 0 12px; }"
-        "QPushButton:hover { background-color: #c0392b; }"));
+        "border-radius: %1px; font-size: %2px; padding: 0 8px; }"
+        "QPushButton:hover { background-color: #c0392b; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_SMALL));
     connect(triggerBtn, &QPushButton::clicked, [this]() {
         emit triggerClicked(strategyId_);
     });
     bottomRow->addWidget(triggerBtn);
     
-    editBtn_ = new QPushButton(QStringLiteral("[编]"), this);
-    editBtn_->setMinimumHeight(36);
-    editBtn_->setMinimumWidth(44);
+    editBtn_ = new QPushButton(QStringLiteral("编"), this);
+    editBtn_->setMinimumHeight(BTN_HEIGHT_SMALL);
+    editBtn_->setMinimumWidth(BTN_MIN_WIDTH_SMALL);
     editBtn_->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #f39c12; color: white; border: none; "
-        "border-radius: 8px; font-size: 14px; }"
-        "QPushButton:hover { background-color: #d68910; }"));
+        "border-radius: %1px; font-size: %2px; }"
+        "QPushButton:hover { background-color: #d68910; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
     connect(editBtn_, &QPushButton::clicked, [this]() {
         emit editClicked(strategyId_);
     });
     bottomRow->addWidget(editBtn_);
     
-    QPushButton *deleteBtn = new QPushButton(QStringLiteral("[删]"), this);
-    deleteBtn->setMinimumHeight(36);
-    deleteBtn->setMinimumWidth(44);
+    QPushButton *deleteBtn = new QPushButton(QStringLiteral("删"), this);
+    deleteBtn->setMinimumHeight(BTN_HEIGHT_SMALL);
+    deleteBtn->setMinimumWidth(BTN_MIN_WIDTH_SMALL);
     deleteBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #95a5a6; color: white; border: none; "
-        "border-radius: 8px; font-size: 14px; }"
-        "QPushButton:hover { background-color: #7f8c8d; }"));
+        "border-radius: %1px; font-size: %2px; }"
+        "QPushButton:hover { background-color: #7f8c8d; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
     connect(deleteBtn, &QPushButton::clicked, [this]() {
         emit deleteClicked(strategyId_);
     });
@@ -259,31 +262,31 @@ void StrategyCard::updateInfo(const QString &name, const QString &description,
     
     if (enabled) {
         if (running) {
-            statusLabel_->setText(QStringLiteral("[运] 运行中"));
+            statusLabel_->setText(QStringLiteral("[运]运行中"));
             statusLabel_->setStyleSheet(QStringLiteral(
-                "font-size: 13px; font-weight: bold; color: #e74c3c; padding: 6px 12px;"
-                "background-color: #fadbd8; border-radius: 8px;"));
+                "font-size: %1px; font-weight: bold; color: #e74c3c; padding: 4px 8px;"
+                "background-color: #fadbd8; border-radius: 4px;").arg(FONT_SIZE_SMALL));
         } else {
-            statusLabel_->setText(QStringLiteral("[OK] 已启用"));
+            statusLabel_->setText(QStringLiteral("[OK]已启用"));
             statusLabel_->setStyleSheet(QStringLiteral(
-                "font-size: 13px; font-weight: bold; color: #27ae60; padding: 6px 12px;"
-                "background-color: #d4edda; border-radius: 8px;"));
+                "font-size: %1px; font-weight: bold; color: #27ae60; padding: 4px 8px;"
+                "background-color: #d4edda; border-radius: 4px;").arg(FONT_SIZE_SMALL));
         }
-        toggleBtn_->setText(QStringLiteral("[禁] 禁用"));
+        toggleBtn_->setText(QStringLiteral("禁用"));
         toggleBtn_->setStyleSheet(QStringLiteral(
             "QPushButton { background-color: #7f8c8d; color: white; border: none; "
-            "border-radius: 8px; font-weight: bold; font-size: 12px; padding: 0 16px; }"
-            "QPushButton:hover { background-color: #6c7a7d; }"));
+            "border-radius: %1px; font-weight: bold; font-size: %2px; padding: 0 8px; }"
+            "QPushButton:hover { background-color: #6c7a7d; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_SMALL));
     } else {
-        statusLabel_->setText(QStringLiteral("[X] 已禁用"));
+        statusLabel_->setText(QStringLiteral("[X]已禁用"));
         statusLabel_->setStyleSheet(QStringLiteral(
-            "font-size: 13px; font-weight: bold; color: #e74c3c; padding: 6px 12px;"
-            "background-color: #fdf2f2; border-radius: 8px;"));
-        toggleBtn_->setText(QStringLiteral("[启] 启用"));
+            "font-size: %1px; font-weight: bold; color: #e74c3c; padding: 4px 8px;"
+            "background-color: #fdf2f2; border-radius: 4px;").arg(FONT_SIZE_SMALL));
+        toggleBtn_->setText(QStringLiteral("启用"));
         toggleBtn_->setStyleSheet(QStringLiteral(
             "QPushButton { background-color: #27ae60; color: white; border: none; "
-            "border-radius: 8px; font-weight: bold; font-size: 12px; padding: 0 16px; }"
-            "QPushButton:hover { background-color: #229954; }"));
+            "border-radius: %1px; font-weight: bold; font-size: %2px; padding: 0 8px; }"
+            "QPushButton:hover { background-color: #229954; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_SMALL));
     }
 }
 
@@ -303,34 +306,34 @@ StrategyWidget::StrategyWidget(RpcClient *rpcClient, QWidget *parent)
 void StrategyWidget::setupUi()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(16, 16, 16, 16);
-    mainLayout->setSpacing(16);
+    mainLayout->setContentsMargins(PAGE_MARGIN, PAGE_MARGIN, PAGE_MARGIN, PAGE_MARGIN);
+    mainLayout->setSpacing(PAGE_SPACING);
 
-    // 页面标题 - 美化
+    // 页面标题
     QLabel *titleLabel = new QLabel(QStringLiteral("[策] 策略管理"), this);
     titleLabel->setStyleSheet(QStringLiteral(
-        "font-size: 26px; font-weight: bold; color: #2c3e50; padding: 4px 0;"));
+        "font-size: %1px; font-weight: bold; color: #2c3e50; padding: 2px 0;").arg(FONT_SIZE_TITLE));
     mainLayout->addWidget(titleLabel);
 
-    // 工具栏 - 美化
+    // 工具栏
     QHBoxLayout *toolbarLayout = new QHBoxLayout();
-    toolbarLayout->setSpacing(12);
+    toolbarLayout->setSpacing(CARD_SPACING);
 
-    QPushButton *refreshBtn = new QPushButton(QStringLiteral("[刷] 刷新"), this);
-    refreshBtn->setMinimumHeight(44);
+    QPushButton *refreshBtn = new QPushButton(QStringLiteral("[刷]刷新"), this);
+    refreshBtn->setMinimumHeight(BTN_HEIGHT);
     refreshBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #3498db; color: white; border: none; "
-        "border-radius: 10px; padding: 0 20px; font-weight: bold; font-size: 14px; }"
-        "QPushButton:hover { background-color: #2980b9; }"));
+        "border-radius: %1px; padding: 0 12px; font-weight: bold; font-size: %2px; }"
+        "QPushButton:hover { background-color: #2980b9; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
     connect(refreshBtn, &QPushButton::clicked, this, &StrategyWidget::onRefreshStrategiesClicked);
     toolbarLayout->addWidget(refreshBtn);
 
-    QPushButton *createBtn = new QPushButton(QStringLiteral("[+] 创建策略"), this);
-    createBtn->setMinimumHeight(44);
+    QPushButton *createBtn = new QPushButton(QStringLiteral("[+]创建"), this);
+    createBtn->setMinimumHeight(BTN_HEIGHT);
     createBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #27ae60; color: white; border: none; "
-        "border-radius: 10px; padding: 0 20px; font-weight: bold; font-size: 14px; }"
-        "QPushButton:hover { background-color: #229954; }"));
+        "border-radius: %1px; padding: 0 12px; font-weight: bold; font-size: %2px; }"
+        "QPushButton:hover { background-color: #229954; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
     connect(createBtn, &QPushButton::clicked, this, &StrategyWidget::onCreateStrategyClicked);
     toolbarLayout->addWidget(createBtn);
 
@@ -338,7 +341,7 @@ void StrategyWidget::setupUi()
 
     statusLabel_ = new QLabel(this);
     statusLabel_->setStyleSheet(QStringLiteral(
-        "color: #7f8c8d; font-size: 14px; padding: 8px 12px; background-color: #f8f9fa; border-radius: 6px;"));
+        "color: #7f8c8d; font-size: %1px; padding: 4px 8px; background-color: #f8f9fa; border-radius: 4px;").arg(FONT_SIZE_SMALL));
     toolbarLayout->addWidget(statusLabel_);
 
     mainLayout->addLayout(toolbarLayout);
@@ -350,9 +353,9 @@ void StrategyWidget::setupUi()
     scrollArea->setFrameShape(QFrame::NoFrame);
     scrollArea->setStyleSheet(QStringLiteral(
         "QScrollArea { background: transparent; border: none; }"
-        "QScrollBar:vertical { width: 10px; background: #f0f0f0; border-radius: 5px; margin: 4px; }"
-        "QScrollBar::handle:vertical { background: #c0c0c0; border-radius: 5px; min-height: 40px; }"
-    ));
+        "QScrollBar:vertical { width: %1px; background: #f0f0f0; border-radius: %2px; margin: 2px; }"
+        "QScrollBar::handle:vertical { background: #c0c0c0; border-radius: %2px; min-height: 30px; }"
+    ).arg(SCROLLBAR_WIDTH).arg(SCROLLBAR_WIDTH/2));
     
     // 启用触控滚动
     QScroller::grabGesture(scrollArea->viewport(), QScroller::LeftMouseButtonGesture);
@@ -362,19 +365,19 @@ void StrategyWidget::setupUi()
     cardsContainer_->setStyleSheet(QStringLiteral("background-color: transparent;"));
     cardsLayout_ = new QGridLayout(cardsContainer_);
     cardsLayout_->setContentsMargins(0, 0, 0, 0);
-    cardsLayout_->setSpacing(16);
+    cardsLayout_->setSpacing(PAGE_SPACING);
     cardsLayout_->setColumnStretch(0, 1);
     cardsLayout_->setColumnStretch(1, 1);
 
     scrollArea->setWidget(cardsContainer_);
     mainLayout->addWidget(scrollArea, 1);
 
-    // 提示 - 美化
+    // 提示
     QLabel *helpLabel = new QLabel(
-        QStringLiteral("[示] 提示：策略是基于条件触发的自动化控制规则，包含执行动作和触发条件。点击策略卡片可编辑。"),
+        QStringLiteral("[示] 策略包含执行动作和触发条件，点击卡片编辑"),
         this);
     helpLabel->setStyleSheet(QStringLiteral(
-        "color: #5d6d7e; font-size: 13px; padding: 10px; background-color: #eaf2f8; border-radius: 8px;"));
+        "color: #5d6d7e; font-size: %1px; padding: 6px; background-color: #eaf2f8; border-radius: 4px;").arg(FONT_SIZE_SMALL));
     helpLabel->setAlignment(Qt::AlignCenter);
     helpLabel->setWordWrap(true);
     mainLayout->addWidget(helpLabel);

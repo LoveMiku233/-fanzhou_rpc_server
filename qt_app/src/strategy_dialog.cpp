@@ -1,9 +1,10 @@
 /**
  * @file strategy_dialog.cpp
- * @brief 策略编辑对话框实现 - 带滚动区域和动画效果（触控屏优化版）
+ * @brief 策略编辑对话框实现 - 带滚动区域和动画效果（1024x600低分辨率优化版）
  */
 
 #include "strategy_dialog.h"
+#include "ui_constants.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -28,6 +29,8 @@
 #include <QScroller>
 #include <QScrollBar>
 #include <QGestureEvent>
+
+using namespace UIConstants;
 
 StrategyDialog::StrategyDialog(QWidget *parent)
     : QDialog(parent)
@@ -60,9 +63,9 @@ void StrategyDialog::setupUi()
 {
     qDebug() << "[STRATEGY_DIALOG] 设置UI...";
     
-    // 主布局
+    // 主布局 - 减小边距适配低分辨率
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(20, 20, 20, 20);
+    mainLayout->setContentsMargins(DIALOG_MARGIN, DIALOG_MARGIN, DIALOG_MARGIN, DIALOG_MARGIN);
     mainLayout->setSpacing(0);
     
     // 内容容器
@@ -71,68 +74,68 @@ void StrategyDialog::setupUi()
     contentWidget->setStyleSheet(QStringLiteral(
         "#contentWidget {"
         "  background-color: white;"
-        "  border-radius: 16px;"
-        "}"
-    ));
+        "  border-radius: %1px;"
+        "}").arg(BORDER_RADIUS_DIALOG));
     
     QGraphicsDropShadowEffect *shadow = new QGraphicsDropShadowEffect(this);
-    shadow->setBlurRadius(30);
-    shadow->setColor(QColor(0, 0, 0, 100));
-    shadow->setOffset(0, 8);
+    shadow->setBlurRadius(20);
+    shadow->setColor(QColor(0, 0, 0, 80));
+    shadow->setOffset(0, 4);
     contentWidget->setGraphicsEffect(shadow);
     
     QVBoxLayout *contentLayout = new QVBoxLayout(contentWidget);
     contentLayout->setContentsMargins(0, 0, 0, 0);
     contentLayout->setSpacing(0);
     
-    // 标题栏
+    // 标题栏 - 减小高度
     QWidget *titleBar = new QWidget(contentWidget);
-    titleBar->setFixedHeight(60);
+    titleBar->setFixedHeight(BTN_HEIGHT_LARGE);
     titleBar->setStyleSheet(QStringLiteral(
         "background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3498db, stop:1 #2980b9); "
-        "border-top-left-radius: 16px; border-top-right-radius: 16px;"));
+        "border-top-left-radius: %1px; border-top-right-radius: %1px;").arg(BORDER_RADIUS_DIALOG));
     
     QHBoxLayout *titleLayout = new QHBoxLayout(titleBar);
-    titleLayout->setContentsMargins(20, 0, 15, 0);
+    titleLayout->setContentsMargins(12, 0, 8, 0);
     
     QLabel *titleLabel = new QLabel(contentWidget);
     titleLabel->setObjectName(QStringLiteral("dialogTitle"));
     titleLabel->setStyleSheet(QStringLiteral(
-        "color: white; font-size: 18px; font-weight: bold; background: transparent;"));
+        "color: white; font-size: %1px; font-weight: bold; background: transparent;").arg(FONT_SIZE_CARD_TITLE));
     titleLayout->addWidget(titleLabel);
     
     QPushButton *closeBtn = new QPushButton(QStringLiteral("[X]"), titleBar);
-    closeBtn->setFixedSize(40, 40);
+    closeBtn->setFixedSize(BTN_HEIGHT_SMALL, BTN_HEIGHT_SMALL);
     closeBtn->setStyleSheet(QStringLiteral(
-        "QPushButton { color: white; font-size: 16px; border: none; background: transparent; }"
-        "QPushButton:hover { background-color: rgba(255,255,255,0.25); border-radius: 20px; }"));
+        "QPushButton { color: white; font-size: %1px; border: none; background: transparent; }"
+        "QPushButton:hover { background-color: rgba(255,255,255,0.25); border-radius: %2px; }")
+        .arg(FONT_SIZE_BODY).arg(BTN_HEIGHT_SMALL/2));
     connect(closeBtn, &QPushButton::clicked, this, &QDialog::reject);
     titleLayout->addWidget(closeBtn);
     
     contentLayout->addWidget(titleBar);
     
-    // ===== 关键修复：使用QScrollArea并启用触控手势 =====
+    // ===== 滚动区域 - 优化高度 =====
     QScrollArea *scrollArea = new QScrollArea(contentWidget);
     scrollArea->setObjectName(QStringLiteral("strategyScrollArea"));
     scrollArea->setWidgetResizable(true);
     scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     scrollArea->setFrameShape(QFrame::NoFrame);
-    scrollArea->setMinimumHeight(450);
+    scrollArea->setMinimumHeight(300);
     scrollArea->setStyleSheet(QStringLiteral(
         "QScrollArea { background: transparent; border: none; }"
-        "QScrollBar:vertical { width: 14px; background: #f8f9fa; border-radius: 7px; margin: 4px; }"
-        "QScrollBar::handle:vertical { background: #bdc3c7; border-radius: 7px; min-height: 50px; }"
+        "QScrollBar:vertical { width: %1px; background: #f8f9fa; border-radius: %2px; margin: 2px; }"
+        "QScrollBar::handle:vertical { background: #bdc3c7; border-radius: %2px; min-height: 30px; }"
         "QScrollBar::handle:vertical:hover { background: #95a5a6; }"
         "QScrollBar::handle:vertical:pressed { background: #7f8c8d; }"
         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
-    ));
+    ).arg(SCROLLBAR_WIDTH).arg(SCROLLBAR_WIDTH/2));
     
-    // 启用触控手势支持 - 关键修复
+    // 启用触控手势支持
     QScroller::grabGesture(scrollArea->viewport(), QScroller::LeftMouseButtonGesture);
     scrollArea->viewport()->setAttribute(Qt::WA_AcceptTouchEvents);
     
-    // 滚动内容 - 使用QWidget作为容器
+    // 滚动内容
     QWidget *scrollContent = new QWidget();
     scrollContent->setObjectName(QStringLiteral("scrollContent"));
     scrollContent->setStyleSheet(QStringLiteral(
@@ -140,138 +143,132 @@ void StrategyDialog::setupUi()
     ));
     
     QVBoxLayout *formLayout = new QVBoxLayout(scrollContent);
-    formLayout->setContentsMargins(20, 20, 20, 20);
-    formLayout->setSpacing(20);
+    formLayout->setContentsMargins(DIALOG_MARGIN, DIALOG_MARGIN, DIALOG_MARGIN, DIALOG_MARGIN);
+    formLayout->setSpacing(DIALOG_SPACING);
     
     // ===== 基本信息组 =====
     QGroupBox *basicGroup = new QGroupBox(QStringLiteral("基本信息"), scrollContent);
     basicGroup->setStyleSheet(QStringLiteral(
-        "QGroupBox { font-weight: bold; font-size: 15px; border: 2px solid #e0e0e0; border-radius: 12px; margin-top: 16px; padding-top: 18px; }"
-        "QGroupBox::title { subcontrol-origin: margin; left: 15px; padding: 0 12px; color: #3498db; background-color: #f8f9fa; font-size: 14px; }"
-    ));
+        "QGroupBox { font-weight: bold; font-size: %1px; border: 1px solid #e0e0e0; border-radius: %2px; margin-top: 10px; padding-top: 12px; }"
+        "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 8px; color: #3498db; background-color: #f8f9fa; font-size: %3px; }"
+    ).arg(FONT_SIZE_BODY).arg(BORDER_RADIUS_CARD).arg(FONT_SIZE_SMALL));
     
     QFormLayout *basicLayout = new QFormLayout(basicGroup);
-    basicLayout->setSpacing(16);
+    basicLayout->setSpacing(DIALOG_SPACING);
     basicLayout->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
     basicLayout->setFieldGrowthPolicy(QFormLayout::ExpandingFieldsGrow);
     
-    // 策略ID - 带默认值
+    // 输入控件通用样式
+    QString inputStyle = QStringLiteral(
+        "border: 1px solid #e0e0e0; border-radius: %1px; padding: 4px 8px; font-size: %2px;")
+        .arg(BORDER_RADIUS_INPUT).arg(FONT_SIZE_BODY);
+    QString inputFocusStyle = inputStyle + QStringLiteral(" QSpinBox:focus, QLineEdit:focus, QComboBox:focus { border-color: #3498db; }");
+    
+    // 策略ID
     idSpinBox_ = new QSpinBox(basicGroup);
     idSpinBox_->setRange(1, 9999);
     idSpinBox_->setValue(1);
-    idSpinBox_->setFixedHeight(48);
-    idSpinBox_->setStyleSheet(QStringLiteral(
-        "QSpinBox { border: 2px solid #e0e0e0; border-radius: 10px; padding: 6px 12px; font-size: 15px; }"
-        "QSpinBox:focus { border-color: #3498db; }"
-        "QSpinBox::up-button, QSpinBox::down-button { width: 24px; height: 20px; }"
-    ));
+    idSpinBox_->setFixedHeight(INPUT_HEIGHT);
+    idSpinBox_->setStyleSheet(inputStyle);
     basicLayout->addRow(QStringLiteral("策略ID:"), idSpinBox_);
     
-    // 名称 - 带默认占位符和默认值
+    // 名称
     nameEdit_ = new QLineEdit(basicGroup);
     nameEdit_->setPlaceholderText(QStringLiteral("策略-1"));
     nameEdit_->setText(QStringLiteral("策略-1"));
-    nameEdit_->setFixedHeight(48);
-    nameEdit_->setStyleSheet(QStringLiteral(
-        "QLineEdit { border: 2px solid #e0e0e0; border-radius: 10px; padding: 6px 14px; font-size: 15px; }"
-        "QLineEdit:focus { border-color: #3498db; }"
-    ));
+    nameEdit_->setFixedHeight(INPUT_HEIGHT);
+    nameEdit_->setStyleSheet(inputStyle);
     basicLayout->addRow(QStringLiteral("名称:"), nameEdit_);
     
-    // 类型 - 默认自动
+    // 类型
     typeCombo_ = new QComboBox(basicGroup);
     typeCombo_->addItem(QStringLiteral("自动触发"), QStringLiteral("auto"));
     typeCombo_->addItem(QStringLiteral("手动触发"), QStringLiteral("manual"));
     typeCombo_->setCurrentIndex(0);
-    typeCombo_->setFixedHeight(48);
-    typeCombo_->setStyleSheet(QStringLiteral(
-        "QComboBox { border: 2px solid #e0e0e0; border-radius: 10px; padding: 6px 12px; font-size: 15px; }"
-        "QComboBox:focus { border-color: #3498db; }"
-        "QComboBox::drop-down { border: none; width: 36px; }"
-        "QComboBox::down-arrow { image: none; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid #7f8c8d; }"
-    ));
+    typeCombo_->setFixedHeight(INPUT_HEIGHT);
+    typeCombo_->setStyleSheet(inputStyle);
     basicLayout->addRow(QStringLiteral("触发类型:"), typeCombo_);
     
-    // 状态 - 默认启用
+    // 状态
     enabledCheck_ = new QCheckBox(QStringLiteral("启用此策略"), basicGroup);
     enabledCheck_->setChecked(true);
     enabledCheck_->setStyleSheet(QStringLiteral(
-        "QCheckBox { font-size: 15px; spacing: 12px; }"
-        "QCheckBox::indicator { width: 26px; height: 26px; border-radius: 8px; border: 2px solid #d0d5dd; }"
+        "QCheckBox { font-size: %1px; spacing: 8px; }"
+        "QCheckBox::indicator { width: 20px; height: 20px; border-radius: 4px; border: 1px solid #d0d5dd; }"
         "QCheckBox::indicator:checked { background-color: #27ae60; border-color: #27ae60; }"
-    ));
+    ).arg(FONT_SIZE_BODY));
     basicLayout->addRow(QStringLiteral("状态:"), enabledCheck_);
     
     formLayout->addWidget(basicGroup);
     
-    // ===== 执行动作组（替代绑定分组）=====
-    QGroupBox *actionsGroup = new QGroupBox(QStringLiteral("执行动作 - 选择要控制的设备通道"), scrollContent);
+    // ===== 执行动作组 =====
+    QGroupBox *actionsGroup = new QGroupBox(QStringLiteral("执行动作"), scrollContent);
     actionsGroup->setStyleSheet(basicGroup->styleSheet());
     
     QVBoxLayout *actionsLayout = new QVBoxLayout(actionsGroup);
-    actionsLayout->setSpacing(16);
+    actionsLayout->setSpacing(DIALOG_SPACING);
     
     // 说明标签
-    QLabel *actionTip = new QLabel(QStringLiteral("[示] 添加需要控制的设备节点和通道，策略触发时将执行这些动作"));
-    actionTip->setStyleSheet(QStringLiteral("color: #5d6d7e; font-size: 13px; padding: 8px; background-color: #eaf2f8; border-radius: 8px;"));
+    QLabel *actionTip = new QLabel(QStringLiteral("[示] 添加需要控制的设备通道"));
+    actionTip->setStyleSheet(QStringLiteral("color: #5d6d7e; font-size: %1px; padding: 4px; background-color: #eaf2f8; border-radius: 4px;").arg(FONT_SIZE_SMALL));
     actionTip->setWordWrap(true);
     actionsLayout->addWidget(actionTip);
     
-    // 动作表格
+    // 动作表格 - 优化大小
     actionsTable_ = new QTableWidget(0, 4, actionsGroup);
     actionsTable_->setHorizontalHeaderLabels(QStringList() 
-        << QStringLiteral("节点ID") << QStringLiteral("通道") << QStringLiteral("动作") << QStringLiteral("操作"));
+        << QStringLiteral("节点") << QStringLiteral("通道") << QStringLiteral("动作") << QStringLiteral("操作"));
     actionsTable_->horizontalHeader()->setStretchLastSection(true);
     actionsTable_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     actionsTable_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     actionsTable_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
     actionsTable_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
-    actionsTable_->setMaximumHeight(200);
-    actionsTable_->setMinimumHeight(120);
+    actionsTable_->setMaximumHeight(TABLE_MAX_HEIGHT);
+    actionsTable_->setMinimumHeight(TABLE_MIN_HEIGHT);
+    actionsTable_->verticalHeader()->setDefaultSectionSize(TABLE_ROW_HEIGHT);
     actionsTable_->setStyleSheet(QStringLiteral(
-        "QTableWidget { border: 2px solid #e0e0e0; border-radius: 10px; gridline-color: #f0f0f0; font-size: 14px; }"
-        "QHeaderView::section { background-color: #ecf0f1; padding: 12px; border: none; border-bottom: 2px solid #d0d5dd; font-weight: bold; font-size: 13px; }"
-        "QTableWidget::item { padding: 10px; }"
+        "QTableWidget { border: 1px solid #e0e0e0; border-radius: %1px; gridline-color: #f0f0f0; font-size: %2px; }"
+        "QHeaderView::section { background-color: #ecf0f1; padding: 6px; border: none; border-bottom: 1px solid #d0d5dd; font-weight: bold; font-size: %3px; }"
+        "QTableWidget::item { padding: 4px; }"
         "QTableWidget::item:selected { background-color: #d6eaf8; color: #2874a6; }"
-    ));
+    ).arg(BORDER_RADIUS_INPUT).arg(FONT_SIZE_SMALL).arg(FONT_SIZE_SMALL));
     actionsLayout->addWidget(actionsTable_);
     
-    // 添加动作行 - 带默认值
+    // 添加动作行
     QHBoxLayout *actionInputLayout = new QHBoxLayout();
-    actionInputLayout->setSpacing(12);
+    actionInputLayout->setSpacing(CARD_SPACING);
     
-    // 节点 - 默认1
+    // 节点
     actionNodeSpin_ = new QSpinBox(actionsGroup);
     actionNodeSpin_->setRange(1, 255);
     actionNodeSpin_->setValue(1);
-    actionNodeSpin_->setFixedHeight(44);
-    actionNodeSpin_->setStyleSheet(idSpinBox_->styleSheet());
+    actionNodeSpin_->setFixedHeight(BTN_HEIGHT);
+    actionNodeSpin_->setStyleSheet(inputStyle);
     
-    // 通道 - 默认0
+    // 通道
     actionChSpin_ = new QSpinBox(actionsGroup);
     actionChSpin_->setRange(0, 3);
     actionChSpin_->setValue(0);
-    actionChSpin_->setFixedHeight(44);
-    actionChSpin_->setStyleSheet(idSpinBox_->styleSheet());
+    actionChSpin_->setFixedHeight(BTN_HEIGHT);
+    actionChSpin_->setStyleSheet(inputStyle);
     
-    // 动作 - 默认正转
+    // 动作
     actionValueCombo_ = new QComboBox(actionsGroup);
-    actionValueCombo_->addItem(QStringLiteral("[停] 停止"), 0);
-    actionValueCombo_->addItem(QStringLiteral("[正] 正转"), 1);
-    actionValueCombo_->addItem(QStringLiteral("[反] 反转"), 2);
+    actionValueCombo_->addItem(QStringLiteral("停止"), 0);
+    actionValueCombo_->addItem(QStringLiteral("正转"), 1);
+    actionValueCombo_->addItem(QStringLiteral("反转"), 2);
     actionValueCombo_->setCurrentIndex(1);
-    actionValueCombo_->setFixedHeight(44);
-    actionValueCombo_->setStyleSheet(typeCombo_->styleSheet());
+    actionValueCombo_->setFixedHeight(BTN_HEIGHT);
+    actionValueCombo_->setStyleSheet(inputStyle);
     
-    QPushButton *addActionBtn = new QPushButton(QStringLiteral("[+] 添加动作"), actionsGroup);
-    addActionBtn->setFixedHeight(44);
+    QPushButton *addActionBtn = new QPushButton(QStringLiteral("[+]添加"), actionsGroup);
+    addActionBtn->setFixedHeight(BTN_HEIGHT);
     addActionBtn->setCursor(Qt::PointingHandCursor);
     addActionBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #27ae60; color: white; border: none; "
-        "border-radius: 10px; padding: 0 24px; font-weight: bold; font-size: 14px; }"
+        "border-radius: %1px; padding: 0 12px; font-weight: bold; font-size: %2px; }"
         "QPushButton:hover { background-color: #229954; }"
-        "QPushButton:pressed { background-color: #1e8449; }"
-    ));
+    ).arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_SMALL));
     connect(addActionBtn, &QPushButton::clicked, this, &StrategyDialog::onAddAction);
     
     actionInputLayout->addWidget(new QLabel(QStringLiteral("节点:")));
@@ -287,51 +284,52 @@ void StrategyDialog::setupUi()
     formLayout->addWidget(actionsGroup);
     
     // ===== 触发条件组 =====
-    QGroupBox *conditionsGroup = new QGroupBox(QStringLiteral("触发条件 - 满足条件时自动执行（可选）"), scrollContent);
+    QGroupBox *conditionsGroup = new QGroupBox(QStringLiteral("触发条件(可选)"), scrollContent);
     conditionsGroup->setStyleSheet(basicGroup->styleSheet());
     
     QVBoxLayout *conditionsLayout = new QVBoxLayout(conditionsGroup);
-    conditionsLayout->setSpacing(16);
+    conditionsLayout->setSpacing(DIALOG_SPACING);
     
-    QLabel *condTip = new QLabel(QStringLiteral("[示] 添加传感器条件，当条件满足时策略自动触发"));
-    condTip->setStyleSheet(QStringLiteral("color: #5d6d7e; font-size: 13px; padding: 8px; background-color: #eaf2f8; border-radius: 8px;"));
+    QLabel *condTip = new QLabel(QStringLiteral("[示] 添加传感器条件"));
+    condTip->setStyleSheet(QStringLiteral("color: #5d6d7e; font-size: %1px; padding: 4px; background-color: #eaf2f8; border-radius: 4px;").arg(FONT_SIZE_SMALL));
     condTip->setWordWrap(true);
     conditionsLayout->addWidget(condTip);
     
     conditionsTable_ = new QTableWidget(0, 5, conditionsGroup);
     conditionsTable_->setHorizontalHeaderLabels(QStringList() 
-        << QStringLiteral("设备") << QStringLiteral("标识符") << QStringLiteral("操作") << QStringLiteral("阈值") << QStringLiteral("操作"));
+        << QStringLiteral("设备") << QStringLiteral("标识") << QStringLiteral("操作") << QStringLiteral("值") << QStringLiteral("删除"));
     conditionsTable_->horizontalHeader()->setStretchLastSection(true);
     conditionsTable_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     conditionsTable_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     conditionsTable_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
     conditionsTable_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
     conditionsTable_->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
-    conditionsTable_->setMaximumHeight(200);
-    conditionsTable_->setMinimumHeight(120);
+    conditionsTable_->setMaximumHeight(TABLE_MAX_HEIGHT);
+    conditionsTable_->setMinimumHeight(TABLE_MIN_HEIGHT);
+    conditionsTable_->verticalHeader()->setDefaultSectionSize(TABLE_ROW_HEIGHT);
     conditionsTable_->setStyleSheet(actionsTable_->styleSheet());
     conditionsLayout->addWidget(conditionsTable_);
     
     QHBoxLayout *condInputLayout = new QHBoxLayout();
-    condInputLayout->setSpacing(12);
+    condInputLayout->setSpacing(CARD_SPACING);
     
-    // 设备名 - 默认sensor1
+    // 设备名
     condDeviceEdit_ = new QLineEdit(conditionsGroup);
     condDeviceEdit_->setPlaceholderText(QStringLiteral("sensor1"));
     condDeviceEdit_->setText(QStringLiteral("sensor1"));
-    condDeviceEdit_->setFixedHeight(44);
-    condDeviceEdit_->setStyleSheet(nameEdit_->styleSheet());
-    condDeviceEdit_->setMaximumWidth(130);
+    condDeviceEdit_->setFixedHeight(BTN_HEIGHT);
+    condDeviceEdit_->setStyleSheet(inputStyle);
+    condDeviceEdit_->setMaximumWidth(100);
     
-    // 标识符 - 默认temperature
+    // 标识符
     condIdEdit_ = new QLineEdit(conditionsGroup);
-    condIdEdit_->setPlaceholderText(QStringLiteral("temperature"));
+    condIdEdit_->setPlaceholderText(QStringLiteral("temp"));
     condIdEdit_->setText(QStringLiteral("temperature"));
-    condIdEdit_->setFixedHeight(44);
-    condIdEdit_->setStyleSheet(nameEdit_->styleSheet());
-    condIdEdit_->setMaximumWidth(130);
+    condIdEdit_->setFixedHeight(BTN_HEIGHT);
+    condIdEdit_->setStyleSheet(inputStyle);
+    condIdEdit_->setMaximumWidth(100);
     
-    // 操作符 - 默认大于
+    // 操作符
     condOpCombo_ = new QComboBox(conditionsGroup);
     condOpCombo_->addItem(QStringLiteral(">"), QStringLiteral("gt"));
     condOpCombo_->addItem(QStringLiteral("<"), QStringLiteral("lt"));
@@ -339,21 +337,21 @@ void StrategyDialog::setupUi()
     condOpCombo_->addItem(QStringLiteral(">="), QStringLiteral("egt"));
     condOpCombo_->addItem(QStringLiteral("<="), QStringLiteral("elt"));
     condOpCombo_->setCurrentIndex(0);
-    condOpCombo_->setFixedHeight(44);
-    condOpCombo_->setStyleSheet(typeCombo_->styleSheet());
-    condOpCombo_->setMaximumWidth(70);
+    condOpCombo_->setFixedHeight(BTN_HEIGHT);
+    condOpCombo_->setStyleSheet(inputStyle);
+    condOpCombo_->setMaximumWidth(50);
     
-    // 阈值 - 默认25.0
+    // 阈值
     condValueSpin_ = new QDoubleSpinBox(conditionsGroup);
     condValueSpin_->setRange(-9999, 9999);
     condValueSpin_->setValue(25.0);
     condValueSpin_->setDecimals(1);
-    condValueSpin_->setFixedHeight(44);
-    condValueSpin_->setStyleSheet(idSpinBox_->styleSheet());
-    condValueSpin_->setMaximumWidth(110);
+    condValueSpin_->setFixedHeight(BTN_HEIGHT);
+    condValueSpin_->setStyleSheet(inputStyle);
+    condValueSpin_->setMaximumWidth(80);
     
-    QPushButton *addCondBtn = new QPushButton(QStringLiteral("[+] 添加条件"), conditionsGroup);
-    addCondBtn->setFixedHeight(44);
+    QPushButton *addCondBtn = new QPushButton(QStringLiteral("[+]添加"), conditionsGroup);
+    addCondBtn->setFixedHeight(BTN_HEIGHT);
     addCondBtn->setCursor(Qt::PointingHandCursor);
     addCondBtn->setStyleSheet(addActionBtn->styleSheet());
     connect(addCondBtn, &QPushButton::clicked, this, &StrategyDialog::onAddCondition);
@@ -370,40 +368,40 @@ void StrategyDialog::setupUi()
     
     formLayout->addStretch();
     
-    // 关键：设置滚动内容的固定宽度，确保可以滚动
-    scrollContent->setMinimumWidth(520);
+    // 设置滚动内容
+    scrollContent->setMinimumWidth(DIALOG_WIDTH_LARGE - DIALOG_MARGIN * 4);
     scrollArea->setWidget(scrollContent);
     contentLayout->addWidget(scrollArea, 1);
     
-    // 底部按钮栏
+    // 底部按钮栏 - 紧凑布局
     QWidget *buttonBar = new QWidget(contentWidget);
-    buttonBar->setFixedHeight(85);
+    buttonBar->setFixedHeight(BTN_HEIGHT_LARGE + 16);
     buttonBar->setStyleSheet(QStringLiteral(
-        "background-color: #f0f0f0; border-bottom-left-radius: 16px; border-bottom-right-radius: 16px;"));
+        "background-color: #f0f0f0; border-bottom-left-radius: %1px; border-bottom-right-radius: %1px;").arg(BORDER_RADIUS_DIALOG));
     
     QHBoxLayout *buttonLayout = new QHBoxLayout(buttonBar);
-    buttonLayout->setContentsMargins(24, 18, 24, 18);
-    buttonLayout->setSpacing(16);
+    buttonLayout->setContentsMargins(12, 8, 12, 8);
+    buttonLayout->setSpacing(DIALOG_SPACING);
     
     QPushButton *cancelBtn = new QPushButton(QStringLiteral("取消"), buttonBar);
-    cancelBtn->setFixedSize(120, 52);
+    cancelBtn->setFixedSize(80, BTN_HEIGHT);
     cancelBtn->setCursor(Qt::PointingHandCursor);
     cancelBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #95a5a6; color: white; border: none; "
-        "border-radius: 10px; font-weight: bold; font-size: 15px; }"
+        "border-radius: %1px; font-weight: bold; font-size: %2px; }"
         "QPushButton:hover { background-color: #7f8c8d; }"
-    ));
+    ).arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
     connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
     
-    QPushButton *saveBtn = new QPushButton(QStringLiteral("[存] 保存策略"), buttonBar);
+    QPushButton *saveBtn = new QPushButton(QStringLiteral("[存]保存"), buttonBar);
     saveBtn->setObjectName(QStringLiteral("saveBtn"));
-    saveBtn->setFixedSize(160, 52);
+    saveBtn->setFixedSize(100, BTN_HEIGHT);
     saveBtn->setCursor(Qt::PointingHandCursor);
     saveBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #3498db; color: white; border: none; "
-        "border-radius: 10px; font-weight: bold; font-size: 15px; }"
+        "border-radius: %1px; font-weight: bold; font-size: %2px; }"
         "QPushButton:hover { background-color: #2980b9; }"
-    ));
+    ).arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
     connect(saveBtn, &QPushButton::clicked, this, &QDialog::accept);
     
     buttonLayout->addStretch();
@@ -413,9 +411,9 @@ void StrategyDialog::setupUi()
     contentLayout->addWidget(buttonBar);
     mainLayout->addWidget(contentWidget);
     
-    // 设置对话框大小 - 触控屏优化
-    setMinimumSize(620, 750);
-    resize(650, 800);
+    // 设置对话框大小 - 1024x600低分辨率优化
+    setMinimumSize(DIALOG_WIDTH_LARGE, DIALOG_HEIGHT_LARGE);
+    resize(DIALOG_WIDTH_LARGE, DIALOG_HEIGHT_LARGE);
     
     qDebug() << "[STRATEGY_DIALOG] UI设置完成，尺寸:" << size();
 }

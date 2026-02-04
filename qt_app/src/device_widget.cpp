@@ -1,11 +1,12 @@
 /**
  * @file device_widget.cpp
- * @brief 设备管理页面实现 - 网格卡片布局（美化版）
+ * @brief 设备管理页面实现 - 网格卡片布局（1024x600低分辨率优化版）
  */
 
 #include "device_widget.h"
 #include "rpc_client.h"
 #include "relay_control_dialog.h"
+#include "ui_constants.h"
 
 #include <QScroller>
 
@@ -30,6 +31,8 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QGraphicsDropShadowEffect>
+
+using namespace UIConstants;
 
 // ==================== DeviceCard Implementation ====================
 
@@ -56,41 +59,41 @@ void DeviceCard::setupUi()
     setStyleSheet(QStringLiteral(
         "#deviceCard {"
         "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);"
-        "  border: 2px solid #e0e0e0;"
-        "  border-radius: 14px;"
+        "  border: 1px solid #e0e0e0;"
+        "  border-radius: %1px;"
         "}"
         "#deviceCard:hover {"
         "  border-color: #27ae60;"
         "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #eafaf1);"
-        "}"));
+        "}").arg(BORDER_RADIUS_CARD));
     setCursor(Qt::PointingHandCursor);
-    setMinimumHeight(130);
+    setMinimumHeight(CARD_MIN_HEIGHT);
     
     // 阴影效果
     QGraphicsDropShadowEffect *shadow = new QGraphicsDropShadowEffect(this);
-    shadow->setBlurRadius(12);
-    shadow->setColor(QColor(0, 0, 0, 35));
-    shadow->setOffset(0, 3);
+    shadow->setBlurRadius(8);
+    shadow->setColor(QColor(0, 0, 0, 25));
+    shadow->setOffset(0, 2);
     setGraphicsEffect(shadow);
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(14, 12, 14, 12);
-    mainLayout->setSpacing(8);
+    mainLayout->setContentsMargins(CARD_MARGIN, CARD_MARGIN, CARD_MARGIN, CARD_MARGIN);
+    mainLayout->setSpacing(CARD_SPACING);
 
     // 顶部行：名称和节点ID
     QHBoxLayout *topRow = new QHBoxLayout();
     
     nameLabel_ = new QLabel(name_, this);
     nameLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 16px; font-weight: bold; color: #2c3e50;"));
+        "font-size: %1px; font-weight: bold; color: #2c3e50;").arg(FONT_SIZE_CARD_TITLE));
     topRow->addWidget(nameLabel_);
     
     topRow->addStretch();
     
     nodeIdLabel_ = new QLabel(QStringLiteral("#%1").arg(nodeId_), this);
     nodeIdLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 13px; color: #7f8c8d; background-color: #ecf0f1; "
-        "padding: 4px 10px; border-radius: 6px; font-weight: 500;"));
+        "font-size: %1px; color: #7f8c8d; background-color: #ecf0f1; "
+        "padding: 2px 6px; border-radius: 4px;").arg(FONT_SIZE_SMALL));
     topRow->addWidget(nodeIdLabel_);
     
     mainLayout->addLayout(topRow);
@@ -98,15 +101,15 @@ void DeviceCard::setupUi()
     // 中间行：状态和电流
     QHBoxLayout *middleRow = new QHBoxLayout();
     
-    statusLabel_ = new QLabel(QStringLiteral("[等] 等待中..."), this);
-    statusLabel_->setStyleSheet(QStringLiteral("font-size: 14px; font-weight: bold; color: #7f8c8d;"));
+    statusLabel_ = new QLabel(QStringLiteral("[等]等待..."), this);
+    statusLabel_->setStyleSheet(QStringLiteral("font-size: %1px; font-weight: bold; color: #7f8c8d;").arg(FONT_SIZE_BODY));
     middleRow->addWidget(statusLabel_);
     
     middleRow->addStretch();
     
-    currentLabel_ = new QLabel(QStringLiteral("-- mA"), this);
+    currentLabel_ = new QLabel(QStringLiteral("--mA"), this);
     currentLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 14px; color: #3498db; font-weight: bold;"));
+        "font-size: %1px; color: #3498db; font-weight: bold;").arg(FONT_SIZE_BODY));
     middleRow->addWidget(currentLabel_);
     
     mainLayout->addLayout(middleRow);
@@ -120,25 +123,25 @@ void DeviceCard::setupUi()
 
     // 底部行：通道状态
     QHBoxLayout *bottomRow = new QHBoxLayout();
-    bottomRow->setSpacing(8);
+    bottomRow->setSpacing(4);
     
     auto createChLabel = [this](const QString &text) -> QLabel* {
         QLabel *label = new QLabel(text, this);
         label->setStyleSheet(QStringLiteral(
-            "font-size: 12px; padding: 5px 10px; background-color: #f5f5f5; border-radius: 6px; font-weight: 500;"));
+            "font-size: %1px; padding: 2px 6px; background-color: #f5f5f5; border-radius: 4px;").arg(FONT_SIZE_SMALL));
         return label;
     };
     
-    ch0Label_ = createChLabel(QStringLiteral("CH0: --"));
+    ch0Label_ = createChLabel(QStringLiteral("0:--"));
     bottomRow->addWidget(ch0Label_);
     
-    ch1Label_ = createChLabel(QStringLiteral("CH1: --"));
+    ch1Label_ = createChLabel(QStringLiteral("1:--"));
     bottomRow->addWidget(ch1Label_);
     
-    ch2Label_ = createChLabel(QStringLiteral("CH2: --"));
+    ch2Label_ = createChLabel(QStringLiteral("2:--"));
     bottomRow->addWidget(ch2Label_);
     
-    ch3Label_ = createChLabel(QStringLiteral("CH3: --"));
+    ch3Label_ = createChLabel(QStringLiteral("3:--"));
     bottomRow->addWidget(ch3Label_);
     
     bottomRow->addStretch();
@@ -150,21 +153,21 @@ void DeviceCard::updateStatus(bool online, qint64 ageMs, double totalCurrent, co
 {
     // 更新在线状态
     if (online) {
-        statusLabel_->setText(QStringLiteral("[OK] 在线 (%1ms)").arg(ageMs));
+        statusLabel_->setText(QStringLiteral("[OK]在线(%1ms)").arg(ageMs));
         statusLabel_->setStyleSheet(QStringLiteral(
-            "font-size: 14px; font-weight: bold; color: #27ae60;"));
+            "font-size: %1px; font-weight: bold; color: #27ae60;").arg(FONT_SIZE_BODY));
     } else if (ageMs < 0) {
-        statusLabel_->setText(QStringLiteral("[警] 无响应"));
+        statusLabel_->setText(QStringLiteral("[警]无响应"));
         statusLabel_->setStyleSheet(QStringLiteral(
-            "font-size: 14px; font-weight: bold; color: #f39c12;"));
+            "font-size: %1px; font-weight: bold; color: #f39c12;").arg(FONT_SIZE_BODY));
     } else {
-        statusLabel_->setText(QStringLiteral("[X] 离线 (%1s)").arg(ageMs / 1000));
+        statusLabel_->setText(QStringLiteral("[X]离线(%1s)").arg(ageMs / 1000));
         statusLabel_->setStyleSheet(QStringLiteral(
-            "font-size: 14px; font-weight: bold; color: #e74c3c;"));
+            "font-size: %1px; font-weight: bold; color: #e74c3c;").arg(FONT_SIZE_BODY));
     }
 
     // 更新总电流
-    currentLabel_->setText(QStringLiteral("[流] %1mA").arg(totalCurrent, 0, 'f', 1));
+    currentLabel_->setText(QStringLiteral("%1mA").arg(totalCurrent, 0, 'f', 0));
 
     // 更新通道状态
     QLabel *chLabels[] = {ch0Label_, ch1Label_, ch2Label_, ch3Label_};
@@ -178,16 +181,16 @@ void DeviceCard::updateStatus(bool online, qint64 ageMs, double totalCurrent, co
             QString bgColor;
             QString textColor;
             switch (mode) {
-                case 0: modeText = QStringLiteral("[停] 停止"); bgColor = QStringLiteral("#ecf0f1"); textColor = QStringLiteral("#7f8c8d"); break;
-                case 1: modeText = QStringLiteral("[正] 正转"); bgColor = QStringLiteral("#d4edda"); textColor = QStringLiteral("#155724"); break;
-                case 2: modeText = QStringLiteral("[反] 反转"); bgColor = QStringLiteral("#fff3cd"); textColor = QStringLiteral("#856404"); break;
-                default: modeText = QStringLiteral("[?] 未知"); bgColor = QStringLiteral("#f5f5f5"); textColor = QStringLiteral("#7f8c8d"); break;
+                case 0: modeText = QStringLiteral("停"); bgColor = QStringLiteral("#ecf0f1"); textColor = QStringLiteral("#7f8c8d"); break;
+                case 1: modeText = QStringLiteral("正"); bgColor = QStringLiteral("#d4edda"); textColor = QStringLiteral("#155724"); break;
+                case 2: modeText = QStringLiteral("反"); bgColor = QStringLiteral("#fff3cd"); textColor = QStringLiteral("#856404"); break;
+                default: modeText = QStringLiteral("?"); bgColor = QStringLiteral("#f5f5f5"); textColor = QStringLiteral("#7f8c8d"); break;
             }
 
-            chLabels[ch]->setText(QStringLiteral("CH%1: %2").arg(ch).arg(modeText));
+            chLabels[ch]->setText(QStringLiteral("%1:%2").arg(ch).arg(modeText));
             chLabels[ch]->setStyleSheet(QStringLiteral(
-                "font-size: 12px; padding: 5px 10px; background-color: %1; color: %2; border-radius: 6px; font-weight: 500;")
-                .arg(bgColor, textColor));
+                "font-size: %1px; padding: 2px 6px; background-color: %2; color: %3; border-radius: 4px;")
+                .arg(FONT_SIZE_SMALL).arg(bgColor, textColor));
         }
     }
 }
@@ -219,46 +222,43 @@ DeviceWidget::DeviceWidget(RpcClient *rpcClient, QWidget *parent)
 void DeviceWidget::setupUi()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(16, 16, 16, 16);
-    mainLayout->setSpacing(16);
+    mainLayout->setContentsMargins(PAGE_MARGIN, PAGE_MARGIN, PAGE_MARGIN, PAGE_MARGIN);
+    mainLayout->setSpacing(PAGE_SPACING);
 
-    // 页面标题 - 美化
+    // 页面标题
     QLabel *titleLabel = new QLabel(QStringLiteral("[设] 设备管理"), this);
     titleLabel->setStyleSheet(QStringLiteral(
-        "font-size: 26px; font-weight: bold; color: #2c3e50; padding: 4px 0;"));
+        "font-size: %1px; font-weight: bold; color: #2c3e50; padding: 2px 0;").arg(FONT_SIZE_TITLE));
     mainLayout->addWidget(titleLabel);
 
-    // 工具栏 - 美化
+    // 工具栏
     QHBoxLayout *toolbarLayout = new QHBoxLayout();
-    toolbarLayout->setSpacing(12);
+    toolbarLayout->setSpacing(CARD_SPACING);
 
-    refreshButton_ = new QPushButton(QStringLiteral("[刷] 刷新设备"), this);
-    refreshButton_->setMinimumHeight(44);
+    refreshButton_ = new QPushButton(QStringLiteral("[刷]刷新"), this);
+    refreshButton_->setMinimumHeight(BTN_HEIGHT);
     refreshButton_->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #3498db; color: white; border: none; "
-        "border-radius: 10px; padding: 0 20px; font-weight: bold; font-size: 14px; }"
-        "QPushButton:hover { background-color: #2980b9; }"
-        "QPushButton:pressed { background-color: #1c5a8a; }"));
+        "border-radius: %1px; padding: 0 12px; font-weight: bold; font-size: %2px; }"
+        "QPushButton:hover { background-color: #2980b9; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
     connect(refreshButton_, &QPushButton::clicked, this, &DeviceWidget::refreshDeviceList);
     toolbarLayout->addWidget(refreshButton_);
 
-    queryAllButton_ = new QPushButton(QStringLiteral("[查] 查询全部"), this);
-    queryAllButton_->setMinimumHeight(44);
+    queryAllButton_ = new QPushButton(QStringLiteral("[查]查询"), this);
+    queryAllButton_->setMinimumHeight(BTN_HEIGHT);
     queryAllButton_->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #27ae60; color: white; border: none; "
-        "border-radius: 10px; padding: 0 20px; font-weight: bold; font-size: 14px; }"
-        "QPushButton:hover { background-color: #229954; }"
-        "QPushButton:pressed { background-color: #1e8449; }"));
+        "border-radius: %1px; padding: 0 12px; font-weight: bold; font-size: %2px; }"
+        "QPushButton:hover { background-color: #229954; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
     connect(queryAllButton_, &QPushButton::clicked, this, &DeviceWidget::onQueryAllClicked);
     toolbarLayout->addWidget(queryAllButton_);
 
-    addDeviceButton_ = new QPushButton(QStringLiteral("[+] 添加设备"), this);
-    addDeviceButton_->setMinimumHeight(44);
+    addDeviceButton_ = new QPushButton(QStringLiteral("[+]添加"), this);
+    addDeviceButton_->setMinimumHeight(BTN_HEIGHT);
     addDeviceButton_->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #f39c12; color: white; border: none; "
-        "border-radius: 10px; padding: 0 20px; font-weight: bold; font-size: 14px; }"
-        "QPushButton:hover { background-color: #d68910; }"
-        "QPushButton:pressed { background-color: #b7791f; }"));
+        "border-radius: %1px; padding: 0 12px; font-weight: bold; font-size: %2px; }"
+        "QPushButton:hover { background-color: #d68910; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
     connect(addDeviceButton_, &QPushButton::clicked, this, &DeviceWidget::onAddDeviceClicked);
     toolbarLayout->addWidget(addDeviceButton_);
 
@@ -266,7 +266,7 @@ void DeviceWidget::setupUi()
 
     statusLabel_ = new QLabel(this);
     statusLabel_->setStyleSheet(QStringLiteral(
-        "color: #7f8c8d; font-size: 14px; padding: 8px 12px; background-color: #f8f9fa; border-radius: 6px;"));
+        "color: #7f8c8d; font-size: %1px; padding: 4px 8px; background-color: #f8f9fa; border-radius: 4px;").arg(FONT_SIZE_SMALL));
     toolbarLayout->addWidget(statusLabel_);
 
     mainLayout->addLayout(toolbarLayout);
@@ -278,32 +278,31 @@ void DeviceWidget::setupUi()
     scrollArea->setFrameShape(QFrame::NoFrame);
     scrollArea->setStyleSheet(QStringLiteral(
         "QScrollArea { background: transparent; border: none; }"
-        "QScrollBar:vertical { width: 10px; background: #f0f0f0; border-radius: 5px; margin: 4px; }"
-        "QScrollBar::handle:vertical { background: #c0c0c0; border-radius: 5px; min-height: 40px; }"
-        "QScrollBar::handle:vertical:hover { background: #a0a0a0; }"
-    ));
+        "QScrollBar:vertical { width: %1px; background: #f0f0f0; border-radius: %2px; margin: 2px; }"
+        "QScrollBar::handle:vertical { background: #c0c0c0; border-radius: %2px; min-height: 30px; }"
+    ).arg(SCROLLBAR_WIDTH).arg(SCROLLBAR_WIDTH/2));
     
     // 启用触控滚动
     QScroller::grabGesture(scrollArea->viewport(), QScroller::LeftMouseButtonGesture);
 
-    // 设备卡片容器 - 使用网格布局（一行两个）
+    // 设备卡片容器
     cardsContainer_ = new QWidget();
     cardsContainer_->setStyleSheet(QStringLiteral("background: transparent;"));
     cardsLayout_ = new QGridLayout(cardsContainer_);
     cardsLayout_->setContentsMargins(0, 0, 0, 0);
-    cardsLayout_->setSpacing(16);
+    cardsLayout_->setSpacing(PAGE_SPACING);
     cardsLayout_->setColumnStretch(0, 1);
     cardsLayout_->setColumnStretch(1, 1);
     
     scrollArea->setWidget(cardsContainer_);
     mainLayout->addWidget(scrollArea, 1);
 
-    // 提示文本 - 美化
+    // 提示文本
     QLabel *helpLabel = new QLabel(
-        QStringLiteral("[示] 点击设备卡片可打开控制面板，绿色=正转，黄色=反转，灰色=停止"),
+        QStringLiteral("[示] 点击卡片控制，绿=正转，黄=反转，灰=停止"),
         this);
     helpLabel->setStyleSheet(QStringLiteral(
-        "color: #5d6d7e; font-size: 13px; padding: 10px; background-color: #eaf2f8; border-radius: 8px;"));
+        "color: #5d6d7e; font-size: %1px; padding: 6px; background-color: #eaf2f8; border-radius: 4px;").arg(FONT_SIZE_SMALL));
     helpLabel->setAlignment(Qt::AlignCenter);
     mainLayout->addWidget(helpLabel);
 }
