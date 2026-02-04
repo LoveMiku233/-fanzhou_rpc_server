@@ -47,6 +47,7 @@ private slots:
     void updateStatusBarTime();
     void attemptAutoConnect();
     void updateCloudStatus();
+    void onMqttStatusFromDashboard(int connected, int total);
 
 private:
     void setupUi();

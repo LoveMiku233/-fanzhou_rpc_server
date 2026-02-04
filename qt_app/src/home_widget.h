@@ -31,18 +31,24 @@ signals:
     void navigateToDevices();
     void navigateToGroups();
     void navigateToSettings();
+    /**
+     * @brief 当MQTT状态更新时发出此信号
+     * @param connected 已连接的通道数
+     * @param total 总通道数
+     */
+    void mqttStatusUpdated(int connected, int total);
 
 private slots:
     void onStopAllClicked();
     void onEmergencyStopClicked();
-    void onAutoRefreshTimeout();
 
 private:
     void setupUi();
     void updateStats();
+    void updateStatsLegacy();  // 兼容旧版本服务器的多RPC调用方式
 
     RpcClient *rpcClient_;
-    QTimer *autoRefreshTimer_;
+    // 注意：自动刷新由MainWindow统一管理，不再需要独立的定时器
 
     // 统计信息标签
     QLabel *totalDevicesLabel_;
