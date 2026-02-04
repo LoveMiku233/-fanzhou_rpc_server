@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>泛舟RPC - 开发者调试工具</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <style>
+        /* 调试页面专用样式 */
+        .debug-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .debug-header {
+            background: linear-gradient(135deg, #7b1fa2 0%, #9c27b0 100%);
+            color: white;
+            padding: 20px 25px;
+            border-radius: 16px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .debug-header h1 {
+            font-size: 1.5em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .debug-header .back-btn {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.3);
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .debug-header .back-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .debug-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 20px;
+        }
+        
+        .debug-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .debug-card-header {
+            padding: 15px 20px;
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .debug-card-body {
+            padding: 15px 20px;
+        }
+        
+        .debug-card.sensor-debug .debug-card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .debug-card.rpc-debug .debug-card-header {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+        
+        .debug-card.system-debug .debug-card-header {
+            background: linear-gradient(135deg, #e65100 0%, #ff9800 100%);
+            color: white;
+        }
+        
+        .debug-card.log-debug .debug-card-header {
+            background: linear-gradient(135deg, #1565c0 0%, #42a5f5 100%);
+            color: white;
+        }
+        
+        .debug-card.mqtt-debug .debug-card-header {
+            background: linear-gradient(135deg, #c62828 0%, #ef5350 100%);
+            color: white;
+        }
+        
+        .debug-card.config-debug .debug-card-header {
+            background: linear-gradient(135deg, #00695c 0%, #26a69a 100%);
+            color: white;
+        }
+        
+        .debug-form-group {
+            margin-bottom: 12px;
+        }
+        
+        .debug-form-group label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+        
+        .debug-form-group input,
+        .debug-form-group select,
+        .debug-form-group textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+        
+        .debug-form-group textarea {
+            min-height: 80px;
+            font-family: 'Fira Code', 'Consolas', monospace;
+        }
+        
+        .debug-form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+        }
+        
+        .debug-btn-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        
+        .debug-btn {
+            padding: 8px 14px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .debug-btn.primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .debug-btn.success {
+            background: #4caf50;
+            color: white;
+        }
+        
+        .debug-btn.warning {
+            background: #ff9800;
+            color: white;
+        }
+        
+        .debug-btn.danger {
+            background: #f44336;
+            color: white;
+        }
+        
+        .debug-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        
+        .debug-output {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 12px;
+        }
+        
+        .debug-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            padding: 6px 10px;
+            border-radius: 6px;
+            background: #f5f5f5;
+        }
+        
+        .debug-status.connected {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        
+        .debug-status.disconnected {
+            background: #ffebee;
+            color: #c62828;
+        }
+        
+        .quick-value-btn {
+            padding: 6px 10px;
+            font-size: 11px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .quick-value-btn:hover {
+            background: #f5f5f5;
+        }
+        
+        .connection-bar {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .connection-bar input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        
+        .connection-bar .host-input {
+            width: 180px;
+        }
+        
+        .connection-bar .port-input {
+            width: 80px;
+        }
+    </style>
+</head>
+<body>
+    <div class="debug-container">
+        <!-- 头部 -->
+        <div class="debug-header">
+            <h1>🔧 开发者调试工具</h1>
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <span class="debug-status disconnected" id="connectionStatus">
+                    <span>●</span>
+                    <span>未连接</span>
+                </span>
+                <button class="back-btn" onclick="window.location.href='index.html'">← 返回主页</button>
+            </div>
+        </div>
+        
+        <!-- 连接栏 -->
+        <div class="connection-bar">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 13px; color: #666;">📡 RPC服务器:</span>
+                <input type="text" id="serverHost" class="host-input" placeholder="设备IP" value="">
+                <span>:</span>
+                <input type="number" id="rpcPort" class="port-input" value="12345">
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 13px; color: #666;">WS端口:</span>
+                <input type="number" id="wsPort" class="port-input" value="12346">
+            </div>
+            <button id="websocatToggleBtn" onclick="toggleWebsocatProxy()" class="debug-btn success" style="display: none;">🚀 启动代理</button>
+            <button id="connectBtn" onclick="toggleConnection()" class="debug-btn primary">🔌 连接</button>
+        </div>
+        
+        <!-- 调试卡片网格 -->
+        <div class="debug-grid">
+            <!-- 传感器模拟调试 -->
+            <div class="debug-card sensor-debug">
+                <div class="debug-card-header">
+                    📡 传感器数据模拟
+                </div>
+                <div class="debug-card-body">
+                    <div class="debug-form-row">
+                        <div class="debug-form-group">
+                            <label>设备编码</label>
+                            <input type="text" id="debugDeviceCode" value="864708069172099" placeholder="设备编码">
+                        </div>
+                        <div class="debug-form-group">
+                            <label>属性标识</label>
+                            <input type="text" id="debugIdentifier" value="airTemp" placeholder="如: airTemp">
+                        </div>
+                        <div class="debug-form-group">
+                            <label>数值</label>
+                            <input type="number" id="debugIdentifierValue" value="25" step="0.1">
+                        </div>
+                    </div>
+                    
+                    <div style="margin: 10px 0; font-size: 12px; color: #666;">
+                        <strong>常用属性:</strong> airTemp(空气温度), airHum(空气湿度), soilTemp(土壤温度), soilHum(土壤湿度), light(光照), co2(CO₂)
+                    </div>
+                    
+                    <div class="debug-btn-group">
+                        <button class="debug-btn success" onclick="setDebugSensorValue()">📤 模拟上报</button>
+                        <button class="quick-value-btn" onclick="setDebugSensorQuick('airTemp', 35)">🌡️ 35°C</button>
+                        <button class="quick-value-btn" onclick="setDebugSensorQuick('airTemp', 5)">❄️ 5°C</button>
+                        <button class="quick-value-btn" onclick="setDebugSensorQuick('airHum', 90)">💧 90%湿度</button>
+                        <button class="quick-value-btn" onclick="setDebugSensorQuick('light', 50000)">☀️ 强光</button>
+                    </div>
+                    
+                    <div class="debug-output" id="sensorDebugOutput">等待操作...</div>
+                </div>
+            </div>
+            
+            <!-- 自定义RPC调用 -->
+            <div class="debug-card rpc-debug">
+                <div class="debug-card-header">
+                    🛠️ 自定义RPC调用
+                </div>
+                <div class="debug-card-body">
+                    <div class="debug-form-group">
+                        <label>RPC方法名</label>
+                        <input type="text" id="rpcMethodName" placeholder="如: rpc.ping, relay.control">
+                    </div>
+                    <div class="debug-form-group">
+                        <label>参数 (JSON)</label>
+                        <textarea id="rpcMethodParams" placeholder='{"node": 1, "ch": 0, "action": "fwd"}'>{}</textarea>
+                    </div>
+                    
+                    <div style="margin: 10px 0; font-size: 12px; color: #666;">
+                        <strong>常用方法:</strong> rpc.ping, sys.info, can.status, relay.control, relay.statusAll, group.list, group.control, config.get, config.save
+                    </div>
+                    
+                    <div class="debug-btn-group">
+                        <button class="debug-btn success" onclick="callCustomRpc()">🚀 发送请求</button>
+                        <button class="debug-btn primary" onclick="callRpcQuick('rpc.ping', {})">🔔 Ping</button>
+                        <button class="debug-btn primary" onclick="callRpcQuick('sys.info', {})">ℹ️ 系统信息</button>
+                        <button class="debug-btn warning" onclick="callRpcQuick('can.status', {})">🔧 CAN状态</button>
+                    </div>
+                    
+                    <div class="debug-output" id="rpcDebugOutput">等待操作...</div>
+                </div>
+            </div>
+            
+            <!-- 系统诊断 -->
+            <div class="debug-card system-debug">
+                <div class="debug-card-header">
+                    ⚙️ 系统诊断
+                </div>
+                <div class="debug-card-body">
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 15px;">
+                        <div style="background: #f5f5f5; padding: 12px; border-radius: 8px;">
+                            <div style="font-size: 11px; color: #666;">RPC连接</div>
+                            <div style="font-size: 16px; font-weight: 600;" id="diagRpcStatus">--</div>
+                        </div>
+                        <div style="background: #f5f5f5; padding: 12px; border-radius: 8px;">
+                            <div style="font-size: 11px; color: #666;">CAN总线</div>
+                            <div style="font-size: 16px; font-weight: 600;" id="diagCanStatus">--</div>
+                        </div>
+                        <div style="background: #f5f5f5; padding: 12px; border-radius: 8px;">
+                            <div style="font-size: 11px; color: #666;">设备数量</div>
+                            <div style="font-size: 16px; font-weight: 600;" id="diagDeviceCount">--</div>
+                        </div>
+                        <div style="background: #f5f5f5; padding: 12px; border-radius: 8px;">
+                            <div style="font-size: 11px; color: #666;">MQTT通道</div>
+                            <div style="font-size: 16px; font-weight: 600;" id="diagMqttCount">--</div>
+                        </div>
+                    </div>
+                    
+                    <div class="debug-btn-group">
+                        <button class="debug-btn primary" onclick="runDiagnostics()">🔍 运行诊断</button>
+                        <button class="debug-btn success" onclick="callRpcQuick('sys.info', {})">ℹ️ 系统信息</button>
+                        <button class="debug-btn warning" onclick="callRpcQuick('can.status', {})">🔧 CAN诊断</button>
+                    </div>
+                    
+                    <div class="debug-output" id="systemDebugOutput">等待操作...</div>
+                </div>
+            </div>
+            
+            <!-- 日志查看 -->
+            <div class="debug-card log-debug">
+                <div class="debug-card-header">
+                    📋 实时日志
+                </div>
+                <div class="debug-card-body">
+                    <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                        <select id="logLevelFilter" style="padding: 6px 10px; border-radius: 6px; border: 1px solid #ddd;">
+                            <option value="all">全部</option>
+                            <option value="info">INFO</option>
+                            <option value="warn">WARN</option>
+                            <option value="error">ERROR</option>
+                        </select>
+                        <button class="debug-btn" onclick="clearDebugLogs()">🗑️ 清空</button>
+                        <button class="debug-btn primary" onclick="exportDebugLogs()">📥 导出</button>
+                    </div>
+                    
+                    <div class="debug-output" id="logDebugOutput" style="max-height: 250px;">等待日志...</div>
+                </div>
+            </div>
+            
+            <!-- MQTT调试 -->
+            <div class="debug-card mqtt-debug">
+                <div class="debug-card-header">
+                    ☁️ MQTT调试
+                </div>
+                <div class="debug-card-body">
+                    <div class="debug-form-row">
+                        <div class="debug-form-group">
+                            <label>通道ID</label>
+                            <input type="number" id="mqttDebugChannelId" value="1" min="1">
+                        </div>
+                        <div class="debug-form-group">
+                            <label>主题</label>
+                            <input type="text" id="mqttDebugTopic" placeholder="test/topic">
+                        </div>
+                        <div class="debug-form-group">
+                            <label>QoS</label>
+                            <select id="mqttDebugQos">
+                                <option value="0">0</option>
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="debug-form-group">
+                        <label>消息内容 (JSON)</label>
+                        <textarea id="mqttDebugPayload" placeholder='{"message": "Hello"}'>{}</textarea>
+                    </div>
+                    
+                    <div class="debug-btn-group">
+                        <button class="debug-btn success" onclick="mqttPublishDebug()">📤 发布消息</button>
+                        <button class="debug-btn primary" onclick="mqttSubscribeDebug()">📥 订阅主题</button>
+                        <button class="debug-btn warning" onclick="listMqttChannels()">📋 查看通道</button>
+                    </div>
+                    
+                    <div class="debug-output" id="mqttDebugOutput">等待操作...</div>
+                </div>
+            </div>
+            
+            <!-- 配置调试 -->
+            <div class="debug-card config-debug">
+                <div class="debug-card-header">
+                    💾 配置管理
+                </div>
+                <div class="debug-card-body">
+                    <div class="debug-form-group">
+                        <label>配置路径 (可选)</label>
+                        <input type="text" id="configPath" placeholder="如: main.rpcPort 或留空获取全部">
+                    </div>
+                    
+                    <div class="debug-btn-group">
+                        <button class="debug-btn primary" onclick="getConfigDebug()">📖 读取配置</button>
+                        <button class="debug-btn success" onclick="saveConfigDebug()">💾 保存配置</button>
+                        <button class="debug-btn warning" onclick="reloadConfigDebug()">🔄 重载配置</button>
+                    </div>
+                    
+                    <div class="debug-output" id="configDebugOutput" style="max-height: 300px;">等待操作...</div>
+                </div>
+            </div>
+            
+            <!-- 场景触发测试 -->
+            <div class="debug-card sensor-debug">
+                <div class="debug-card-header">
+                    ⚡ 场景触发测试
+                </div>
+                <div class="debug-card-body">
+                    <div class="debug-form-row">
+                        <div class="debug-form-group">
+                            <label>场景ID</label>
+                            <input type="number" id="testSceneId" value="1" min="1">
+                        </div>
+                        <div class="debug-form-group">
+                            <label>场景类型</label>
+                            <select id="testSceneType">
+                                <option value="auto">自动场景</option>
+                                <option value="manual">手动场景</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="debug-btn-group">
+                        <button class="debug-btn success" onclick="testSceneTrigger()">⚡ 触发场景</button>
+                        <button class="debug-btn primary" onclick="listScenes()">📋 场景列表</button>
+                        <button class="debug-btn warning" onclick="checkSceneStatus()">🔍 状态检查</button>
+                    </div>
+                    
+                    <div class="debug-output" id="sceneDebugOutput">等待操作...</div>
+                </div>
+            </div>
+            
+            <!-- 继电器直接控制 -->
+            <div class="debug-card rpc-debug">
+                <div class="debug-card-header">
+                    🎛️ 继电器直接控制
+                </div>
+                <div class="debug-card-body">
+                    <div class="debug-form-row">
+                        <div class="debug-form-group">
+                            <label>节点ID</label>
+                            <input type="number" id="relayNode" value="1" min="1" max="255">
+                        </div>
+                        <div class="debug-form-group">
+                            <label>通道</label>
+                            <select id="relayChannel">
+                                <option value="0">CH0</option>
+                                <option value="1">CH1</option>
+                                <option value="2">CH2</option>
+                                <option value="3">CH3</option>
+                            </select>
+                        </div>
+                        <div class="debug-form-group">
+                            <label>动作</label>
+                            <select id="relayAction">
+                                <option value="stop">⏹️ 停止</option>
+                                <option value="fwd">▶️ 正转</option>
+                                <option value="rev">◀️ 反转</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="debug-btn-group">
+                        <button class="debug-btn success" onclick="controlRelayDebug()">⚡ 执行</button>
+                        <button class="debug-btn primary" onclick="queryRelayDebug()">🔍 查询状态</button>
+                        <button class="debug-btn warning" onclick="queryAllRelaysDebug()">📊 全部状态</button>
+                    </div>
+                    
+                    <div class="debug-output" id="relayDebugOutput">等待操作...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // WebSocket连接
+        let ws = null;
+        let requestId = 1;
+        let pendingRequests = {};
+        let debugLogs = [];
+        
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 从sessionStorage读取连接信息
+            const host = sessionStorage.getItem('rpc_host');
+            const rpcPort = sessionStorage.getItem('rpc_port');
+            const wsPort = sessionStorage.getItem('ws_port');
+            
+            if (host) document.getElementById('serverHost').value = host;
+            if (rpcPort) document.getElementById('rpcPort').value = rpcPort;
+            if (wsPort) document.getElementById('wsPort').value = wsPort;
+            
+            // 检测Tauri环境
+            if (window.__TAURI__) {
+                document.getElementById('websocatToggleBtn').style.display = 'inline-block';
+            }
+            
+            addDebugLog('info', '开发者调试工具已加载');
+        });
+        
+        // 连接管理
+        function toggleConnection() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.close();
+            } else {
+                connect();
+            }
+        }
+        
+        function connect() {
+            const host = document.getElementById('serverHost').value.trim() || 'localhost';
+            const wsPort = document.getElementById('wsPort').value || 12346;
+            
+            const url = `ws://${host}:${wsPort}`;
+            addDebugLog('info', `正在连接 ${url}...`);
+            
+            ws = new WebSocket(url);
+            
+            ws.onopen = function() {
+                updateConnectionStatus(true);
+                addDebugLog('success', '✅ WebSocket连接成功');
+                runDiagnostics();
+            };
+            
+            ws.onclose = function() {
+                updateConnectionStatus(false);
+                addDebugLog('warn', '⚠️ WebSocket连接已断开');
+            };
+            
+            ws.onerror = function(err) {
+                updateConnectionStatus(false);
+                addDebugLog('error', '❌ WebSocket连接错误');
+            };
+            
+            ws.onmessage = function(event) {
+                handleMessage(event.data);
+            };
+        }
+        
+        function updateConnectionStatus(connected) {
+            const statusEl = document.getElementById('connectionStatus');
+            const connectBtn = document.getElementById('connectBtn');
+            
+            if (connected) {
+                statusEl.className = 'debug-status connected';
+                statusEl.innerHTML = '<span>●</span><span>已连接</span>';
+                connectBtn.textContent = '🔌 断开';
+                document.getElementById('diagRpcStatus').textContent = '✅ 已连接';
+                document.getElementById('diagRpcStatus').style.color = '#2e7d32';
+            } else {
+                statusEl.className = 'debug-status disconnected';
+                statusEl.innerHTML = '<span>●</span><span>未连接</span>';
+                connectBtn.textContent = '🔌 连接';
+                document.getElementById('diagRpcStatus').textContent = '❌ 未连接';
+                document.getElementById('diagRpcStatus').style.color = '#c62828';
+            }
+        }
+        
+        // RPC调用
+        function callMethod(method, params, callback) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                addDebugLog('error', '请先连接到服务器');
+                return;
+            }
+            
+            const id = requestId++;
+            const request = {
+                jsonrpc: '2.0',
+                id: id,
+                method: method,
+                params: params
+            };
+            
+            pendingRequests[id] = callback;
+            ws.send(JSON.stringify(request));
+            addDebugLog('info', `📤 发送: ${method}`);
+        }
+        
+        function handleMessage(data) {
+            try {
+                const response = JSON.parse(data);
+                addDebugLog('info', `📥 收到响应: ${JSON.stringify(response).substring(0, 100)}...`);
+                
+                if (response.id && pendingRequests[response.id]) {
+                    pendingRequests[response.id](response);
+                    delete pendingRequests[response.id];
+                }
+            } catch (e) {
+                addDebugLog('error', `解析响应失败: ${e.message}`);
+            }
+        }
+        
+        // 日志管理
+        function addDebugLog(level, message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const log = { timestamp, level, message };
+            debugLogs.push(log);
+            
+            // 限制日志数量
+            if (debugLogs.length > 500) {
+                debugLogs = debugLogs.slice(-400);
+            }
+            
+            updateLogDisplay();
+        }
+        
+        function updateLogDisplay() {
+            const container = document.getElementById('logDebugOutput');
+            const filter = document.getElementById('logLevelFilter').value;
+            
+            let filtered = debugLogs;
+            if (filter !== 'all') {
+                filtered = debugLogs.filter(l => l.level === filter);
+            }
+            
+            const html = filtered.slice(-50).map(log => {
+                let color = '#d4d4d4';
+                if (log.level === 'error') color = '#f44336';
+                else if (log.level === 'warn') color = '#ff9800';
+                else if (log.level === 'success') color = '#4caf50';
+                
+                return `<div style="color: ${color}; margin-bottom: 4px;">[${log.timestamp}] ${log.message}</div>`;
+            }).join('');
+            
+            container.innerHTML = html || '暂无日志';
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        function clearDebugLogs() {
+            debugLogs = [];
+            updateLogDisplay();
+            addDebugLog('info', '日志已清空');
+        }
+        
+        function exportDebugLogs() {
+            const content = debugLogs.map(l => `[${l.timestamp}] [${l.level.toUpperCase()}] ${l.message}`).join('\n');
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `debug_logs_${new Date().toISOString().slice(0,10)}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+            addDebugLog('info', '日志已导出');
+        }
+        
+        // 传感器调试
+        function setDebugSensorValue() {
+            const deviceCode = document.getElementById('debugDeviceCode').value;
+            const identifier = document.getElementById('debugIdentifier').value;
+            const value = parseFloat(document.getElementById('debugIdentifierValue').value);
+            
+            callMethod('sensor.debug.set', {
+                deviceCode: deviceCode,
+                identifier: identifier,
+                value: value
+            }, function(response) {
+                const output = document.getElementById('sensorDebugOutput');
+                if (response.result) {
+                    output.innerHTML = `<span style="color: #4caf50;">✅ 模拟数据已发送</span>\n${JSON.stringify(response.result, null, 2)}`;
+                } else if (response.error) {
+                    output.innerHTML = `<span style="color: #f44336;">❌ 错误: ${response.error.message}</span>`;
+                }
+            });
+        }
+        
+        function setDebugSensorQuick(identifier, value) {
+            document.getElementById('debugIdentifier').value = identifier;
+            document.getElementById('debugIdentifierValue').value = value;
+            setDebugSensorValue();
+        }
+        
+        // RPC调试
+        function callCustomRpc() {
+            const method = document.getElementById('rpcMethodName').value.trim();
+            const paramsStr = document.getElementById('rpcMethodParams').value;
+            
+            if (!method) {
+                addDebugLog('error', '请输入方法名');
+                return;
+            }
+            
+            let params = {};
+            try {
+                params = JSON.parse(paramsStr);
+            } catch (e) {
+                addDebugLog('error', 'JSON参数格式错误');
+                return;
+            }
+            
+            callMethod(method, params, function(response) {
+                const output = document.getElementById('rpcDebugOutput');
+                output.innerHTML = JSON.stringify(response, null, 2);
+            });
+        }
+        
+        function callRpcQuick(method, params) {
+            callMethod(method, params, function(response) {
+                const output = document.getElementById('rpcDebugOutput');
+                output.innerHTML = JSON.stringify(response, null, 2);
+            });
+        }
+        
+        // 系统诊断
+        function runDiagnostics() {
+            addDebugLog('info', '正在运行诊断...');
+            
+            // 获取系统信息
+            callMethod('sys.info', {}, function(response) {
+                const output = document.getElementById('systemDebugOutput');
+                if (response.result) {
+                    output.innerHTML = JSON.stringify(response.result, null, 2);
+                }
+            });
+            
+            // 获取CAN状态
+            callMethod('can.status', {}, function(response) {
+                const diagCan = document.getElementById('diagCanStatus');
+                if (response.result && response.result.open) {
+                    diagCan.textContent = '✅ 正常';
+                    diagCan.style.color = '#2e7d32';
+                } else {
+                    diagCan.textContent = '❌ 未打开';
+                    diagCan.style.color = '#c62828';
+                }
+            });
+            
+            // 获取设备列表
+            callMethod('device.list', {}, function(response) {
+                const diagDevice = document.getElementById('diagDeviceCount');
+                if (response.result && response.result.devices) {
+                    diagDevice.textContent = response.result.devices.length;
+                    diagDevice.style.color = '#333';
+                }
+            });
+            
+            // 获取MQTT通道
+            callMethod('mqtt.channels.list', {}, function(response) {
+                const diagMqtt = document.getElementById('diagMqttCount');
+                if (response.result && response.result.channels) {
+                    const connected = response.result.channels.filter(c => c.connected).length;
+                    const total = response.result.channels.length;
+                    diagMqtt.textContent = `${connected}/${total}`;
+                    diagMqtt.style.color = connected > 0 ? '#2e7d32' : '#666';
+                }
+            });
+        }
+        
+        // MQTT调试
+        function mqttPublishDebug() {
+            const channelId = parseInt(document.getElementById('mqttDebugChannelId').value);
+            const topic = document.getElementById('mqttDebugTopic').value;
+            const qos = parseInt(document.getElementById('mqttDebugQos').value);
+            const payload = document.getElementById('mqttDebugPayload').value;
+            
+            callMethod('mqtt.publish', {
+                channelId: channelId,
+                topic: topic,
+                payload: payload,
+                qos: qos
+            }, function(response) {
+                const output = document.getElementById('mqttDebugOutput');
+                output.innerHTML = JSON.stringify(response, null, 2);
+            });
+        }
+        
+        function mqttSubscribeDebug() {
+            const channelId = parseInt(document.getElementById('mqttDebugChannelId').value);
+            const topic = document.getElementById('mqttDebugTopic').value;
+            const qos = parseInt(document.getElementById('mqttDebugQos').value);
+            
+            callMethod('mqtt.subscribe', {
+                channelId: channelId,
+                topic: topic,
+                qos: qos
+            }, function(response) {
+                const output = document.getElementById('mqttDebugOutput');
+                output.innerHTML = JSON.stringify(response, null, 2);
+            });
+        }
+        
+        function listMqttChannels() {
+            callMethod('mqtt.channels.list', {}, function(response) {
+                const output = document.getElementById('mqttDebugOutput');
+                output.innerHTML = JSON.stringify(response, null, 2);
+            });
+        }
+        
+        // 配置调试
+        function getConfigDebug() {
+            const path = document.getElementById('configPath').value.trim();
+            
+            callMethod('config.get', path ? { path: path } : {}, function(response) {
+                const output = document.getElementById('configDebugOutput');
+                output.innerHTML = JSON.stringify(response, null, 2);
+            });
+        }
+        
+        function saveConfigDebug() {
+            callMethod('config.save', {}, function(response) {
+                const output = document.getElementById('configDebugOutput');
+                if (response.result && response.result.ok) {
+                    output.innerHTML = '<span style="color: #4caf50;">✅ 配置已保存</span>';
+                } else {
+                    output.innerHTML = JSON.stringify(response, null, 2);
+                }
+            });
+        }
+        
+        function reloadConfigDebug() {
+            callMethod('config.reload', {}, function(response) {
+                const output = document.getElementById('configDebugOutput');
+                output.innerHTML = JSON.stringify(response, null, 2);
+            });
+        }
+        
+        // 场景测试
+        function testSceneTrigger() {
+            const sceneId = parseInt(document.getElementById('testSceneId').value);
+            const sceneType = document.getElementById('testSceneType').value;
+            
+            callMethod('scene.trigger', {
+                sceneId: sceneId,
+                type: sceneType
+            }, function(response) {
+                const output = document.getElementById('sceneDebugOutput');
+                output.innerHTML = JSON.stringify(response, null, 2);
+            });
+        }
+        
+        function listScenes() {
+            callMethod('scene.list', {}, function(response) {
+                const output = document.getElementById('sceneDebugOutput');
+                output.innerHTML = JSON.stringify(response, null, 2);
+            });
+        }
+        
+        function checkSceneStatus() {
+            callMethod('scene.status', {}, function(response) {
+                const output = document.getElementById('sceneDebugOutput');
+                output.innerHTML = JSON.stringify(response, null, 2);
+            });
+        }
+        
+        // 继电器控制
+        function controlRelayDebug() {
+            const node = parseInt(document.getElementById('relayNode').value);
+            const ch = parseInt(document.getElementById('relayChannel').value);
+            const action = document.getElementById('relayAction').value;
+            
+            callMethod('relay.control', {
+                node: node,
+                ch: ch,
+                action: action
+            }, function(response) {
+                const output = document.getElementById('relayDebugOutput');
+                output.innerHTML = JSON.stringify(response, null, 2);
+            });
+        }
+        
+        function queryRelayDebug() {
+            const node = parseInt(document.getElementById('relayNode').value);
+            
+            callMethod('relay.statusAll', { node: node }, function(response) {
+                const output = document.getElementById('relayDebugOutput');
+                output.innerHTML = JSON.stringify(response, null, 2);
+            });
+        }
+        
+        function queryAllRelaysDebug() {
+            callMethod('relay.queryAll', {}, function(response) {
+                const output = document.getElementById('relayDebugOutput');
+                output.innerHTML = JSON.stringify(response, null, 2);
+            });
+        }
+        
+        // Tauri代理控制
+        async function toggleWebsocatProxy() {
+            if (!window.__TAURI__) return;
+            
+            // 这里需要调用Tauri的命令来启动/停止代理
+            addDebugLog('info', '正在切换代理状态...');
+            // 实际实现需要根据Tauri后端的API来完成
+        }
+        
+        // 日志级别过滤器变化时更新显示
+        document.getElementById('logLevelFilter')?.addEventListener('change', updateLogDisplay);
+    </script>
+</body>
+</html>
