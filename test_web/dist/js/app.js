@@ -3361,6 +3361,7 @@ function renderMqttChannels() {
                         ? `<button onclick="disconnectMqttChannel(${channel.channelId})" class="danger" style="flex: 1;">断开</button>`
                         : `<button onclick="connectMqttChannel(${channel.channelId})" class="success" style="flex: 1;">连接</button>`
                     }
+                    <button onclick="viewMqttChannelConfig(${channel.channelId})" class="secondary" style="flex: 1;">配置</button>
                     <button onclick="removeMqttChannel(${channel.channelId})" class="secondary" style="flex: 1;">删除</button>
                 </div>
             </div>
@@ -3369,11 +3370,187 @@ function renderMqttChannels() {
     
     html += '</div>';
     if (container) container.innerHTML = html;
+    
+    // 同时刷新配置详情
+    refreshMqttChannelDetails();
 }
 
 /**
- * 打开添加MQTT通道弹窗
+ * 刷新MQTT通道详细配置
  */
+function refreshMqttChannelDetails() {
+    const container = document.getElementById('mqttChannelDetailsContainer');
+    if (!container) return;
+    
+    if (!mqttChannelsCache || mqttChannelsCache.length === 0) {
+        container.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">暂无通道配置数据</div>';
+        return;
+    }
+    
+    let html = '';
+    mqttChannelsCache.forEach(channel => {
+        const connected = channel.connected === true;
+        const enabled = channel.enabled !== false;
+        
+        html += `
+            <div style="background: white; border-radius: 10px; padding: 15px; margin-bottom: 15px; border: 1px solid ${connected ? '#4caf50' : '#e0e0e0'};">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #eee;">
+                    <div style="font-weight: 600; color: #333; font-size: 14px;">
+                        ☁️ ${escapeHtml(channel.name || 'MQTT通道 ' + channel.channelId)}
+                        <span style="font-size: 11px; padding: 2px 8px; border-radius: 8px; margin-left: 8px; background: ${connected ? '#c8e6c9' : '#f5f5f5'}; color: ${connected ? '#2e7d32' : '#666'};">
+                            ${connected ? '已连接' : (enabled ? '未连接' : '已禁用')}
+                        </span>
+                    </div>
+                    <span style="font-size: 12px; color: #999;">ID: ${channel.channelId}</span>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; font-size: 13px;">
+                    <div style="background: #f8f9fa; padding: 10px; border-radius: 6px;">
+                        <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Broker地址</div>
+                        <div style="color: #333; font-weight: 500;">${escapeHtml(channel.broker || '--')}:${channel.port || 1883}</div>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 10px; border-radius: 6px;">
+                        <div style="font-size: 11px; color: #666; margin-bottom: 4px;">客户端ID</div>
+                        <div style="color: #333; font-weight: 500; word-break: break-all;">${escapeHtml(channel.clientId || '自动生成')}</div>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 10px; border-radius: 6px;">
+                        <div style="font-size: 11px; color: #666; margin-bottom: 4px;">主题前缀</div>
+                        <div style="color: #333; font-weight: 500; word-break: break-all;">${escapeHtml(channel.topicPrefix || '--')}</div>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 10px; border-radius: 6px;">
+                        <div style="font-size: 11px; color: #666; margin-bottom: 4px;">用户名</div>
+                        <div style="color: #333; font-weight: 500;">${channel.username ? escapeHtml(channel.username) : '(未设置)'}</div>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 10px; border-radius: 6px;">
+                        <div style="font-size: 11px; color: #666; margin-bottom: 4px;">QoS级别</div>
+                        <div style="color: #333; font-weight: 500;">${channel.qos !== undefined ? channel.qos : 0}</div>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 10px; border-radius: 6px;">
+                        <div style="font-size: 11px; color: #666; margin-bottom: 4px;">心跳间隔</div>
+                        <div style="color: #333; font-weight: 500;">${channel.keepAliveSec || 60}秒</div>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 10px; border-radius: 6px;">
+                        <div style="font-size: 11px; color: #666; margin-bottom: 4px;">自动重连</div>
+                        <div style="color: #333; font-weight: 500;">${channel.autoReconnect !== false ? '✅ 是' : '❌ 否'}</div>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 10px; border-radius: 6px;">
+                        <div style="font-size: 11px; color: #666; margin-bottom: 4px;">启用状态</div>
+                        <div style="color: #333; font-weight: 500;">${enabled ? '✅ 已启用' : '❌ 已禁用'}</div>
+                    </div>
+                </div>
+                
+                <!-- 主题配置 -->
+                <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #eee;">
+                    <div style="font-size: 12px; color: #666; margin-bottom: 8px; font-weight: 600;">📨 主题配置</div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; font-size: 12px;">
+                        ${channel.topicControlSub ? `
+                            <div style="background: #e3f2fd; padding: 8px 10px; border-radius: 6px;">
+                                <span style="color: #1565c0;">📥 控制订阅:</span>
+                                <span style="color: #333; word-break: break-all;">${escapeHtml(channel.topicControlSub)}</span>
+                            </div>
+                        ` : ''}
+                        ${channel.topicStatusPub ? `
+                            <div style="background: #e8f5e9; padding: 8px 10px; border-radius: 6px;">
+                                <span style="color: #2e7d32;">📤 状态发布:</span>
+                                <span style="color: #333; word-break: break-all;">${escapeHtml(channel.topicStatusPub)}</span>
+                            </div>
+                        ` : ''}
+                        ${channel.topicStrategySub ? `
+                            <div style="background: #fff3e0; padding: 8px 10px; border-radius: 6px;">
+                                <span style="color: #e65100;">📥 策略订阅:</span>
+                                <span style="color: #333; word-break: break-all;">${escapeHtml(channel.topicStrategySub)}</span>
+                            </div>
+                        ` : ''}
+                        ${channel.topicEventPub ? `
+                            <div style="background: #fce4ec; padding: 8px 10px; border-radius: 6px;">
+                                <span style="color: #c2185b;">📤 事件发布:</span>
+                                <span style="color: #333; word-break: break-all;">${escapeHtml(channel.topicEventPub)}</span>
+                            </div>
+                        ` : ''}
+                        ${channel.topicSettingSub ? `
+                            <div style="background: #ede7f6; padding: 8px 10px; border-radius: 6px;">
+                                <span style="color: #512da8;">📥 设置订阅:</span>
+                                <span style="color: #333; word-break: break-all;">${escapeHtml(channel.topicSettingSub)}</span>
+                            </div>
+                        ` : ''}
+                        ${channel.topicSettingPub ? `
+                            <div style="background: #e0f2f1; padding: 8px 10px; border-radius: 6px;">
+                                <span style="color: #00796b;">📤 设置发布:</span>
+                                <span style="color: #333; word-break: break-all;">${escapeHtml(channel.topicSettingPub)}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+                
+                <!-- 统计信息 -->
+                <div style="margin-top: 12px; display: flex; gap: 15px; font-size: 12px; color: #666;">
+                    <span>📤 已发送: <strong style="color: #333;">${channel.messagesSent || 0}</strong> 条</span>
+                    <span>📥 已接收: <strong style="color: #333;">${channel.messagesReceived || 0}</strong> 条</span>
+                    ${channel.lastConnectedAt ? `<span>最后连接: ${new Date(channel.lastConnectedAt).toLocaleString()}</span>` : ''}
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+/**
+ * 查看单个MQTT通道配置
+ */
+function viewMqttChannelConfig(channelId) {
+    const channel = mqttChannelsCache.find(c => c.channelId === channelId);
+    if (!channel) {
+        alert('未找到通道配置');
+        return;
+    }
+    
+    // 显示JSON配置
+    const configJson = JSON.stringify(channel, null, 2);
+    
+    // 创建一个简单的弹窗显示配置
+    const existingModal = document.getElementById('mqttConfigViewModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    const modal = document.createElement('div');
+    modal.id = 'mqttConfigViewModal';
+    modal.className = 'modal-overlay';
+    modal.style.display = 'flex';
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header" style="background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);">
+                <h3>📋 通道 ${channelId} 配置</h3>
+                <button class="modal-close" onclick="document.getElementById('mqttConfigViewModal').remove()">✕</button>
+            </div>
+            <div class="modal-body">
+                <pre style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 13px; max-height: 400px;">${escapeHtml(configJson)}</pre>
+            </div>
+            <div class="modal-footer">
+                <button onclick="copyMqttConfig(${channelId})" class="success">📋 复制配置</button>
+                <button onclick="document.getElementById('mqttConfigViewModal').remove()" class="secondary">关闭</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+/**
+ * 复制MQTT配置
+ */
+function copyMqttConfig(channelId) {
+    const channel = mqttChannelsCache.find(c => c.channelId === channelId);
+    if (!channel) return;
+    
+    const configJson = JSON.stringify(channel, null, 2);
+    navigator.clipboard.writeText(configJson).then(() => {
+        alert('配置已复制到剪贴板');
+    }).catch(err => {
+        console.error('复制失败:', err);
+    });
+}
 function openAddMqttChannelModal() {
     // 设置默认值
     let nextId = 1;
