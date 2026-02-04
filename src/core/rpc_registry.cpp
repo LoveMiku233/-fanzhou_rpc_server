@@ -209,6 +209,83 @@ void RpcRegistry::registerSystem()
         };
     });
 
+    // 获取仪表板汇总信息（优化：一次RPC返回所有仪表板需要的数据）
+    dispatcher_->registerMethod(QStringLiteral("sys.dashboard"),
+                                 [this](const QJsonObject &) {
+        // 设备统计
+        int totalDevices = context_->relays.size();
+        int onlineDevices = 0;
+        int offlineDevices = 0;
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        for (auto it = context_->relays.begin(); it != context_->relays.end(); ++it) {
+            auto *relay = it.value();
+            if (relay) {
+                qint64 ageMs = 0;
+                bool online = false;
+                calcDeviceOnlineStatus(relay->lastSeenMs(), now, ageMs, online);
+                if (online) {
+                    onlineDevices++;
+                } else {
+                    offlineDevices++;
+                }
+            }
+        }
+
+        // 分组数量
+        int totalGroups = context_->deviceGroups.size();
+
+        // 策略数量
+        int totalStrategies = context_->strategyStates().size();
+
+        // 传感器数量
+        int totalSensors = context_->sensors.size();
+
+        // CAN状态
+        const bool canOpened = context_->canBus && context_->canBus->isOpened();
+        const QString canInterface = context_->coreConfig.can.interface;
+
+        // MQTT状态
+        int mqttConnected = 0;
+        int mqttTotal = 0;
+        if (context_->mqttManager) {
+            auto channelInfos = context_->mqttManager->getAllChannelInfo();
+            mqttTotal = channelInfos.size();
+            for (const auto &info : channelInfos) {
+                if (info.connected) {
+                    mqttConnected++;
+                }
+            }
+        }
+
+        // 系统运行时间
+        QString uptime;
+        if (context_->systemMonitor) {
+            uptime = context_->systemMonitor->getUptimeFormatted();
+        }
+
+        return QJsonObject{
+            {QStringLiteral("ok"), true},
+            // 设备统计
+            {QStringLiteral("totalDevices"), totalDevices},
+            {QStringLiteral("onlineDevices"), onlineDevices},
+            {QStringLiteral("offlineDevices"), offlineDevices},
+            // 分组
+            {QStringLiteral("totalGroups"), totalGroups},
+            // 策略
+            {QStringLiteral("totalStrategies"), totalStrategies},
+            // 传感器
+            {QStringLiteral("totalSensors"), totalSensors},
+            // CAN
+            {QStringLiteral("canOpened"), canOpened},
+            {QStringLiteral("canInterface"), canInterface},
+            // MQTT
+            {QStringLiteral("mqttConnected"), mqttConnected},
+            {QStringLiteral("mqttTotal"), mqttTotal},
+            // 系统
+            {QStringLiteral("uptime"), uptime}
+        };
+    });
+
     dispatcher_->registerMethod(QStringLiteral("sys.can.setBitrate"),
                                  [this](const QJsonObject &params) {
         QString interface;

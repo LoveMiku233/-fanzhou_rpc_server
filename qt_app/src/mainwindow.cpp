@@ -46,22 +46,17 @@ MainWindow::MainWindow(QWidget *parent)
     , rpcClient_(new RpcClient(this))
     , autoRefreshTimer_(new QTimer(this))
     , statusBarTimer_(new QTimer(this))
-    , cloudStatusTimer_(new QTimer(this))
     , currentPageIndex_(0)
 {
     setupUi();
 
-    // 自动刷新定时器
+    // 自动刷新定时器（同时负责云状态更新，减少RPC调用频率）
     connect(autoRefreshTimer_, &QTimer::timeout, this, &MainWindow::onAutoRefreshTimeout);
 
     // 状态栏时间更新定时器
     connect(statusBarTimer_, &QTimer::timeout, this, &MainWindow::updateStatusBarTime);
     statusBarTimer_->start(1000);
     updateStatusBarTime();
-    
-    // 云状态检查定时器
-    connect(cloudStatusTimer_, &QTimer::timeout, this, &MainWindow::updateCloudStatus);
-    cloudStatusTimer_->start(5000);  // 每5秒检查一次云连接状态
     
     // 延迟执行自动连接（等待UI初始化完成）
     QTimer::singleShot(800, this, [this]() {
@@ -98,7 +93,6 @@ MainWindow::~MainWindow()
 {
     autoRefreshTimer_->stop();
     statusBarTimer_->stop();
-    cloudStatusTimer_->stop();
     qDebug() << "[MAIN_WINDOW] 主窗口销毁";
 }
 
@@ -279,6 +273,8 @@ void MainWindow::createContentArea()
     homeWidget_ = new HomeWidget(rpcClient_, this);
     homeScrollArea->setWidget(homeWidget_);
     QScroller::grabGesture(homeScrollArea->viewport(), QScroller::LeftMouseButtonGesture);
+    // 连接MQTT状态信号，避免重复RPC调用更新状态栏
+    connect(homeWidget_, &HomeWidget::mqttStatusUpdated, this, &MainWindow::onMqttStatusFromDashboard);
     contentStack_->addWidget(homeScrollArea);
 
     // 创建设备管理页面（带滚动）
@@ -461,9 +457,18 @@ void MainWindow::updateStatusBarConnection(bool connected)
 void MainWindow::onAutoRefreshTimeout()
 {
     if (rpcClient_->isConnected()) {
-        // 静默刷新主页数据
-        if (currentPageIndex_ == 0 && homeWidget_) {
-            homeWidget_->refreshData();
+        // 只刷新当前可见页面的数据，避免不必要的RPC调用
+        switch (currentPageIndex_) {
+        case 0:  // 主页
+            if (homeWidget_) {
+                homeWidget_->refreshData();
+            }
+            // 主页的dashboard调用已包含MQTT状态，无需额外更新云状态
+            break;
+        default:
+            // 其他页面不自动刷新，但需要更新云状态
+            updateCloudStatus();
+            break;
         }
     }
 }
@@ -574,5 +579,23 @@ void MainWindow::updateCloudStatus()
         // RPC调用失败或方法不存在
         cloudStatusLabel_->setText(QStringLiteral("[云] 未知"));
         cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #95a5a6; padding: 4px 10px;"));
+    }
+}
+
+void MainWindow::onMqttStatusFromDashboard(int connected, int total)
+{
+    // 从HomeWidget的dashboard调用接收MQTT状态，避免重复RPC调用
+    if (total == 0) {
+        cloudStatusLabel_->setText(QStringLiteral("[云] 未配置"));
+        cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #95a5a6; padding: 4px 10px;"));
+    } else if (connected == 0) {
+        cloudStatusLabel_->setText(QStringLiteral("[云] 断开 (0/%1)").arg(total));
+        cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #e67e22; padding: 4px 10px;"));
+    } else if (connected == total) {
+        cloudStatusLabel_->setText(QStringLiteral("[云] 已连接 (%1)").arg(total));
+        cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #27ae60; font-weight: bold; padding: 4px 10px;"));
+    } else {
+        cloudStatusLabel_->setText(QStringLiteral("[云] 部分连接 (%1/%2)").arg(connected).arg(total));
+        cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #f39c12; padding: 4px 10px;"));
     }
 }

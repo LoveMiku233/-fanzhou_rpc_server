@@ -47,6 +47,7 @@ private slots:
     void updateStatusBarTime();
     void attemptAutoConnect();
     void updateCloudStatus();
+    void onMqttStatusFromDashboard(int connected, int total);
 
 private:
     void setupUi();
@@ -85,7 +86,7 @@ private:
     // 定时器
     QTimer *autoRefreshTimer_;
     QTimer *statusBarTimer_;
-    QTimer *cloudStatusTimer_;
+    // 注意：cloudStatusTimer已被移除，云状态检查合并到autoRefreshTimer中
 
     // 当前页面索引
     int currentPageIndex_;
