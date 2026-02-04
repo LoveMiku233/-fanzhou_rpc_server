@@ -45,6 +45,12 @@ constexpr int BTN_HEIGHT = 40;
 // 大按钮高度（主要操作）
 constexpr int BTN_HEIGHT_LARGE = 44;
 
+// 紧急/急停按钮高度（需要更突出的显示）
+constexpr int BTN_HEIGHT_EMERGENCY = 50;
+
+// 侧边栏菜单按钮高度（包含图标和文字两行）
+constexpr int MENU_BTN_HEIGHT = 52;
+
 // 输入框高度
 constexpr int INPUT_HEIGHT = 40;
 

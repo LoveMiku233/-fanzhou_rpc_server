@@ -226,7 +226,7 @@ void MainWindow::createSidebar()
         btn->setObjectName(QStringLiteral("menuButton"));
         btn->setProperty("menuIndex", i);
         btn->setCheckable(true);
-        btn->setFixedHeight(BTN_HEIGHT_LARGE + 8);  // 固定高度防止重叠
+        btn->setFixedHeight(MENU_BTN_HEIGHT);  // 侧边栏菜单按钮使用专用常量
         btn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         btn->setStyleSheet(QStringLiteral(
             "QPushButton { "

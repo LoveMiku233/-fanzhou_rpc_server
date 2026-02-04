@@ -188,7 +188,7 @@ void HomeWidget::setupUi()
 
     // 急停按钮 - 固定高度和宽度
     emergencyStopButton_ = new QPushButton(QStringLiteral("紧急停止"), this);
-    emergencyStopButton_->setFixedHeight(BTN_HEIGHT_LARGE + 6);
+    emergencyStopButton_->setFixedHeight(BTN_HEIGHT_EMERGENCY);
     emergencyStopButton_->setStyleSheet(QStringLiteral(
         "QPushButton {"
         "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e74c3c, stop:1 #c0392b);"
