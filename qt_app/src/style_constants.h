@@ -37,23 +37,26 @@ constexpr int DIALOG_SPACING = 8;
 
 // ==================== 控件高度（统一） ====================
 // 小按钮高度（图标按钮等）
-constexpr int BTN_HEIGHT_SMALL = 32;
+constexpr int BTN_HEIGHT_SMALL = 36;
 
 // 标准按钮高度
-constexpr int BTN_HEIGHT = 36;
+constexpr int BTN_HEIGHT = 40;
 
 // 大按钮高度（主要操作）
-constexpr int BTN_HEIGHT_LARGE = 40;
+constexpr int BTN_HEIGHT_LARGE = 44;
 
 // 输入框高度
-constexpr int INPUT_HEIGHT = 36;
+constexpr int INPUT_HEIGHT = 40;
 
 // ==================== 控件最小宽度 ====================
 // 小按钮最小宽度
-constexpr int BTN_MIN_WIDTH_SMALL = 40;
+constexpr int BTN_MIN_WIDTH_SMALL = 50;
 
 // 标准按钮最小宽度
-constexpr int BTN_MIN_WIDTH = 60;
+constexpr int BTN_MIN_WIDTH = 70;
+
+// 大按钮最小宽度
+constexpr int BTN_MIN_WIDTH_LARGE = 90;
 
 // 输入框最小宽度
 constexpr int INPUT_MIN_WIDTH = 80;

@@ -59,7 +59,7 @@ void DeviceCard::setupUi()
     setStyleSheet(QStringLiteral(
         "#deviceCard {"
         "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);"
-        "  border: 1px solid #e0e0e0;"
+        "  border: 2px solid #e0e0e0;"
         "  border-radius: %1px;"
         "}"
         "#deviceCard:hover {"
@@ -68,13 +68,7 @@ void DeviceCard::setupUi()
         "}").arg(BORDER_RADIUS_CARD));
     setCursor(Qt::PointingHandCursor);
     setMinimumHeight(CARD_MIN_HEIGHT);
-    
-    // 阴影效果
-    QGraphicsDropShadowEffect *shadow = new QGraphicsDropShadowEffect(this);
-    shadow->setBlurRadius(8);
-    shadow->setColor(QColor(0, 0, 0, 25));
-    shadow->setOffset(0, 2);
-    setGraphicsEffect(shadow);
+    setMinimumWidth(200);  // 确保卡片最小宽度
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(CARD_MARGIN, CARD_MARGIN, CARD_MARGIN, CARD_MARGIN);
@@ -236,7 +230,8 @@ void DeviceWidget::setupUi()
     toolbarLayout->setSpacing(CARD_SPACING);
 
     refreshButton_ = new QPushButton(QStringLiteral("[刷]刷新"), this);
-    refreshButton_->setMinimumHeight(BTN_HEIGHT);
+    refreshButton_->setFixedHeight(BTN_HEIGHT);
+    refreshButton_->setMinimumWidth(BTN_MIN_WIDTH);
     refreshButton_->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #3498db; color: white; border: none; "
         "border-radius: %1px; padding: 0 12px; font-weight: bold; font-size: %2px; }"
@@ -245,7 +240,8 @@ void DeviceWidget::setupUi()
     toolbarLayout->addWidget(refreshButton_);
 
     queryAllButton_ = new QPushButton(QStringLiteral("[查]查询"), this);
-    queryAllButton_->setMinimumHeight(BTN_HEIGHT);
+    queryAllButton_->setFixedHeight(BTN_HEIGHT);
+    queryAllButton_->setMinimumWidth(BTN_MIN_WIDTH);
     queryAllButton_->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #27ae60; color: white; border: none; "
         "border-radius: %1px; padding: 0 12px; font-weight: bold; font-size: %2px; }"
@@ -254,7 +250,8 @@ void DeviceWidget::setupUi()
     toolbarLayout->addWidget(queryAllButton_);
 
     addDeviceButton_ = new QPushButton(QStringLiteral("[+]添加"), this);
-    addDeviceButton_->setMinimumHeight(BTN_HEIGHT);
+    addDeviceButton_->setFixedHeight(BTN_HEIGHT);
+    addDeviceButton_->setMinimumWidth(BTN_MIN_WIDTH);
     addDeviceButton_->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #f39c12; color: white; border: none; "
         "border-radius: %1px; padding: 0 12px; font-weight: bold; font-size: %2px; }"

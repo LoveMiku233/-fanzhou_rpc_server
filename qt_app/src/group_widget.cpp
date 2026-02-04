@@ -52,7 +52,7 @@ void GroupCard::setupUi()
     setStyleSheet(QStringLiteral(
         "#groupCard {"
         "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);"
-        "  border: 1px solid #e0e0e0;"
+        "  border: 2px solid #e0e0e0;"
         "  border-radius: %1px;"
         "}"
         "#groupCard:hover {"
@@ -61,13 +61,7 @@ void GroupCard::setupUi()
         "}").arg(BORDER_RADIUS_CARD));
     setCursor(Qt::PointingHandCursor);
     setMinimumHeight(CARD_MIN_HEIGHT);
-    
-    // 阴影效果
-    QGraphicsDropShadowEffect *shadow = new QGraphicsDropShadowEffect(this);
-    shadow->setBlurRadius(8);
-    shadow->setColor(QColor(0, 0, 0, 25));
-    shadow->setOffset(0, 2);
-    setGraphicsEffect(shadow);
+    setMinimumWidth(200);  // 确保卡片最小宽度
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(CARD_MARGIN, CARD_MARGIN, CARD_MARGIN, CARD_MARGIN);
@@ -124,12 +118,13 @@ void GroupCard::setupUi()
     line->setMaximumHeight(1);
     mainLayout->addWidget(line);
 
-    // 底部行：控制按钮
+    // 底部行：控制按钮 - 统一大小
     QHBoxLayout *buttonRow = new QHBoxLayout();
-    buttonRow->setSpacing(4);
+    buttonRow->setSpacing(6);
     
     QPushButton *stopBtn = new QPushButton(QStringLiteral("停"), this);
-    stopBtn->setMinimumHeight(BTN_HEIGHT_SMALL);
+    stopBtn->setFixedHeight(BTN_HEIGHT_SMALL);
+    stopBtn->setMinimumWidth(BTN_MIN_WIDTH_SMALL);
     stopBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #7f8c8d; color: white; border: none; "
         "border-radius: %1px; font-weight: bold; font-size: %2px; padding: 0 8px; }"
@@ -140,7 +135,8 @@ void GroupCard::setupUi()
     buttonRow->addWidget(stopBtn);
     
     QPushButton *fwdBtn = new QPushButton(QStringLiteral("正"), this);
-    fwdBtn->setMinimumHeight(BTN_HEIGHT_SMALL);
+    fwdBtn->setFixedHeight(BTN_HEIGHT_SMALL);
+    fwdBtn->setMinimumWidth(BTN_MIN_WIDTH_SMALL);
     fwdBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #27ae60; color: white; border: none; "
         "border-radius: %1px; font-weight: bold; font-size: %2px; padding: 0 8px; }"
@@ -151,7 +147,8 @@ void GroupCard::setupUi()
     buttonRow->addWidget(fwdBtn);
     
     QPushButton *revBtn = new QPushButton(QStringLiteral("反"), this);
-    revBtn->setMinimumHeight(BTN_HEIGHT_SMALL);
+    revBtn->setFixedHeight(BTN_HEIGHT_SMALL);
+    revBtn->setMinimumWidth(BTN_MIN_WIDTH_SMALL);
     revBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #f39c12; color: white; border: none; "
         "border-radius: %1px; font-weight: bold; font-size: %2px; padding: 0 8px; }"
@@ -162,7 +159,7 @@ void GroupCard::setupUi()
     buttonRow->addWidget(revBtn);
     
     QPushButton *deleteBtn = new QPushButton(QStringLiteral("删"), this);
-    deleteBtn->setMinimumHeight(BTN_HEIGHT_SMALL);
+    deleteBtn->setFixedHeight(BTN_HEIGHT_SMALL);
     deleteBtn->setMinimumWidth(BTN_MIN_WIDTH_SMALL);
     deleteBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #e74c3c; color: white; border: none; "
@@ -243,7 +240,8 @@ void GroupWidget::setupUi()
     toolbarLayout->setSpacing(CARD_SPACING);
 
     QPushButton *refreshButton = new QPushButton(QStringLiteral("[刷]刷新"), this);
-    refreshButton->setMinimumHeight(BTN_HEIGHT);
+    refreshButton->setFixedHeight(BTN_HEIGHT);
+    refreshButton->setMinimumWidth(BTN_MIN_WIDTH);
     refreshButton->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #3498db; color: white; border: none; "
         "border-radius: %1px; padding: 0 12px; font-weight: bold; font-size: %2px; }"
@@ -252,7 +250,8 @@ void GroupWidget::setupUi()
     toolbarLayout->addWidget(refreshButton);
 
     QPushButton *createButton = new QPushButton(QStringLiteral("[+]创建"), this);
-    createButton->setMinimumHeight(BTN_HEIGHT);
+    createButton->setFixedHeight(BTN_HEIGHT);
+    createButton->setMinimumWidth(BTN_MIN_WIDTH);
     createButton->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #27ae60; color: white; border: none; "
         "border-radius: %1px; padding: 0 12px; font-weight: bold; font-size: %2px; }"
@@ -261,7 +260,8 @@ void GroupWidget::setupUi()
     toolbarLayout->addWidget(createButton);
 
     QPushButton *manageChannelsBtn = new QPushButton(QStringLiteral("[置]管理"), this);
-    manageChannelsBtn->setMinimumHeight(BTN_HEIGHT);
+    manageChannelsBtn->setFixedHeight(BTN_HEIGHT);
+    manageChannelsBtn->setMinimumWidth(BTN_MIN_WIDTH);
     manageChannelsBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #f39c12; color: white; border: none; "
         "border-radius: %1px; padding: 0 12px; font-weight: bold; font-size: %2px; }"

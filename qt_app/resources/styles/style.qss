@@ -93,15 +93,15 @@ QGroupBox::title {
     color: #2c3e50;
 }
 
-/* Push Buttons - 触屏优化，现代渐变效果 */
+/* Push Buttons - 触屏优化，现代渐变效果，统一尺寸 */
 QPushButton {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
         stop:0 #5dade2, stop:1 #3498db);
     color: white;
     border: none;
     border-radius: 8px;
-    padding: 10px 16px;
-    min-width: 70px;
+    padding: 8px 16px;
+    min-width: 60px;
     min-height: 36px;
     font-weight: bold;
     font-size: 13px;
