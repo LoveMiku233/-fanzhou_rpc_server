@@ -407,7 +407,6 @@ void MainWindow::updateMenuButtonStyles(int activeIndex)
 void MainWindow::onConnectionStatusChanged(bool connected)
 {
     updateStatusBarConnection(connected);
-
     if (connected) {
         // 启动自动刷新
         QSettings settings;

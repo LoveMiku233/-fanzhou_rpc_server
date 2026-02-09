@@ -37,6 +37,7 @@ int main(int argc, char *argv[])
     mainWindow.setWindowTitle(QStringLiteral("泛舟RPC客户端 - 温室控制系统"));
     // 适配7寸1024x600分辨率触屏，全屏显示以充分利用小屏幕空间
     mainWindow.showMaximized();
+    mainWindow.setFixedSize(1024, 600);
 
     return app.exec();
 }
