@@ -34,6 +34,12 @@
 
 using namespace UIConstants;
 
+namespace {
+// Minimum current (mA) threshold to display in channel status
+// Values below this are considered noise/measurement error and are hidden
+constexpr double kMinDisplayCurrentMa = 0.1;
+}
+
 // ==================== DeviceCard Implementation ====================
 
 DeviceCard::DeviceCard(int nodeId, const QString &name, QWidget *parent)
@@ -193,7 +199,7 @@ void DeviceCard::updateStatus(bool online, qint64 ageMs, double totalCurrent, co
 
             // 显示通道号:状态(电流mA)
             QString displayText;
-            if (current > 0.1) {
+            if (current > kMinDisplayCurrentMa) {
                 displayText = QStringLiteral("%1:%2(%3)").arg(ch).arg(modeText).arg(current, 0, 'f', 0);
             } else {
                 displayText = QStringLiteral("%1:%2").arg(ch).arg(modeText);

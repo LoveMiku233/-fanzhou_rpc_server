@@ -19,6 +19,16 @@
 
 using namespace UIConstants;
 
+namespace {
+// Delay between stopping each channel during sequential stop (ms)
+// This prevents hardware overload and ensures each relay has time to respond
+constexpr int kChannelStopIntervalMs = 300;
+
+// Delay before refreshing status after all channels are stopped (ms)
+// This allows time for the hardware to report updated status
+constexpr int kStatusRefreshDelayMs = 200;
+}
+
 RelayControlDialog::RelayControlDialog(RpcClient *rpcClient, int nodeId,
                                          const QString &deviceName, QWidget *parent)
     : QDialog(parent)
@@ -196,7 +206,7 @@ void RelayControlDialog::onChannelControlClicked()
 
 void RelayControlDialog::onStopAllClicked()
 {
-    // 开始顺序停止所有通道，每个通道间隔300ms
+    // 开始顺序停止所有通道
     stopChannelIndex_ = 0;
     stopNextChannel();
 }
@@ -210,15 +220,15 @@ void RelayControlDialog::stopNextChannel()
     
     if (stopChannelIndex_ >= 4) {
         // 所有通道已停止，刷新状态
-        QTimer::singleShot(200, this, &RelayControlDialog::onQueryStatusClicked);
+        QTimer::singleShot(kStatusRefreshDelayMs, this, &RelayControlDialog::onQueryStatusClicked);
         return;
     }
     
     controlRelay(stopChannelIndex_, QStringLiteral("stop"));
     stopChannelIndex_++;
     
-    // 延迟300ms后停止下一个通道
-    QTimer::singleShot(300, this, &RelayControlDialog::stopNextChannel);
+    // 延迟后停止下一个通道
+    QTimer::singleShot(kChannelStopIntervalMs, this, &RelayControlDialog::stopNextChannel);
 }
 
 void RelayControlDialog::onQueryStatusClicked()

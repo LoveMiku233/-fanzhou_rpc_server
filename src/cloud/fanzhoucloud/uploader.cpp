@@ -15,6 +15,9 @@ const char *const kLogSource = "CloudUploader";
 
 // Tolerance for current comparison (in A, 0.01A = 10mA)
 constexpr double kCurrentTolerance = 0.01;
+
+// Key prefix for identifying current fields in payload
+const QString kCurrentKeyPrefix = QStringLiteral("current");
 }
 
 CloudUploader::CloudUploader(core::CoreContext *ctx, QObject *parent)
@@ -72,12 +75,17 @@ void CloudUploader::onChannelValueChanged(quint8 nodeId, quint8 channel)
 
 bool CloudUploader::payloadsEqual(const QJsonObject &a, const QJsonObject &b, double currentTolerance) const
 {
-    // Check if keys are the same
-    if (a.keys() != b.keys()) {
+    // Fast path: check if key counts are the same first
+    if (a.size() != b.size()) {
         return false;
     }
     
     for (const QString &key : a.keys()) {
+        // Check if b contains this key
+        if (!b.contains(key)) {
+            return false;
+        }
+        
         const QJsonValue &valA = a[key];
         const QJsonValue &valB = b[key];
         
@@ -86,14 +94,24 @@ bool CloudUploader::payloadsEqual(const QJsonObject &a, const QJsonObject &b, do
             return false;
         }
         
-        // For current values (keys containing "current"), use tolerance comparison
-        if (key.contains(QStringLiteral("current"), Qt::CaseInsensitive) && 
-            valA.isDouble() && valB.isDouble()) {
-            double diff = std::fabs(valA.toDouble() - valB.toDouble());
-            if (diff > currentTolerance) {
-                return false;
+        // For current fields (keys starting with "current" followed by a digit), use tolerance comparison
+        // Format: "node_X_currentY" where X is node id and Y is channel index (1-4)
+        if (key.contains(kCurrentKeyPrefix) && valA.isDouble() && valB.isDouble()) {
+            // Verify it's actually a current field (ends with digit after "current")
+            int currentPos = key.indexOf(kCurrentKeyPrefix);
+            if (currentPos >= 0) {
+                int afterCurrentPos = currentPos + kCurrentKeyPrefix.length();
+                if (afterCurrentPos < key.length() && key[afterCurrentPos].isDigit()) {
+                    double diff = std::fabs(valA.toDouble() - valB.toDouble());
+                    if (diff > currentTolerance) {
+                        return false;
+                    }
+                    continue;  // Skip the default comparison below
+                }
             }
-        } else if (valA.isDouble() && valB.isDouble()) {
+        }
+        
+        if (valA.isDouble() && valB.isDouble()) {
             // For other double values, use exact comparison
             if (valA.toDouble() != valB.toDouble()) {
                 return false;
