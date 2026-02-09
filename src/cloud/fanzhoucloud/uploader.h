@@ -43,6 +43,15 @@ private:
 
     void tryUploadNode(quint8 nodeId, bool force = false);
     QJsonObject buildNodePayload(quint8 nodeId, const QString &formatId) const;
+    
+    /**
+     * @brief Compare two payloads with tolerance for floating-point values
+     * @param a First payload
+     * @param b Second payload
+     * @param currentTolerance Tolerance for current values (in A)
+     * @return true if payloads are considered equal
+     */
+    bool payloadsEqual(const QJsonObject &a, const QJsonObject &b, double currentTolerance = 0.01) const;
 };
 
 }

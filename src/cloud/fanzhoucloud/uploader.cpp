@@ -5,12 +5,19 @@
 #include "utils/logger.h"
 #include <QJsonDocument>
 #include <QJsonArray>
+#include <cmath>
 
 namespace fanzhou {
 namespace cloud {
 namespace fanzhoucloud {
 namespace {
 const char *const kLogSource = "CloudUploader";
+
+// Tolerance for current comparison (in A, 0.01A = 10mA)
+constexpr double kCurrentTolerance = 0.01;
+
+// Key prefix for identifying current fields in payload
+const QString kCurrentKeyPrefix = QStringLiteral("current");
 }
 
 CloudUploader::CloudUploader(core::CoreContext *ctx, QObject *parent)
@@ -64,6 +71,58 @@ void CloudUploader::onChannelValueChanged(quint8 nodeId, quint8 channel)
     }
 
     tryUploadNode(nodeId, cfg_->uploadMode != QStringLiteral("change"));
+}
+
+bool CloudUploader::payloadsEqual(const QJsonObject &a, const QJsonObject &b, double currentTolerance) const
+{
+    // Fast path: check if key counts are the same first
+    if (a.size() != b.size()) {
+        return false;
+    }
+    
+    for (const QString &key : a.keys()) {
+        // Check if b contains this key
+        if (!b.contains(key)) {
+            return false;
+        }
+        
+        const QJsonValue &valA = a[key];
+        const QJsonValue &valB = b[key];
+        
+        // If types are different, not equal
+        if (valA.type() != valB.type()) {
+            return false;
+        }
+        
+        // For current fields (keys starting with "current" followed by a digit), use tolerance comparison
+        // Format: "node_X_currentY" where X is node id and Y is channel index (1-4)
+        if (key.contains(kCurrentKeyPrefix) && valA.isDouble() && valB.isDouble()) {
+            // Verify it's actually a current field (ends with digit after "current")
+            int currentPos = key.indexOf(kCurrentKeyPrefix);
+            if (currentPos >= 0) {
+                int afterCurrentPos = currentPos + kCurrentKeyPrefix.length();
+                if (afterCurrentPos < key.length() && key[afterCurrentPos].isDigit()) {
+                    double diff = std::fabs(valA.toDouble() - valB.toDouble());
+                    if (diff > currentTolerance) {
+                        return false;
+                    }
+                    continue;  // Skip the default comparison below
+                }
+            }
+        }
+        
+        if (valA.isDouble() && valB.isDouble()) {
+            // For other double values, use exact comparison
+            if (valA.toDouble() != valB.toDouble()) {
+                return false;
+            }
+        } else if (valA != valB) {
+            // For non-double values, use exact comparison
+            return false;
+        }
+    }
+    
+    return true;
 }
 
 void CloudUploader::tryUploadNode(quint8 nodeId, bool force)
@@ -125,13 +184,14 @@ void CloudUploader::tryUploadNode(quint8 nodeId, bool force)
                 continue;
             }
 
+            // Use tolerance-based comparison for change mode
             if (cfg_->uploadMode == QStringLiteral("change") &&
                 !force &&
                 !state.lastPayload.isEmpty() &&
-                state.lastPayload == payload) {
+                payloadsEqual(state.lastPayload, payload, kCurrentTolerance)) {
 
                 LOG_DEBUG(kLogSource,
-                          QStringLiteral("Skip upload node %1: payload unchanged")
+                          QStringLiteral("Skip upload node %1: payload unchanged (within tolerance)")
                               .arg(nodeId));
                 return;
             }
@@ -226,10 +286,12 @@ QJsonObject CloudUploader::buildNodePayload(quint8 nodeId,
                 device::RelayProtocol::phaseLost(status.statusByte);
         }
 
-        // 电流
+        // 电流 - 使用四舍五入到小数点后两位，减少因浮点精度导致的重复上传
         if (cfg_->uploadCurrent) {
-            root[prefix + QStringLiteral("current%1").arg(chIndex)] =
-                static_cast<double>(status.currentA);
+            double currentA = static_cast<double>(status.currentA);
+            // Round to 2 decimal places to avoid floating-point precision issues
+            currentA = std::round(currentA * 100.0) / 100.0;
+            root[prefix + QStringLiteral("current%1").arg(chIndex)] = currentA;
         }
     }
 

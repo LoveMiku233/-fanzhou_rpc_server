@@ -33,6 +33,7 @@ private slots:
     void onChannelControlClicked();
     void onStopAllClicked();
     void onQueryStatusClicked();
+    void stopNextChannel();
 
 private:
     void setupUi();
@@ -50,6 +51,9 @@ private:
     QLabel *ch2StatusLabel_;
     QLabel *ch3StatusLabel_;
     QLabel *currentLabel_;
+    
+    // 顺序停止控制
+    int stopChannelIndex_;
 };
 
 #endif // RELAY_CONTROL_DIALOG_H

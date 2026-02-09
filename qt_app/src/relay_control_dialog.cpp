@@ -15,8 +15,19 @@
 #include <QJsonObject>
 #include <QMessageBox>
 #include <QFrame>
+#include <QTimer>
 
 using namespace UIConstants;
+
+namespace {
+// Delay between stopping each channel during sequential stop (ms)
+// This prevents hardware overload and ensures each relay has time to respond
+constexpr int kChannelStopIntervalMs = 300;
+
+// Delay before refreshing status after all channels are stopped (ms)
+// This allows time for the hardware to report updated status
+constexpr int kStatusRefreshDelayMs = 200;
+}
 
 RelayControlDialog::RelayControlDialog(RpcClient *rpcClient, int nodeId,
                                          const QString &deviceName, QWidget *parent)
@@ -30,6 +41,7 @@ RelayControlDialog::RelayControlDialog(RpcClient *rpcClient, int nodeId,
     , ch2StatusLabel_(nullptr)
     , ch3StatusLabel_(nullptr)
     , currentLabel_(nullptr)
+    , stopChannelIndex_(0)
 {
     setWindowTitle(QStringLiteral("控制: %1 (#%2)").arg(deviceName).arg(nodeId));
     setMinimumSize(DIALOG_WIDTH, DIALOG_HEIGHT);
@@ -194,12 +206,29 @@ void RelayControlDialog::onChannelControlClicked()
 
 void RelayControlDialog::onStopAllClicked()
 {
-    for (int ch = 0; ch < 4; ++ch) {
-        controlRelay(ch, QStringLiteral("stop"));
+    // 开始顺序停止所有通道
+    stopChannelIndex_ = 0;
+    stopNextChannel();
+}
+
+void RelayControlDialog::stopNextChannel()
+{
+    // 安全检查：确保RPC客户端可用
+    if (!rpcClient_ || !rpcClient_->isConnected()) {
+        return;
     }
     
-    // 刷新状态
-    onQueryStatusClicked();
+    if (stopChannelIndex_ >= 4) {
+        // 所有通道已停止，刷新状态
+        QTimer::singleShot(kStatusRefreshDelayMs, this, &RelayControlDialog::onQueryStatusClicked);
+        return;
+    }
+    
+    controlRelay(stopChannelIndex_, QStringLiteral("stop"));
+    stopChannelIndex_++;
+    
+    // 延迟后停止下一个通道
+    QTimer::singleShot(kChannelStopIntervalMs, this, &RelayControlDialog::stopNextChannel);
 }
 
 void RelayControlDialog::onQueryStatusClicked()
@@ -249,14 +278,22 @@ void RelayControlDialog::updateStatusDisplay(const QJsonObject &status)
             QJsonObject chStatus = channels.value(chKey).toObject();
             int mode = chStatus.value(QStringLiteral("mode")).toInt(0);
             double current = chStatus.value(QStringLiteral("current")).toDouble(0);
+            bool phaseLost = chStatus.value(QStringLiteral("phaseLost")).toBool(false);
 
             QString modeText;
             QString color;
-            switch (mode) {
-                case 0: modeText = QStringLiteral("停止"); color = QStringLiteral("#7f8c8d"); break;
-                case 1: modeText = QStringLiteral("正转"); color = QStringLiteral("#27ae60"); break;
-                case 2: modeText = QStringLiteral("反转"); color = QStringLiteral("#f39c12"); break;
-                default: modeText = QStringLiteral("未知"); color = QStringLiteral("#95a5a6"); break;
+            
+            // 如果缺相，优先显示缺相状态
+            if (phaseLost) {
+                modeText = QStringLiteral("缺相");
+                color = QStringLiteral("#dc3545");
+            } else {
+                switch (mode) {
+                    case 0: modeText = QStringLiteral("停止"); color = QStringLiteral("#7f8c8d"); break;
+                    case 1: modeText = QStringLiteral("正转"); color = QStringLiteral("#27ae60"); break;
+                    case 2: modeText = QStringLiteral("反转"); color = QStringLiteral("#f39c12"); break;
+                    default: modeText = QStringLiteral("未知"); color = QStringLiteral("#95a5a6"); break;
+                }
             }
 
             chLabels[ch]->setText(QStringLiteral("%1 (%2mA)")
