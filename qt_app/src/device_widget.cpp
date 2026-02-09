@@ -163,25 +163,43 @@ void DeviceCard::updateStatus(bool online, qint64 ageMs, double totalCurrent, co
     // 更新总电流 - 保留1位小数
     currentLabel_->setText(QStringLiteral("%1mA").arg(totalCurrent, 0, 'f', 1));
 
-    // 更新通道状态
+    // 更新通道状态 - 显示模式、电流和缺相状态
     QLabel *chLabels[] = {ch0Label_, ch1Label_, ch2Label_, ch3Label_};
     for (int ch = 0; ch < 4; ++ch) {
         QString chKey = QString::number(ch);
         if (channels.contains(chKey)) {
             QJsonObject chStatus = channels.value(chKey).toObject();
             int mode = chStatus.value(QStringLiteral("mode")).toInt(0);
+            bool phaseLost = chStatus.value(QStringLiteral("phaseLost")).toBool(false);
+            double current = chStatus.value(QStringLiteral("current")).toDouble(0);
 
             QString modeText;
             QString bgColor;
             QString textColor;
-            switch (mode) {
-                case 0: modeText = QStringLiteral("停"); bgColor = QStringLiteral("#ecf0f1"); textColor = QStringLiteral("#7f8c8d"); break;
-                case 1: modeText = QStringLiteral("正"); bgColor = QStringLiteral("#d4edda"); textColor = QStringLiteral("#155724"); break;
-                case 2: modeText = QStringLiteral("反"); bgColor = QStringLiteral("#fff3cd"); textColor = QStringLiteral("#856404"); break;
-                default: modeText = QStringLiteral("?"); bgColor = QStringLiteral("#f5f5f5"); textColor = QStringLiteral("#7f8c8d"); break;
+            
+            // 如果缺相，优先显示缺相状态
+            if (phaseLost) {
+                modeText = QStringLiteral("缺");
+                bgColor = QStringLiteral("#f8d7da");
+                textColor = QStringLiteral("#721c24");
+            } else {
+                switch (mode) {
+                    case 0: modeText = QStringLiteral("停"); bgColor = QStringLiteral("#ecf0f1"); textColor = QStringLiteral("#7f8c8d"); break;
+                    case 1: modeText = QStringLiteral("正"); bgColor = QStringLiteral("#d4edda"); textColor = QStringLiteral("#155724"); break;
+                    case 2: modeText = QStringLiteral("反"); bgColor = QStringLiteral("#fff3cd"); textColor = QStringLiteral("#856404"); break;
+                    default: modeText = QStringLiteral("?"); bgColor = QStringLiteral("#f5f5f5"); textColor = QStringLiteral("#7f8c8d"); break;
+                }
             }
 
-            chLabels[ch]->setText(QStringLiteral("%1:%2").arg(ch).arg(modeText));
+            // 显示通道号:状态(电流mA)
+            QString displayText;
+            if (current > 0.1) {
+                displayText = QStringLiteral("%1:%2(%3)").arg(ch).arg(modeText).arg(current, 0, 'f', 0);
+            } else {
+                displayText = QStringLiteral("%1:%2").arg(ch).arg(modeText);
+            }
+
+            chLabels[ch]->setText(displayText);
             chLabels[ch]->setStyleSheet(QStringLiteral(
                 "font-size: %1px; padding: 2px 6px; background-color: %2; color: %3; border-radius: 4px;")
                 .arg(FONT_SIZE_SMALL).arg(bgColor, textColor));
@@ -437,6 +455,10 @@ void DeviceWidget::onDeviceCardClicked(int nodeId, const QString &name)
         emit logMessage(message);
     });
     connect(dialog, &QDialog::finished, this, [this, nodeId]() {
+        // 安全检查：确保RPC客户端仍然可用
+        if (!rpcClient_ || !rpcClient_->isConnected()) {
+            return;
+        }
         // 刷新设备状态
         QJsonObject params;
         params[QStringLiteral("node")] = nodeId;

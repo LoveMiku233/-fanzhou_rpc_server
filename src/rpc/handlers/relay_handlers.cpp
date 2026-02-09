@@ -139,7 +139,8 @@ void registerRelayHandlers(core::CoreContext *context, JsonRpcDispatcher *dispat
         if (!dev)
             return RpcHelpers::err(RpcError::BadParameterValue, QStringLiteral("unknown node"));
 
-        QJsonArray channels;
+        QJsonObject channels;
+        double totalCurrent = 0.0;
         for (quint8 ch = 0; ch < 4; ++ch) {
             const auto status = dev->lastStatus(ch);
             QJsonObject obj;
@@ -149,7 +150,10 @@ void registerRelayHandlers(core::CoreContext *context, JsonRpcDispatcher *dispat
             obj[keyCurrentA()] = static_cast<double>(status.currentA);
             obj[keyMode()] = static_cast<int>(device::RelayProtocol::modeBits(status.statusByte));
             obj[keyPhaseLost()] = device::RelayProtocol::phaseLost(status.statusByte);
-            channels.append(obj);
+            // Use current in mA for display
+            obj[QStringLiteral("current")] = static_cast<double>(status.currentA) * 1000.0;
+            channels[QString::number(ch)] = obj;
+            totalCurrent += static_cast<double>(status.currentA) * 1000.0;  // Convert to mA
         }
 
         const qint64 now = QDateTime::currentMSecsSinceEpoch();
@@ -163,7 +167,8 @@ void registerRelayHandlers(core::CoreContext *context, JsonRpcDispatcher *dispat
             {keyNode(), static_cast<int>(node)},
             {keyOnline(), online},
             {keyAgeMs(), (ageMs >= 0) ? static_cast<double>(ageMs) : QJsonValue()},
-            {keyChannels(), channels}
+            {keyChannels(), channels},
+            {QStringLiteral("totalCurrent"), totalCurrent}
         };
 
         if (!online) {
