@@ -238,7 +238,7 @@ void RpcRegistry::registerSystem()
         int totalStrategies = context_->strategyStates().size();
 
         // 传感器数量
-        int totalSensors = context_->sensors.size();
+        int totalSensors = context_->sensorConfigs.size();
 
         // CAN状态
         const bool canOpened = context_->canBus && context_->canBus->isOpened();
@@ -248,7 +248,7 @@ void RpcRegistry::registerSystem()
         int mqttConnected = 0;
         int mqttTotal = 0;
         if (context_->mqttManager) {
-            auto channelInfos = context_->mqttManager->getAllChannelInfo();
+            auto channelInfos = context_->mqttManager->channelStatusList();
             mqttTotal = channelInfos.size();
             for (const auto &info : channelInfos) {
                 if (info.connected) {
@@ -260,7 +260,20 @@ void RpcRegistry::registerSystem()
         // 系统运行时间
         QString uptime;
         if (context_->systemMonitor) {
-            uptime = context_->systemMonitor->getUptimeFormatted();
+            qint64 uptimeSec = context_->systemMonitor->currentSnapshot().uptimeSec;
+            int days = uptimeSec / 86400;
+            int hours = (uptimeSec % 86400) / 3600;
+            int minutes = (uptimeSec % 3600) / 60;
+            int seconds = uptimeSec % 60;
+            if (days > 0) {
+                uptime = QStringLiteral("%1d %2h %3m %4s").arg(days).arg(hours).arg(minutes).arg(seconds);
+            } else if (hours > 0) {
+                uptime = QStringLiteral("%1h %2m %3s").arg(hours).arg(minutes).arg(seconds);
+            } else if (minutes > 0) {
+                uptime = QStringLiteral("%1m %2s").arg(minutes).arg(seconds);
+            } else {
+                uptime = QStringLiteral("%1s").arg(seconds);
+            }
         }
 
         return QJsonObject{
