@@ -16,6 +16,11 @@
 #include <QMessageBox>
 #include <QDateTime>
 
+namespace {
+// 继电器通道数量
+constexpr int kMaxRelayChannels = 4;
+}
+
 RelayControlWidget::RelayControlWidget(RpcClient *rpcClient, QWidget *parent)
     : QWidget(parent)
     , rpcClient_(rpcClient)
@@ -97,7 +102,7 @@ void RelayControlWidget::setupUi()
     quickLayout->setSpacing(6);
 
     // 为每个通道创建快捷按钮 - 增大按钮尺寸适配触屏
-    for (int ch = 0; ch < 4; ++ch) {
+    for (int ch = 0; ch < kMaxRelayChannels; ++ch) {
         QLabel *chLabel = new QLabel(QStringLiteral("CH%1:").arg(ch), this);
         quickLayout->addWidget(chLabel, ch, 0);
 
@@ -258,7 +263,7 @@ void RelayControlWidget::onStopAllClicked()
     int node = nodeSpinBox_->value();
     
     // 异步停止所有通道
-    for (int ch = 0; ch < 4; ++ch) {
+    for (int ch = 0; ch < kMaxRelayChannels; ++ch) {
         controlRelay(node, ch, QStringLiteral("stop"));
     }
 

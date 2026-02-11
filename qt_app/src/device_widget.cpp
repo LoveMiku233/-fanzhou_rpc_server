@@ -357,7 +357,7 @@ void DeviceWidget::refreshDeviceList()
     qDebug() << "[DEVICE_WIDGET] 刷新设备列表";
 
     // 使用异步调用避免阻塞UI线程
-    rpcClient_->callAsync(QStringLiteral("device.list"), QJsonObject(),
+    int reqId = rpcClient_->callAsync(QStringLiteral("device.list"), QJsonObject(),
         [this](const QJsonValue &result, const QJsonObject &error) {
             // 在主线程中处理结果
             QMetaObject::invokeMethod(this, [this, result, error]() {
@@ -385,6 +385,13 @@ void DeviceWidget::refreshDeviceList()
                 tryRelayNodesAsFallback();
             }, Qt::QueuedConnection);
         }, 2000);  // 2秒超时
+    
+    // 如果异步调用失败，重置标志
+    if (reqId < 0) {
+        isRefreshing_ = false;
+        statusLabel_->setText(QStringLiteral("[X] 发送请求失败"));
+        emit logMessage(QStringLiteral("刷新设备失败：无法发送请求"), QStringLiteral("ERROR"));
+    }
 }
 
 void DeviceWidget::tryRelayNodesAsFallback()
