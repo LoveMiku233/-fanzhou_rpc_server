@@ -62,7 +62,8 @@ RelayControlDialog::RelayControlDialog(RpcClient *rpcClient, int nodeId,
     , syncTimer_(nullptr)
 {
     setWindowTitle(QStringLiteral("控制: %1 (#%2)").arg(deviceName).arg(nodeId));
-    setMinimumSize(DIALOG_WIDTH, DIALOG_HEIGHT);
+    // 使用更大的对话框尺寸以确保按钮完整显示
+    setMinimumSize(DIALOG_WIDTH_LARGE, DIALOG_HEIGHT_LARGE);
     setModal(true);
     setupUi();
     
@@ -127,7 +128,7 @@ void RelayControlDialog::updateButtonStyles(int channel, int mode)
         "  color: #666666; "
         "  border: 1px solid #d0d0d0; "
         "  border-radius: 6px; "
-        "  padding: 8px 14px; "
+        "  padding: 8px 12px; "
         "  font-size: 13px; "
         "}"
         "QPushButton:hover { background-color: #e0e0e0; border-color: #c0c0c0; }");
@@ -139,9 +140,9 @@ void RelayControlDialog::updateButtonStyles(int channel, int mode)
         "  color: white; "
         "  border: 3px solid #5d6d7e; "
         "  border-radius: 6px; "
-        "  padding: 8px 14px; "
+        "  padding: 8px 12px; "
         "  font-weight: bold; "
-        "  font-size: 14px; "
+        "  font-size: 13px; "
         "}"
         "QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #7e8e9b, stop:1 #5c6a79); }");
     
@@ -152,9 +153,9 @@ void RelayControlDialog::updateButtonStyles(int channel, int mode)
         "  color: white; "
         "  border: 3px solid #1e8449; "
         "  border-radius: 6px; "
-        "  padding: 8px 14px; "
+        "  padding: 8px 12px; "
         "  font-weight: bold; "
-        "  font-size: 14px; "
+        "  font-size: 13px; "
         "}"
         "QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #48c67d, stop:1 #1f9e50); }");
     
@@ -165,9 +166,9 @@ void RelayControlDialog::updateButtonStyles(int channel, int mode)
         "  color: white; "
         "  border: 3px solid #d68910; "
         "  border-radius: 6px; "
-        "  padding: 8px 14px; "
+        "  padding: 8px 12px; "
         "  font-weight: bold; "
-        "  font-size: 14px; "
+        "  font-size: 13px; "
         "}"
         "QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e5a031, stop:1 #e38c02); }");
     
@@ -315,29 +316,56 @@ void RelayControlDialog::setupUi()
         chLabel->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 13px; color: #2c3e50;"));
         controlGrid->addWidget(chLabel, ch, 0);
 
-        // 停止按钮
+        // 初始样式 - 停止状态高亮（默认状态）
+        QString initialStopStyle = QStringLiteral(
+            "QPushButton { "
+            "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #8e9eab, stop:1 #6c7a89); "
+            "  color: white; "
+            "  border: 3px solid #5d6d7e; "
+            "  border-radius: 6px; "
+            "  padding: 8px 12px; "
+            "  font-weight: bold; "
+            "  font-size: 13px; "
+            "}"
+            "QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #7e8e9b, stop:1 #5c6a79); }");
+        
+        QString normalStyle = QStringLiteral(
+            "QPushButton { "
+            "  background-color: #f0f0f0; "
+            "  color: #666666; "
+            "  border: 1px solid #d0d0d0; "
+            "  border-radius: 6px; "
+            "  padding: 8px 12px; "
+            "  font-size: 13px; "
+            "}"
+            "QPushButton:hover { background-color: #e0e0e0; border-color: #c0c0c0; }");
+
+        // 停止按钮 - 增大尺寸以确保完整显示，初始为活动状态（默认停止）
         QPushButton *stopBtn = new QPushButton(QStringLiteral("■ 停"), this);
         stopBtn->setProperty("channel", ch);
         stopBtn->setProperty("action", QStringLiteral("stop"));
-        stopBtn->setMinimumSize(56, 40);
+        stopBtn->setMinimumSize(60, 42);
+        stopBtn->setStyleSheet(initialStopStyle);
         connect(stopBtn, &QPushButton::clicked, this, &RelayControlDialog::onChannelControlClicked);
         controlGrid->addWidget(stopBtn, ch, 1);
         stopBtns[ch] = stopBtn;
 
-        // 正转按钮
+        // 正转按钮 - 增大尺寸以确保完整显示
         QPushButton *fwdBtn = new QPushButton(QStringLiteral("▶ 正"), this);
         fwdBtn->setProperty("channel", ch);
         fwdBtn->setProperty("action", QStringLiteral("fwd"));
-        fwdBtn->setMinimumSize(56, 40);
+        fwdBtn->setMinimumSize(60, 42);
+        fwdBtn->setStyleSheet(normalStyle);
         connect(fwdBtn, &QPushButton::clicked, this, &RelayControlDialog::onChannelControlClicked);
         controlGrid->addWidget(fwdBtn, ch, 2);
         fwdBtns[ch] = fwdBtn;
 
-        // 反转按钮
+        // 反转按钮 - 增大尺寸以确保完整显示
         QPushButton *revBtn = new QPushButton(QStringLiteral("◀ 反"), this);
         revBtn->setProperty("channel", ch);
         revBtn->setProperty("action", QStringLiteral("rev"));
-        revBtn->setMinimumSize(56, 40);
+        revBtn->setMinimumSize(60, 42);
+        revBtn->setStyleSheet(normalStyle);
         connect(revBtn, &QPushButton::clicked, this, &RelayControlDialog::onChannelControlClicked);
         controlGrid->addWidget(revBtn, ch, 3);
         revBtns[ch] = revBtn;
@@ -346,13 +374,10 @@ void RelayControlDialog::setupUi()
         QLabel *currentLbl = new QLabel(QStringLiteral("-- A"), this);
         currentLbl->setStyleSheet(QStringLiteral(
             "font-size: 13px; font-weight: bold; color: #95a5a6; "
-            "background-color: #f5f5f5; padding: 4px 8px; border-radius: 6px; min-width: 60px;"));
+            "background-color: #f5f5f5; padding: 4px 8px; border-radius: 6px; min-width: 55px;"));
         currentLbl->setAlignment(Qt::AlignCenter);
         controlGrid->addWidget(currentLbl, ch, 4);
         currentLabels[ch] = currentLbl;
-        
-        // 初始化按钮样式为停止状态
-        updateButtonStyles(ch, 0);
     }
 
     // 保存按钮和电流标签引用

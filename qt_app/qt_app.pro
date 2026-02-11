@@ -34,7 +34,8 @@ SOURCES += \
     src/home_widget.cpp \
     src/log_widget.cpp \
     src/settings_widget.cpp \
-    src/relay_control_dialog.cpp
+    src/relay_control_dialog.cpp \
+    src/screen_manager.cpp
 
 HEADERS += \
     src/mainwindow.h \
@@ -51,7 +52,8 @@ HEADERS += \
     src/log_widget.h \
     src/settings_widget.h \
     src/relay_control_dialog.h \
-    src/style_constants.h
+    src/style_constants.h \
+    src/screen_manager.h
 
 # Resources
 RESOURCES += \
