@@ -83,6 +83,7 @@ private:
     void updateDeviceCards(const QJsonArray &devices);
     void updateDeviceCardStatus(int nodeId, const QJsonObject &status);
     void clearDeviceCards();
+    void tryRelayNodesAsFallback();
 
     RpcClient *rpcClient_;
     QLabel *statusLabel_;
@@ -93,6 +94,9 @@ private:
     QWidget *cardsContainer_;
     QGridLayout *cardsLayout_;
     QList<DeviceCard*> deviceCards_;
+    
+    // 防止重复操作的标志
+    bool isRefreshing_;
 };
 
 #endif // DEVICE_WIDGET_H

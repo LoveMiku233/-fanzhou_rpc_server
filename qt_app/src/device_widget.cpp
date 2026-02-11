@@ -232,6 +232,7 @@ DeviceWidget::DeviceWidget(RpcClient *rpcClient, QWidget *parent)
     , addDeviceButton_(nullptr)
     , cardsContainer_(nullptr)
     , cardsLayout_(nullptr)
+    , isRefreshing_(false)
 {
     setupUi();
     qDebug() << "[DEVICE_WIDGET] 设备页面初始化完成";
@@ -345,53 +346,96 @@ void DeviceWidget::refreshDeviceList()
         return;
     }
 
+    // 防止重复刷新
+    if (isRefreshing_) {
+        qDebug() << "[DEVICE_WIDGET] 刷新操作进行中，跳过";
+        return;
+    }
+    isRefreshing_ = true;
+
     statusLabel_->setText(QStringLiteral("[刷] 刷新中..."));
     qDebug() << "[DEVICE_WIDGET] 刷新设备列表";
 
-    // 使用device.list获取设备列表（包含设备名称）
-    QJsonValue result = rpcClient_->call(QStringLiteral("device.list"));
+    // 使用异步调用避免阻塞UI线程
+    int reqId = rpcClient_->callAsync(QStringLiteral("device.list"), QJsonObject(),
+        [this](const QJsonValue &result, const QJsonObject &error) {
+            // 在主线程中处理结果
+            QMetaObject::invokeMethod(this, [this, result, error]() {
+                if (!error.isEmpty()) {
+                    // 如果device.list失败，尝试relay.nodes
+                    tryRelayNodesAsFallback();
+                    return;
+                }
+                
+                qDebug() << "[DEVICE_WIDGET] device.list 响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
+
+                if (result.isObject()) {
+                    QJsonObject obj = result.toObject();
+                    if (obj.contains(QStringLiteral("devices"))) {
+                        QJsonArray devices = obj.value(QStringLiteral("devices")).toArray();
+                        updateDeviceCards(devices);
+                        statusLabel_->setText(QStringLiteral("[OK] 共 %1 个设备").arg(devices.size()));
+                        emit logMessage(QStringLiteral("刷新设备列表成功，共 %1 个设备").arg(devices.size()));
+                        isRefreshing_ = false;
+                        return;
+                    }
+                }
+                
+                // 回退到relay.nodes
+                tryRelayNodesAsFallback();
+            }, Qt::QueuedConnection);
+        }, 2000);  // 2秒超时
     
-    qDebug() << "[DEVICE_WIDGET] device.list 响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
-
-    if (result.isObject()) {
-        QJsonObject obj = result.toObject();
-        if (obj.contains(QStringLiteral("devices"))) {
-            QJsonArray devices = obj.value(QStringLiteral("devices")).toArray();
-            updateDeviceCards(devices);
-            statusLabel_->setText(QStringLiteral("[OK] 共 %1 个设备").arg(devices.size()));
-            emit logMessage(QStringLiteral("刷新设备列表成功，共 %1 个设备").arg(devices.size()));
-            return;
-        }
+    // 如果异步调用失败，重置标志
+    if (reqId < 0) {
+        isRefreshing_ = false;
+        statusLabel_->setText(QStringLiteral("[X] 发送请求失败"));
+        emit logMessage(QStringLiteral("刷新设备失败：无法发送请求"), QStringLiteral("ERROR"));
     }
+}
 
-    // 如果device.list失败，回退使用relay.nodes
-    result = rpcClient_->call(QStringLiteral("relay.nodes"));
-    
-    qDebug() << "[DEVICE_WIDGET] relay.nodes 响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
+void DeviceWidget::tryRelayNodesAsFallback()
+{
+    // 使用异步调用
+    rpcClient_->callAsync(QStringLiteral("relay.nodes"), QJsonObject(),
+        [this](const QJsonValue &result, const QJsonObject &error) {
+            QMetaObject::invokeMethod(this, [this, result, error]() {
+                if (!error.isEmpty()) {
+                    statusLabel_->setText(QStringLiteral("[X] 获取失败"));
+                    emit logMessage(QStringLiteral("获取设备列表失败"), QStringLiteral("ERROR"));
+                    isRefreshing_ = false;
+                    return;
+                }
+                
+                qDebug() << "[DEVICE_WIDGET] relay.nodes 响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
 
-    if (result.isObject()) {
-        QJsonObject obj = result.toObject();
-        if (obj.contains(QStringLiteral("nodes"))) {
-            QJsonArray nodes = obj.value(QStringLiteral("nodes")).toArray();
-            // 转换为device格式
-            QJsonArray devices;
-            for (const QJsonValue &val : nodes) {
-                QJsonObject node = val.toObject();
-                QJsonObject device;
-                device[QStringLiteral("nodeId")] = node.value(QStringLiteral("node")).toInt();
-                device[QStringLiteral("name")] = QStringLiteral("继电器-%1").arg(node.value(QStringLiteral("node")).toInt());
-                device[QStringLiteral("online")] = node.value(QStringLiteral("online")).toBool();
-                devices.append(device);
-            }
-            updateDeviceCards(devices);
-            statusLabel_->setText(QStringLiteral("[OK] 共 %1 个设备").arg(devices.size()));
-            emit logMessage(QStringLiteral("刷新设备列表成功，共 %1 个设备").arg(devices.size()));
-            return;
-        }
-    }
+                if (result.isObject()) {
+                    QJsonObject obj = result.toObject();
+                    if (obj.contains(QStringLiteral("nodes"))) {
+                        QJsonArray nodes = obj.value(QStringLiteral("nodes")).toArray();
+                        // 转换为device格式
+                        QJsonArray devices;
+                        for (const QJsonValue &val : nodes) {
+                            QJsonObject node = val.toObject();
+                            QJsonObject device;
+                            device[QStringLiteral("nodeId")] = node.value(QStringLiteral("node")).toInt();
+                            device[QStringLiteral("name")] = QStringLiteral("继电器-%1").arg(node.value(QStringLiteral("node")).toInt());
+                            device[QStringLiteral("online")] = node.value(QStringLiteral("online")).toBool();
+                            devices.append(device);
+                        }
+                        updateDeviceCards(devices);
+                        statusLabel_->setText(QStringLiteral("[OK] 共 %1 个设备").arg(devices.size()));
+                        emit logMessage(QStringLiteral("刷新设备列表成功，共 %1 个设备").arg(devices.size()));
+                        isRefreshing_ = false;
+                        return;
+                    }
+                }
 
-    statusLabel_->setText(QStringLiteral("[X] 获取失败"));
-    emit logMessage(QStringLiteral("获取设备列表失败"), QStringLiteral("ERROR"));
+                statusLabel_->setText(QStringLiteral("[X] 获取失败"));
+                emit logMessage(QStringLiteral("获取设备列表失败"), QStringLiteral("ERROR"));
+                isRefreshing_ = false;
+            }, Qt::QueuedConnection);
+        }, 2000);  // 2秒超时
 }
 
 void DeviceWidget::refreshDeviceStatus()
@@ -402,16 +446,23 @@ void DeviceWidget::refreshDeviceStatus()
 
     qDebug() << "[DEVICE_WIDGET] 刷新设备状态";
 
+    // 使用异步调用避免阻塞UI线程
     for (DeviceCard *card : deviceCards_) {
         int nodeId = card->nodeId();
 
         QJsonObject params;
         params[QStringLiteral("node")] = nodeId;
 
-        QJsonValue result = rpcClient_->call(QStringLiteral("relay.statusAll"), params);
-        if (result.isObject()) {
-            updateDeviceCardStatus(nodeId, result.toObject());
-        }
+        // 使用异步调用，通过lambda回调更新UI
+        rpcClient_->callAsync(QStringLiteral("relay.statusAll"), params,
+            [this, nodeId](const QJsonValue &result, const QJsonObject &error) {
+                if (error.isEmpty() && result.isObject()) {
+                    // 在主线程中更新UI
+                    QMetaObject::invokeMethod(this, [this, nodeId, result]() {
+                        updateDeviceCardStatus(nodeId, result.toObject());
+                    }, Qt::QueuedConnection);
+                }
+            }, 2000);  // 2秒超时
     }
 }
 
@@ -425,25 +476,35 @@ void DeviceWidget::onQueryAllClicked()
     statusLabel_->setText(QStringLiteral("[查] 查询中..."));
     qDebug() << "[DEVICE_WIDGET] 查询所有设备";
 
-    QJsonValue result = rpcClient_->call(QStringLiteral("relay.queryAll"));
-    
-    qDebug() << "[DEVICE_WIDGET] relay.queryAll 响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
+    // 使用异步调用避免阻塞UI线程
+    rpcClient_->callAsync(QStringLiteral("relay.queryAll"), QJsonObject(),
+        [this](const QJsonValue &result, const QJsonObject &error) {
+            QMetaObject::invokeMethod(this, [this, result, error]() {
+                if (!error.isEmpty()) {
+                    statusLabel_->setText(QStringLiteral("[X] 查询失败"));
+                    emit logMessage(QStringLiteral("查询所有设备失败"), QStringLiteral("ERROR"));
+                    return;
+                }
+                
+                qDebug() << "[DEVICE_WIDGET] relay.queryAll 响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
 
-    if (result.isObject()) {
-        QJsonObject obj = result.toObject();
-        if (obj.value(QStringLiteral("ok")).toBool()) {
-            int queried = obj.value(QStringLiteral("queriedDevices")).toInt();
-            statusLabel_->setText(QStringLiteral("[OK] 已查询 %1 个设备").arg(queried));
-            emit logMessage(QStringLiteral("查询所有设备成功，共 %1 个设备").arg(queried));
+                if (result.isObject()) {
+                    QJsonObject obj = result.toObject();
+                    if (obj.value(QStringLiteral("ok")).toBool()) {
+                        int queried = obj.value(QStringLiteral("queriedDevices")).toInt();
+                        statusLabel_->setText(QStringLiteral("[OK] 已查询 %1 个设备").arg(queried));
+                        emit logMessage(QStringLiteral("查询所有设备成功，共 %1 个设备").arg(queried));
 
-            // 延迟后刷新状态
-            QTimer::singleShot(500, this, &DeviceWidget::refreshDeviceStatus);
-            return;
-        }
-    }
+                        // 延迟后刷新状态
+                        QTimer::singleShot(500, this, &DeviceWidget::refreshDeviceStatus);
+                        return;
+                    }
+                }
 
-    statusLabel_->setText(QStringLiteral("[X] 查询失败"));
-    emit logMessage(QStringLiteral("查询所有设备失败"), QStringLiteral("ERROR"));
+                statusLabel_->setText(QStringLiteral("[X] 查询失败"));
+                emit logMessage(QStringLiteral("查询所有设备失败"), QStringLiteral("ERROR"));
+            }, Qt::QueuedConnection);
+        }, 2000);  // 2秒超时
 }
 
 void DeviceWidget::onDeviceCardClicked(int nodeId, const QString &name)
@@ -465,13 +526,17 @@ void DeviceWidget::onDeviceCardClicked(int nodeId, const QString &name)
         if (!rpcClient_ || !rpcClient_->isConnected()) {
             return;
         }
-        // 刷新设备状态
+        // 使用异步调用刷新设备状态
         QJsonObject params;
         params[QStringLiteral("node")] = nodeId;
-        QJsonValue result = rpcClient_->call(QStringLiteral("relay.statusAll"), params);
-        if (result.isObject()) {
-            updateDeviceCardStatus(nodeId, result.toObject());
-        }
+        rpcClient_->callAsync(QStringLiteral("relay.statusAll"), params,
+            [this, nodeId](const QJsonValue &result, const QJsonObject &error) {
+                if (error.isEmpty() && result.isObject()) {
+                    QMetaObject::invokeMethod(this, [this, nodeId, result]() {
+                        updateDeviceCardStatus(nodeId, result.toObject());
+                    }, Qt::QueuedConnection);
+                }
+            }, 2000);  // 2秒超时
     });
     dialog->exec();
 }
@@ -555,20 +620,30 @@ void DeviceWidget::onAddDeviceClicked()
     
     qDebug() << "[DEVICE_WIDGET] 添加设备:" << name << "nodeId=" << nodeId << "type=" << type;
     
-    QJsonValue result = rpcClient_->call(QStringLiteral("device.add"), params);
-    
-    qDebug() << "[DEVICE_WIDGET] device.add 响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
+    // 使用异步调用避免阻塞UI线程
+    rpcClient_->callAsync(QStringLiteral("device.add"), params,
+        [this, name](const QJsonValue &result, const QJsonObject &error) {
+            QMetaObject::invokeMethod(this, [this, name, result, error]() {
+                if (!error.isEmpty()) {
+                    QMessageBox::warning(this, QStringLiteral("错误"), 
+                        QStringLiteral("[X] 添加设备失败: %1").arg(error.value(QStringLiteral("message")).toString()));
+                    return;
+                }
+                
+                qDebug() << "[DEVICE_WIDGET] device.add 响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
 
-    if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        QMessageBox::information(this, QStringLiteral("成功"), 
-            QStringLiteral("[OK] 设备 %1 添加成功！").arg(name));
-        emit logMessage(QStringLiteral("添加设备成功: %1").arg(name));
-        refreshDeviceList();
-    } else {
-        QString error = result.toObject().value(QStringLiteral("error")).toString();
-        QMessageBox::warning(this, QStringLiteral("错误"), 
-            QStringLiteral("[X] 添加设备失败: %1").arg(error));
-    }
+                if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
+                    QMessageBox::information(this, QStringLiteral("成功"), 
+                        QStringLiteral("[OK] 设备 %1 添加成功！").arg(name));
+                    emit logMessage(QStringLiteral("添加设备成功: %1").arg(name));
+                    refreshDeviceList();
+                } else {
+                    QString errorMsg = result.toObject().value(QStringLiteral("error")).toString();
+                    QMessageBox::warning(this, QStringLiteral("错误"), 
+                        QStringLiteral("[X] 添加设备失败: %1").arg(errorMsg));
+                }
+            }, Qt::QueuedConnection);
+        }, 2000);  // 2秒超时
 }
 
 void DeviceWidget::updateDeviceCards(const QJsonArray &devices)

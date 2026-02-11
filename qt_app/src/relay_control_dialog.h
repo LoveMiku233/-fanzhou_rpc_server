@@ -54,6 +54,9 @@ private:
     
     // 顺序停止控制
     int stopChannelIndex_;
+    
+    // 防止重复操作的标志
+    bool isControlling_;
 };
 
 #endif // RELAY_CONTROL_DIALOG_H
