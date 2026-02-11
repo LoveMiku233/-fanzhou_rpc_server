@@ -97,6 +97,7 @@ void RelayControlDialog::stopSyncTimer()
 void RelayControlDialog::onSyncTimerTimeout()
 {
     // 定时同步设备状态
+    // 注意：定时器回调在主线程执行，与用户操作不会有线程冲突
     if (rpcClient_ && rpcClient_->isConnected() && !isControlling_) {
         onQueryStatusClicked();
     }
