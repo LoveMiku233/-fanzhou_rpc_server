@@ -191,12 +191,22 @@ void RelayControlWidget::onQueryClicked()
     params[QStringLiteral("node")] = node;
     params[QStringLiteral("ch")] = channel;
 
-    QJsonValue result = rpcClient_->call(QStringLiteral("relay.status"), params);
-    
-    QString resultStr = QString::fromUtf8(QJsonDocument(result.toObject()).toJson(QJsonDocument::Indented));
-    appendResult(QStringLiteral("查询节点 %1 通道 %2:\n%3").arg(node).arg(channel).arg(resultStr));
-    
-    statusLabel_->setText(QStringLiteral("[成功] 查询完成"));
+    // 使用异步调用避免阻塞UI线程
+    rpcClient_->callAsync(QStringLiteral("relay.status"), params,
+        [this, node, channel](const QJsonValue &result, const QJsonObject &error) {
+            QMetaObject::invokeMethod(this, [this, node, channel, result, error]() {
+                if (!error.isEmpty()) {
+                    appendResult(QStringLiteral("查询节点 %1 通道 %2 失败: %3").arg(node).arg(channel).arg(error.value(QStringLiteral("message")).toString()));
+                    statusLabel_->setText(QStringLiteral("[失败] 查询失败"));
+                    return;
+                }
+                
+                QString resultStr = QString::fromUtf8(QJsonDocument(result.toObject()).toJson(QJsonDocument::Indented));
+                appendResult(QStringLiteral("查询节点 %1 通道 %2:\n%3").arg(node).arg(channel).arg(resultStr));
+                
+                statusLabel_->setText(QStringLiteral("[成功] 查询完成"));
+            }, Qt::QueuedConnection);
+        }, 2000);  // 2秒超时
 }
 
 void RelayControlWidget::onQueryAllClicked()
@@ -211,12 +221,22 @@ void RelayControlWidget::onQueryAllClicked()
     QJsonObject params;
     params[QStringLiteral("node")] = node;
 
-    QJsonValue result = rpcClient_->call(QStringLiteral("relay.statusAll"), params);
-    
-    QString resultStr = QString::fromUtf8(QJsonDocument(result.toObject()).toJson(QJsonDocument::Indented));
-    appendResult(QStringLiteral("查询节点 %1 全部通道:\n%2").arg(node).arg(resultStr));
-    
-    statusLabel_->setText(QStringLiteral("[成功] 查询完成"));
+    // 使用异步调用避免阻塞UI线程
+    rpcClient_->callAsync(QStringLiteral("relay.statusAll"), params,
+        [this, node](const QJsonValue &result, const QJsonObject &error) {
+            QMetaObject::invokeMethod(this, [this, node, result, error]() {
+                if (!error.isEmpty()) {
+                    appendResult(QStringLiteral("查询节点 %1 全部通道失败: %2").arg(node).arg(error.value(QStringLiteral("message")).toString()));
+                    statusLabel_->setText(QStringLiteral("[失败] 查询失败"));
+                    return;
+                }
+                
+                QString resultStr = QString::fromUtf8(QJsonDocument(result.toObject()).toJson(QJsonDocument::Indented));
+                appendResult(QStringLiteral("查询节点 %1 全部通道:\n%2").arg(node).arg(resultStr));
+                
+                statusLabel_->setText(QStringLiteral("[成功] 查询完成"));
+            }, Qt::QueuedConnection);
+        }, 2000);  // 2秒超时
 }
 
 void RelayControlWidget::onStopAllClicked()
@@ -237,11 +257,12 @@ void RelayControlWidget::onStopAllClicked()
 
     int node = nodeSpinBox_->value();
     
+    // 异步停止所有通道
     for (int ch = 0; ch < 4; ++ch) {
         controlRelay(node, ch, QStringLiteral("stop"));
     }
 
-    statusLabel_->setText(QStringLiteral("[成功] 已停止节点 %1 的所有通道").arg(node));
+    statusLabel_->setText(QStringLiteral("[执行中] 正在停止节点 %1 的所有通道").arg(node));
 }
 
 void RelayControlWidget::onQuickControlClicked()
@@ -268,33 +289,43 @@ void RelayControlWidget::controlRelay(int node, int channel, const QString &acti
     params[QStringLiteral("ch")] = channel;
     params[QStringLiteral("action")] = action;
 
-    QJsonValue result = rpcClient_->call(QStringLiteral("relay.control"), params);
-    
-    QJsonObject obj = result.toObject();
-    if (obj.value(QStringLiteral("ok")).toBool()) {
-        QString actionText;
-        if (action == QStringLiteral("stop")) actionText = QStringLiteral("停止");
-        else if (action == QStringLiteral("fwd")) actionText = QStringLiteral("正转");
-        else if (action == QStringLiteral("rev")) actionText = QStringLiteral("反转");
-        
-        appendResult(QStringLiteral("[成功] 节点 %1 通道 %2 -> %3")
-            .arg(node).arg(channel).arg(actionText));
-        statusLabel_->setText(QStringLiteral("[成功] 控制成功"));
-        
-        // 检查警告
-        if (obj.contains(QStringLiteral("warning"))) {
-            QString warning = obj.value(QStringLiteral("warning")).toString();
-            appendResult(QStringLiteral("[警告] %1").arg(warning));
-        }
-    } else {
-        QString error = obj.value(QStringLiteral("error")).toString();
-        if (obj.contains(QStringLiteral("rpcError"))) {
-            QJsonObject rpcError = obj.value(QStringLiteral("rpcError")).toObject();
-            error = rpcError.value(QStringLiteral("message")).toString();
-        }
-        appendResult(QStringLiteral("[失败] 控制失败: %1").arg(error));
-        statusLabel_->setText(QStringLiteral("[失败] 控制失败"));
-    }
+    // 使用异步调用避免阻塞UI线程
+    rpcClient_->callAsync(QStringLiteral("relay.control"), params,
+        [this, node, channel, action](const QJsonValue &result, const QJsonObject &error) {
+            QMetaObject::invokeMethod(this, [this, node, channel, action, result, error]() {
+                if (!error.isEmpty()) {
+                    appendResult(QStringLiteral("[失败] 控制失败: %1").arg(error.value(QStringLiteral("message")).toString()));
+                    statusLabel_->setText(QStringLiteral("[失败] 控制失败"));
+                    return;
+                }
+                
+                QJsonObject obj = result.toObject();
+                if (obj.value(QStringLiteral("ok")).toBool()) {
+                    QString actionText;
+                    if (action == QStringLiteral("stop")) actionText = QStringLiteral("停止");
+                    else if (action == QStringLiteral("fwd")) actionText = QStringLiteral("正转");
+                    else if (action == QStringLiteral("rev")) actionText = QStringLiteral("反转");
+                    
+                    appendResult(QStringLiteral("[成功] 节点 %1 通道 %2 -> %3")
+                        .arg(node).arg(channel).arg(actionText));
+                    statusLabel_->setText(QStringLiteral("[成功] 控制成功"));
+                    
+                    // 检查警告
+                    if (obj.contains(QStringLiteral("warning"))) {
+                        QString warning = obj.value(QStringLiteral("warning")).toString();
+                        appendResult(QStringLiteral("[警告] %1").arg(warning));
+                    }
+                } else {
+                    QString errorMsg = obj.value(QStringLiteral("error")).toString();
+                    if (obj.contains(QStringLiteral("rpcError"))) {
+                        QJsonObject rpcError = obj.value(QStringLiteral("rpcError")).toObject();
+                        errorMsg = rpcError.value(QStringLiteral("message")).toString();
+                    }
+                    appendResult(QStringLiteral("[失败] 控制失败: %1").arg(errorMsg));
+                    statusLabel_->setText(QStringLiteral("[失败] 控制失败"));
+                }
+            }, Qt::QueuedConnection);
+        }, 2000);  // 2秒超时
 }
 
 void RelayControlWidget::appendResult(const QString &message)

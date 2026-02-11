@@ -83,6 +83,7 @@ private:
     void updateDeviceCards(const QJsonArray &devices);
     void updateDeviceCardStatus(int nodeId, const QJsonObject &status);
     void clearDeviceCards();
+    void tryRelayNodesAsFallback();
 
     RpcClient *rpcClient_;
     QLabel *statusLabel_;
