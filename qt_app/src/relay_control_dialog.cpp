@@ -204,8 +204,7 @@ void RelayControlDialog::setupUi()
         chLabel->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 12px;"));
         controlGrid->addWidget(chLabel, ch, 0);
 
-        // 滑块控制 (0=停止, 1=正转, 2=反转)
-        // 但为了直观性，我们使用 -1=反转, 0=停止, 1=正转
+        // 滑块控制: -1=反转, 0=停止, 1=正转
         QSlider *slider = new QSlider(Qt::Horizontal, this);
         slider->setMinimum(-1);  // 反转
         slider->setMaximum(1);   // 正转
@@ -270,8 +269,7 @@ void RelayControlDialog::onSliderValueChanged(int value)
 
     int channel = slider->property("channel").toInt();
     
-    // 更新滑块样式
-    // 将滑块值转换为显示模式: -1=反转(2), 0=停止(0), 1=正转(1)
+    // 将滑块值(-1=反转, 0=停止, 1=正转)转换为显示模式(0=停止, 1=正转, 2=反转)
     int displayMode = (value == -1) ? 2 : value;
     updateSliderStyle(slider, displayMode);
     
@@ -468,9 +466,7 @@ void RelayControlDialog::updateStatusDisplay(const QJsonObject &status)
                     case 2: sliderValue = -1; break;  // 反转
                 }
                 chSliders[ch]->setValue(sliderValue);
-                // 将mode转换为显示模式
-                int displayMode = mode;
-                updateSliderStyle(chSliders[ch], displayMode);
+                updateSliderStyle(chSliders[ch], mode);
                 chSliders[ch]->blockSignals(false);
             }
         } else {
