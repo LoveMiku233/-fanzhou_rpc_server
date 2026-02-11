@@ -34,6 +34,7 @@ public:
 signals:
     void connectionStatusChanged(bool connected);
     void logMessage(const QString &message, const QString &level = QStringLiteral("INFO"));
+    void autoScreenOffSettingsChanged(bool enabled, int timeoutSeconds);
 
 public slots:
     void onConnect();
@@ -68,6 +69,10 @@ private slots:
     void onSetBrightness();
     void onRebootSystem();
     void onShutdownSystem();
+    
+    // 自动息屏槽函数
+    void onAutoScreenOffToggled(bool checked);
+    void onScreenOffTimeoutChanged(int value);
 
 private:
     void setupUi();
@@ -122,6 +127,10 @@ private:
     
     // 系统控制组件
     QSlider *brightnessSlider_;
+    
+    // 自动息屏组件
+    QCheckBox *autoScreenOffCheckBox_;
+    QSpinBox *screenOffTimeoutSpinBox_;
 };
 
 #endif // SETTINGS_WIDGET_H

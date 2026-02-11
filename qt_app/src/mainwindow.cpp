@@ -12,6 +12,7 @@
 #include "sensor_widget.h"
 #include "log_widget.h"
 #include "settings_widget.h"
+#include "screen_manager.h"
 #include "style_constants.h"
 
 #include <QStatusBar>
@@ -44,6 +45,7 @@ MainWindow::MainWindow(QWidget *parent)
     , logWidget_(nullptr)
     , settingsWidget_(nullptr)
     , rpcClient_(new RpcClient(this))
+    , screenManager_(new ScreenManager(this))
     , autoRefreshTimer_(new QTimer(this))
     , statusBarTimer_(new QTimer(this))
     , currentPageIndex_(0)
@@ -348,7 +350,17 @@ void MainWindow::createContentArea()
     connect(settingsWidget_, &SettingsWidget::connectionStatusChanged,
             this, &MainWindow::onConnectionStatusChanged);
     connect(settingsWidget_, &SettingsWidget::logMessage, this, &MainWindow::onLogMessage);
+    connect(settingsWidget_, &SettingsWidget::autoScreenOffSettingsChanged,
+            this, &MainWindow::onAutoScreenOffSettingsChanged);
     contentStack_->addWidget(settingsScrollArea);
+    
+    // 初始化自动息屏（根据保存的设置）
+    QSettings settings;
+    bool autoScreenOff = settings.value(QStringLiteral("settings/autoScreenOff"), false).toBool();
+    int screenOffTimeout = settings.value(QStringLiteral("settings/screenOffTimeout"), 60).toInt();
+    if (autoScreenOff) {
+        screenManager_->enableAutoScreenOff(screenOffTimeout);
+    }
 }
 
 void MainWindow::onMenuButtonClicked()
@@ -602,5 +614,17 @@ void MainWindow::onMqttStatusFromDashboard(int connected, int total)
     } else {
         cloudStatusLabel_->setText(QStringLiteral("[云] 部分连接 (%1/%2)").arg(connected).arg(total));
         cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #f39c12; padding: 4px 10px;"));
+    }
+}
+
+void MainWindow::onAutoScreenOffSettingsChanged(bool enabled, int timeoutSeconds)
+{
+    if (enabled) {
+        screenManager_->setScreenOffTimeout(timeoutSeconds);
+        screenManager_->enableAutoScreenOff(timeoutSeconds);
+        qDebug() << "[MAIN_WINDOW] 自动息屏已启用，超时时间:" << timeoutSeconds << "秒";
+    } else {
+        screenManager_->disableAutoScreenOff();
+        qDebug() << "[MAIN_WINDOW] 自动息屏已禁用";
     }
 }

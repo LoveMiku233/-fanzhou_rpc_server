@@ -24,6 +24,7 @@ class StrategyWidget;
 class SensorWidget;
 class LogWidget;
 class SettingsWidget;
+class ScreenManager;
 
 /**
  * @brief 主窗口类 - 大棚控制系统
@@ -48,6 +49,7 @@ private slots:
     void attemptAutoConnect();
     void updateCloudStatus();
     void onMqttStatusFromDashboard(int connected, int total);
+    void onAutoScreenOffSettingsChanged(bool enabled, int timeoutSeconds);
 
 private:
     void setupUi();
@@ -82,6 +84,9 @@ private:
 
     // RPC客户端
     RpcClient *rpcClient_;
+    
+    // 屏幕管理器（自动息屏）
+    ScreenManager *screenManager_;
 
     // 定时器
     QTimer *autoRefreshTimer_;

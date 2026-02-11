@@ -19,6 +19,7 @@
 #include <QTabWidget>
 #include <QRegularExpression>
 #include <QSlider>
+#include <QFrame>
 
 SettingsWidget::SettingsWidget(RpcClient *rpcClient, QWidget *parent)
     : QWidget(parent)
@@ -47,6 +48,8 @@ SettingsWidget::SettingsWidget(RpcClient *rpcClient, QWidget *parent)
     , mqttEnabledCheckBox_(nullptr)
     , mqttStatusLabel_(nullptr)
     , brightnessSlider_(nullptr)
+    , autoScreenOffCheckBox_(nullptr)
+    , screenOffTimeoutSpinBox_(nullptr)
 {
     setupUi();
 
@@ -61,6 +64,10 @@ SettingsWidget::SettingsWidget(RpcClient *rpcClient, QWidget *parent)
     portSpinBox_->setValue(settings.value(QStringLiteral("connection/port"), 12345).toInt());
     refreshIntervalSpinBox_->setValue(settings.value(QStringLiteral("settings/refreshInterval"), 5).toInt());
     autoConnectCheckBox_->setChecked(settings.value(QStringLiteral("settings/autoConnect"), false).toBool());
+    
+    // 加载自动息屏设置
+    autoScreenOffCheckBox_->setChecked(settings.value(QStringLiteral("settings/autoScreenOff"), false).toBool());
+    screenOffTimeoutSpinBox_->setValue(settings.value(QStringLiteral("settings/screenOffTimeout"), 60).toInt());
 
     updateConnectionStatus(false);
 }
@@ -468,6 +475,43 @@ void SettingsWidget::setupUi()
     screenBtnLayout->addWidget(setBrightnessBtn);
 
     screenLayout->addRow(screenBtnLayout);
+    
+    // 自动息屏设置 - 分隔线
+    QFrame *screenSeparator = new QFrame(systemTab);
+    screenSeparator->setFrameShape(QFrame::HLine);
+    screenSeparator->setStyleSheet(QStringLiteral("color: #e0e0e0;"));
+    screenLayout->addRow(screenSeparator);
+    
+    // 自动息屏开关
+    autoScreenOffCheckBox_ = new QCheckBox(QStringLiteral("启用自动息屏"), systemTab);
+    autoScreenOffCheckBox_->setMinimumHeight(36);
+    autoScreenOffCheckBox_->setStyleSheet(QStringLiteral(
+        "QCheckBox { font-size: 13px; padding: 4px; }"
+        "QCheckBox::indicator { width: 22px; height: 22px; }"));
+    connect(autoScreenOffCheckBox_, &QCheckBox::toggled, this, &SettingsWidget::onAutoScreenOffToggled);
+    screenLayout->addRow(QStringLiteral("自动息屏:"), autoScreenOffCheckBox_);
+    
+    // 息屏超时时间
+    screenOffTimeoutSpinBox_ = new QSpinBox(systemTab);
+    screenOffTimeoutSpinBox_->setRange(10, 600);  // 10秒到10分钟
+    screenOffTimeoutSpinBox_->setValue(60);
+    screenOffTimeoutSpinBox_->setSuffix(QStringLiteral(" 秒"));
+    screenOffTimeoutSpinBox_->setMinimumHeight(36);
+    screenOffTimeoutSpinBox_->setStyleSheet(QStringLiteral(
+        "QSpinBox { border: 2px solid #e0e0e0; border-radius: 6px; padding: 4px 8px; font-size: 13px; }"
+        "QSpinBox:focus { border-color: #3498db; }"));
+    connect(screenOffTimeoutSpinBox_, QOverload<int>::of(&QSpinBox::valueChanged), 
+            this, &SettingsWidget::onScreenOffTimeoutChanged);
+    screenLayout->addRow(QStringLiteral("息屏时间:"), screenOffTimeoutSpinBox_);
+    
+    // 自动息屏提示
+    QLabel *screenOffHelpLabel = new QLabel(
+        QStringLiteral("[示] 无触控操作后自动关闭屏幕，触控后自动亮起"), systemTab);
+    screenOffHelpLabel->setStyleSheet(QStringLiteral(
+        "color: #7f8c8d; font-size: 11px; padding: 4px;"));
+    screenOffHelpLabel->setWordWrap(true);
+    screenLayout->addRow(screenOffHelpLabel);
+    
     sysLayout->addWidget(screenGroupBox);
 
     // 系统操作组
@@ -1101,5 +1145,29 @@ void SettingsWidget::onSetUploadConfig()
         QString error = result.toObject().value(QStringLiteral("error")).toString();
         emit logMessage(QStringLiteral("保存配置失败: %1").arg(error), QStringLiteral("ERROR"));
         QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("保存配置失败: %1").arg(error));
+    }
+}
+
+
+// ==================== 自动息屏槽函数 ====================
+
+void SettingsWidget::onAutoScreenOffToggled(bool checked)
+{
+    QSettings settings;
+    settings.setValue(QStringLiteral("settings/autoScreenOff"), checked);
+    
+    int timeout = screenOffTimeoutSpinBox_->value();
+    
+    emit autoScreenOffSettingsChanged(checked, timeout);
+    emit logMessage(QStringLiteral("自动息屏: %1").arg(checked ? QStringLiteral("启用") : QStringLiteral("禁用")));
+}
+
+void SettingsWidget::onScreenOffTimeoutChanged(int value)
+{
+    QSettings settings;
+    settings.setValue(QStringLiteral("settings/screenOffTimeout"), value);
+    
+    if (autoScreenOffCheckBox_->isChecked()) {
+        emit autoScreenOffSettingsChanged(true, value);
     }
 }
