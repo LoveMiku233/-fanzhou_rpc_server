@@ -81,11 +81,12 @@ void DeviceCard::setupUi()
     setMinimumWidth(200);  // 确保卡片最小宽度
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(CARD_MARGIN, CARD_MARGIN, CARD_MARGIN, CARD_MARGIN);
-    mainLayout->setSpacing(CARD_SPACING);
+    mainLayout->setContentsMargins(CARD_MARGIN + 2, CARD_MARGIN + 2, CARD_MARGIN + 2, CARD_MARGIN + 2);
+    mainLayout->setSpacing(CARD_SPACING + 2);
 
     // 顶部行：名称和节点ID
     QHBoxLayout *topRow = new QHBoxLayout();
+    topRow->setSpacing(6);
     
     nameLabel_ = new QLabel(name_, this);
     nameLabel_->setStyleSheet(QStringLiteral(
@@ -97,13 +98,14 @@ void DeviceCard::setupUi()
     nodeIdLabel_ = new QLabel(QStringLiteral("#%1").arg(nodeId_), this);
     nodeIdLabel_->setStyleSheet(QStringLiteral(
         "font-size: %1px; color: #7f8c8d; background-color: #ecf0f1; "
-        "padding: 2px 6px; border-radius: 4px;").arg(FONT_SIZE_SMALL));
+        "padding: 3px 8px; border-radius: 6px;").arg(FONT_SIZE_SMALL));
     topRow->addWidget(nodeIdLabel_);
     
     mainLayout->addLayout(topRow);
 
     // 中间行：状态和电流
     QHBoxLayout *middleRow = new QHBoxLayout();
+    middleRow->setSpacing(8);
     
     statusLabel_ = new QLabel(QStringLiteral("[等]等待..."), this);
     statusLabel_->setStyleSheet(QStringLiteral("font-size: %1px; font-weight: bold; color: #7f8c8d;").arg(FONT_SIZE_BODY));
@@ -127,12 +129,12 @@ void DeviceCard::setupUi()
 
     // 底部行：通道状态
     QHBoxLayout *bottomRow = new QHBoxLayout();
-    bottomRow->setSpacing(4);
+    bottomRow->setSpacing(6);
     
     auto createChLabel = [this](const QString &text) -> QLabel* {
         QLabel *label = new QLabel(text, this);
         label->setStyleSheet(QStringLiteral(
-            "font-size: %1px; padding: 2px 6px; background-color: #f5f5f5; border-radius: 4px;").arg(FONT_SIZE_SMALL));
+            "font-size: %1px; padding: 3px 8px; background-color: #f5f5f5; color: #95a5a6; border-radius: 6px;").arg(FONT_SIZE_SMALL));
         return label;
     };
     
@@ -170,8 +172,16 @@ void DeviceCard::updateStatus(bool online, qint64 ageMs, double totalCurrent, co
             "font-size: %1px; font-weight: bold; color: #e74c3c;").arg(FONT_SIZE_BODY));
     }
 
-    // 更新总电流 - 保留1位小数
-    currentLabel_->setText(QStringLiteral("%1mA").arg(totalCurrent, 0, 'f', 1));
+    // 更新总电流 - 当设备从未响应时显示 "--mA"，否则显示实际值
+    if (ageMs < 0 && totalCurrent < kMinDisplayCurrentMa) {
+        currentLabel_->setText(QStringLiteral("--mA"));
+        currentLabel_->setStyleSheet(QStringLiteral(
+            "font-size: %1px; color: #95a5a6; font-weight: bold;").arg(FONT_SIZE_BODY));
+    } else {
+        currentLabel_->setText(QStringLiteral("%1mA").arg(totalCurrent, 0, 'f', 1));
+        currentLabel_->setStyleSheet(QStringLiteral(
+            "font-size: %1px; color: #3498db; font-weight: bold;").arg(FONT_SIZE_BODY));
+    }
 
     // 更新通道状态 - 显示模式、电流和缺相状态
     QLabel *chLabels[] = {ch0Label_, ch1Label_, ch2Label_, ch3Label_};
@@ -211,8 +221,14 @@ void DeviceCard::updateStatus(bool online, qint64 ageMs, double totalCurrent, co
 
             chLabels[ch]->setText(displayText);
             chLabels[ch]->setStyleSheet(QStringLiteral(
-                "font-size: %1px; padding: 2px 6px; background-color: %2; color: %3; border-radius: 4px;")
+                "font-size: %1px; padding: 3px 8px; background-color: %2; color: %3; border-radius: 6px;")
                 .arg(FONT_SIZE_SMALL).arg(bgColor, textColor));
+        } else if (ageMs < 0) {
+            // 设备从未响应时，显示等待状态
+            chLabels[ch]->setText(QStringLiteral("%1:--").arg(ch));
+            chLabels[ch]->setStyleSheet(QStringLiteral(
+                "font-size: %1px; padding: 3px 8px; background-color: #f5f5f5; color: #95a5a6; border-radius: 6px;")
+                .arg(FONT_SIZE_SMALL));
         }
     }
 }
@@ -452,7 +468,7 @@ void DeviceWidget::refreshDeviceStatus()
         return;
     }
 
-    qDebug() << "[DEVICE_WIDGET] 刷新设备状态";
+    qDebug() << "[DEVICE_WIDGET] 刷新设备状态，设备数量:" << deviceCards_.size();
 
     // 使用异步调用避免阻塞UI线程
     for (DeviceCard *card : deviceCards_) {
@@ -465,10 +481,17 @@ void DeviceWidget::refreshDeviceStatus()
         rpcClient_->callAsync(QStringLiteral("relay.statusAll"), params,
             [this, nodeId](const QJsonValue &result, const QJsonObject &error) {
                 if (error.isEmpty() && result.isObject()) {
+                    QJsonObject resultObj = result.toObject();
+                    qDebug() << "[DEVICE_WIDGET] relay.statusAll node=" << nodeId 
+                             << "online=" << resultObj.value(QStringLiteral("online")).toBool()
+                             << "totalCurrent=" << resultObj.value(QStringLiteral("totalCurrent")).toDouble();
                     // 在主线程中更新UI
                     QMetaObject::invokeMethod(this, [this, nodeId, result]() {
                         updateDeviceCardStatus(nodeId, result.toObject());
                     }, Qt::QueuedConnection);
+                } else if (!error.isEmpty()) {
+                    qDebug() << "[DEVICE_WIDGET] relay.statusAll node=" << nodeId << "错误:" 
+                             << error.value(QStringLiteral("message")).toString();
                 }
             }, 2000);  // 2秒超时
     }
