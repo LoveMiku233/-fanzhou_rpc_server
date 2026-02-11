@@ -38,6 +38,10 @@ namespace {
 // Minimum current (mA) threshold to display in channel status
 // Values below this are considered noise/measurement error and are hidden
 constexpr double kMinDisplayCurrentMa = 0.1;
+
+// Delay (ms) before fallback status refresh when device.list doesn't return channel data
+// This ensures the UI layout is complete before initiating additional RPC calls
+constexpr int kFallbackRefreshDelayMs = 50;
 }
 
 // ==================== DeviceCard Implementation ====================
@@ -689,7 +693,11 @@ void DeviceWidget::updateDeviceCards(const QJsonArray &devices)
 
         // 设置初始状态 - 使用device.list返回的状态信息（如果有）
         bool online = device.value(QStringLiteral("online")).toBool();
-        qint64 ageMs = static_cast<qint64>(device.value(QStringLiteral("ageMs")).toDouble(-1));
+        // 使用toVariant().toLongLong()以正确处理整数和浮点数类型
+        qint64 ageMs = device.value(QStringLiteral("ageMs")).toVariant().toLongLong();
+        if (!device.contains(QStringLiteral("ageMs")) || device.value(QStringLiteral("ageMs")).isNull()) {
+            ageMs = -1;  // 默认值表示无数据
+        }
         double totalCurrent = device.value(QStringLiteral("totalCurrent")).toDouble(0);
         QJsonObject channels = device.value(QStringLiteral("channels")).toObject();
         
@@ -706,9 +714,9 @@ void DeviceWidget::updateDeviceCards(const QJsonArray &devices)
     
     // 如果device.list没有返回通道数据，则额外调用relay.statusAll刷新状态
     // 这是为了兼容旧版RPC服务器或使用relay.nodes回退时的情况
-    if (!hasChannelData && !deviceCards_.isEmpty()) {
+    if (!hasChannelData) {
         qDebug() << "[DEVICE_WIDGET] device.list未返回通道数据，执行额外的状态刷新";
-        QTimer::singleShot(50, this, &DeviceWidget::refreshDeviceStatus);
+        QTimer::singleShot(kFallbackRefreshDelayMs, this, &DeviceWidget::refreshDeviceStatus);
     }
 }
 
