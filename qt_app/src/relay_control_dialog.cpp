@@ -374,7 +374,7 @@ void RelayControlDialog::setupUi()
         QLabel *currentLbl = new QLabel(QStringLiteral("-- A"), this);
         currentLbl->setStyleSheet(QStringLiteral(
             "font-size: 13px; font-weight: bold; color: #95a5a6; "
-            "background-color: #f5f5f5; padding: 4px 8px; border-radius: 6px; min-width: 55px;"));
+            "background-color: #f5f5f5; padding: 4px 8px; border-radius: 6px; min-width: 60px;"));
         currentLbl->setAlignment(Qt::AlignCenter);
         controlGrid->addWidget(currentLbl, ch, 4);
         currentLabels[ch] = currentLbl;
