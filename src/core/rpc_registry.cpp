@@ -758,6 +758,21 @@ void RpcRegistry::registerCan()
             {QStringLiteral("txQueueSize"), txQueueSize}
         };
 
+        // 添加详细的CAN状态信息
+        if (hasCanBus) {
+            result[QStringLiteral("resetAttemptCount")] = context_->canBus->resetAttemptCount();
+            result[QStringLiteral("droppedFrameCount")] = context_->canBus->droppedFrameCount();
+            result[QStringLiteral("backoffMultiplier")] = context_->canBus->backoffMultiplier();
+            result[QStringLiteral("resetInProgress")] = context_->canBus->isResetInProgress();
+            
+            const qint64 lastResetMs = context_->canBus->lastResetTimeMs();
+            if (lastResetMs > 0) {
+                result[QStringLiteral("lastResetTimeMs")] = static_cast<double>(lastResetMs);
+                const qint64 now = QDateTime::currentMSecsSinceEpoch();
+                result[QStringLiteral("timeSinceLastResetMs")] = static_cast<double>(now - lastResetMs);
+            }
+        }
+
         // 如果CAN未打开，提供诊断信息
         if (!canOpened) {
             result[QStringLiteral("diagnostic")] = QStringLiteral(
