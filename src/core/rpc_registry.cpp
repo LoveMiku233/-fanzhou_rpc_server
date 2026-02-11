@@ -2425,10 +2425,11 @@ void RpcRegistry::registerDevice()
         return QJsonObject{{kKeyOk, true}, {QStringLiteral("interfaceTypes"), arr}};
     });
 
-    // 获取设备列表
+    // 获取设备列表（包含在线状态、电流和通道状态信息）
     dispatcher_->registerMethod(QStringLiteral("device.list"),
                                  [this](const QJsonObject &) {
         QJsonArray arr;
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
         const auto devices = context_->listDevices();
         for (const auto &dev : devices) {
             QJsonObject obj;
@@ -2442,6 +2443,45 @@ void RpcRegistry::registerDevice()
             if (!dev.params.isEmpty()) {
                 obj[QStringLiteral("params")] = dev.params;
             }
+            
+            // 添加设备在线状态、电流和通道信息（如果是继电器设备）
+            auto *relayDev = context_->relays.value(static_cast<quint8>(dev.nodeId), nullptr);
+            if (relayDev) {
+                const qint64 lastSeen = relayDev->lastSeenMs();
+                bool online = false;
+                qint64 ageMs = -1;
+                if (lastSeen > 0) {
+                    ageMs = now - lastSeen;
+                    online = (ageMs <= kOnlineTimeoutMs);
+                }
+                obj[kKeyOnline] = online;
+                obj[kKeyAgeMs] = (ageMs >= 0) ? static_cast<double>(ageMs) : QJsonValue();
+                
+                // 添加通道状态和总电流信息
+                QJsonObject channels;
+                double totalCurrent = 0.0;
+                for (quint8 ch = 0; ch < kDefaultChannelCount; ++ch) {
+                    const auto status = relayDev->lastStatus(ch);
+                    QJsonObject chObj;
+                    chObj[kKeyCh] = static_cast<int>(ch);
+                    chObj[kKeyChannel] = static_cast<int>(status.channel);
+                    chObj[kKeyStatusByte] = static_cast<int>(status.statusByte);
+                    chObj[kKeyCurrentA] = static_cast<double>(status.currentA);
+                    chObj[kKeyMode] = static_cast<int>(device::RelayProtocol::modeBits(status.statusByte));
+                    chObj[kKeyPhaseLost] = device::RelayProtocol::phaseLost(status.statusByte);
+                    // 电流单位转换为mA供前端显示
+                    chObj[QStringLiteral("current")] = static_cast<double>(status.currentA) * 1000.0;
+                    channels[QString::number(ch)] = chObj;
+                    totalCurrent += static_cast<double>(status.currentA) * 1000.0;
+                }
+                obj[kKeyChannels] = channels;
+                obj[QStringLiteral("totalCurrent")] = totalCurrent;
+            } else {
+                // 非继电器设备，设置默认值
+                obj[kKeyOnline] = false;
+                obj[kKeyAgeMs] = QJsonValue();
+            }
+            
             arr.append(obj);
         }
         return QJsonObject{{kKeyOk, true}, {kKeyDevices, arr}, {kKeyTotal, arr.size()}};
