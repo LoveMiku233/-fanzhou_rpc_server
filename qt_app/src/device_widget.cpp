@@ -113,7 +113,7 @@ void DeviceCard::setupUi()
     
     middleRow->addStretch();
     
-    currentLabel_ = new QLabel(QStringLiteral("--mA"), this);
+    currentLabel_ = new QLabel(QStringLiteral("--A"), this);
     currentLabel_->setStyleSheet(QStringLiteral(
         "font-size: %1px; color: #3498db; font-weight: bold;").arg(FONT_SIZE_BODY));
     middleRow->addWidget(currentLabel_);
@@ -172,13 +172,15 @@ void DeviceCard::updateStatus(bool online, qint64 ageMs, double totalCurrent, co
             "font-size: %1px; font-weight: bold; color: #e74c3c;").arg(FONT_SIZE_BODY));
     }
 
-    // 更新总电流 - 当设备从未响应时显示 "--mA"，否则显示实际值
+    // 更新总电流 - 当设备从未响应时显示 "--A"，否则显示实际值（mA转换为A）
     if (ageMs < 0 && totalCurrent < kMinDisplayCurrentMa) {
-        currentLabel_->setText(QStringLiteral("--mA"));
+        currentLabel_->setText(QStringLiteral("--A"));
         currentLabel_->setStyleSheet(QStringLiteral(
             "font-size: %1px; color: #95a5a6; font-weight: bold;").arg(FONT_SIZE_BODY));
     } else {
-        currentLabel_->setText(QStringLiteral("%1mA").arg(totalCurrent, 0, 'f', 1));
+        // 将mA转换为A (除以1000)
+        double currentInA = totalCurrent / 1000.0;
+        currentLabel_->setText(QStringLiteral("%1A").arg(currentInA, 0, 'f', 2));
         currentLabel_->setStyleSheet(QStringLiteral(
             "font-size: %1px; color: #3498db; font-weight: bold;").arg(FONT_SIZE_BODY));
     }
@@ -211,10 +213,12 @@ void DeviceCard::updateStatus(bool online, qint64 ageMs, double totalCurrent, co
                 }
             }
 
-            // 显示通道号:状态(电流mA)
+            // 显示通道号:状态(电流A)
             QString displayText;
             if (current > kMinDisplayCurrentMa) {
-                displayText = QStringLiteral("%1:%2(%3)").arg(ch).arg(modeText).arg(current, 0, 'f', 0);
+                // 将mA转换为A (除以1000)
+                double currentInA = current / 1000.0;
+                displayText = QStringLiteral("%1:%2(%3A)").arg(ch).arg(modeText).arg(currentInA, 0, 'f', 2);
             } else {
                 displayText = QStringLiteral("%1:%2").arg(ch).arg(modeText);
             }

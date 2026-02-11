@@ -41,6 +41,14 @@ RelayControlDialog::RelayControlDialog(RpcClient *rpcClient, int nodeId,
     , ch2StatusLabel_(nullptr)
     , ch3StatusLabel_(nullptr)
     , currentLabel_(nullptr)
+    , ch0CurrentLabel_(nullptr)
+    , ch1CurrentLabel_(nullptr)
+    , ch2CurrentLabel_(nullptr)
+    , ch3CurrentLabel_(nullptr)
+    , ch0Slider_(nullptr)
+    , ch1Slider_(nullptr)
+    , ch2Slider_(nullptr)
+    , ch3Slider_(nullptr)
     , stopChannelIndex_(0)
     , isControlling_(false)
 {
@@ -51,6 +59,50 @@ RelayControlDialog::RelayControlDialog(RpcClient *rpcClient, int nodeId,
     
     // 初始查询状态
     onQueryStatusClicked();
+}
+
+void RelayControlDialog::updateSliderStyle(QSlider *slider, int value)
+{
+    QString bgColor;
+    QString handleColor;
+    
+    switch (value) {
+        case 0: // 停止 - 灰色
+            bgColor = QStringLiteral("#ecf0f1");
+            handleColor = QStringLiteral("#7f8c8d");
+            break;
+        case 1: // 正转 - 绿色
+            bgColor = QStringLiteral("#d4edda");
+            handleColor = QStringLiteral("#27ae60");
+            break;
+        case 2: // 反转 - 橙色
+            bgColor = QStringLiteral("#fff3cd");
+            handleColor = QStringLiteral("#f39c12");
+            break;
+        default:
+            bgColor = QStringLiteral("#f5f5f5");
+            handleColor = QStringLiteral("#95a5a6");
+            break;
+    }
+    
+    slider->setStyleSheet(QStringLiteral(
+        "QSlider::groove:horizontal {"
+        "  border: 1px solid #bdc3c7;"
+        "  height: 20px;"
+        "  background: %1;"
+        "  border-radius: 10px;"
+        "}"
+        "QSlider::handle:horizontal {"
+        "  background: %2;"
+        "  border: 2px solid #ffffff;"
+        "  width: 28px;"
+        "  margin: -2px 0;"
+        "  border-radius: 14px;"
+        "}"
+        "QSlider::handle:horizontal:hover {"
+        "  background: %2;"
+        "  border: 2px solid #3498db;"
+        "}").arg(bgColor, handleColor));
 }
 
 void RelayControlDialog::setupUi()
@@ -79,7 +131,7 @@ void RelayControlDialog::setupUi()
     statusLabel_->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 13px;"));
     statusLayout->addWidget(statusLabel_);
 
-    currentLabel_ = new QLabel(QStringLiteral("总电流: -- mA"), this);
+    currentLabel_ = new QLabel(QStringLiteral("总电流: -- A"), this);
     currentLabel_->setStyleSheet(QStringLiteral(
         "font-size: 13px; color: #3498db; font-weight: bold;"));
     statusLayout->addWidget(currentLabel_);
@@ -126,52 +178,69 @@ void RelayControlDialog::setupUi()
 
     contentLayout->addWidget(statusBox);
 
-    // 右侧：通道控制区域
+    // 右侧：通道控制区域（使用滑块）
     QGroupBox *controlBox = new QGroupBox(QStringLiteral("通道控制"), this);
     QVBoxLayout *controlBoxLayout = new QVBoxLayout(controlBox);
-    controlBoxLayout->setSpacing(6);
+    controlBoxLayout->setSpacing(8);
     controlBoxLayout->setContentsMargins(10, 12, 10, 10);
 
     // 控制说明
-    QLabel *helpLabel = new QLabel(QStringLiteral("停=停止  正=正转  反=反转"), this);
+    QLabel *helpLabel = new QLabel(QStringLiteral("左=反转  中=停止  右=正转"), this);
     helpLabel->setStyleSheet(QStringLiteral("color: #7f8c8d; font-size: 11px;"));
     helpLabel->setAlignment(Qt::AlignCenter);
     controlBoxLayout->addWidget(helpLabel);
 
     QGridLayout *controlGrid = new QGridLayout();
-    controlGrid->setSpacing(6);
+    controlGrid->setSpacing(8);
+    controlGrid->setColumnStretch(1, 1);
 
+    // 创建滑块控制
+    QSlider *sliders[] = {nullptr, nullptr, nullptr, nullptr};
+    QLabel *currentLabels[] = {nullptr, nullptr, nullptr, nullptr};
+    
     for (int ch = 0; ch < 4; ++ch) {
+        // 通道标签
         QLabel *chLabel = new QLabel(QStringLiteral("通道%1:").arg(ch), this);
         chLabel->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 12px;"));
         controlGrid->addWidget(chLabel, ch, 0);
 
-        QPushButton *stopBtn = new QPushButton(QStringLiteral("停"), this);
-        stopBtn->setProperty("channel", ch);
-        stopBtn->setProperty("action", QStringLiteral("stop"));
-        stopBtn->setMinimumSize(50, 36);
-        stopBtn->setMaximumWidth(60);
-        connect(stopBtn, &QPushButton::clicked, this, &RelayControlDialog::onChannelControlClicked);
-        controlGrid->addWidget(stopBtn, ch, 1);
+        // 滑块控制 (0=停止, 1=正转, 2=反转)
+        // 但为了直观性，我们使用 -1=反转, 0=停止, 1=正转
+        QSlider *slider = new QSlider(Qt::Horizontal, this);
+        slider->setMinimum(-1);  // 反转
+        slider->setMaximum(1);   // 正转
+        slider->setValue(0);     // 停止
+        slider->setTickPosition(QSlider::TicksBelow);
+        slider->setTickInterval(1);
+        slider->setMinimumWidth(120);
+        slider->setMinimumHeight(30);
+        slider->setProperty("channel", ch);
+        
+        updateSliderStyle(slider, 0);
+        
+        connect(slider, &QSlider::valueChanged, this, &RelayControlDialog::onSliderValueChanged);
+        controlGrid->addWidget(slider, ch, 1);
+        sliders[ch] = slider;
 
-        QPushButton *fwdBtn = new QPushButton(QStringLiteral("正"), this);
-        fwdBtn->setProperty("channel", ch);
-        fwdBtn->setProperty("action", QStringLiteral("fwd"));
-        fwdBtn->setProperty("type", QStringLiteral("success"));
-        fwdBtn->setMinimumSize(50, 36);
-        fwdBtn->setMaximumWidth(60);
-        connect(fwdBtn, &QPushButton::clicked, this, &RelayControlDialog::onChannelControlClicked);
-        controlGrid->addWidget(fwdBtn, ch, 2);
-
-        QPushButton *revBtn = new QPushButton(QStringLiteral("反"), this);
-        revBtn->setProperty("channel", ch);
-        revBtn->setProperty("action", QStringLiteral("rev"));
-        revBtn->setProperty("type", QStringLiteral("warning"));
-        revBtn->setMinimumSize(50, 36);
-        revBtn->setMaximumWidth(60);
-        connect(revBtn, &QPushButton::clicked, this, &RelayControlDialog::onChannelControlClicked);
-        controlGrid->addWidget(revBtn, ch, 3);
+        // 电流显示标签（在滑块旁边）
+        QLabel *currentLbl = new QLabel(QStringLiteral("-- A"), this);
+        currentLbl->setStyleSheet(QStringLiteral(
+            "font-size: 12px; font-weight: bold; color: #3498db; min-width: 50px;"));
+        currentLbl->setAlignment(Qt::AlignCenter);
+        controlGrid->addWidget(currentLbl, ch, 2);
+        currentLabels[ch] = currentLbl;
     }
+
+    // 保存滑块和电流标签引用
+    ch0Slider_ = sliders[0];
+    ch1Slider_ = sliders[1];
+    ch2Slider_ = sliders[2];
+    ch3Slider_ = sliders[3];
+    
+    ch0CurrentLabel_ = currentLabels[0];
+    ch1CurrentLabel_ = currentLabels[1];
+    ch2CurrentLabel_ = currentLabels[2];
+    ch3CurrentLabel_ = currentLabels[3];
 
     controlBoxLayout->addLayout(controlGrid);
     controlBoxLayout->addStretch();
@@ -194,6 +263,31 @@ void RelayControlDialog::setupUi()
     mainLayout->addWidget(closeBtn);
 }
 
+void RelayControlDialog::onSliderValueChanged(int value)
+{
+    QSlider *slider = qobject_cast<QSlider*>(sender());
+    if (!slider) return;
+
+    int channel = slider->property("channel").toInt();
+    
+    // 更新滑块样式
+    // 将滑块值转换为显示模式: -1=反转(2), 0=停止(0), 1=正转(1)
+    int displayMode = (value == -1) ? 2 : value;
+    updateSliderStyle(slider, displayMode);
+    
+    // 转换滑块值为动作
+    QString action;
+    if (value == 0) {
+        action = QStringLiteral("stop");
+    } else if (value == 1) {
+        action = QStringLiteral("fwd");
+    } else if (value == -1) {
+        action = QStringLiteral("rev");
+    }
+
+    controlRelay(channel, action);
+}
+
 void RelayControlDialog::onChannelControlClicked()
 {
     QPushButton *btn = qobject_cast<QPushButton*>(sender());
@@ -210,6 +304,17 @@ void RelayControlDialog::onStopAllClicked()
     // 开始顺序停止所有通道
     stopChannelIndex_ = 0;
     stopNextChannel();
+    
+    // 同时将所有滑块设置为停止位置
+    QSlider *sliders[] = {ch0Slider_, ch1Slider_, ch2Slider_, ch3Slider_};
+    for (int ch = 0; ch < 4; ++ch) {
+        if (sliders[ch]) {
+            sliders[ch]->blockSignals(true);
+            sliders[ch]->setValue(0);
+            updateSliderStyle(sliders[ch], 0);
+            sliders[ch]->blockSignals(false);
+        }
+    }
 }
 
 void RelayControlDialog::stopNextChannel()
@@ -293,13 +398,16 @@ void RelayControlDialog::updateStatusDisplay(const QJsonObject &status)
         statusLabel_->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 14px; color: #e74c3c;"));
     }
 
-    // 更新电流
+    // 更新电流（mA转换为A）
     double totalCurrent = status.value(QStringLiteral("totalCurrent")).toDouble(0);
-    currentLabel_->setText(QStringLiteral("总电流: %1 mA").arg(totalCurrent, 0, 'f', 1));
+    double totalCurrentInA = totalCurrent / 1000.0;
+    currentLabel_->setText(QStringLiteral("总电流: %1 A").arg(totalCurrentInA, 0, 'f', 2));
 
     // 更新通道状态
     QJsonObject channels = status.value(QStringLiteral("channels")).toObject();
     QLabel *chLabels[] = {ch0StatusLabel_, ch1StatusLabel_, ch2StatusLabel_, ch3StatusLabel_};
+    QLabel *chCurrentLabels[] = {ch0CurrentLabel_, ch1CurrentLabel_, ch2CurrentLabel_, ch3CurrentLabel_};
+    QSlider *chSliders[] = {ch0Slider_, ch1Slider_, ch2Slider_, ch3Slider_};
 
     for (int ch = 0; ch < 4; ++ch) {
         QString chKey = QString::number(ch);
@@ -311,26 +419,69 @@ void RelayControlDialog::updateStatusDisplay(const QJsonObject &status)
 
             QString modeText;
             QString color;
+            QString bgColor;
             
             // 如果缺相，优先显示缺相状态
             if (phaseLost) {
                 modeText = QStringLiteral("缺相");
                 color = QStringLiteral("#dc3545");
+                bgColor = QStringLiteral("#f8d7da");
             } else {
                 switch (mode) {
-                    case 0: modeText = QStringLiteral("停止"); color = QStringLiteral("#7f8c8d"); break;
-                    case 1: modeText = QStringLiteral("正转"); color = QStringLiteral("#27ae60"); break;
-                    case 2: modeText = QStringLiteral("反转"); color = QStringLiteral("#f39c12"); break;
-                    default: modeText = QStringLiteral("未知"); color = QStringLiteral("#95a5a6"); break;
+                    case 0: modeText = QStringLiteral("停止"); color = QStringLiteral("#7f8c8d"); bgColor = QStringLiteral("#ecf0f1"); break;
+                    case 1: modeText = QStringLiteral("正转"); color = QStringLiteral("#27ae60"); bgColor = QStringLiteral("#d4edda"); break;
+                    case 2: modeText = QStringLiteral("反转"); color = QStringLiteral("#f39c12"); bgColor = QStringLiteral("#fff3cd"); break;
+                    default: modeText = QStringLiteral("未知"); color = QStringLiteral("#95a5a6"); bgColor = QStringLiteral("#f5f5f5"); break;
                 }
             }
 
-            chLabels[ch]->setText(QStringLiteral("%1 (%2mA)")
-                .arg(modeText).arg(current, 0, 'f', 1));
+            // 将mA转换为A
+            double currentInA = current / 1000.0;
+            
+            // 更新状态标签（在左侧状态区域）
+            chLabels[ch]->setText(QStringLiteral("%1 (%2A)")
+                .arg(modeText).arg(currentInA, 0, 'f', 2));
             chLabels[ch]->setStyleSheet(QStringLiteral("color: %1; font-weight: bold; font-size: 13px;").arg(color));
+            
+            // 更新控制区域的电流标签（在滑块旁边）
+            if (chCurrentLabels[ch]) {
+                chCurrentLabels[ch]->setText(QStringLiteral("%1A").arg(currentInA, 0, 'f', 2));
+                // 根据缺相状态设置颜色
+                if (phaseLost) {
+                    chCurrentLabels[ch]->setStyleSheet(QStringLiteral(
+                        "font-size: 12px; font-weight: bold; color: #dc3545; "
+                        "background-color: #f8d7da; padding: 2px 4px; border-radius: 4px; min-width: 50px;"));
+                } else {
+                    chCurrentLabels[ch]->setStyleSheet(QStringLiteral(
+                        "font-size: 12px; font-weight: bold; color: %1; "
+                        "background-color: %2; padding: 2px 4px; border-radius: 4px; min-width: 50px;").arg(color, bgColor));
+                }
+            }
+            
+            // 更新滑块位置（不触发信号）
+            if (chSliders[ch]) {
+                chSliders[ch]->blockSignals(true);
+                int sliderValue = 0;
+                switch (mode) {
+                    case 0: sliderValue = 0; break;   // 停止
+                    case 1: sliderValue = 1; break;   // 正转
+                    case 2: sliderValue = -1; break;  // 反转
+                }
+                chSliders[ch]->setValue(sliderValue);
+                // 将mode转换为显示模式
+                int displayMode = mode;
+                updateSliderStyle(chSliders[ch], displayMode);
+                chSliders[ch]->blockSignals(false);
+            }
         } else {
             chLabels[ch]->setText(QStringLiteral("--"));
             chLabels[ch]->setStyleSheet(QStringLiteral("color: #95a5a6; font-size: 13px;"));
+            
+            if (chCurrentLabels[ch]) {
+                chCurrentLabels[ch]->setText(QStringLiteral("-- A"));
+                chCurrentLabels[ch]->setStyleSheet(QStringLiteral(
+                    "font-size: 12px; font-weight: bold; color: #95a5a6; min-width: 50px;"));
+            }
         }
     }
 }
