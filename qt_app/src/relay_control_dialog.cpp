@@ -42,6 +42,7 @@ RelayControlDialog::RelayControlDialog(RpcClient *rpcClient, int nodeId,
     , ch3StatusLabel_(nullptr)
     , currentLabel_(nullptr)
     , stopChannelIndex_(0)
+    , isControlling_(false)
 {
     setWindowTitle(QStringLiteral("控制: %1 (#%2)").arg(deviceName).arg(nodeId));
     setMinimumSize(DIALOG_WIDTH, DIALOG_HEIGHT);
@@ -224,7 +225,26 @@ void RelayControlDialog::stopNextChannel()
         return;
     }
     
-    controlRelay(stopChannelIndex_, QStringLiteral("stop"));
+    // 直接异步调用，不使用controlRelay()以避免isControlling_冲突
+    int channel = stopChannelIndex_;
+    QJsonObject params;
+    params[QStringLiteral("node")] = nodeId_;
+    params[QStringLiteral("ch")] = channel;
+    params[QStringLiteral("action")] = QStringLiteral("stop");
+    
+    rpcClient_->callAsync(QStringLiteral("relay.control"), params,
+        [this, channel](const QJsonValue &result, const QJsonObject &error) {
+            QMetaObject::invokeMethod(this, [this, channel, result, error]() {
+                if (error.isEmpty() && result.isObject()) {
+                    QJsonObject obj = result.toObject();
+                    if (obj.value(QStringLiteral("ok")).toBool()) {
+                        emit controlExecuted(QStringLiteral("节点 %1 通道 %2 -> 停止")
+                            .arg(nodeId_).arg(channel));
+                    }
+                }
+            }, Qt::QueuedConnection);
+        }, 2000);  // 2秒超时
+    
     stopChannelIndex_++;
     
     // 延迟后停止下一个通道
@@ -321,6 +341,13 @@ void RelayControlDialog::controlRelay(int channel, const QString &action)
         QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先连接服务器"));
         return;
     }
+    
+    // 防止重复控制操作
+    if (isControlling_) {
+        qDebug() << "[RELAY_CONTROL_DIALOG] 控制操作进行中，跳过";
+        return;
+    }
+    isControlling_ = true;
 
     QJsonObject params;
     params[QStringLiteral("node")] = nodeId_;
@@ -331,6 +358,8 @@ void RelayControlDialog::controlRelay(int channel, const QString &action)
     rpcClient_->callAsync(QStringLiteral("relay.control"), params,
         [this, channel, action](const QJsonValue &result, const QJsonObject &error) {
             QMetaObject::invokeMethod(this, [this, channel, action, result, error]() {
+                isControlling_ = false;
+                
                 if (!error.isEmpty()) {
                     QMessageBox::warning(this, QStringLiteral("错误"),
                         QStringLiteral("控制失败: %1").arg(error.value(QStringLiteral("message")).toString()));

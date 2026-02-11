@@ -94,6 +94,9 @@ private:
     QWidget *cardsContainer_;
     QGridLayout *cardsLayout_;
     QList<DeviceCard*> deviceCards_;
+    
+    // 防止重复操作的标志
+    bool isRefreshing_;
 };
 
 #endif // DEVICE_WIDGET_H

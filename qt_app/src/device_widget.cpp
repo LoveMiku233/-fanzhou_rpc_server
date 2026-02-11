@@ -232,6 +232,7 @@ DeviceWidget::DeviceWidget(RpcClient *rpcClient, QWidget *parent)
     , addDeviceButton_(nullptr)
     , cardsContainer_(nullptr)
     , cardsLayout_(nullptr)
+    , isRefreshing_(false)
 {
     setupUi();
     qDebug() << "[DEVICE_WIDGET] 设备页面初始化完成";
@@ -345,6 +346,13 @@ void DeviceWidget::refreshDeviceList()
         return;
     }
 
+    // 防止重复刷新
+    if (isRefreshing_) {
+        qDebug() << "[DEVICE_WIDGET] 刷新操作进行中，跳过";
+        return;
+    }
+    isRefreshing_ = true;
+
     statusLabel_->setText(QStringLiteral("[刷] 刷新中..."));
     qDebug() << "[DEVICE_WIDGET] 刷新设备列表";
 
@@ -368,6 +376,7 @@ void DeviceWidget::refreshDeviceList()
                         updateDeviceCards(devices);
                         statusLabel_->setText(QStringLiteral("[OK] 共 %1 个设备").arg(devices.size()));
                         emit logMessage(QStringLiteral("刷新设备列表成功，共 %1 个设备").arg(devices.size()));
+                        isRefreshing_ = false;
                         return;
                     }
                 }
@@ -387,6 +396,7 @@ void DeviceWidget::tryRelayNodesAsFallback()
                 if (!error.isEmpty()) {
                     statusLabel_->setText(QStringLiteral("[X] 获取失败"));
                     emit logMessage(QStringLiteral("获取设备列表失败"), QStringLiteral("ERROR"));
+                    isRefreshing_ = false;
                     return;
                 }
                 
@@ -409,12 +419,14 @@ void DeviceWidget::tryRelayNodesAsFallback()
                         updateDeviceCards(devices);
                         statusLabel_->setText(QStringLiteral("[OK] 共 %1 个设备").arg(devices.size()));
                         emit logMessage(QStringLiteral("刷新设备列表成功，共 %1 个设备").arg(devices.size()));
+                        isRefreshing_ = false;
                         return;
                     }
                 }
 
                 statusLabel_->setText(QStringLiteral("[X] 获取失败"));
                 emit logMessage(QStringLiteral("获取设备列表失败"), QStringLiteral("ERROR"));
+                isRefreshing_ = false;
             }, Qt::QueuedConnection);
         }, 2000);  // 2秒超时
 }
