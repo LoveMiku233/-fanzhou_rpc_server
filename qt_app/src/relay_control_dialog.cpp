@@ -1,6 +1,6 @@
 /**
  * @file relay_control_dialog.cpp
- * @brief 继电器控制对话框实现（1024x600低分辨率优化版）
+ * @brief 继电器控制对话框实现（使用按钮控制，带状态同步）
  */
 
 #include "relay_control_dialog.h"
@@ -45,12 +45,21 @@ RelayControlDialog::RelayControlDialog(RpcClient *rpcClient, int nodeId,
     , ch1CurrentLabel_(nullptr)
     , ch2CurrentLabel_(nullptr)
     , ch3CurrentLabel_(nullptr)
-    , ch0Slider_(nullptr)
-    , ch1Slider_(nullptr)
-    , ch2Slider_(nullptr)
-    , ch3Slider_(nullptr)
+    , ch0StopBtn_(nullptr)
+    , ch0FwdBtn_(nullptr)
+    , ch0RevBtn_(nullptr)
+    , ch1StopBtn_(nullptr)
+    , ch1FwdBtn_(nullptr)
+    , ch1RevBtn_(nullptr)
+    , ch2StopBtn_(nullptr)
+    , ch2FwdBtn_(nullptr)
+    , ch2RevBtn_(nullptr)
+    , ch3StopBtn_(nullptr)
+    , ch3FwdBtn_(nullptr)
+    , ch3RevBtn_(nullptr)
     , stopChannelIndex_(0)
     , isControlling_(false)
+    , syncTimer_(nullptr)
 {
     setWindowTitle(QStringLiteral("控制: %1 (#%2)").arg(deviceName).arg(nodeId));
     setMinimumSize(DIALOG_WIDTH, DIALOG_HEIGHT);
@@ -59,50 +68,97 @@ RelayControlDialog::RelayControlDialog(RpcClient *rpcClient, int nodeId,
     
     // 初始查询状态
     onQueryStatusClicked();
+    
+    // 启动状态同步定时器
+    startSyncTimer();
 }
 
-void RelayControlDialog::updateSliderStyle(QSlider *slider, int value)
+RelayControlDialog::~RelayControlDialog()
 {
-    QString bgColor;
-    QString handleColor;
+    stopSyncTimer();
+}
+
+void RelayControlDialog::startSyncTimer()
+{
+    if (!syncTimer_) {
+        syncTimer_ = new QTimer(this);
+        connect(syncTimer_, &QTimer::timeout, this, &RelayControlDialog::onSyncTimerTimeout);
+    }
+    syncTimer_->start(kSyncIntervalMs);
+}
+
+void RelayControlDialog::stopSyncTimer()
+{
+    if (syncTimer_) {
+        syncTimer_->stop();
+    }
+}
+
+void RelayControlDialog::onSyncTimerTimeout()
+{
+    // 定时同步设备状态
+    if (rpcClient_ && rpcClient_->isConnected() && !isControlling_) {
+        onQueryStatusClicked();
+    }
+}
+
+void RelayControlDialog::updateButtonStyles(int channel, int mode)
+{
+    // 获取对应通道的按钮
+    QPushButton *stopBtn = nullptr;
+    QPushButton *fwdBtn = nullptr;
+    QPushButton *revBtn = nullptr;
     
-    switch (value) {
-        case 0: // 停止 - 灰色
-            bgColor = QStringLiteral("#ecf0f1");
-            handleColor = QStringLiteral("#7f8c8d");
-            break;
-        case 1: // 正转 - 绿色
-            bgColor = QStringLiteral("#d4edda");
-            handleColor = QStringLiteral("#27ae60");
-            break;
-        case 2: // 反转 - 橙色
-            bgColor = QStringLiteral("#fff3cd");
-            handleColor = QStringLiteral("#f39c12");
-            break;
-        default:
-            bgColor = QStringLiteral("#f5f5f5");
-            handleColor = QStringLiteral("#95a5a6");
-            break;
+    switch (channel) {
+        case 0: stopBtn = ch0StopBtn_; fwdBtn = ch0FwdBtn_; revBtn = ch0RevBtn_; break;
+        case 1: stopBtn = ch1StopBtn_; fwdBtn = ch1FwdBtn_; revBtn = ch1RevBtn_; break;
+        case 2: stopBtn = ch2StopBtn_; fwdBtn = ch2FwdBtn_; revBtn = ch2RevBtn_; break;
+        case 3: stopBtn = ch3StopBtn_; fwdBtn = ch3FwdBtn_; revBtn = ch3RevBtn_; break;
+        default: return;
     }
     
-    slider->setStyleSheet(QStringLiteral(
-        "QSlider::groove:horizontal {"
-        "  border: 1px solid #bdc3c7;"
-        "  height: 20px;"
-        "  background: %1;"
-        "  border-radius: 10px;"
-        "}"
-        "QSlider::handle:horizontal {"
-        "  background: %2;"
-        "  border: 2px solid #ffffff;"
-        "  width: 28px;"
-        "  margin: -2px 0;"
-        "  border-radius: 14px;"
-        "}"
-        "QSlider::handle:horizontal:hover {"
-        "  background: %2;"
-        "  border: 2px solid #3498db;"
-        "}").arg(bgColor, handleColor));
+    if (!stopBtn || !fwdBtn || !revBtn) return;
+    
+    // 重置所有按钮样式
+    QString normalStyle = QStringLiteral(
+        "QPushButton { background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; padding: 6px 12px; }"
+        "QPushButton:hover { background-color: #e0e0e0; }");
+    
+    QString activeStopStyle = QStringLiteral(
+        "QPushButton { background-color: #7f8c8d; color: white; border: 2px solid #5f6c6d; border-radius: 4px; padding: 6px 12px; font-weight: bold; }"
+        "QPushButton:hover { background-color: #6f7c7d; }");
+    
+    QString activeFwdStyle = QStringLiteral(
+        "QPushButton { background-color: #27ae60; color: white; border: 2px solid #1e8449; border-radius: 4px; padding: 6px 12px; font-weight: bold; }"
+        "QPushButton:hover { background-color: #229954; }");
+    
+    QString activeRevStyle = QStringLiteral(
+        "QPushButton { background-color: #f39c12; color: white; border: 2px solid #d68910; border-radius: 4px; padding: 6px 12px; font-weight: bold; }"
+        "QPushButton:hover { background-color: #e59500; }");
+    
+    // 根据模式设置活动状态样式
+    switch (mode) {
+        case 0: // 停止
+            stopBtn->setStyleSheet(activeStopStyle);
+            fwdBtn->setStyleSheet(normalStyle);
+            revBtn->setStyleSheet(normalStyle);
+            break;
+        case 1: // 正转
+            stopBtn->setStyleSheet(normalStyle);
+            fwdBtn->setStyleSheet(activeFwdStyle);
+            revBtn->setStyleSheet(normalStyle);
+            break;
+        case 2: // 反转
+            stopBtn->setStyleSheet(normalStyle);
+            fwdBtn->setStyleSheet(normalStyle);
+            revBtn->setStyleSheet(activeRevStyle);
+            break;
+        default:
+            stopBtn->setStyleSheet(normalStyle);
+            fwdBtn->setStyleSheet(normalStyle);
+            revBtn->setStyleSheet(normalStyle);
+            break;
+    }
 }
 
 void RelayControlDialog::setupUi()
@@ -178,14 +234,14 @@ void RelayControlDialog::setupUi()
 
     contentLayout->addWidget(statusBox);
 
-    // 右侧：通道控制区域（使用滑块）
+    // 右侧：通道控制区域（使用按钮）
     QGroupBox *controlBox = new QGroupBox(QStringLiteral("通道控制"), this);
     QVBoxLayout *controlBoxLayout = new QVBoxLayout(controlBox);
     controlBoxLayout->setSpacing(8);
     controlBoxLayout->setContentsMargins(10, 12, 10, 10);
 
     // 控制说明
-    QLabel *helpLabel = new QLabel(QStringLiteral("左=反转  中=停止  右=正转"), this);
+    QLabel *helpLabel = new QLabel(QStringLiteral("点击按钮控制继电器"), this);
     helpLabel->setStyleSheet(QStringLiteral("color: #7f8c8d; font-size: 11px;"));
     helpLabel->setAlignment(Qt::AlignCenter);
     controlBoxLayout->addWidget(helpLabel);
@@ -193,48 +249,67 @@ void RelayControlDialog::setupUi()
     QGridLayout *controlGrid = new QGridLayout();
     controlGrid->setSpacing(8);
     controlGrid->setColumnStretch(1, 1);
+    controlGrid->setColumnStretch(2, 1);
+    controlGrid->setColumnStretch(3, 1);
+    controlGrid->setColumnStretch(4, 0);
 
-    // 创建滑块控制
-    QSlider *sliders[] = {nullptr, nullptr, nullptr, nullptr};
-    QLabel *currentLabels[] = {nullptr, nullptr, nullptr, nullptr};
-    
+    // 存储按钮的数组以便初始化
+    QPushButton *stopBtns[4] = {nullptr, nullptr, nullptr, nullptr};
+    QPushButton *fwdBtns[4] = {nullptr, nullptr, nullptr, nullptr};
+    QPushButton *revBtns[4] = {nullptr, nullptr, nullptr, nullptr};
+    QLabel *currentLabels[4] = {nullptr, nullptr, nullptr, nullptr};
+
+    // 创建按钮控制
     for (int ch = 0; ch < 4; ++ch) {
         // 通道标签
         QLabel *chLabel = new QLabel(QStringLiteral("通道%1:").arg(ch), this);
         chLabel->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 12px;"));
         controlGrid->addWidget(chLabel, ch, 0);
 
-        // 滑块控制: -1=反转, 0=停止, 1=正转
-        QSlider *slider = new QSlider(Qt::Horizontal, this);
-        slider->setMinimum(-1);  // 反转
-        slider->setMaximum(1);   // 正转
-        slider->setValue(0);     // 停止
-        slider->setTickPosition(QSlider::TicksBelow);
-        slider->setTickInterval(1);
-        slider->setMinimumWidth(120);
-        slider->setMinimumHeight(30);
-        slider->setProperty("channel", ch);
-        
-        updateSliderStyle(slider, 0);
-        
-        connect(slider, &QSlider::valueChanged, this, &RelayControlDialog::onSliderValueChanged);
-        controlGrid->addWidget(slider, ch, 1);
-        sliders[ch] = slider;
+        // 停止按钮
+        QPushButton *stopBtn = new QPushButton(QStringLiteral("停"), this);
+        stopBtn->setProperty("channel", ch);
+        stopBtn->setProperty("action", QStringLiteral("stop"));
+        stopBtn->setMinimumSize(50, 36);
+        connect(stopBtn, &QPushButton::clicked, this, &RelayControlDialog::onChannelControlClicked);
+        controlGrid->addWidget(stopBtn, ch, 1);
+        stopBtns[ch] = stopBtn;
 
-        // 电流显示标签（在滑块旁边）
+        // 正转按钮
+        QPushButton *fwdBtn = new QPushButton(QStringLiteral("正"), this);
+        fwdBtn->setProperty("channel", ch);
+        fwdBtn->setProperty("action", QStringLiteral("fwd"));
+        fwdBtn->setMinimumSize(50, 36);
+        connect(fwdBtn, &QPushButton::clicked, this, &RelayControlDialog::onChannelControlClicked);
+        controlGrid->addWidget(fwdBtn, ch, 2);
+        fwdBtns[ch] = fwdBtn;
+
+        // 反转按钮
+        QPushButton *revBtn = new QPushButton(QStringLiteral("反"), this);
+        revBtn->setProperty("channel", ch);
+        revBtn->setProperty("action", QStringLiteral("rev"));
+        revBtn->setMinimumSize(50, 36);
+        connect(revBtn, &QPushButton::clicked, this, &RelayControlDialog::onChannelControlClicked);
+        controlGrid->addWidget(revBtn, ch, 3);
+        revBtns[ch] = revBtn;
+
+        // 电流显示标签（在按钮旁边）
         QLabel *currentLbl = new QLabel(QStringLiteral("-- A"), this);
         currentLbl->setStyleSheet(QStringLiteral(
             "font-size: 12px; font-weight: bold; color: #3498db; min-width: 50px;"));
         currentLbl->setAlignment(Qt::AlignCenter);
-        controlGrid->addWidget(currentLbl, ch, 2);
+        controlGrid->addWidget(currentLbl, ch, 4);
         currentLabels[ch] = currentLbl;
+        
+        // 初始化按钮样式为停止状态
+        updateButtonStyles(ch, 0);
     }
 
-    // 保存滑块和电流标签引用
-    ch0Slider_ = sliders[0];
-    ch1Slider_ = sliders[1];
-    ch2Slider_ = sliders[2];
-    ch3Slider_ = sliders[3];
+    // 保存按钮和电流标签引用
+    ch0StopBtn_ = stopBtns[0]; ch0FwdBtn_ = fwdBtns[0]; ch0RevBtn_ = revBtns[0];
+    ch1StopBtn_ = stopBtns[1]; ch1FwdBtn_ = fwdBtns[1]; ch1RevBtn_ = revBtns[1];
+    ch2StopBtn_ = stopBtns[2]; ch2FwdBtn_ = fwdBtns[2]; ch2RevBtn_ = revBtns[2];
+    ch3StopBtn_ = stopBtns[3]; ch3FwdBtn_ = fwdBtns[3]; ch3RevBtn_ = revBtns[3];
     
     ch0CurrentLabel_ = currentLabels[0];
     ch1CurrentLabel_ = currentLabels[1];
@@ -262,30 +337,6 @@ void RelayControlDialog::setupUi()
     mainLayout->addWidget(closeBtn);
 }
 
-void RelayControlDialog::onSliderValueChanged(int value)
-{
-    QSlider *slider = qobject_cast<QSlider*>(sender());
-    if (!slider) return;
-
-    int channel = slider->property("channel").toInt();
-    
-    // 将滑块值(-1=反转, 0=停止, 1=正转)转换为显示模式(0=停止, 1=正转, 2=反转)
-    int displayMode = (value == -1) ? 2 : value;
-    updateSliderStyle(slider, displayMode);
-    
-    // 转换滑块值为动作
-    QString action;
-    if (value == 0) {
-        action = QStringLiteral("stop");
-    } else if (value == 1) {
-        action = QStringLiteral("fwd");
-    } else if (value == -1) {
-        action = QStringLiteral("rev");
-    }
-
-    controlRelay(channel, action);
-}
-
 void RelayControlDialog::onChannelControlClicked()
 {
     QPushButton *btn = qobject_cast<QPushButton*>(sender());
@@ -302,17 +353,6 @@ void RelayControlDialog::onStopAllClicked()
     // 开始顺序停止所有通道
     stopChannelIndex_ = 0;
     stopNextChannel();
-    
-    // 同时将所有滑块设置为停止位置
-    QSlider *sliders[] = {ch0Slider_, ch1Slider_, ch2Slider_, ch3Slider_};
-    for (int ch = 0; ch < 4; ++ch) {
-        if (sliders[ch]) {
-            sliders[ch]->blockSignals(true);
-            sliders[ch]->setValue(0);
-            updateSliderStyle(sliders[ch], 0);
-            sliders[ch]->blockSignals(false);
-        }
-    }
 }
 
 void RelayControlDialog::stopNextChannel()
@@ -405,7 +445,6 @@ void RelayControlDialog::updateStatusDisplay(const QJsonObject &status)
     QJsonObject channels = status.value(QStringLiteral("channels")).toObject();
     QLabel *chLabels[] = {ch0StatusLabel_, ch1StatusLabel_, ch2StatusLabel_, ch3StatusLabel_};
     QLabel *chCurrentLabels[] = {ch0CurrentLabel_, ch1CurrentLabel_, ch2CurrentLabel_, ch3CurrentLabel_};
-    QSlider *chSliders[] = {ch0Slider_, ch1Slider_, ch2Slider_, ch3Slider_};
 
     for (int ch = 0; ch < 4; ++ch) {
         QString chKey = QString::number(ch);
@@ -441,7 +480,7 @@ void RelayControlDialog::updateStatusDisplay(const QJsonObject &status)
                 .arg(modeText).arg(currentInA, 0, 'f', 2));
             chLabels[ch]->setStyleSheet(QStringLiteral("color: %1; font-weight: bold; font-size: 13px;").arg(color));
             
-            // 更新控制区域的电流标签（在滑块旁边）
+            // 更新控制区域的电流标签（在按钮旁边）
             if (chCurrentLabels[ch]) {
                 chCurrentLabels[ch]->setText(QStringLiteral("%1A").arg(currentInA, 0, 'f', 2));
                 // 根据缺相状态设置颜色
@@ -456,19 +495,8 @@ void RelayControlDialog::updateStatusDisplay(const QJsonObject &status)
                 }
             }
             
-            // 更新滑块位置（不触发信号）
-            if (chSliders[ch]) {
-                chSliders[ch]->blockSignals(true);
-                int sliderValue = 0;
-                switch (mode) {
-                    case 0: sliderValue = 0; break;   // 停止
-                    case 1: sliderValue = 1; break;   // 正转
-                    case 2: sliderValue = -1; break;  // 反转
-                }
-                chSliders[ch]->setValue(sliderValue);
-                updateSliderStyle(chSliders[ch], mode);
-                chSliders[ch]->blockSignals(false);
-            }
+            // 更新按钮样式以反映当前状态
+            updateButtonStyles(ch, mode);
         } else {
             chLabels[ch]->setText(QStringLiteral("--"));
             chLabels[ch]->setStyleSheet(QStringLiteral("color: #95a5a6; font-size: 13px;"));

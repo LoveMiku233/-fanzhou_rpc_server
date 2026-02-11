@@ -65,6 +65,42 @@ public:
     int txQueueSize() const { return txQueue_.size(); }
 
     /**
+     * @brief 获取接口名称
+     * @return CAN接口名称
+     */
+    QString interfaceName() const { return config_.interface; }
+
+    /**
+     * @brief 获取重置尝试次数
+     * @return 重置尝试次数
+     */
+    int resetAttemptCount() const { return txResetAttemptCount_; }
+
+    /**
+     * @brief 获取丢帧计数
+     * @return 丢帧计数
+     */
+    int droppedFrameCount() const { return droppedFrameCount_; }
+
+    /**
+     * @brief 获取退避乘数
+     * @return 当前退避乘数
+     */
+    int backoffMultiplier() const { return txBackoffMultiplier_; }
+
+    /**
+     * @brief 获取最后一次重置的时间戳
+     * @return 最后重置时间戳（毫秒）
+     */
+    qint64 lastResetTimeMs() const { return lastResetTimeMs_; }
+
+    /**
+     * @brief 获取重置是否正在进行中
+     * @return 重置进行中返回true
+     */
+    bool isResetInProgress() const { return resetInProgress_; }
+
+    /**
      * @brief 发送CAN帧
      * @param canId CAN标识符
      * @param payload 帧数据（经典CAN最大8字节）
@@ -116,7 +152,7 @@ private:
     static constexpr int kMaxConsecutiveMaxBackoffRetries = 3;  ///< 最大连续重试次数，超过后尝试重置接口（减少等待时间）
     static constexpr int kResetThreshold = 3;  ///< 丢弃帧次数阈值，超过后触发接口重置
     static constexpr int kMaxResetAttempts = 3;  ///< 最大接口重置尝试次数
-    static constexpr int kResetCooldownMs = 30000;  ///< 接口重置冷却时间（毫秒）
+    static constexpr int kResetCooldownMs = 5000;  ///< 接口重置冷却时间（毫秒）- 缩短以加快恢复
     static constexpr int kProcessTimeoutMs = 5000;  ///< 外部进程执行超时（毫秒）
 
     /**
