@@ -464,6 +464,12 @@ void MainWindow::onAutoRefreshTimeout()
             }
             // 主页的dashboard调用已包含MQTT状态，无需额外更新云状态
             break;
+        case 1:  // 设备页面 - 自动刷新设备状态（电流、在线状态等）
+            if (deviceWidget_) {
+                deviceWidget_->refreshDeviceStatus();
+            }
+            updateCloudStatus();
+            break;
         default:
             // 其他页面不自动刷新，但需要更新云状态
             updateCloudStatus();

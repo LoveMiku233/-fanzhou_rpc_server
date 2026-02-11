@@ -413,7 +413,7 @@ void DeviceWidget::tryRelayNodesAsFallback()
                     QJsonObject obj = result.toObject();
                     if (obj.contains(QStringLiteral("nodes"))) {
                         QJsonArray nodes = obj.value(QStringLiteral("nodes")).toArray();
-                        // 转换为device格式
+                        // 转换为device格式，保留在线状态和ageMs
                         QJsonArray devices;
                         for (const QJsonValue &val : nodes) {
                             QJsonObject node = val.toObject();
@@ -421,6 +421,10 @@ void DeviceWidget::tryRelayNodesAsFallback()
                             device[QStringLiteral("nodeId")] = node.value(QStringLiteral("node")).toInt();
                             device[QStringLiteral("name")] = QStringLiteral("继电器-%1").arg(node.value(QStringLiteral("node")).toInt());
                             device[QStringLiteral("online")] = node.value(QStringLiteral("online")).toBool();
+                            // 传递ageMs信息以供显示
+                            if (node.contains(QStringLiteral("ageMs"))) {
+                                device[QStringLiteral("ageMs")] = node.value(QStringLiteral("ageMs"));
+                            }
                             devices.append(device);
                         }
                         updateDeviceCards(devices);
@@ -661,6 +665,7 @@ void DeviceWidget::updateDeviceCards(const QJsonArray &devices)
 
     int row = 0;
     int col = 0;
+    bool hasChannelData = false;
     
     for (const QJsonObject &device : sortedDevices) {
         int nodeId = device.value(QStringLiteral("nodeId")).toInt();
@@ -682,13 +687,29 @@ void DeviceWidget::updateDeviceCards(const QJsonArray &devices)
             row++;
         }
 
-        // 设置初始状态
+        // 设置初始状态 - 使用device.list返回的状态信息（如果有）
         bool online = device.value(QStringLiteral("online")).toBool();
-        card->updateStatus(online, -1, 0, QJsonObject());
+        qint64 ageMs = static_cast<qint64>(device.value(QStringLiteral("ageMs")).toDouble(-1));
+        double totalCurrent = device.value(QStringLiteral("totalCurrent")).toDouble(0);
+        QJsonObject channels = device.value(QStringLiteral("channels")).toObject();
+        
+        // 检查是否包含通道数据
+        if (!channels.isEmpty()) {
+            hasChannelData = true;
+        }
+        
+        card->updateStatus(online, ageMs, totalCurrent, channels);
     }
     
     // 添加弹性空间
     cardsLayout_->setRowStretch(row + 1, 1);
+    
+    // 如果device.list没有返回通道数据，则额外调用relay.statusAll刷新状态
+    // 这是为了兼容旧版RPC服务器或使用relay.nodes回退时的情况
+    if (!hasChannelData && !deviceCards_.isEmpty()) {
+        qDebug() << "[DEVICE_WIDGET] device.list未返回通道数据，执行额外的状态刷新";
+        QTimer::singleShot(50, this, &DeviceWidget::refreshDeviceStatus);
+    }
 }
 
 void DeviceWidget::updateDeviceCardStatus(int nodeId, const QJsonObject &status)
