@@ -67,10 +67,10 @@ void HomeWidget::setupUi()
     statusCard->setObjectName(QStringLiteral("statusCard"));
     statusCard->setStyleSheet(QStringLiteral(
         "#statusCard { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #ecf0f1, stop:1 #d5dbdb); "
-        "border-radius: %1px; padding: 6px; border: 2px solid #bdc3c7; }").arg(BORDER_RADIUS_CARD));
+        "border-radius: %1px; padding: 8px; border: 2px solid #bdc3c7; }").arg(BORDER_RADIUS_CARD));
     
     QHBoxLayout *statusLayout = new QHBoxLayout(statusCard);
-    statusLayout->setContentsMargins(CARD_MARGIN, CARD_MARGIN, CARD_MARGIN, CARD_MARGIN);
+    statusLayout->setContentsMargins(CARD_MARGIN + 2, CARD_MARGIN, CARD_MARGIN + 2, CARD_MARGIN);
     
     connectionStatusLabel_ = new QLabel(QStringLiteral("未连接"), this);
     connectionStatusLabel_->setStyleSheet(QStringLiteral(
@@ -80,14 +80,14 @@ void HomeWidget::setupUi()
     
     systemUptimeLabel_ = new QLabel(QStringLiteral("运行: --"), this);
     systemUptimeLabel_->setStyleSheet(QStringLiteral(
-        "font-size: %1px; color: #5d6d7e; padding: 4px 8px; background-color: white; border-radius: 4px;").arg(FONT_SIZE_SMALL));
+        "font-size: %1px; color: #5d6d7e; padding: 4px 10px; background-color: white; border-radius: 6px;").arg(FONT_SIZE_SMALL));
     statusLayout->addWidget(systemUptimeLabel_);
     
     mainLayout->addWidget(statusCard);
 
     // 统计信息卡片网格 - 2行4列
     QGridLayout *statsGrid = new QGridLayout();
-    statsGrid->setSpacing(CARD_SPACING);
+    statsGrid->setSpacing(CARD_SPACING + 2);
 
     auto createStatCard = [this](const QString &title, const QString &bgColor) -> QPair<QFrame*, QLabel*> {
         QFrame *card = new QFrame(this);
@@ -96,14 +96,15 @@ void HomeWidget::setupUi()
         // 使用border代替shadow效果，提升性能
         card->setStyleSheet(QStringLiteral(
             "QFrame { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 %1, stop:1 %2); "
-            "border-radius: %3px; padding: 4px; border: 2px solid rgba(0,0,0,0.1); }").arg(bgColor, darkerBg).arg(BORDER_RADIUS_CARD));
+            "border-radius: %3px; padding: 6px; border: 2px solid rgba(0,0,0,0.1); }").arg(bgColor, darkerBg).arg(BORDER_RADIUS_CARD));
+        card->setMinimumHeight(70);  // 确保卡片有最小高度
         
         QVBoxLayout *layout = new QVBoxLayout(card);
-        layout->setContentsMargins(CARD_MARGIN, CARD_MARGIN, CARD_MARGIN, CARD_MARGIN);
-        layout->setSpacing(2);
+        layout->setContentsMargins(CARD_MARGIN + 2, CARD_MARGIN, CARD_MARGIN + 2, CARD_MARGIN);
+        layout->setSpacing(4);
         
         QLabel *titleLabel = new QLabel(title, card);
-        titleLabel->setStyleSheet(QStringLiteral("color: rgba(255,255,255,0.85); font-size: %1px;").arg(FONT_SIZE_SMALL));
+        titleLabel->setStyleSheet(QStringLiteral("color: rgba(255,255,255,0.9); font-size: %1px; font-weight: 500;").arg(FONT_SIZE_SMALL));
         layout->addWidget(titleLabel);
         
         QLabel *valueLabel = new QLabel(QStringLiteral("--"), card);
@@ -153,11 +154,11 @@ void HomeWidget::setupUi()
     // 快捷操作区
     QGroupBox *actionsBox = new QGroupBox(QStringLiteral("快捷操作"), this);
     actionsBox->setStyleSheet(QStringLiteral(
-        "QGroupBox { font-weight: bold; font-size: %1px; border: 1px solid #e0e0e0; border-radius: %2px; margin-top: 8px; padding-top: 10px; }"
-        "QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 6px; color: #3498db; }").arg(FONT_SIZE_BODY).arg(BORDER_RADIUS_CARD));
+        "QGroupBox { font-weight: bold; font-size: %1px; border: 2px solid #e0e0e0; border-radius: %2px; margin-top: 10px; padding-top: 12px; }"
+        "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 8px; color: #3498db; }").arg(FONT_SIZE_BODY).arg(BORDER_RADIUS_CARD));
     
     QHBoxLayout *actionsLayout = new QHBoxLayout(actionsBox);
-    actionsLayout->setSpacing(CARD_SPACING);
+    actionsLayout->setSpacing(CARD_SPACING + 2);
     actionsLayout->setContentsMargins(CARD_MARGIN, CARD_MARGIN, CARD_MARGIN, CARD_MARGIN);
 
     refreshButton_ = new QPushButton(QStringLiteral("刷新"), this);
