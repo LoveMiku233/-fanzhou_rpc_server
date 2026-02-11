@@ -120,22 +120,56 @@ void RelayControlDialog::updateButtonStyles(int channel, int mode)
     
     if (!stopBtn || !fwdBtn || !revBtn) return;
     
-    // 重置所有按钮样式
+    // 普通状态样式 - 淡灰色背景
     QString normalStyle = QStringLiteral(
-        "QPushButton { background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; padding: 6px 12px; }"
-        "QPushButton:hover { background-color: #e0e0e0; }");
+        "QPushButton { "
+        "  background-color: #f0f0f0; "
+        "  color: #666666; "
+        "  border: 1px solid #d0d0d0; "
+        "  border-radius: 6px; "
+        "  padding: 8px 14px; "
+        "  font-size: 13px; "
+        "}"
+        "QPushButton:hover { background-color: #e0e0e0; border-color: #c0c0c0; }");
     
+    // 停止状态高亮样式 - 深灰色，带阴影效果
     QString activeStopStyle = QStringLiteral(
-        "QPushButton { background-color: #7f8c8d; color: white; border: 2px solid #5f6c6d; border-radius: 4px; padding: 6px 12px; font-weight: bold; }"
-        "QPushButton:hover { background-color: #6f7c7d; }");
+        "QPushButton { "
+        "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #8e9eab, stop:1 #6c7a89); "
+        "  color: white; "
+        "  border: 3px solid #5d6d7e; "
+        "  border-radius: 6px; "
+        "  padding: 8px 14px; "
+        "  font-weight: bold; "
+        "  font-size: 14px; "
+        "}"
+        "QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #7e8e9b, stop:1 #5c6a79); }");
     
+    // 正转状态高亮样式 - 绿色，带渐变和阴影
     QString activeFwdStyle = QStringLiteral(
-        "QPushButton { background-color: #27ae60; color: white; border: 2px solid #1e8449; border-radius: 4px; padding: 6px 12px; font-weight: bold; }"
-        "QPushButton:hover { background-color: #229954; }");
+        "QPushButton { "
+        "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #58d68d, stop:1 #27ae60); "
+        "  color: white; "
+        "  border: 3px solid #1e8449; "
+        "  border-radius: 6px; "
+        "  padding: 8px 14px; "
+        "  font-weight: bold; "
+        "  font-size: 14px; "
+        "}"
+        "QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #48c67d, stop:1 #1f9e50); }");
     
+    // 反转状态高亮样式 - 橙色，带渐变和阴影
     QString activeRevStyle = QStringLiteral(
-        "QPushButton { background-color: #f39c12; color: white; border: 2px solid #d68910; border-radius: 4px; padding: 6px 12px; font-weight: bold; }"
-        "QPushButton:hover { background-color: #e59500; }");
+        "QPushButton { "
+        "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f5b041, stop:1 #f39c12); "
+        "  color: white; "
+        "  border: 3px solid #d68910; "
+        "  border-radius: 6px; "
+        "  padding: 8px 14px; "
+        "  font-weight: bold; "
+        "  font-size: 14px; "
+        "}"
+        "QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e5a031, stop:1 #e38c02); }");
     
     // 根据模式设置活动状态样式
     switch (mode) {
@@ -165,71 +199,81 @@ void RelayControlDialog::updateButtonStyles(int channel, int mode)
 void RelayControlDialog::setupUi()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(DIALOG_MARGIN, DIALOG_MARGIN, DIALOG_MARGIN, DIALOG_MARGIN);
-    mainLayout->setSpacing(DIALOG_SPACING);
+    mainLayout->setContentsMargins(DIALOG_MARGIN + 4, DIALOG_MARGIN + 4, DIALOG_MARGIN + 4, DIALOG_MARGIN + 4);
+    mainLayout->setSpacing(DIALOG_SPACING + 4);
 
-    // 设备信息
-    QLabel *titleLabel = new QLabel(QStringLiteral("设备: %1 (#%2)").arg(deviceName_).arg(nodeId_), this);
+    // 设备信息标题 - 更醒目的样式
+    QLabel *titleLabel = new QLabel(QStringLiteral("设备控制: %1 (#%2)").arg(deviceName_).arg(nodeId_), this);
     titleLabel->setStyleSheet(QStringLiteral(
-        "font-size: %1px; font-weight: bold; color: #2c3e50;").arg(FONT_SIZE_CARD_TITLE));
+        "font-size: %1px; font-weight: bold; color: #2c3e50; "
+        "padding: 8px; background-color: #ecf0f1; border-radius: 8px;").arg(FONT_SIZE_CARD_TITLE + 2));
     mainLayout->addWidget(titleLabel);
 
     // 左右布局：状态在左，控制在右
     QHBoxLayout *contentLayout = new QHBoxLayout();
-    contentLayout->setSpacing(12);
+    contentLayout->setSpacing(16);
 
     // 左侧：设备状态区域
     QGroupBox *statusBox = new QGroupBox(QStringLiteral("设备状态"), this);
+    statusBox->setStyleSheet(QStringLiteral(
+        "QGroupBox { font-weight: bold; font-size: 14px; border: 2px solid #3498db; border-radius: 10px; margin-top: 14px; padding-top: 8px; }"
+        "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 8px; color: #3498db; }"));
     QVBoxLayout *statusLayout = new QVBoxLayout(statusBox);
-    statusLayout->setSpacing(8);
-    statusLayout->setContentsMargins(10, 12, 10, 10);
+    statusLayout->setSpacing(10);
+    statusLayout->setContentsMargins(12, 16, 12, 12);
 
-    statusLabel_ = new QLabel(QStringLiteral("在线状态: 未知"), this);
-    statusLabel_->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 13px;"));
+    statusLabel_ = new QLabel(QStringLiteral("在线状态: 查询中..."), this);
+    statusLabel_->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 14px; color: #7f8c8d;"));
     statusLayout->addWidget(statusLabel_);
 
     currentLabel_ = new QLabel(QStringLiteral("总电流: -- A"), this);
     currentLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 13px; color: #3498db; font-weight: bold;"));
+        "font-size: 15px; color: #3498db; font-weight: bold; "
+        "background-color: #ebf5fb; padding: 4px 8px; border-radius: 6px;"));
     statusLayout->addWidget(currentLabel_);
 
-    // 通道状态 - 垂直排列
+    // 通道状态 - 垂直排列，更清晰的显示
     QGridLayout *chStatusGrid = new QGridLayout();
-    chStatusGrid->setSpacing(6);
+    chStatusGrid->setSpacing(8);
+    chStatusGrid->setVerticalSpacing(10);
 
     QLabel *ch0Title = new QLabel(QStringLiteral("通道0:"), this);
-    ch0Title->setStyleSheet(QStringLiteral("font-size: 12px; font-weight: bold;"));
+    ch0Title->setStyleSheet(QStringLiteral("font-size: 13px; font-weight: bold; color: #34495e;"));
     ch0StatusLabel_ = new QLabel(QStringLiteral("--"), this);
-    ch0StatusLabel_->setStyleSheet(QStringLiteral("font-size: 12px;"));
+    ch0StatusLabel_->setStyleSheet(QStringLiteral("font-size: 13px; background-color: #f5f5f5; padding: 4px 8px; border-radius: 6px;"));
     chStatusGrid->addWidget(ch0Title, 0, 0);
     chStatusGrid->addWidget(ch0StatusLabel_, 0, 1);
 
     QLabel *ch1Title = new QLabel(QStringLiteral("通道1:"), this);
-    ch1Title->setStyleSheet(QStringLiteral("font-size: 12px; font-weight: bold;"));
+    ch1Title->setStyleSheet(QStringLiteral("font-size: 13px; font-weight: bold; color: #34495e;"));
     ch1StatusLabel_ = new QLabel(QStringLiteral("--"), this);
-    ch1StatusLabel_->setStyleSheet(QStringLiteral("font-size: 12px;"));
+    ch1StatusLabel_->setStyleSheet(QStringLiteral("font-size: 13px; background-color: #f5f5f5; padding: 4px 8px; border-radius: 6px;"));
     chStatusGrid->addWidget(ch1Title, 1, 0);
     chStatusGrid->addWidget(ch1StatusLabel_, 1, 1);
 
     QLabel *ch2Title = new QLabel(QStringLiteral("通道2:"), this);
-    ch2Title->setStyleSheet(QStringLiteral("font-size: 12px; font-weight: bold;"));
+    ch2Title->setStyleSheet(QStringLiteral("font-size: 13px; font-weight: bold; color: #34495e;"));
     ch2StatusLabel_ = new QLabel(QStringLiteral("--"), this);
-    ch2StatusLabel_->setStyleSheet(QStringLiteral("font-size: 12px;"));
+    ch2StatusLabel_->setStyleSheet(QStringLiteral("font-size: 13px; background-color: #f5f5f5; padding: 4px 8px; border-radius: 6px;"));
     chStatusGrid->addWidget(ch2Title, 2, 0);
     chStatusGrid->addWidget(ch2StatusLabel_, 2, 1);
 
     QLabel *ch3Title = new QLabel(QStringLiteral("通道3:"), this);
-    ch3Title->setStyleSheet(QStringLiteral("font-size: 12px; font-weight: bold;"));
+    ch3Title->setStyleSheet(QStringLiteral("font-size: 13px; font-weight: bold; color: #34495e;"));
     ch3StatusLabel_ = new QLabel(QStringLiteral("--"), this);
-    ch3StatusLabel_->setStyleSheet(QStringLiteral("font-size: 12px;"));
+    ch3StatusLabel_->setStyleSheet(QStringLiteral("font-size: 13px; background-color: #f5f5f5; padding: 4px 8px; border-radius: 6px;"));
     chStatusGrid->addWidget(ch3Title, 3, 0);
     chStatusGrid->addWidget(ch3StatusLabel_, 3, 1);
 
     statusLayout->addLayout(chStatusGrid);
     statusLayout->addStretch();
 
-    QPushButton *refreshBtn = new QPushButton(QStringLiteral("刷新状态"), this);
-    refreshBtn->setMinimumHeight(36);
+    QPushButton *refreshBtn = new QPushButton(QStringLiteral("🔄 刷新状态"), this);
+    refreshBtn->setMinimumHeight(40);
+    refreshBtn->setStyleSheet(QStringLiteral(
+        "QPushButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5dade2, stop:1 #3498db); "
+        "color: white; border-radius: 8px; font-weight: bold; font-size: 13px; }"
+        "QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4d9dd2, stop:1 #2488cb); }"));
     connect(refreshBtn, &QPushButton::clicked, this, &RelayControlDialog::onQueryStatusClicked);
     statusLayout->addWidget(refreshBtn);
 
@@ -237,18 +281,22 @@ void RelayControlDialog::setupUi()
 
     // 右侧：通道控制区域（使用按钮）
     QGroupBox *controlBox = new QGroupBox(QStringLiteral("通道控制"), this);
+    controlBox->setStyleSheet(QStringLiteral(
+        "QGroupBox { font-weight: bold; font-size: 14px; border: 2px solid #27ae60; border-radius: 10px; margin-top: 14px; padding-top: 8px; }"
+        "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 8px; color: #27ae60; }"));
     QVBoxLayout *controlBoxLayout = new QVBoxLayout(controlBox);
-    controlBoxLayout->setSpacing(8);
-    controlBoxLayout->setContentsMargins(10, 12, 10, 10);
+    controlBoxLayout->setSpacing(10);
+    controlBoxLayout->setContentsMargins(12, 16, 12, 12);
 
-    // 控制说明
-    QLabel *helpLabel = new QLabel(QStringLiteral("点击按钮控制继电器"), this);
-    helpLabel->setStyleSheet(QStringLiteral("color: #7f8c8d; font-size: 11px;"));
+    // 控制说明 - 更醒目
+    QLabel *helpLabel = new QLabel(QStringLiteral("🎛️ 点击按钮控制继电器 (高亮 = 当前状态)"), this);
+    helpLabel->setStyleSheet(QStringLiteral("color: #34495e; font-size: 12px; font-weight: bold;"));
     helpLabel->setAlignment(Qt::AlignCenter);
     controlBoxLayout->addWidget(helpLabel);
 
     QGridLayout *controlGrid = new QGridLayout();
-    controlGrid->setSpacing(8);
+    controlGrid->setSpacing(10);
+    controlGrid->setVerticalSpacing(12);
     controlGrid->setColumnStretch(1, 1);
     controlGrid->setColumnStretch(2, 1);
     controlGrid->setColumnStretch(3, 1);
@@ -264,40 +312,41 @@ void RelayControlDialog::setupUi()
     for (int ch = 0; ch < 4; ++ch) {
         // 通道标签
         QLabel *chLabel = new QLabel(QStringLiteral("通道%1:").arg(ch), this);
-        chLabel->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 12px;"));
+        chLabel->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 13px; color: #2c3e50;"));
         controlGrid->addWidget(chLabel, ch, 0);
 
         // 停止按钮
-        QPushButton *stopBtn = new QPushButton(QStringLiteral("停"), this);
+        QPushButton *stopBtn = new QPushButton(QStringLiteral("■ 停"), this);
         stopBtn->setProperty("channel", ch);
         stopBtn->setProperty("action", QStringLiteral("stop"));
-        stopBtn->setMinimumSize(50, 36);
+        stopBtn->setMinimumSize(56, 40);
         connect(stopBtn, &QPushButton::clicked, this, &RelayControlDialog::onChannelControlClicked);
         controlGrid->addWidget(stopBtn, ch, 1);
         stopBtns[ch] = stopBtn;
 
         // 正转按钮
-        QPushButton *fwdBtn = new QPushButton(QStringLiteral("正"), this);
+        QPushButton *fwdBtn = new QPushButton(QStringLiteral("▶ 正"), this);
         fwdBtn->setProperty("channel", ch);
         fwdBtn->setProperty("action", QStringLiteral("fwd"));
-        fwdBtn->setMinimumSize(50, 36);
+        fwdBtn->setMinimumSize(56, 40);
         connect(fwdBtn, &QPushButton::clicked, this, &RelayControlDialog::onChannelControlClicked);
         controlGrid->addWidget(fwdBtn, ch, 2);
         fwdBtns[ch] = fwdBtn;
 
         // 反转按钮
-        QPushButton *revBtn = new QPushButton(QStringLiteral("反"), this);
+        QPushButton *revBtn = new QPushButton(QStringLiteral("◀ 反"), this);
         revBtn->setProperty("channel", ch);
         revBtn->setProperty("action", QStringLiteral("rev"));
-        revBtn->setMinimumSize(50, 36);
+        revBtn->setMinimumSize(56, 40);
         connect(revBtn, &QPushButton::clicked, this, &RelayControlDialog::onChannelControlClicked);
         controlGrid->addWidget(revBtn, ch, 3);
         revBtns[ch] = revBtn;
 
-        // 电流显示标签（在按钮旁边）
+        // 电流显示标签（在按钮旁边）- 更醒目
         QLabel *currentLbl = new QLabel(QStringLiteral("-- A"), this);
         currentLbl->setStyleSheet(QStringLiteral(
-            "font-size: 12px; font-weight: bold; color: #3498db; min-width: 50px;"));
+            "font-size: 13px; font-weight: bold; color: #95a5a6; "
+            "background-color: #f5f5f5; padding: 4px 8px; border-radius: 6px; min-width: 60px;"));
         currentLbl->setAlignment(Qt::AlignCenter);
         controlGrid->addWidget(currentLbl, ch, 4);
         currentLabels[ch] = currentLbl;
@@ -320,10 +369,17 @@ void RelayControlDialog::setupUi()
     controlBoxLayout->addLayout(controlGrid);
     controlBoxLayout->addStretch();
 
-    // 全部停止按钮
-    QPushButton *stopAllBtn = new QPushButton(QStringLiteral("全部停止"), this);
+    // 全部停止按钮 - 更醒目的危险样式
+    QPushButton *stopAllBtn = new QPushButton(QStringLiteral("⏹ 全部停止"), this);
     stopAllBtn->setProperty("type", QStringLiteral("danger"));
-    stopAllBtn->setMinimumHeight(40);
+    stopAllBtn->setMinimumHeight(44);
+    stopAllBtn->setStyleSheet(QStringLiteral(
+        "QPushButton { "
+        "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ec7063, stop:1 #e74c3c); "
+        "  color: white; border-radius: 8px; font-weight: bold; font-size: 14px; border: 2px solid #c0392b; "
+        "}"
+        "QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #dc6053, stop:1 #d73c2c); }"
+        "QPushButton:pressed { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #cc5043, stop:1 #c72c1c); }"));
     connect(stopAllBtn, &QPushButton::clicked, this, &RelayControlDialog::onStopAllClicked);
     controlBoxLayout->addWidget(stopAllBtn);
 
@@ -333,7 +389,13 @@ void RelayControlDialog::setupUi()
 
     // 关闭按钮
     QPushButton *closeBtn = new QPushButton(QStringLiteral("关闭"), this);
-    closeBtn->setMinimumHeight(40);
+    closeBtn->setMinimumHeight(44);
+    closeBtn->setStyleSheet(QStringLiteral(
+        "QPushButton { "
+        "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #bdc3c7, stop:1 #95a5a6); "
+        "  color: white; border-radius: 8px; font-weight: bold; font-size: 14px; "
+        "}"
+        "QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #adb3b7, stop:1 #859596); }"));
     connect(closeBtn, &QPushButton::clicked, this, &QDialog::accept);
     mainLayout->addWidget(closeBtn);
 }
@@ -427,13 +489,13 @@ void RelayControlDialog::updateStatusDisplay(const QJsonObject &status)
     qint64 ageMs = static_cast<qint64>(status.value(QStringLiteral("ageMs")).toDouble(-1));
 
     if (online) {
-        statusLabel_->setText(QStringLiteral("在线状态: 在线 (%1ms)").arg(ageMs));
+        statusLabel_->setText(QStringLiteral("在线状态: ● 在线 (%1ms)").arg(ageMs));
         statusLabel_->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 14px; color: #27ae60;"));
     } else if (ageMs < 0) {
-        statusLabel_->setText(QStringLiteral("在线状态: 无响应"));
+        statusLabel_->setText(QStringLiteral("在线状态: ○ 无响应"));
         statusLabel_->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 14px; color: #f39c12;"));
     } else {
-        statusLabel_->setText(QStringLiteral("在线状态: 离线 (%1s)").arg(ageMs / 1000));
+        statusLabel_->setText(QStringLiteral("在线状态: ✕ 离线 (%1s)").arg(ageMs / 1000));
         statusLabel_->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 14px; color: #e74c3c;"));
     }
 
@@ -441,6 +503,9 @@ void RelayControlDialog::updateStatusDisplay(const QJsonObject &status)
     double totalCurrent = status.value(QStringLiteral("totalCurrent")).toDouble(0);
     double totalCurrentInA = totalCurrent / 1000.0;
     currentLabel_->setText(QStringLiteral("总电流: %1 A").arg(totalCurrentInA, 0, 'f', 2));
+    currentLabel_->setStyleSheet(QStringLiteral(
+        "font-size: 15px; color: #3498db; font-weight: bold; "
+        "background-color: #ebf5fb; padding: 4px 8px; border-radius: 6px;"));
 
     // 更新通道状态
     QJsonObject channels = status.value(QStringLiteral("channels")).toObject();
@@ -456,43 +521,67 @@ void RelayControlDialog::updateStatusDisplay(const QJsonObject &status)
             bool phaseLost = chStatus.value(QStringLiteral("phaseLost")).toBool(false);
 
             QString modeText;
+            QString modeIcon;
             QString color;
             QString bgColor;
             
             // 如果缺相，优先显示缺相状态
             if (phaseLost) {
                 modeText = QStringLiteral("缺相");
+                modeIcon = QStringLiteral("⚠");
                 color = QStringLiteral("#dc3545");
                 bgColor = QStringLiteral("#f8d7da");
             } else {
                 switch (mode) {
-                    case 0: modeText = QStringLiteral("停止"); color = QStringLiteral("#7f8c8d"); bgColor = QStringLiteral("#ecf0f1"); break;
-                    case 1: modeText = QStringLiteral("正转"); color = QStringLiteral("#27ae60"); bgColor = QStringLiteral("#d4edda"); break;
-                    case 2: modeText = QStringLiteral("反转"); color = QStringLiteral("#f39c12"); bgColor = QStringLiteral("#fff3cd"); break;
-                    default: modeText = QStringLiteral("未知"); color = QStringLiteral("#95a5a6"); bgColor = QStringLiteral("#f5f5f5"); break;
+                    case 0: 
+                        modeText = QStringLiteral("停止"); 
+                        modeIcon = QStringLiteral("■");
+                        color = QStringLiteral("#6c757d"); 
+                        bgColor = QStringLiteral("#e9ecef"); 
+                        break;
+                    case 1: 
+                        modeText = QStringLiteral("正转"); 
+                        modeIcon = QStringLiteral("▶");
+                        color = QStringLiteral("#28a745"); 
+                        bgColor = QStringLiteral("#d4edda"); 
+                        break;
+                    case 2: 
+                        modeText = QStringLiteral("反转"); 
+                        modeIcon = QStringLiteral("◀");
+                        color = QStringLiteral("#fd7e14"); 
+                        bgColor = QStringLiteral("#fff3cd"); 
+                        break;
+                    default: 
+                        modeText = QStringLiteral("未知"); 
+                        modeIcon = QStringLiteral("?");
+                        color = QStringLiteral("#95a5a6"); 
+                        bgColor = QStringLiteral("#f5f5f5"); 
+                        break;
                 }
             }
 
             // 将mA转换为A
             double currentInA = current / 1000.0;
             
-            // 更新状态标签（在左侧状态区域）
-            chLabels[ch]->setText(QStringLiteral("%1 (%2A)")
-                .arg(modeText).arg(currentInA, 0, 'f', 2));
-            chLabels[ch]->setStyleSheet(QStringLiteral("color: %1; font-weight: bold; font-size: 13px;").arg(color));
+            // 更新状态标签（在左侧状态区域）- 带图标和背景色
+            chLabels[ch]->setText(QStringLiteral("%1 %2 (%3A)")
+                .arg(modeIcon, modeText).arg(currentInA, 0, 'f', 2));
+            chLabels[ch]->setStyleSheet(QStringLiteral(
+                "color: %1; font-weight: bold; font-size: 13px; "
+                "background-color: %2; padding: 4px 8px; border-radius: 6px;").arg(color, bgColor));
             
-            // 更新控制区域的电流标签（在按钮旁边）
+            // 更新控制区域的电流标签（在按钮旁边）- 更醒目
             if (chCurrentLabels[ch]) {
                 chCurrentLabels[ch]->setText(QStringLiteral("%1A").arg(currentInA, 0, 'f', 2));
                 // 根据缺相状态设置颜色
                 if (phaseLost) {
                     chCurrentLabels[ch]->setStyleSheet(QStringLiteral(
-                        "font-size: 12px; font-weight: bold; color: #dc3545; "
-                        "background-color: #f8d7da; padding: 2px 4px; border-radius: 4px; min-width: 50px;"));
+                        "font-size: 13px; font-weight: bold; color: #dc3545; "
+                        "background-color: #f8d7da; padding: 4px 8px; border-radius: 6px; min-width: 60px;"));
                 } else {
                     chCurrentLabels[ch]->setStyleSheet(QStringLiteral(
-                        "font-size: 12px; font-weight: bold; color: %1; "
-                        "background-color: %2; padding: 2px 4px; border-radius: 4px; min-width: 50px;").arg(color, bgColor));
+                        "font-size: 13px; font-weight: bold; color: %1; "
+                        "background-color: %2; padding: 4px 8px; border-radius: 6px; min-width: 60px;").arg(color, bgColor));
                 }
             }
             
@@ -500,12 +589,14 @@ void RelayControlDialog::updateStatusDisplay(const QJsonObject &status)
             updateButtonStyles(ch, mode);
         } else {
             chLabels[ch]->setText(QStringLiteral("--"));
-            chLabels[ch]->setStyleSheet(QStringLiteral("color: #95a5a6; font-size: 13px;"));
+            chLabels[ch]->setStyleSheet(QStringLiteral(
+                "color: #95a5a6; font-size: 13px; background-color: #f5f5f5; padding: 4px 8px; border-radius: 6px;"));
             
             if (chCurrentLabels[ch]) {
                 chCurrentLabels[ch]->setText(QStringLiteral("-- A"));
                 chCurrentLabels[ch]->setStyleSheet(QStringLiteral(
-                    "font-size: 12px; font-weight: bold; color: #95a5a6; min-width: 50px;"));
+                    "font-size: 13px; font-weight: bold; color: #95a5a6; "
+                    "background-color: #f5f5f5; padding: 4px 8px; border-radius: 6px; min-width: 60px;"));
             }
         }
     }
