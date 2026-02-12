@@ -130,7 +130,7 @@ private:
     
     // 自动息屏组件
     QCheckBox *autoScreenOffCheckBox_;
-    QSpinBox *screenOffTimeoutSpinBox_;
+    QComboBox *screenOffTimeoutComboBox_;
 };
 
 #endif // SETTINGS_WIDGET_H

@@ -49,7 +49,7 @@ SettingsWidget::SettingsWidget(RpcClient *rpcClient, QWidget *parent)
     , mqttStatusLabel_(nullptr)
     , brightnessSlider_(nullptr)
     , autoScreenOffCheckBox_(nullptr)
-    , screenOffTimeoutSpinBox_(nullptr)
+    , screenOffTimeoutComboBox_(nullptr)
 {
     setupUi();
 
@@ -67,7 +67,11 @@ SettingsWidget::SettingsWidget(RpcClient *rpcClient, QWidget *parent)
     
     // 加载自动息屏设置
     autoScreenOffCheckBox_->setChecked(settings.value(QStringLiteral("settings/autoScreenOff"), false).toBool());
-    screenOffTimeoutSpinBox_->setValue(settings.value(QStringLiteral("settings/screenOffTimeout"), 60).toInt());
+    int savedTimeout = settings.value(QStringLiteral("settings/screenOffTimeout"), 60).toInt();
+    int comboIndex = screenOffTimeoutComboBox_->findData(savedTimeout);
+    if (comboIndex >= 0) {
+        screenOffTimeoutComboBox_->setCurrentIndex(comboIndex);
+    }
 
     updateConnectionStatus(false);
 }
@@ -491,22 +495,27 @@ void SettingsWidget::setupUi()
     connect(autoScreenOffCheckBox_, &QCheckBox::toggled, this, &SettingsWidget::onAutoScreenOffToggled);
     screenLayout->addRow(QStringLiteral("自动息屏:"), autoScreenOffCheckBox_);
     
-    // 息屏超时时间
-    screenOffTimeoutSpinBox_ = new QSpinBox(systemTab);
-    screenOffTimeoutSpinBox_->setRange(10, 600);  // 10秒到10分钟
-    screenOffTimeoutSpinBox_->setValue(60);
-    screenOffTimeoutSpinBox_->setSuffix(QStringLiteral(" 秒"));
-    screenOffTimeoutSpinBox_->setMinimumHeight(36);
-    screenOffTimeoutSpinBox_->setStyleSheet(QStringLiteral(
-        "QSpinBox { border: 2px solid #e0e0e0; border-radius: 6px; padding: 4px 8px; font-size: 13px; }"
-        "QSpinBox:focus { border-color: #3498db; }"));
-    connect(screenOffTimeoutSpinBox_, QOverload<int>::of(&QSpinBox::valueChanged), 
+    // 息屏超时时间 - 下拉框选择
+    screenOffTimeoutComboBox_ = new QComboBox(systemTab);
+    screenOffTimeoutComboBox_->addItem(QStringLiteral("30 秒"), 30);
+    screenOffTimeoutComboBox_->addItem(QStringLiteral("1 分钟"), 60);
+    screenOffTimeoutComboBox_->addItem(QStringLiteral("2 分钟"), 120);
+    screenOffTimeoutComboBox_->addItem(QStringLiteral("5 分钟"), 300);
+    screenOffTimeoutComboBox_->addItem(QStringLiteral("10 分钟"), 600);
+    screenOffTimeoutComboBox_->setCurrentIndex(1);  // 默认1分钟
+    screenOffTimeoutComboBox_->setMinimumHeight(36);
+    screenOffTimeoutComboBox_->setStyleSheet(QStringLiteral(
+        "QComboBox { border: 2px solid #e0e0e0; border-radius: 6px; padding: 4px 8px; font-size: 13px; }"
+        "QComboBox:focus { border-color: #3498db; }"
+        "QComboBox::drop-down { border: none; width: 30px; }"
+        "QComboBox::down-arrow { width: 12px; height: 12px; }"));
+    connect(screenOffTimeoutComboBox_, QOverload<int>::of(&QComboBox::currentIndexChanged), 
             this, &SettingsWidget::onScreenOffTimeoutChanged);
-    screenLayout->addRow(QStringLiteral("息屏时间:"), screenOffTimeoutSpinBox_);
+    screenLayout->addRow(QStringLiteral("息屏时间:"), screenOffTimeoutComboBox_);
     
     // 自动息屏提示
     QLabel *screenOffHelpLabel = new QLabel(
-        QStringLiteral("[示] 无触控操作后自动关闭屏幕，触控后自动亮起"), systemTab);
+        QStringLiteral("[提示] 无触控操作后自动关闭屏幕，触控后自动亮起"), systemTab);
     screenOffHelpLabel->setStyleSheet(QStringLiteral(
         "color: #7f8c8d; font-size: 11px; padding: 4px;"));
     screenOffHelpLabel->setWordWrap(true);
@@ -1156,18 +1165,21 @@ void SettingsWidget::onAutoScreenOffToggled(bool checked)
     QSettings settings;
     settings.setValue(QStringLiteral("settings/autoScreenOff"), checked);
     
-    int timeout = screenOffTimeoutSpinBox_->value();
+    int timeout = screenOffTimeoutComboBox_->currentData().toInt();
     
     emit autoScreenOffSettingsChanged(checked, timeout);
     emit logMessage(QStringLiteral("自动息屏: %1").arg(checked ? QStringLiteral("启用") : QStringLiteral("禁用")));
 }
 
-void SettingsWidget::onScreenOffTimeoutChanged(int value)
+void SettingsWidget::onScreenOffTimeoutChanged(int index)
 {
+    Q_UNUSED(index);
+    int timeout = screenOffTimeoutComboBox_->currentData().toInt();
+    
     QSettings settings;
-    settings.setValue(QStringLiteral("settings/screenOffTimeout"), value);
+    settings.setValue(QStringLiteral("settings/screenOffTimeout"), timeout);
     
     if (autoScreenOffCheckBox_->isChecked()) {
-        emit autoScreenOffSettingsChanged(true, value);
+        emit autoScreenOffSettingsChanged(true, timeout);
     }
 }

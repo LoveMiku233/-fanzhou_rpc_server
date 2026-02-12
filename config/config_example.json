@@ -14,7 +14,8 @@
     "logToConsole": true,
     "logToFile": true,
     "logFilePath": "/var/log/fanzhou_core/core.log",
-    "logLevel": 0
+    "logLevel": 0,
+    "maxFileSizeMB": 10
   },
   "can": {
     "ifname": "can0",

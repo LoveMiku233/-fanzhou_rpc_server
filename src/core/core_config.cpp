@@ -50,6 +50,7 @@ CoreConfig CoreConfig::makeDefault()
     config.log.logToFile = true;
     config.log.logFilePath = QStringLiteral("/var/log/fanzhou_core/core.log");
     config.log.logLevel = 0;
+    config.log.maxFileSizeMB = 10;
 
     DeviceConfig device;
     device.name = QStringLiteral("relay01");
