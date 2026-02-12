@@ -209,6 +209,13 @@ void RpcRegistry::registerSystem()
         };
     });
 
+    // 系统重启
+    dispatcher_->registerMethod(QStringLiteral("sys.reboot"),
+                                 [](const QJsonObject &) {
+        QProcess::startDetached(QStringLiteral("reboot"), QStringList());
+        return QJsonObject{{QStringLiteral("ok"), true}, {QStringLiteral("message"), QStringLiteral("System rebooting...")}};
+    });
+
     // 获取仪表板汇总信息（优化：一次RPC返回所有仪表板需要的数据）
     dispatcher_->registerMethod(QStringLiteral("sys.dashboard"),
                                  [this](const QJsonObject &) {

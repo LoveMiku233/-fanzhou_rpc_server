@@ -76,6 +76,9 @@ bool CoreConfig::loadLog(const QJsonObject &root)
         if (logObj.contains(QStringLiteral("logLevel"))) {
             log.logLevel = logObj[QStringLiteral("logLevel")].toInt(log.logLevel);
         }
+        if (logObj.contains(QStringLiteral("maxFileSizeMB"))) {
+            log.maxFileSizeMB = logObj[QStringLiteral("maxFileSizeMB")].toInt(log.maxFileSizeMB);
+        }
     } else {
         return false;
     }
@@ -167,6 +170,7 @@ void CoreConfig::saveLog(QJsonObject &root) const
     logObj[QStringLiteral("logToFile")] = log.logToFile;
     logObj[QStringLiteral("logFilePath")] = log.logFilePath;
     logObj[QStringLiteral("logLevel")] = log.logLevel;
+    logObj[QStringLiteral("maxFileSizeMB")] = log.maxFileSizeMB;
     root[QStringLiteral("log")] = logObj;
 }
 
