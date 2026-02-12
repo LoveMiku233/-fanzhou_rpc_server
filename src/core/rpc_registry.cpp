@@ -244,8 +244,14 @@ void RpcRegistry::registerSystem()
         // 策略数量
         int totalStrategies = context_->strategyStates().size();
 
-        // 传感器数量
+        // 传感器数量（包括MQTT传感器和物理传感器设备）
         int totalSensors = context_->sensorConfigs.size();
+        const auto devices = context_->listDevices();
+        for (const auto &dev : devices) {
+            if (device::isSensorType(dev.deviceType)) {
+                totalSensors++;
+            }
+        }
 
         // CAN状态
         const bool canOpened = context_->canBus && context_->canBus->isOpened();
@@ -933,7 +939,8 @@ void RpcRegistry::registerRelay()
         if (!dev)
             return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, QStringLiteral("unknown node"));
 
-        QJsonArray channels;
+        QJsonObject channels;
+        double totalCurrent = 0.0;
         for (quint8 ch = 0; ch < 4; ++ch) {
             const auto status = dev->lastStatus(ch);
             QJsonObject obj;
@@ -943,7 +950,9 @@ void RpcRegistry::registerRelay()
             obj[kKeyCurrentA] = static_cast<double>(status.currentA);
             obj[kKeyMode] = static_cast<int>(device::RelayProtocol::modeBits(status.statusByte));
             obj[kKeyPhaseLost] = device::RelayProtocol::phaseLost(status.statusByte);
-            channels.append(obj);
+            obj[QStringLiteral("current")] = static_cast<double>(status.currentA) * 1000.0;
+            channels[QString::number(ch)] = obj;
+            totalCurrent += static_cast<double>(status.currentA) * 1000.0;
         }
 
         const qint64 now = QDateTime::currentMSecsSinceEpoch();
@@ -957,7 +966,8 @@ void RpcRegistry::registerRelay()
             {kKeyNode, static_cast<int>(node)},
             {kKeyOnline, online},
             {kKeyAgeMs, (ageMs >= 0) ? static_cast<double>(ageMs) : QJsonValue()},
-            {kKeyChannels, channels}
+            {kKeyChannels, channels},
+            {QStringLiteral("totalCurrent"), totalCurrent}
         };
 
         // Add diagnostic info when device is offline or never responded

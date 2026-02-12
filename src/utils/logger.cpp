@@ -22,7 +22,8 @@ Logger::~Logger()
     close();
 }
 
-void Logger::init(const QString &logFilePath, LogLevel minLevel, bool logToConsole)
+void Logger::init(const QString &logFilePath, LogLevel minLevel, bool logToConsole,
+                  int maxFileSizeMB)
 {
     QMutexLocker locker(&mutex_);
 
@@ -32,6 +33,7 @@ void Logger::init(const QString &logFilePath, LogLevel minLevel, bool logToConso
 
     minLevel_ = minLevel;
     consoleEnabled_ = logToConsole;
+    maxFileSizeBytes_ = static_cast<qint64>(maxFileSizeMB) * 1024 * 1024;
 
     if (!logFilePath.isEmpty()) {
         const QString dirPath = QFileInfo(logFilePath).absolutePath();
@@ -137,6 +139,7 @@ void Logger::log(LogLevel level, const QString &source, const QString &message)
 
     if (fileEnabled_) {
         QMutexLocker locker(&mutex_);
+        checkAndRotateFile();
         QTextStream stream(&logFile_);
         stream << formatted << "\n";
         stream.flush();
@@ -173,6 +176,23 @@ void Logger::flush()
     if (fileEnabled_) {
         QMutexLocker locker(&mutex_);
         logFile_.flush();
+    }
+}
+
+void Logger::checkAndRotateFile()
+{
+    if (maxFileSizeBytes_ <= 0 || !logFile_.isOpen()) {
+        return;
+    }
+
+    if (logFile_.size() >= maxFileSizeBytes_) {
+        const QString filePath = logFile_.fileName();
+        logFile_.close();
+        logFile_.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text);
+        if (consoleEnabled_) {
+            qInfo().noquote() << "[Logger] Log file rotated (exceeded"
+                              << (maxFileSizeBytes_ / (1024 * 1024)) << "MB):" << filePath;
+        }
     }
 }
 

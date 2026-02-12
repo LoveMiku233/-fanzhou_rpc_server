@@ -77,7 +77,8 @@ int main(int argc, char *argv[])
     // 2. 初始化日志系统
     const QString logPath = config.log.logToFile ? config.log.logFilePath : QString();
     const fanzhou::LogLevel logLevel = static_cast<fanzhou::LogLevel>(config.log.logLevel);
-    fanzhou::Logger::instance().init(logPath, logLevel, config.log.logToConsole);
+    fanzhou::Logger::instance().init(logPath, logLevel, config.log.logToConsole,
+                                     config.log.maxFileSizeMB);
 
     LOG_INFO(kLogSource, QStringLiteral("FanZhou RPC Server starting..."));
     LOG_INFO(kLogSource, QStringLiteral("Config file: %1").arg(configPath));
