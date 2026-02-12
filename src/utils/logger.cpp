@@ -188,7 +188,14 @@ void Logger::checkAndRotateFile()
     if (logFile_.size() >= maxFileSizeBytes_) {
         const QString filePath = logFile_.fileName();
         logFile_.close();
-        logFile_.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text);
+        if (!logFile_.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+            fileEnabled_ = false;
+            if (consoleEnabled_) {
+                qWarning().noquote() << "[Logger] Failed to reopen log file after rotation:"
+                                     << filePath << "Error:" << logFile_.errorString();
+            }
+            return;
+        }
         if (consoleEnabled_) {
             qInfo().noquote() << "[Logger] Log file rotated (exceeded"
                               << (maxFileSizeBytes_ / (1024 * 1024)) << "MB):" << filePath;
