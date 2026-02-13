@@ -63,6 +63,20 @@ bool RpcClient::connectToServer(int timeoutMs)
     return true;
 }
 
+void RpcClient::connectToServerAsync()
+{
+    if (socket_->state() == QAbstractSocket::ConnectedState) {
+        emit connected();
+        return;
+    }
+    if (socket_->state() == QAbstractSocket::ConnectingState) {
+        return;  // 正在连接中，等待信号
+    }
+
+    log(QStringLiteral("[RPC] 正在异步连接服务器: %1:%2").arg(host_).arg(port_));
+    socket_->connectToHost(host_, port_);
+}
+
 void RpcClient::disconnectFromServer()
 {
     if (socket_->state() != QAbstractSocket::UnconnectedState) {
@@ -98,7 +112,8 @@ QByteArray RpcClient::packRequest(int id, const QString &method,
 
 int RpcClient::callAsync(const QString &method, const QJsonObject &params)
 {
-    if (!connectToServer()) {
+    if (!isConnected()) {
+        log(QStringLiteral("[RPC] 异步调用失败：未连接服务器, method: %1").arg(method));
         return -1;
     }
 

@@ -53,11 +53,18 @@ public:
     quint16 port() const { return port_; }
 
     /**
-     * @brief 连接到服务器
+     * @brief 连接到服务器（阻塞）
      * @param timeoutMs 连接超时（毫秒）
      * @return 连接成功返回true
      */
     bool connectToServer(int timeoutMs = 3000);
+
+    /**
+     * @brief 异步连接到服务器（非阻塞）
+     *
+     * 连接结果通过 connected() 或 transportError() 信号通知。
+     */
+    void connectToServerAsync();
 
     /**
      * @brief 断开服务器连接

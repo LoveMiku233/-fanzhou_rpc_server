@@ -86,6 +86,9 @@ private:
     // 防止重复操作的标志
     bool isControlling_;
     
+    // 防止重复查询的标志
+    bool isQuerying_;
+    
     // 状态同步定时器
     QTimer *syncTimer_;
     static constexpr int kSyncIntervalMs = 2000;  // 2秒同步一次
