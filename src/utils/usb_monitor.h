@@ -108,6 +108,7 @@ private:
 
     QTimer *timer_ = nullptr;
     bool processing_ = false;  ///< 防止重入
+    bool usbHandled_ = false;  ///< U盘已处理标记，等待U盘拔出后重置
 
     QString rpcLogPath_;       ///< RPC服务器日志路径
     QString qtLogPath_;        ///< QT界面日志路径

@@ -182,11 +182,10 @@ bool UsbMonitor::deployUpdates()
         }
 
         if (QFile::copy(serverSrc, serverDest)) {
-            // 设置执行权限
+            // 设置执行权限 (owner+group: rwx, other: r-x)
             QFile destFile(serverDest);
             destFile.setPermissions(QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner |
-                                    QFile::ReadGroup | QFile::ExeGroup |
-                                    QFile::ReadOther | QFile::ExeOther);
+                                    QFile::ReadGroup | QFile::ExeGroup);
             LOG_INFO(kLogSource, QStringLiteral("fanzhou_rpc_server 已部署到 %1").arg(serverDest));
             needRestart = true;
         } else {
@@ -212,11 +211,10 @@ bool UsbMonitor::deployUpdates()
         }
 
         if (QFile::copy(clientSrc, clientDest)) {
-            // 设置执行权限
+            // 设置执行权限 (owner+group: rwx, other: r-x)
             QFile destFile(clientDest);
             destFile.setPermissions(QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner |
-                                    QFile::ReadGroup | QFile::ExeGroup |
-                                    QFile::ReadOther | QFile::ExeOther);
+                                    QFile::ReadGroup | QFile::ExeGroup);
             LOG_INFO(kLogSource, QStringLiteral("fanzhou_rpc_client 已部署到 %1").arg(clientDest));
             needRestart = true;
         } else {
@@ -268,6 +266,16 @@ void UsbMonitor::onCheckUsb()
     }
 
     if (!isUsbDevicePresent()) {
+        // U盘已拔出，重置处理标记
+        if (usbHandled_) {
+            usbHandled_ = false;
+            LOG_INFO(kLogSource, QStringLiteral("U盘已拔出，监控已恢复"));
+        }
+        return;
+    }
+
+    // U盘已处理过，等待拔出后再处理
+    if (usbHandled_) {
         return;
     }
 
@@ -300,16 +308,15 @@ void UsbMonitor::onCheckUsb()
     LOG_INFO(kLogSource, message);
     emit usbProcessed(message);
 
+    // 标记已处理，等待U盘拔出后重置
+    usbHandled_ = true;
+    processing_ = false;
+
     // 6. 如果有程序更新，重启系统
     if (needRestart) {
         LOG_INFO(kLogSource, QStringLiteral("正在重启系统..."));
         QProcess::execute(QStringLiteral("reboot"));
     }
-
-    // 停止定时器，防止重复处理同一个U盘
-    timer_->stop();
-    LOG_INFO(kLogSource, QStringLiteral("U盘监控已暂停，请拔出U盘后重新插入以触发下次处理"));
-    processing_ = false;
 }
 
 }  // namespace fanzhou
