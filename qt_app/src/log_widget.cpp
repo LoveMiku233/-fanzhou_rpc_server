@@ -194,11 +194,8 @@ void LogWidget::appendLog(const QString &message, const QString &level)
     if (totalCount_ > kMaxLogEntries) {
         QTextCursor cursor = logTextEdit_->textCursor();
         cursor.movePosition(QTextCursor::Start);
-        // 删除最早的约20%条目以减少频繁裁剪
         const int linesToRemove = kMaxLogEntries / 5;
-        for (int i = 0; i < linesToRemove; ++i) {
-            cursor.movePosition(QTextCursor::Down, QTextCursor::KeepAnchor);
-        }
+        cursor.movePosition(QTextCursor::Down, QTextCursor::KeepAnchor, linesToRemove);
         cursor.removeSelectedText();
         totalCount_ -= linesToRemove;
     }

@@ -15,6 +15,7 @@ namespace rpc {
 
 namespace {
 const char *const kLogSource = "RpcClient";
+constexpr int kMaxRequestId = 2000000000;  ///< nextId_回绕阈值
 }
 
 JsonRpcClient::JsonRpcClient(QObject *parent)
@@ -104,7 +105,7 @@ int JsonRpcClient::callAsync(const QString &method, const QJsonObject &params)
     }
 
     const int id = nextId_++;
-    if (nextId_ > 2000000000) nextId_ = 1;  // 防止整数溢出
+    if (nextId_ > kMaxRequestId) nextId_ = 1;  // 防止整数溢出
     pending_.insert(id, method);
 
     const QByteArray payload = packRequest(id, method, params);
@@ -196,7 +197,7 @@ QJsonValue JsonRpcClient::call(const QString &method, const QJsonObject &params,
     }
 
     const int id = nextId_++;
-    if (nextId_ > 2000000000) nextId_ = 1;  // 防止整数溢出
+    if (nextId_ > kMaxRequestId) nextId_ = 1;  // 防止整数溢出
     pending_.insert(id, method);
 
     const QByteArray payload = packRequest(id, method, params);

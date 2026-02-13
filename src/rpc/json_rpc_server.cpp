@@ -65,6 +65,8 @@ void JsonRpcServer::onReadyRead()
                     QStringLiteral("Buffer overflow from %1:%2, dropping connection")
                         .arg(socket->peerAddress().toString())
                         .arg(socket->peerPort()));
+        buffers_.remove(socket);
+        authenticatedTokens_.remove(socket);
         socket->disconnectFromHost();
         return;
     }
