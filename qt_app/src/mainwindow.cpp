@@ -26,6 +26,7 @@
 #include <QJsonArray>
 #include <QJsonValue>
 #include <QJsonDocument>
+#include <memory>
 
 using namespace UIConstants;
 
@@ -75,14 +76,23 @@ MainWindow::MainWindow(QWidget *parent)
             
             rpcClient_->setEndpoint(host, port);
             
-            if (rpcClient_->connectToServer(3000)) {
+            // 使用异步连接避免阻塞UI线程
+            auto connOk = std::make_shared<QMetaObject::Connection>();
+            auto connErr = std::make_shared<QMetaObject::Connection>();
+            *connOk = connect(rpcClient_, &RpcClient::connected, this, [this, connOk, connErr]() {
+                disconnect(*connOk);
+                disconnect(*connErr);
                 onLogMessage(QStringLiteral("[OK] 自动连接成功"));
                 qDebug() << "[MAIN_WINDOW] 自动连接成功";
                 onConnectionStatusChanged(true);
-            } else {
-                onLogMessage(QStringLiteral("[X] 自动连接失败，请检查服务器是否运行"), QStringLiteral("WARN"));
-                qDebug() << "[MAIN_WINDOW] 自动连接失败";
-            }
+            });
+            *connErr = connect(rpcClient_, &RpcClient::transportError, this, [this, connOk, connErr](const QString &error) {
+                disconnect(*connOk);
+                disconnect(*connErr);
+                onLogMessage(QStringLiteral("[X] 自动连接失败: %1，请检查服务器是否运行").arg(error), QStringLiteral("WARN"));
+                qDebug() << "[MAIN_WINDOW] 自动连接失败:" << error;
+            });
+            rpcClient_->connectToServerAsync();
         } else {
             qDebug() << "[MAIN_WINDOW] 自动连接未启用";
         }
@@ -554,49 +564,51 @@ void MainWindow::updateCloudStatus()
         return;
     }
     
-    // 调用RPC获取MQTT通道状态
-    QJsonValue result = rpcClient_->call(QStringLiteral("mqtt.channels.list"), QJsonObject(), 1000);
-    
-    if (result.isObject()) {
-        QJsonObject resultObj = result.toObject();
-        
-        // 检查是否成功
-        if (!resultObj.value(QStringLiteral("ok")).toBool()) {
-            cloudStatusLabel_->setText(QStringLiteral("[云] 未知"));
-            cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #95a5a6; padding: 4px 10px;"));
-            return;
-        }
-        
-        QJsonArray channels = resultObj.value(QStringLiteral("channels")).toArray();
-        
-        int totalChannels = channels.size();
-        int connectedChannels = 0;
-        
-        for (const QJsonValue &channelVal : channels) {
-            QJsonObject channel = channelVal.toObject();
-            if (channel.value(QStringLiteral("connected")).toBool()) {
-                connectedChannels++;
-            }
-        }
-        
-        if (totalChannels == 0) {
-            cloudStatusLabel_->setText(QStringLiteral("[云] 未配置"));
-            cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #95a5a6; padding: 4px 10px;"));
-        } else if (connectedChannels == 0) {
-            cloudStatusLabel_->setText(QStringLiteral("[云] 断开 (0/%1)").arg(totalChannels));
-            cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #e67e22; padding: 4px 10px;"));
-        } else if (connectedChannels == totalChannels) {
-            cloudStatusLabel_->setText(QStringLiteral("[云] 已连接 (%1)").arg(totalChannels));
-            cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #27ae60; font-weight: bold; padding: 4px 10px;"));
-        } else {
-            cloudStatusLabel_->setText(QStringLiteral("[云] 部分连接 (%1/%2)").arg(connectedChannels).arg(totalChannels));
-            cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #f39c12; padding: 4px 10px;"));
-        }
-    } else {
-        // RPC调用失败或方法不存在
-        cloudStatusLabel_->setText(QStringLiteral("[云] 未知"));
-        cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #95a5a6; padding: 4px 10px;"));
-    }
+    // 使用异步调用避免阻塞UI线程
+    rpcClient_->callAsync(QStringLiteral("mqtt.channels.list"), QJsonObject(),
+        [this](const QJsonValue &result, const QJsonObject &error) {
+            QMetaObject::invokeMethod(this, [this, result, error]() {
+                if (!error.isEmpty() || !result.isObject()) {
+                    cloudStatusLabel_->setText(QStringLiteral("[云] 未知"));
+                    cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #95a5a6; padding: 4px 10px;"));
+                    return;
+                }
+                
+                QJsonObject resultObj = result.toObject();
+                
+                if (!resultObj.value(QStringLiteral("ok")).toBool()) {
+                    cloudStatusLabel_->setText(QStringLiteral("[云] 未知"));
+                    cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #95a5a6; padding: 4px 10px;"));
+                    return;
+                }
+                
+                QJsonArray channels = resultObj.value(QStringLiteral("channels")).toArray();
+                
+                int totalChannels = channels.size();
+                int connectedChannels = 0;
+                
+                for (const QJsonValue &channelVal : channels) {
+                    QJsonObject channel = channelVal.toObject();
+                    if (channel.value(QStringLiteral("connected")).toBool()) {
+                        connectedChannels++;
+                    }
+                }
+                
+                if (totalChannels == 0) {
+                    cloudStatusLabel_->setText(QStringLiteral("[云] 未配置"));
+                    cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #95a5a6; padding: 4px 10px;"));
+                } else if (connectedChannels == 0) {
+                    cloudStatusLabel_->setText(QStringLiteral("[云] 断开 (0/%1)").arg(totalChannels));
+                    cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #e67e22; padding: 4px 10px;"));
+                } else if (connectedChannels == totalChannels) {
+                    cloudStatusLabel_->setText(QStringLiteral("[云] 已连接 (%1)").arg(totalChannels));
+                    cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #27ae60; font-weight: bold; padding: 4px 10px;"));
+                } else {
+                    cloudStatusLabel_->setText(QStringLiteral("[云] 部分连接 (%1/%2)").arg(connectedChannels).arg(totalChannels));
+                    cloudStatusLabel_->setStyleSheet(QStringLiteral("color: #f39c12; padding: 4px 10px;"));
+                }
+            }, Qt::QueuedConnection);
+        }, 2000);
 }
 
 void MainWindow::onMqttStatusFromDashboard(int connected, int total)

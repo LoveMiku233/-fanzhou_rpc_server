@@ -289,77 +289,83 @@ void HomeWidget::updateStats()
     connectionStatusLabel_->setStyleSheet(QStringLiteral(
         "font-size: 18px; font-weight: bold; color: #27ae60;"));
 
-    // 使用聚合的dashboard接口一次获取所有仪表板数据（优化：减少7次RPC调用为1次）
-    QJsonValue dashboardResult = rpcClient_->call(QStringLiteral("sys.dashboard"), QJsonObject(), 3000);
-    
-    if (dashboardResult.isObject()) {
-        QJsonObject obj = dashboardResult.toObject();
-        
-        if (obj.value(QStringLiteral("ok")).toBool()) {
-            // 设备统计
-            int totalDevices = obj.value(QStringLiteral("totalDevices")).toInt();
-            int onlineDevices = obj.value(QStringLiteral("onlineDevices")).toInt();
-            int offlineDevices = obj.value(QStringLiteral("offlineDevices")).toInt();
-            
-            totalDevicesLabel_->setText(QString::number(totalDevices));
-            onlineDevicesLabel_->setText(QString::number(onlineDevices));
-            offlineDevicesLabel_->setText(QString::number(offlineDevices));
-            
-            // 分组
-            int totalGroups = obj.value(QStringLiteral("totalGroups")).toInt();
-            totalGroupsLabel_->setText(QString::number(totalGroups));
-            
-            // 策略
-            int totalStrategies = obj.value(QStringLiteral("totalStrategies")).toInt();
-            totalStrategiesLabel_->setText(QString::number(totalStrategies));
-            
-            // 传感器
-            int totalSensors = obj.value(QStringLiteral("totalSensors")).toInt();
-            totalSensorsLabel_->setText(QString::number(totalSensors));
-            
-            // CAN状态
-            bool canOpened = obj.value(QStringLiteral("canOpened")).toBool();
-            if (canOpened) {
-                canStatusLabel_->setText(QStringLiteral("正常"));
-                canStatusLabel_->parentWidget()->setStyleSheet(
-                    canStatusLabel_->parentWidget()->styleSheet().replace(QStringLiteral("#34495e"), QStringLiteral("#27ae60")));
-            } else {
-                canStatusLabel_->setText(QStringLiteral("关闭"));
-            }
-            
-            // MQTT状态
-            int mqttConnected = obj.value(QStringLiteral("mqttConnected")).toInt();
-            int mqttTotal = obj.value(QStringLiteral("mqttTotal")).toInt();
-            if (mqttTotal > 0) {
-                mqttStatusLabel_->setText(QStringLiteral("%1/%2").arg(mqttConnected).arg(mqttTotal));
-            } else {
-                mqttStatusLabel_->setText(QStringLiteral("未配置"));
-            }
-            
-            // 通知MainWindow更新状态栏的云状态，避免重复RPC调用
-            emit mqttStatusUpdated(mqttConnected, mqttTotal);
-            
-            // 系统运行时间
-            QString uptime = obj.value(QStringLiteral("uptime")).toString();
-            if (!uptime.isEmpty()) {
-                systemUptimeLabel_->setText(QStringLiteral("运行时间: %1").arg(uptime));
-            }
-            
-            qDebug() << "[HOME_WIDGET] Dashboard数据更新成功（单次RPC）";
-        } else {
-            qDebug() << "[HOME_WIDGET] Dashboard调用返回失败";
-        }
-    } else {
-        // 如果sys.dashboard不可用（旧版本服务器），回退到原有的多次调用方式
-        qDebug() << "[HOME_WIDGET] sys.dashboard不可用，使用兼容模式";
-        updateStatsLegacy();
-    }
+    // 使用异步调用避免阻塞UI线程
+    rpcClient_->callAsync(QStringLiteral("sys.dashboard"), QJsonObject(),
+        [this](const QJsonValue &result, const QJsonObject &error) {
+            QMetaObject::invokeMethod(this, [this, result, error]() {
+                if (!error.isEmpty() || !result.isObject()) {
+                    // 异步调用失败，尝试兼容模式
+                    qDebug() << "[HOME_WIDGET] sys.dashboard异步调用失败，使用兼容模式";
+                    updateStatsLegacy();
+                    return;
+                }
+                
+                QJsonObject obj = result.toObject();
+                
+                if (!obj.value(QStringLiteral("ok")).toBool()) {
+                    qDebug() << "[HOME_WIDGET] Dashboard调用返回失败";
+                    updateStatsLegacy();
+                    return;
+                }
+                
+                // 设备统计
+                int totalDevices = obj.value(QStringLiteral("totalDevices")).toInt();
+                int onlineDevices = obj.value(QStringLiteral("onlineDevices")).toInt();
+                int offlineDevices = obj.value(QStringLiteral("offlineDevices")).toInt();
+                
+                totalDevicesLabel_->setText(QString::number(totalDevices));
+                onlineDevicesLabel_->setText(QString::number(onlineDevices));
+                offlineDevicesLabel_->setText(QString::number(offlineDevices));
+                
+                // 分组
+                int totalGroups = obj.value(QStringLiteral("totalGroups")).toInt();
+                totalGroupsLabel_->setText(QString::number(totalGroups));
+                
+                // 策略
+                int totalStrategies = obj.value(QStringLiteral("totalStrategies")).toInt();
+                totalStrategiesLabel_->setText(QString::number(totalStrategies));
+                
+                // 传感器
+                int totalSensors = obj.value(QStringLiteral("totalSensors")).toInt();
+                totalSensorsLabel_->setText(QString::number(totalSensors));
+                
+                // CAN状态
+                bool canOpened = obj.value(QStringLiteral("canOpened")).toBool();
+                if (canOpened) {
+                    canStatusLabel_->setText(QStringLiteral("正常"));
+                    canStatusLabel_->parentWidget()->setStyleSheet(
+                        canStatusLabel_->parentWidget()->styleSheet().replace(QStringLiteral("#34495e"), QStringLiteral("#27ae60")));
+                } else {
+                    canStatusLabel_->setText(QStringLiteral("关闭"));
+                }
+                
+                // MQTT状态
+                int mqttConnected = obj.value(QStringLiteral("mqttConnected")).toInt();
+                int mqttTotal = obj.value(QStringLiteral("mqttTotal")).toInt();
+                if (mqttTotal > 0) {
+                    mqttStatusLabel_->setText(QStringLiteral("%1/%2").arg(mqttConnected).arg(mqttTotal));
+                } else {
+                    mqttStatusLabel_->setText(QStringLiteral("未配置"));
+                }
+                
+                // 通知MainWindow更新状态栏的云状态，避免重复RPC调用
+                emit mqttStatusUpdated(mqttConnected, mqttTotal);
+                
+                // 系统运行时间
+                QString uptime = obj.value(QStringLiteral("uptime")).toString();
+                if (!uptime.isEmpty()) {
+                    systemUptimeLabel_->setText(QStringLiteral("运行时间: %1").arg(uptime));
+                }
+                
+                qDebug() << "[HOME_WIDGET] Dashboard数据更新成功（异步RPC）";
+            }, Qt::QueuedConnection);
+        }, 3000);
 
     // 更新时间
     lastUpdateLabel_->setText(QStringLiteral("最后更新: %1")
         .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"))));
         
-    qDebug() << "[HOME_WIDGET] 统计数据更新完成";
+    qDebug() << "[HOME_WIDGET] 统计数据更新请求已发送";
 }
 
 void HomeWidget::updateStatsLegacy()

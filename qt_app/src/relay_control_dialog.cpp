@@ -59,6 +59,7 @@ RelayControlDialog::RelayControlDialog(RpcClient *rpcClient, int nodeId,
     , ch3RevBtn_(nullptr)
     , stopChannelIndex_(0)
     , isControlling_(false)
+    , isQuerying_(false)
     , syncTimer_(nullptr)
 {
     setWindowTitle(QStringLiteral("控制: %1 (#%2)").arg(deviceName).arg(nodeId));
@@ -99,7 +100,7 @@ void RelayControlDialog::onSyncTimerTimeout()
 {
     // 定时同步设备状态
     // 注意：定时器回调在主线程执行，与用户操作不会有线程冲突
-    if (rpcClient_ && rpcClient_->isConnected() && !isControlling_) {
+    if (rpcClient_ && rpcClient_->isConnected() && !isControlling_ && !isQuerying_) {
         onQueryStatusClicked();
     }
 }
@@ -489,6 +490,12 @@ void RelayControlDialog::onQueryStatusClicked()
         return;
     }
 
+    // 防止重复查询
+    if (isQuerying_) {
+        return;
+    }
+    isQuerying_ = true;
+
     QJsonObject params;
     params[QStringLiteral("node")] = nodeId_;
 
@@ -496,6 +503,8 @@ void RelayControlDialog::onQueryStatusClicked()
     rpcClient_->callAsync(QStringLiteral("relay.statusAll"), params,
         [this](const QJsonValue &result, const QJsonObject &error) {
             QMetaObject::invokeMethod(this, [this, result, error]() {
+                isQuerying_ = false;
+                
                 if (!error.isEmpty()) {
                     statusLabel_->setText(QStringLiteral("在线状态: [X] 查询失败"));
                     return;
@@ -630,7 +639,8 @@ void RelayControlDialog::updateStatusDisplay(const QJsonObject &status)
 void RelayControlDialog::controlRelay(int channel, const QString &action)
 {
     if (!rpcClient_ || !rpcClient_->isConnected()) {
-        QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请先连接服务器"));
+        statusLabel_->setText(QStringLiteral("在线状态: [X] 未连接服务器"));
+        statusLabel_->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 14px; color: #e74c3c;"));
         return;
     }
     
@@ -653,8 +663,10 @@ void RelayControlDialog::controlRelay(int channel, const QString &action)
                 isControlling_ = false;
                 
                 if (!error.isEmpty()) {
-                    QMessageBox::warning(this, QStringLiteral("错误"),
-                        QStringLiteral("控制失败: %1").arg(error.value(QStringLiteral("message")).toString()));
+                    // 使用状态标签代替阻塞的QMessageBox，避免阻塞事件循环
+                    statusLabel_->setText(QStringLiteral("在线状态: [X] 控制失败: %1")
+                        .arg(error.value(QStringLiteral("message")).toString()));
+                    statusLabel_->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 14px; color: #e74c3c;"));
                     return;
                 }
                 
@@ -672,8 +684,8 @@ void RelayControlDialog::controlRelay(int channel, const QString &action)
                     onQueryStatusClicked();
                 } else {
                     QString errorMsg = obj.value(QStringLiteral("error")).toString();
-                    QMessageBox::warning(this, QStringLiteral("错误"),
-                        QStringLiteral("控制失败: %1").arg(errorMsg));
+                    statusLabel_->setText(QStringLiteral("在线状态: [X] 控制失败: %1").arg(errorMsg));
+                    statusLabel_->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 14px; color: #e74c3c;"));
                 }
             }, Qt::QueuedConnection);
         }, 2000);  // 2秒超时

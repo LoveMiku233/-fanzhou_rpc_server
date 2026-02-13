@@ -497,47 +497,56 @@ void SensorWidget::refreshSensorList()
     
     qDebug() << "[SENSOR_WIDGET] 正在请求传感器列表...";
     
-    QJsonValue result = rpcClient_->call(QStringLiteral("sensor.list"));
-    
-    qDebug() << "[SENSOR_WIDGET] 收到sensor.list响应";
-    
-    if (result.isObject()) {
-        QJsonObject obj = result.toObject();
-        if (obj.value(QStringLiteral("ok")).toBool()) {
-            QJsonArray sensors = obj.value(QStringLiteral("sensors")).toArray();
-            sensorsCache_ = sensors;
-            updateSensorCards(sensors);
-            
-            statusLabel_->setText(QStringLiteral("[OK] 共 %1 个传感器").arg(sensors.size()));
-            statusLabel_->setStyleSheet(QStringLiteral(
-                "color: #27ae60; font-size: 14px; padding: 10px 16px; "
-                "background-color: #d4edda; border-radius: 8px; font-weight: 500;"));
-            
-            lastUpdateLabel_->setText(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss")));
-            
-            emit logMessage(QStringLiteral("传感器列表刷新成功，共 %1 个").arg(sensors.size()));
-            
-            qDebug() << "[SENSOR_WIDGET] 传感器列表加载成功，数量:" << sensors.size();
-            
-            // 获取每个传感器的数据和参数
-            for (const QJsonValue &v : sensors) {
-                int nodeId = v.toObject().value(QStringLiteral("nodeId")).toInt();
-                fetchSensorData(nodeId);
-                fetchSensorParams(nodeId);
-            }
-            return;
-        } else {
-            QString error = obj.value(QStringLiteral("error")).toString();
-            qDebug() << "[SENSOR_WIDGET] sensor.list返回错误:" << error;
-        }
-    }
-    
-    statusLabel_->setText(QStringLiteral("[X] 加载失败"));
-    statusLabel_->setStyleSheet(QStringLiteral(
-        "color: #e74c3c; font-size: 14px; padding: 10px 16px; "
-        "background-color: #f8d7da; border-radius: 8px; font-weight: 500;"));
-    emit logMessage(QStringLiteral("传感器列表加载失败"), QStringLiteral("ERROR"));
-    qDebug() << "[SENSOR_WIDGET] 加载失败";
+    // 使用异步调用避免阻塞UI线程
+    rpcClient_->callAsync(QStringLiteral("sensor.list"), QJsonObject(),
+        [this](const QJsonValue &result, const QJsonObject &error) {
+            QMetaObject::invokeMethod(this, [this, result, error]() {
+                qDebug() << "[SENSOR_WIDGET] 收到sensor.list响应";
+                
+                if (!error.isEmpty() || !result.isObject()) {
+                    statusLabel_->setText(QStringLiteral("[X] 加载失败"));
+                    statusLabel_->setStyleSheet(QStringLiteral(
+                        "color: #e74c3c; font-size: 14px; padding: 10px 16px; "
+                        "background-color: #f8d7da; border-radius: 8px; font-weight: 500;"));
+                    emit logMessage(QStringLiteral("传感器列表加载失败"), QStringLiteral("ERROR"));
+                    qDebug() << "[SENSOR_WIDGET] 加载失败";
+                    return;
+                }
+                
+                QJsonObject obj = result.toObject();
+                if (obj.value(QStringLiteral("ok")).toBool()) {
+                    QJsonArray sensors = obj.value(QStringLiteral("sensors")).toArray();
+                    sensorsCache_ = sensors;
+                    updateSensorCards(sensors);
+                    
+                    statusLabel_->setText(QStringLiteral("[OK] 共 %1 个传感器").arg(sensors.size()));
+                    statusLabel_->setStyleSheet(QStringLiteral(
+                        "color: #27ae60; font-size: 14px; padding: 10px 16px; "
+                        "background-color: #d4edda; border-radius: 8px; font-weight: 500;"));
+                    
+                    lastUpdateLabel_->setText(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss")));
+                    
+                    emit logMessage(QStringLiteral("传感器列表刷新成功，共 %1 个").arg(sensors.size()));
+                    
+                    qDebug() << "[SENSOR_WIDGET] 传感器列表加载成功，数量:" << sensors.size();
+                    
+                    // 获取每个传感器的数据和参数
+                    for (const QJsonValue &v : sensors) {
+                        int nodeId = v.toObject().value(QStringLiteral("nodeId")).toInt();
+                        fetchSensorData(nodeId);
+                        fetchSensorParams(nodeId);
+                    }
+                } else {
+                    QString errorStr = obj.value(QStringLiteral("error")).toString();
+                    qDebug() << "[SENSOR_WIDGET] sensor.list返回错误:" << errorStr;
+                    statusLabel_->setText(QStringLiteral("[X] 加载失败"));
+                    statusLabel_->setStyleSheet(QStringLiteral(
+                        "color: #e74c3c; font-size: 14px; padding: 10px 16px; "
+                        "background-color: #f8d7da; border-radius: 8px; font-weight: 500;"));
+                    emit logMessage(QStringLiteral("传感器列表加载失败"), QStringLiteral("ERROR"));
+                }
+            }, Qt::QueuedConnection);
+        }, 3000);
 }
 
 void SensorWidget::updateSensorCards(const QJsonArray &sensors)
@@ -588,13 +597,24 @@ void SensorWidget::fetchSensorData(int nodeId)
         }
     }
     
-    QJsonValue result = rpcClient_->call(QStringLiteral("sensor.read"), params);
-    
-    if (result.isObject()) {
-        updateSensorCardData(nodeId, result.toObject());
-    } else {
-        qDebug() << "[SENSOR_WIDGET] 传感器" << nodeId << "数据获取失败";
-    }
+    // 使用异步调用避免阻塞UI线程
+    rpcClient_->callAsync(QStringLiteral("sensor.read"), params,
+        [this, nodeId](const QJsonValue &result, const QJsonObject &error) {
+            QMetaObject::invokeMethod(this, [this, nodeId, result, error]() {
+                if (!error.isEmpty() || !result.isObject()) {
+                    qDebug() << "[SENSOR_WIDGET] 传感器" << nodeId << "数据获取失败";
+                    // 重置更新状态
+                    for (SensorCard *card : sensorCards_) {
+                        if (card->nodeId() == nodeId) {
+                            card->setUpdating(false);
+                            break;
+                        }
+                    }
+                    return;
+                }
+                updateSensorCardData(nodeId, result.toObject());
+            }, Qt::QueuedConnection);
+        }, 2000);
 }
 
 void SensorWidget::fetchSensorParams(int nodeId)
@@ -604,11 +624,15 @@ void SensorWidget::fetchSensorParams(int nodeId)
     
     qDebug() << "[SENSOR_WIDGET] 请求传感器参数 nodeId=" << nodeId;
     
-    QJsonValue result = rpcClient_->call(QStringLiteral("sensor.getParams"), params);
-    
-    if (result.isObject()) {
-        updateSensorCardParams(nodeId, result.toObject());
-    }
+    // 使用异步调用避免阻塞UI线程
+    rpcClient_->callAsync(QStringLiteral("sensor.getParams"), params,
+        [this, nodeId](const QJsonValue &result, const QJsonObject &error) {
+            QMetaObject::invokeMethod(this, [this, nodeId, result]() {
+                if (result.isObject()) {
+                    updateSensorCardParams(nodeId, result.toObject());
+                }
+            }, Qt::QueuedConnection);
+        }, 2000);
 }
 
 void SensorWidget::updateSensorCardData(int nodeId, const QJsonObject &data)
