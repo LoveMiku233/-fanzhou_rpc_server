@@ -627,8 +627,8 @@ void SensorWidget::fetchSensorParams(int nodeId)
     // 使用异步调用避免阻塞UI线程
     rpcClient_->callAsync(QStringLiteral("sensor.getParams"), params,
         [this, nodeId](const QJsonValue &result, const QJsonObject &error) {
-            QMetaObject::invokeMethod(this, [this, nodeId, result]() {
-                if (result.isObject()) {
+            QMetaObject::invokeMethod(this, [this, nodeId, result, error]() {
+                if (error.isEmpty() && result.isObject()) {
                     updateSensorCardParams(nodeId, result.toObject());
                 }
             }, Qt::QueuedConnection);
