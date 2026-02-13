@@ -18,6 +18,7 @@
 #include "src/rpc/json_rpc_dispatcher.h"
 #include "src/rpc/json_rpc_server.h"
 #include "src/utils/logger.h"
+#include "src/utils/usb_monitor.h"
 
 namespace {
 
@@ -144,6 +145,12 @@ int main(int argc, char *argv[])
              QStringLiteral("Server started! JSON-RPC port: %1, Config: %2")
                  .arg(port)
                  .arg(configPath));
+
+    // 7. 启动U盘监控
+    fanzhou::UsbMonitor usbMonitor;
+    usbMonitor.setRpcLogPath(config.log.logToFile ? config.log.logFilePath : kDefaultLogPath);
+    usbMonitor.start(5000);
+    LOG_INFO(kLogSource, QStringLiteral("USB monitor started"));
 
     return app.exec();
 }

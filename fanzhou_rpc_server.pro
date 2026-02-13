@@ -34,6 +34,7 @@ SOURCES += \
     src/utils/logger.cpp \
     src/utils/system_settings.cpp \
     src/utils/system_monitor.cpp \
+    src/utils/usb_monitor.cpp \
     src/comm/base/comm_adapter.cpp \
     src/comm/serial/serial_comm.cpp \
     src/comm/can/can_comm.cpp \
@@ -73,6 +74,7 @@ HEADERS += \
     src/utils/logger.h \
     src/utils/system_settings.h \
     src/utils/system_monitor.h \
+    src/utils/usb_monitor.h \
     src/comm/base/comm_adapter.h \
     src/comm/serial/serial_comm.h \
     src/comm/can/can_comm.h \
