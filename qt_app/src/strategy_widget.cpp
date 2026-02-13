@@ -403,21 +403,28 @@ void StrategyWidget::onRefreshStrategiesClicked()
     statusLabel_->setText(QStringLiteral("[载] 加载中..."));
     qDebug() << "[STRATEGY_WIDGET] 刷新策略列表";
 
-    QJsonValue result = rpcClient_->call(QStringLiteral("auto.strategy.list"));
-    
-    qDebug() << "[STRATEGY_WIDGET] auto.strategy.list 响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
-    
-    if (result.isObject()) {
-        QJsonObject obj = result.toObject();
-        if (obj.contains(QStringLiteral("strategies"))) {
-            QJsonArray strategies = obj.value(QStringLiteral("strategies")).toArray();
-            strategiesCache_ = strategies;
-            updateStrategyCards(strategies);
-            statusLabel_->setText(QStringLiteral("[OK] 共 %1 个策略").arg(strategies.size()));
-            return;
-        }
-    }
-    statusLabel_->setText(QStringLiteral("[X] 加载失败"));
+    // 使用异步调用避免阻塞UI线程
+    rpcClient_->callAsync(QStringLiteral("auto.strategy.list"), QJsonObject(),
+        [this](const QJsonValue &result, const QJsonObject &error) {
+            QMetaObject::invokeMethod(this, [this, result, error]() {
+                if (!error.isEmpty() || !result.isObject()) {
+                    statusLabel_->setText(QStringLiteral("[X] 加载失败"));
+                    qDebug() << "[STRATEGY_WIDGET] auto.strategy.list 失败";
+                    return;
+                }
+
+                QJsonObject obj = result.toObject();
+                if (obj.contains(QStringLiteral("strategies"))) {
+                    QJsonArray strategies = obj.value(QStringLiteral("strategies")).toArray();
+                    strategiesCache_ = strategies;
+                    updateStrategyCards(strategies);
+                    statusLabel_->setText(QStringLiteral("[OK] 共 %1 个策略").arg(strategies.size()));
+                    qDebug() << "[STRATEGY_WIDGET] 刷新成功，策略数:" << strategies.size();
+                } else {
+                    statusLabel_->setText(QStringLiteral("[X] 加载失败"));
+                }
+            }, Qt::QueuedConnection);
+        }, 3000);
 }
 
 void StrategyWidget::updateStrategyCards(const QJsonArray &strategies)
@@ -616,18 +623,22 @@ void StrategyWidget::onToggleStrategy(int strategyId, bool newState)
 
     qDebug() << "[STRATEGY_WIDGET] 切换策略状态 strategyId=" << strategyId << "enabled=" << newState;
     
-    QJsonValue result = rpcClient_->call(QStringLiteral("auto.strategy.enable"), params);
-    
-    qDebug() << "[STRATEGY_WIDGET] auto.strategy.enable 响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
-
-    if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        statusLabel_->setText(QStringLiteral("[OK] 策略 %1 状态已更新").arg(strategyId));
-        emit logMessage(QStringLiteral("策略状态已更新"));
-        onRefreshStrategiesClicked();
-    } else {
-        QString error = result.toObject().value(QStringLiteral("error")).toString();
-        QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("[X] 更新策略失败: %1").arg(error));
-    }
+    rpcClient_->callAsync(QStringLiteral("auto.strategy.enable"), params,
+        [this, strategyId](const QJsonValue &result, const QJsonObject &error) {
+            QMetaObject::invokeMethod(this, [this, strategyId, result, error]() {
+                if (error.isEmpty() && result.isObject() &&
+                    result.toObject().value(QStringLiteral("ok")).toBool()) {
+                    statusLabel_->setText(QStringLiteral("[OK] 策略 %1 状态已更新").arg(strategyId));
+                    emit logMessage(QStringLiteral("策略状态已更新"));
+                    onRefreshStrategiesClicked();
+                } else {
+                    QString errMsg = result.toObject().value(QStringLiteral("error")).toString();
+                    if (errMsg.isEmpty()) errMsg = error.value(QStringLiteral("message")).toString();
+                    QMessageBox::warning(this, QStringLiteral("错误"),
+                        QStringLiteral("[X] 更新策略失败: %1").arg(errMsg));
+                }
+            }, Qt::QueuedConnection);
+        }, 3000);
 }
 
 void StrategyWidget::onTriggerStrategy(int strategyId)
@@ -639,17 +650,21 @@ void StrategyWidget::onTriggerStrategy(int strategyId)
 
     qDebug() << "[STRATEGY_WIDGET] 手动触发策略 strategyId=" << strategyId;
     
-    QJsonValue result = rpcClient_->call(QStringLiteral("auto.strategy.trigger"), params);
-    
-    qDebug() << "[STRATEGY_WIDGET] auto.strategy.trigger 响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
-
-    if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        statusLabel_->setText(QStringLiteral("[触] 策略 %1 已触发").arg(strategyId));
-        emit logMessage(QStringLiteral("手动触发策略成功"));
-    } else {
-        QString error = result.toObject().value(QStringLiteral("error")).toString();
-        QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("[X] 触发策略失败: %1").arg(error));
-    }
+    rpcClient_->callAsync(QStringLiteral("auto.strategy.trigger"), params,
+        [this, strategyId](const QJsonValue &result, const QJsonObject &error) {
+            QMetaObject::invokeMethod(this, [this, strategyId, result, error]() {
+                if (error.isEmpty() && result.isObject() &&
+                    result.toObject().value(QStringLiteral("ok")).toBool()) {
+                    statusLabel_->setText(QStringLiteral("[触] 策略 %1 已触发").arg(strategyId));
+                    emit logMessage(QStringLiteral("手动触发策略成功"));
+                } else {
+                    QString errMsg = result.toObject().value(QStringLiteral("error")).toString();
+                    if (errMsg.isEmpty()) errMsg = error.value(QStringLiteral("message")).toString();
+                    QMessageBox::warning(this, QStringLiteral("错误"),
+                        QStringLiteral("[X] 触发策略失败: %1").arg(errMsg));
+                }
+            }, Qt::QueuedConnection);
+        }, 3000);
 }
 
 void StrategyWidget::onDeleteStrategy(int strategyId)
@@ -666,16 +681,20 @@ void StrategyWidget::onDeleteStrategy(int strategyId)
 
     qDebug() << "[STRATEGY_WIDGET] 删除策略 strategyId=" << strategyId;
     
-    QJsonValue result = rpcClient_->call(QStringLiteral("auto.strategy.delete"), params);
-    
-    qDebug() << "[STRATEGY_WIDGET] auto.strategy.delete 响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
-
-    if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        statusLabel_->setText(QStringLiteral("[OK] 策略 %1 删除成功").arg(strategyId));
-        emit logMessage(QStringLiteral("删除策略成功"));
-        onRefreshStrategiesClicked();
-    } else {
-        QString error = result.toObject().value(QStringLiteral("error")).toString();
-        QMessageBox::warning(this, QStringLiteral("错误"), QStringLiteral("[X] 删除策略失败: %1").arg(error));
-    }
+    rpcClient_->callAsync(QStringLiteral("auto.strategy.delete"), params,
+        [this, strategyId](const QJsonValue &result, const QJsonObject &error) {
+            QMetaObject::invokeMethod(this, [this, strategyId, result, error]() {
+                if (error.isEmpty() && result.isObject() &&
+                    result.toObject().value(QStringLiteral("ok")).toBool()) {
+                    statusLabel_->setText(QStringLiteral("[OK] 策略 %1 删除成功").arg(strategyId));
+                    emit logMessage(QStringLiteral("删除策略成功"));
+                    onRefreshStrategiesClicked();
+                } else {
+                    QString errMsg = result.toObject().value(QStringLiteral("error")).toString();
+                    if (errMsg.isEmpty()) errMsg = error.value(QStringLiteral("message")).toString();
+                    QMessageBox::warning(this, QStringLiteral("错误"),
+                        QStringLiteral("[X] 删除策略失败: %1").arg(errMsg));
+                }
+            }, Qt::QueuedConnection);
+        }, 3000);
 }
