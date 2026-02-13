@@ -70,6 +70,8 @@ private:
     core::CoreContext *context_ = nullptr;
     QHash<QTcpSocket *, QByteArray> buffers_;
     QHash<QTcpSocket *, QString> authenticatedTokens_;  ///< 已认证的socket -> token
+
+    static constexpr int kMaxBufferSize = 1024 * 1024;  ///< 单个连接最大缓冲区1MB
 };
 
 }  // namespace rpc

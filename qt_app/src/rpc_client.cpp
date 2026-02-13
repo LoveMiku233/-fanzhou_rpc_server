@@ -118,6 +118,7 @@ int RpcClient::callAsync(const QString &method, const QJsonObject &params)
     }
 
     const int id = nextId_++;
+    if (nextId_ > 2000000000) nextId_ = 1;  // 防止整数溢出
     pending_.insert(id, method);
 
     const QByteArray payload = packRequest(id, method, params);
@@ -199,6 +200,7 @@ QJsonValue RpcClient::call(const QString &method, const QJsonObject &params,
     }
 
     const int id = nextId_++;
+    if (nextId_ > 2000000000) nextId_ = 1;  // 防止整数溢出
     pending_.insert(id, method);
 
     const QByteArray payload = packRequest(id, method, params);

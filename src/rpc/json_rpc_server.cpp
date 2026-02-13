@@ -56,7 +56,19 @@ void JsonRpcServer::onReadyRead()
         return;
     }
 
-    buffers_[socket].append(socket->readAll());
+    auto &buf = buffers_[socket];
+    buf.append(socket->readAll());
+
+    // 防止单个连接缓冲区过大导致内存耗尽
+    if (buf.size() > kMaxBufferSize) {
+        LOG_WARNING(kLogSource,
+                    QStringLiteral("Buffer overflow from %1:%2, dropping connection")
+                        .arg(socket->peerAddress().toString())
+                        .arg(socket->peerPort()));
+        socket->disconnectFromHost();
+        return;
+    }
+
     processLines(socket);
 }
 

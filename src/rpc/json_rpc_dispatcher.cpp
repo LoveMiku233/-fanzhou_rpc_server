@@ -7,6 +7,7 @@
 #include "utils/logger.h"
 
 #include <algorithm>
+#include <stdexcept>
 
 namespace fanzhou {
 namespace rpc {
@@ -94,9 +95,21 @@ QJsonObject JsonRpcDispatcher::handle(const QJsonObject &request) const
 
     // 执行处理器
     LOG_DEBUG(kLogSource, QStringLiteral("Executing method: %1").arg(method));
-    const QJsonValue result = it.value()(params);
-
-    return isNotification ? QJsonObject{} : makeResult(id, result);
+    try {
+        const QJsonValue result = it.value()(params);
+        return isNotification ? QJsonObject{} : makeResult(id, result);
+    } catch (const std::exception &e) {
+        LOG_ERROR(kLogSource,
+                  QStringLiteral("Handler exception for method %1: %2")
+                      .arg(method, QString::fromLocal8Bit(e.what())));
+        return isNotification ? QJsonObject{}
+                              : makeError(id, -32603, QStringLiteral("Internal error"));
+    } catch (...) {
+        LOG_ERROR(kLogSource,
+                  QStringLiteral("Unknown handler exception for method %1").arg(method));
+        return isNotification ? QJsonObject{}
+                              : makeError(id, -32603, QStringLiteral("Internal error"));
+    }
 }
 
 }  // namespace rpc

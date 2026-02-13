@@ -190,6 +190,19 @@ void LogWidget::appendLog(const QString &message, const QString &level)
 
     logTextEdit_->append(formattedMessage);
 
+    // 限制日志条目数，防止内存无限增长和渲染变慢
+    if (totalCount_ > kMaxLogEntries) {
+        QTextCursor cursor = logTextEdit_->textCursor();
+        cursor.movePosition(QTextCursor::Start);
+        // 删除最早的约20%条目以减少频繁裁剪
+        const int linesToRemove = kMaxLogEntries / 5;
+        for (int i = 0; i < linesToRemove; ++i) {
+            cursor.movePosition(QTextCursor::Down, QTextCursor::KeepAnchor);
+        }
+        cursor.removeSelectedText();
+        totalCount_ -= linesToRemove;
+    }
+
     // 滚动到底部
     QScrollBar *sb = logTextEdit_->verticalScrollBar();
     sb->setValue(sb->maximum());

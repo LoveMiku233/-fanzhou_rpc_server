@@ -938,6 +938,9 @@ void CoreContext::processNextJob()
     if (processingQueue_) return;
     if (controlQueue_.isEmpty()) {
         if (controlTimer_) controlTimer_->stop();
+        // 队列空闲时清理过期数据
+        trimJobResults();
+        trimDeletedStrategies();
         return;
     }
 
@@ -2118,6 +2121,34 @@ bool CoreContext::isIpWhitelisted(const QString &ip) const
     }
     
     return false;
+}
+
+void CoreContext::trimJobResults()
+{
+    if (jobResults_.size() <= kMaxJobResults) return;
+
+    // 找到最小的jobId阈值，只保留最近的kMaxJobResults条
+    QList<quint64> ids = jobResults_.keys();
+    std::sort(ids.begin(), ids.end());
+    const int toRemove = ids.size() - kMaxJobResults;
+    for (int i = 0; i < toRemove; ++i) {
+        jobResults_.remove(ids[i]);
+    }
+}
+
+void CoreContext::trimDeletedStrategies()
+{
+    if (deletedStrategies_.isEmpty()) return;
+    const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+    QList<int> expired;
+    for (auto it = deletedStrategies_.begin(); it != deletedStrategies_.end(); ++it) {
+        if (nowMs - it->deleteMs > kDeletedStrategyTtlMs) {
+            expired.append(it.key());
+        }
+    }
+    for (int key : expired) {
+        deletedStrategies_.remove(key);
+    }
 }
 
 }  // namespace core

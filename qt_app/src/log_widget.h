@@ -47,6 +47,8 @@ private:
     int totalCount_;
     int warningCount_;
     int errorCount_;
+
+    static constexpr int kMaxLogEntries = 2000;  ///< 最大日志条数，防止内存增长
 };
 
 #endif // LOG_WIDGET_H

@@ -410,8 +410,13 @@ private:
     quint64 nextJobId_ = 1;
     quint64 lastJobId_ = 0;
 
+    void trimJobResults();
+    void trimDeletedStrategies();
+
     static constexpr int kQueueTickMs = 10;
     static constexpr int kMsPerSec = 1000;
+    static constexpr int kMaxJobResults = 500;           ///< jobResults最大保留条数
+    static constexpr qint64 kDeletedStrategyTtlMs = 3600000; ///< deletedStrategies保留1小时
 };
 
 }  // namespace core
