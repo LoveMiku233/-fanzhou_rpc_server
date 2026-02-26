@@ -119,9 +119,13 @@ void Logger::log(LogLevel level, const QString &source, const QString &message)
         return;
     }
 
+    // Cache volatile flags under mutex before any I/O
+    const bool doConsole = consoleEnabled_;
+    const bool doFile = fileEnabled_;
+
     const QString formatted = formatMessage(level, source, message);
 
-    if (consoleEnabled_) {
+    if (doConsole) {
         // Temporarily unlock mutex during console I/O to avoid holding the lock
         // during potentially slow I/O operations; Qt's qDebug/qInfo are thread-safe
         locker.unlock();
@@ -143,7 +147,7 @@ void Logger::log(LogLevel level, const QString &source, const QString &message)
         locker.relock();
     }
 
-    if (fileEnabled_) {
+    if (doFile && fileEnabled_) {
         checkAndRotateFile();
         QTextStream stream(&logFile_);
         stream << formatted << "\n";
