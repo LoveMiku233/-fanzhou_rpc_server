@@ -72,6 +72,7 @@ private:
     QHash<QTcpSocket *, QString> authenticatedTokens_;  ///< 已认证的socket -> token
 
     static constexpr int kMaxBufferSize = 1024 * 1024;  ///< 单个连接最大缓冲区1MB
+    static constexpr int kMaxConnections = 64;          ///< 最大并发连接数
 };
 
 }  // namespace rpc

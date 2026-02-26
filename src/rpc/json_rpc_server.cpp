@@ -38,14 +38,28 @@ void JsonRpcServer::onNewConnection()
 {
     while (hasPendingConnections()) {
         auto *socket = nextPendingConnection();
+
+        // 工业环境下限制最大并发连接数，防止资源耗尽
+        if (buffers_.size() >= kMaxConnections) {
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("Max connections reached (%1), rejecting %2:%3")
+                            .arg(kMaxConnections)
+                            .arg(socket->peerAddress().toString())
+                            .arg(socket->peerPort()));
+            socket->disconnectFromHost();
+            socket->deleteLater();
+            continue;
+        }
+
         buffers_[socket] = QByteArray{};
         connect(socket, &QTcpSocket::readyRead, this, &JsonRpcServer::onReadyRead);
         connect(socket, &QTcpSocket::disconnected, this, &JsonRpcServer::onDisconnected);
 
         LOG_INFO(kLogSource,
-                 QStringLiteral("New client connected: %1:%2")
+                 QStringLiteral("New client connected: %1:%2 (total: %3)")
                      .arg(socket->peerAddress().toString())
-                     .arg(socket->peerPort()));
+                     .arg(socket->peerPort())
+                     .arg(buffers_.size()));
     }
 }
 
