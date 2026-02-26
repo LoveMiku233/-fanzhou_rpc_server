@@ -576,6 +576,18 @@ A: 浏览器出于安全考虑，只允许使用WebSocket协议进行实时通�
 
 ### CAN通信失败
 
+**Q: 为什么经常CAN设备掉线？是不是CAN总线超时或总线过载？怎么解决？**
+
+A: 是的，这两种情况都很常见。通常表现为 `can.status` 里 `txQueueSize` 持续偏大（总线拥堵）或设备长时间无响应（超时离线）。
+
+**建议按以下顺序处理：**
+
+1. 先调用 `can.status`，重点看 `opened`、`txQueueSize` 和 `diagnostic`
+2. 若 `txQueueSize` 持续较大，优先降低发送频率，尽量使用 `relay.controlMulti` 合并指令，减少CAN帧数量
+3. 检查波特率是否一致（默认125000）、总线两端120Ω终端电阻、CAN_H/CAN_L接线和设备供电
+4. 必要时按上一节步骤重置CAN接口（`ip link set can0 down/up` + `canconfig`）
+5. 用 `candump can0` 和核心日志持续观察是否恢复稳定
+
 1. 检查CAN接口状态：
    ```bash
    ip link show can0
