@@ -113,6 +113,8 @@ QString Logger::formatMessage(LogLevel level, const QString &source,
 
 void Logger::log(LogLevel level, const QString &source, const QString &message)
 {
+    QMutexLocker locker(&mutex_);
+
     if (level < minLevel_) {
         return;
     }
@@ -120,6 +122,9 @@ void Logger::log(LogLevel level, const QString &source, const QString &message)
     const QString formatted = formatMessage(level, source, message);
 
     if (consoleEnabled_) {
+        // Temporarily unlock mutex during console I/O to avoid holding the lock
+        // during potentially slow I/O operations; Qt's qDebug/qInfo are thread-safe
+        locker.unlock();
         switch (level) {
         case LogLevel::Debug:
             qDebug().noquote() << formatted;
@@ -135,10 +140,10 @@ void Logger::log(LogLevel level, const QString &source, const QString &message)
             qCritical().noquote() << formatted;
             break;
         }
+        locker.relock();
     }
 
     if (fileEnabled_) {
-        QMutexLocker locker(&mutex_);
         checkAndRotateFile();
         QTextStream stream(&logFile_);
         stream << formatted << "\n";
