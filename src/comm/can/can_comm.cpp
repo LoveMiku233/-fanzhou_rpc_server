@@ -504,7 +504,9 @@ bool CanComm::tryResetInterface()
         process.setArguments(args);
         process.start();
         if (!process.waitForFinished(kProcessTimeoutMs)) {
-            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 type can bitrate timed out").arg(config_.interface));
+            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 type can bitrate %2 timed out")
+                          .arg(config_.interface)
+                          .arg(config_.bitrate));
             resetInProgress_ = false;
             return false;
         }
