@@ -24,12 +24,17 @@
 
 #include "relay_gd427.h"
 #include "comm/can/can_comm.h"
+#include "utils/logger.h"
 
 #include <QDateTime>
 #include <QtGlobal>
 
 namespace fanzhou {
 namespace device {
+
+namespace {
+const char *const kLogSource = "RelayGD427";
+}  // namespace
 
 RelayGd427::RelayGd427(quint8 nodeId, comm::CanComm *bus, QObject *parent)
     : DeviceAdapter(parent)
@@ -80,6 +85,10 @@ qint64 RelayGd427::lastSeenMs() const
 bool RelayGd427::control(quint8 channel, RelayProtocol::Action action)
 {
     if (!bus_ || channel > kMaxChannel) {
+        LOG_WARNING(kLogSource, QStringLiteral("control failed: node=0x%1, ch=%2, bus=%3")
+                        .arg(nodeId_, 2, 16, QLatin1Char('0'))
+                        .arg(channel)
+                        .arg(bus_ ? "ok" : "null"));
         return false;
     }
 
@@ -90,7 +99,19 @@ bool RelayGd427::control(quint8 channel, RelayProtocol::Action action)
 
     // CAN ID = 单通道控制基地址 + 节点ID
     const quint32 canId = RelayProtocol::kSingleCtrlBaseId + nodeId_;
-    return bus_->sendFrame(canId, RelayProtocol::encodeCtrl(cmd), false, false);
+    const bool ok = bus_->sendFrame(canId, RelayProtocol::encodeCtrl(cmd), false, false);
+    if (!ok) {
+        LOG_ERROR(kLogSource, QStringLiteral("control sendFrame failed: node=0x%1, ch=%2, action=%3")
+                      .arg(nodeId_, 2, 16, QLatin1Char('0'))
+                      .arg(channel)
+                      .arg(static_cast<int>(action)));
+    } else {
+        LOG_INFO(kLogSource, QStringLiteral("control: node=0x%1, ch=%2, action=%3")
+                     .arg(nodeId_, 2, 16, QLatin1Char('0'))
+                     .arg(channel)
+                     .arg(static_cast<int>(action)));
+    }
+    return ok;
 }
 
 /**
@@ -105,6 +126,8 @@ bool RelayGd427::control(quint8 channel, RelayProtocol::Action action)
 bool RelayGd427::controlMulti(const RelayProtocol::Action actions[4])
 {
     if (!bus_) {
+        LOG_WARNING(kLogSource, QStringLiteral("controlMulti failed: node=0x%1, bus=null")
+                        .arg(nodeId_, 2, 16, QLatin1Char('0')));
         return false;
     }
 
@@ -116,7 +139,23 @@ bool RelayGd427::controlMulti(const RelayProtocol::Action actions[4])
 
     // CAN ID = 多通道控制基地址 + 节点ID
     const quint32 canId = RelayProtocol::kMultiCtrlBaseId + nodeId_;
-    return bus_->sendFrame(canId, RelayProtocol::encodeMultiCtrl(cmd), false, false);
+    const bool ok = bus_->sendFrame(canId, RelayProtocol::encodeMultiCtrl(cmd), false, false);
+    if (!ok) {
+        LOG_ERROR(kLogSource, QStringLiteral("controlMulti sendFrame failed: node=0x%1, actions=[%2,%3,%4,%5]")
+                      .arg(nodeId_, 2, 16, QLatin1Char('0'))
+                      .arg(static_cast<int>(actions[0]))
+                      .arg(static_cast<int>(actions[1]))
+                      .arg(static_cast<int>(actions[2]))
+                      .arg(static_cast<int>(actions[3])));
+    } else {
+        LOG_INFO(kLogSource, QStringLiteral("controlMulti: node=0x%1, actions=[%2,%3,%4,%5]")
+                     .arg(nodeId_, 2, 16, QLatin1Char('0'))
+                     .arg(static_cast<int>(actions[0]))
+                     .arg(static_cast<int>(actions[1]))
+                     .arg(static_cast<int>(actions[2]))
+                     .arg(static_cast<int>(actions[3])));
+    }
+    return ok;
 }
 
 /**
@@ -130,12 +169,22 @@ bool RelayGd427::controlMulti(const RelayProtocol::Action actions[4])
 bool RelayGd427::query(quint8 channel)
 {
     if (!bus_ || channel > kMaxChannel) {
+        LOG_WARNING(kLogSource, QStringLiteral("query failed: node=0x%1, ch=%2, bus=%3")
+                        .arg(nodeId_, 2, 16, QLatin1Char('0'))
+                        .arg(channel)
+                        .arg(bus_ ? "ok" : "null"));
         return false;
     }
 
     // CAN ID = 单通道查询基地址 + 节点ID
     const quint32 canId = RelayProtocol::kSingleQueryBaseId + nodeId_;
-    return bus_->sendFrame(canId, RelayProtocol::encodeSingleQuery(channel), false, false);
+    const bool ok = bus_->sendFrame(canId, RelayProtocol::encodeSingleQuery(channel), false, false);
+    if (!ok) {
+        LOG_WARNING(kLogSource, QStringLiteral("query sendFrame failed: node=0x%1, ch=%2")
+                        .arg(nodeId_, 2, 16, QLatin1Char('0'))
+                        .arg(channel));
+    }
+    return ok;
 }
 
 /**
@@ -149,12 +198,19 @@ bool RelayGd427::query(quint8 channel)
 bool RelayGd427::queryAll()
 {
     if (!bus_) {
+        LOG_WARNING(kLogSource, QStringLiteral("queryAll failed: node=0x%1, bus=null")
+                        .arg(nodeId_, 2, 16, QLatin1Char('0')));
         return false;
     }
 
     // CAN ID = 全通道查询基地址 + 节点ID
     const quint32 canId = RelayProtocol::kAllQueryBaseId + nodeId_;
-    return bus_->sendFrame(canId, RelayProtocol::encodeAllQuery(), false, false);
+    const bool ok = bus_->sendFrame(canId, RelayProtocol::encodeAllQuery(), false, false);
+    if (!ok) {
+        LOG_WARNING(kLogSource, QStringLiteral("queryAll sendFrame failed: node=0x%1")
+                        .arg(nodeId_, 2, 16, QLatin1Char('0')));
+    }
+    return ok;
 }
 
 /**
@@ -169,12 +225,26 @@ bool RelayGd427::queryAll()
 bool RelayGd427::setOvercurrentFlag(quint8 channel, quint8 flag)
 {
     if (!bus_) {
+        LOG_WARNING(kLogSource, QStringLiteral("setOvercurrentFlag failed: node=0x%1, bus=null")
+                        .arg(nodeId_, 2, 16, QLatin1Char('0')));
         return false;
     }
 
     // CAN ID = 设置命令基地址 + 节点ID
     const quint32 canId = RelayProtocol::kSettingsCmdBaseId + nodeId_;
-    return bus_->sendFrame(canId, RelayProtocol::encodeSetOvercurrentFlag(channel, flag), false, false);
+    const bool ok = bus_->sendFrame(canId, RelayProtocol::encodeSetOvercurrentFlag(channel, flag), false, false);
+    if (!ok) {
+        LOG_ERROR(kLogSource, QStringLiteral("setOvercurrentFlag sendFrame failed: node=0x%1, ch=%2, flag=%3")
+                      .arg(nodeId_, 2, 16, QLatin1Char('0'))
+                      .arg(channel)
+                      .arg(flag));
+    } else {
+        LOG_INFO(kLogSource, QStringLiteral("setOvercurrentFlag: node=0x%1, ch=%2, flag=%3")
+                     .arg(nodeId_, 2, 16, QLatin1Char('0'))
+                     .arg(channel)
+                     .arg(flag));
+    }
+    return ok;
 }
 
 /**
@@ -189,10 +259,16 @@ void RelayGd427::onSingleStatusFrame(quint32 canId, const QByteArray &payload)
 
     RelayProtocol::Status status;
     if (!RelayProtocol::decodeStatus(payload, status)) {
+        LOG_WARNING(kLogSource, QStringLiteral("decodeStatus failed: node=0x%1, payload size=%2")
+                        .arg(nodeId_, 2, 16, QLatin1Char('0'))
+                        .arg(payload.size()));
         return;
     }
 
     if (status.channel > kMaxChannel) {
+        LOG_WARNING(kLogSource, QStringLiteral("invalid channel in status: node=0x%1, ch=%2")
+                        .arg(nodeId_, 2, 16, QLatin1Char('0'))
+                        .arg(status.channel));
         return;
     }
 
@@ -214,6 +290,9 @@ void RelayGd427::onAutoStatusFrame(quint32 canId, const QByteArray &payload)
 
     RelayProtocol::AutoStatusReport report;
     if (!RelayProtocol::decodeAutoStatus(payload, report)) {
+        LOG_WARNING(kLogSource, QStringLiteral("decodeAutoStatus failed: node=0x%1, payload size=%2")
+                        .arg(nodeId_, 2, 16, QLatin1Char('0'))
+                        .arg(payload.size()));
         return;
     }
 
@@ -244,8 +323,16 @@ void RelayGd427::onSettingsRespFrame(quint32 canId, const QByteArray &payload)
 
     RelayProtocol::SettingsResp resp;
     if (!RelayProtocol::decodeSettingsResp(payload, resp)) {
+        LOG_WARNING(kLogSource, QStringLiteral("decodeSettingsResp failed: node=0x%1, payload size=%2")
+                        .arg(nodeId_, 2, 16, QLatin1Char('0'))
+                        .arg(payload.size()));
         return;
     }
+
+    LOG_INFO(kLogSource, QStringLiteral("settings response: node=0x%1, cmdType=0x%2, status=0x%3")
+                 .arg(nodeId_, 2, 16, QLatin1Char('0'))
+                 .arg(static_cast<quint8>(resp.cmdType), 2, 16, QLatin1Char('0'))
+                 .arg(static_cast<quint8>(resp.status), 2, 16, QLatin1Char('0')));
 
     emit settingsResponseReceived(static_cast<quint8>(resp.cmdType), static_cast<quint8>(resp.status));
 }

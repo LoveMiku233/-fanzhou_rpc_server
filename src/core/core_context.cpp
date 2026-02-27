@@ -922,12 +922,23 @@ ControlJobResult CoreContext::executeJob(const ControlJob &job)
     auto *dev = relays.value(job.node, nullptr);
     if (!dev) {
         result.message = kErrDeviceNotFound;
+        LOG_WARNING(kLogSource, QStringLiteral("executeJob: device not found, node=0x%1, ch=%2, source=%3")
+                        .arg(job.node, 2, 16, QChar('0'))
+                        .arg(job.channel)
+                        .arg(job.source));
         return result;
     }
 
     const bool ok = dev->control(job.channel, job.action);
     result.ok = ok;
     result.message = ok ? QStringLiteral("ok") : kErrDeviceRejected;
+    if (!ok) {
+        LOG_WARNING(kLogSource, QStringLiteral("executeJob: control rejected, node=0x%1, ch=%2, action=%3, source=%4")
+                        .arg(job.node, 2, 16, QChar('0'))
+                        .arg(job.channel)
+                        .arg(static_cast<int>(job.action))
+                        .arg(job.source));
+    }
     jobResults_.insert(job.id, result);
     lastJobId_ = job.id;
     return result;
@@ -962,6 +973,10 @@ EnqueueResult CoreContext::enqueueControl(quint8 node, quint8 channel,
     if (!controlTimer_) initQueue();
     if (!relays.contains(node)) {
         result.error = kErrUnknownNode;
+        LOG_WARNING(kLogSource, QStringLiteral("enqueueControl: unknown node=0x%1, ch=%2, source=%3")
+                        .arg(node, 2, 16, QChar('0'))
+                        .arg(channel)
+                        .arg(source));
         return result;
     }
 
