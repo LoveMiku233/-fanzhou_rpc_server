@@ -25,6 +25,8 @@ namespace comm {
  */
 struct CanConfig {
     QString interface = QStringLiteral("can0");  ///< CAN接口名
+    int bitrate = 250000;                        ///< CAN波特率
+    bool tripleSampling = true;                  ///< 启用三次采样
     bool canFd = false;                          ///< 启用CAN FD模式
 };
 

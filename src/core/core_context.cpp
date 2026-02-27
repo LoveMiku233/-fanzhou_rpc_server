@@ -146,6 +146,8 @@ bool CoreContext::initCan()
 
     comm::CanConfig canConfig;
     canConfig.interface = coreConfig.can.interface;
+    canConfig.bitrate = coreConfig.can.bitrate;
+    canConfig.tripleSampling = coreConfig.can.tripleSampling;
     canConfig.canFd = false;
 
     canBus = new comm::CanComm(canConfig, this);
