@@ -72,10 +72,14 @@ bool CanComm::open()
         return true;
     }
 
+    LOG_INFO(kLogSource, QStringLiteral("Opening CAN interface: %1").arg(config_.interface));
+
     // 创建SocketCAN原始套接字
     // Create SocketCAN raw socket
     socket_ = ::socket(PF_CAN, SOCK_RAW, CAN_RAW);
     if (socket_ < 0) {
+        LOG_ERROR(kLogSource, QStringLiteral("socket(PF_CAN) failed: %1")
+                      .arg(utils::sysErrorString("socket(PF_CAN) failed")));
         emit errorOccurred(utils::sysErrorString("socket(PF_CAN) failed"));
         return false;
     }
@@ -93,6 +97,8 @@ bool CanComm::open()
         int enable = 1;
         if (::setsockopt(socket_, SOL_CAN_RAW, CAN_RAW_FD_FRAMES,
                          &enable, sizeof(enable)) != 0) {
+            LOG_ERROR(kLogSource, QStringLiteral("setsockopt(CAN_RAW_FD_FRAMES) failed: %1")
+                          .arg(utils::sysErrorString("setsockopt")));
             emit errorOccurred(utils::sysErrorString("setsockopt(CAN_RAW_FD_FRAMES) failed"));
             close();
             return false;
@@ -102,6 +108,8 @@ bool CanComm::open()
     // Set non-blocking mode
     const int flags = ::fcntl(socket_, F_GETFL, 0);
     if (flags < 0 || ::fcntl(socket_, F_SETFL, flags | O_NONBLOCK) < 0) {
+        LOG_ERROR(kLogSource, QStringLiteral("fcntl(O_NONBLOCK) failed: %1")
+                      .arg(utils::sysErrorString("fcntl")));
         emit errorOccurred(utils::sysErrorString("fcntl(O_NONBLOCK) failed"));
         close();
         return false;
@@ -112,6 +120,9 @@ bool CanComm::open()
     std::strncpy(ifr.ifr_name, config_.interface.toLocal8Bit().constData(), IFNAMSIZ - 1);
     ifr.ifr_name[IFNAMSIZ - 1] = '\0';
     if (::ioctl(socket_, SIOCGIFINDEX, &ifr) < 0) {
+        LOG_ERROR(kLogSource, QStringLiteral("ioctl(SIOCGIFINDEX) failed for %1: %2")
+                      .arg(config_.interface)
+                      .arg(utils::sysErrorString("ioctl")));
         emit errorOccurred(utils::sysErrorString("ioctl(SIOCGIFINDEX) failed"));
         close();
         return false;
@@ -123,6 +134,9 @@ bool CanComm::open()
     addr.can_ifindex = ifr.ifr_ifindex;
 
     if (::bind(socket_, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)) < 0) {
+        LOG_ERROR(kLogSource, QStringLiteral("bind(AF_CAN) failed for %1: %2")
+                      .arg(config_.interface)
+                      .arg(utils::sysErrorString("bind")));
         emit errorOccurred(utils::sysErrorString("bind(AF_CAN) failed"));
         close();
         return false;
@@ -143,12 +157,17 @@ bool CanComm::open()
     readNotifier_ = new QSocketNotifier(socket_, QSocketNotifier::Read, this);
     connect(readNotifier_, &QSocketNotifier::activated, this, &CanComm::onReadable);
 
+    LOG_INFO(kLogSource, QStringLiteral("CAN interface %1 opened successfully").arg(config_.interface));
     emit opened();
     return true;
 }
 
 void CanComm::close()
 {
+    if (socket_ >= 0) {
+        LOG_INFO(kLogSource, QStringLiteral("Closing CAN interface %1").arg(config_.interface));
+    }
+
     if (readNotifier_) {
         readNotifier_->setEnabled(false);
         readNotifier_->deleteLater();
@@ -383,11 +402,16 @@ void CanComm::onReadable()
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 break;
             }
+            LOG_ERROR(kLogSource, QStringLiteral("CAN read failed on %1: %2")
+                          .arg(config_.interface)
+                          .arg(utils::sysErrorString("read")));
             emit errorOccurred(utils::sysErrorString("CAN read failed"));
             break;
         }
 
         if (n != sizeof(frame)) {
+            LOG_WARNING(kLogSource, QStringLiteral("CAN read incomplete frame: got %1 bytes, expected %2")
+                            .arg(n).arg(sizeof(frame)));
             break;
         }
 
@@ -409,15 +433,15 @@ bool CanComm::tryResetInterface()
 {
     // 防止重入
     if (resetInProgress_) {
-        LOG_DEBUG(kLogSource, QStringLiteral("接口重置正在进行中，跳过"));
+        LOG_WARNING(kLogSource, QStringLiteral("CAN interface reset already in progress, skipping"));
         return false;
     }
 
     // 检查冷却时间
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
     if (lastResetTimeMs_ > 0 && (now - lastResetTimeMs_) < kResetCooldownMs) {
-        LOG_DEBUG(kLogSource,
-                  QStringLiteral("接口重置冷却中，剩余%1ms")
+        LOG_WARNING(kLogSource,
+                  QStringLiteral("CAN interface reset cooldown active, remaining %1ms")
                       .arg(kResetCooldownMs - (now - lastResetTimeMs_)));
         return false;
     }
@@ -435,10 +459,11 @@ bool CanComm::tryResetInterface()
     ++txResetAttemptCount_;
     lastResetTimeMs_ = now;
 
-    LOG_INFO(kLogSource,
-             QStringLiteral("开始重置CAN接口 %1 (第%2次尝试)")
+    LOG_WARNING(kLogSource,
+             QStringLiteral("Resetting CAN interface %1 (attempt %2/%3)")
                  .arg(config_.interface)
-                 .arg(txResetAttemptCount_));
+                 .arg(txResetAttemptCount_)
+                 .arg(kMaxResetAttempts));
 
     // 1. 关闭当前socket
     close();
@@ -451,18 +476,18 @@ bool CanComm::tryResetInterface()
                               config_.interface, QStringLiteral("down")});
         process.start();
         if (!process.waitForFinished(kProcessTimeoutMs)) {
-            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 down 超时").arg(config_.interface));
+            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 down timed out").arg(config_.interface));
             resetInProgress_ = false;
             return false;
         }
         if (process.exitCode() != 0) {
             LOG_WARNING(kLogSource,
-                        QStringLiteral("ip link set %1 down 失败: %2")
+                        QStringLiteral("ip link set %1 down failed: %2")
                             .arg(config_.interface)
                             .arg(QString::fromUtf8(process.readAllStandardError())));
             // 继续尝试，因为接口可能已经是down状态
         } else {
-            LOG_DEBUG(kLogSource, QStringLiteral("CAN接口 %1 已关闭").arg(config_.interface));
+            LOG_INFO(kLogSource, QStringLiteral("CAN interface %1 brought down").arg(config_.interface));
         }
     }
 
@@ -474,19 +499,19 @@ bool CanComm::tryResetInterface()
                               config_.interface, QStringLiteral("up")});
         process.start();
         if (!process.waitForFinished(kProcessTimeoutMs)) {
-            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 up 超时").arg(config_.interface));
+            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 up timed out").arg(config_.interface));
             resetInProgress_ = false;
             return false;
         }
         if (process.exitCode() != 0) {
             LOG_ERROR(kLogSource,
-                      QStringLiteral("ip link set %1 up 失败: %2")
+                      QStringLiteral("ip link set %1 up failed: %2")
                           .arg(config_.interface)
                           .arg(QString::fromUtf8(process.readAllStandardError())));
             resetInProgress_ = false;
             return false;
         }
-        LOG_DEBUG(kLogSource, QStringLiteral("CAN接口 %1 已重新启动").arg(config_.interface));
+        LOG_INFO(kLogSource, QStringLiteral("CAN interface %1 brought up").arg(config_.interface));
     }
 
     // 4. 重新打开socket
@@ -495,14 +520,14 @@ bool CanComm::tryResetInterface()
 
     if (reopened) {
         LOG_INFO(kLogSource,
-                 QStringLiteral("CAN接口 %1 重置完成，socket已重新打开")
+                 QStringLiteral("CAN interface %1 reset successful, socket reopened")
                      .arg(config_.interface));
         // 重置成功后，重置重试计数器（允许未来再次重试）
         txResetAttemptCount_ = 0;
         return true;
     } else {
         LOG_ERROR(kLogSource,
-                  QStringLiteral("CAN接口 %1 重置后无法重新打开socket")
+                  QStringLiteral("CAN interface %1 reset completed but socket reopen failed")
                       .arg(config_.interface));
         return false;
     }

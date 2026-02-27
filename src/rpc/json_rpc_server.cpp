@@ -209,10 +209,11 @@ void JsonRpcServer::processLines(QTcpSocket *socket)
             socket->write(toLine(response));
 
             if (response.contains(QStringLiteral("error"))) {
-                LOG_DEBUG(kLogSource,
-                          QStringLiteral("RPC error response [id=%1]: %2")
+                LOG_WARNING(kLogSource,
+                          QStringLiteral("RPC error response [id=%1] method=%2: %3")
                               .arg(reqId.isNull() ? QStringLiteral("null")
                                                   : QString::number(reqId.toInt()))
+                              .arg(method)
                               .arg(response.value(QStringLiteral("error"))
                                        .toObject()
                                        .value(QStringLiteral("message"))

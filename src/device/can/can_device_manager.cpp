@@ -6,9 +6,14 @@
 #include "can_device_manager.h"
 #include "comm/can/can_comm.h"
 #include "i_can_device.h"
+#include "utils/logger.h"
 
 namespace fanzhou {
 namespace device {
+
+namespace {
+const char *const kLogSource = "CanDevMgr";
+}  // namespace
 
 CanDeviceManager::CanDeviceManager(comm::CanComm *bus, QObject *parent)
     : QObject(parent)
@@ -27,11 +32,18 @@ void CanDeviceManager::addDevice(ICanDevice *device)
         return;
     }
     devices_.push_back(device);
+    LOG_INFO(kLogSource, QStringLiteral("Device registered: %1 (total: %2)")
+                 .arg(device->canDeviceName())
+                 .arg(devices_.size()));
 }
 
 void CanDeviceManager::removeDevice(ICanDevice *device)
 {
-    devices_.removeAll(device);
+    if (device && devices_.removeAll(device) > 0) {
+        LOG_INFO(kLogSource, QStringLiteral("Device removed: %1 (remaining: %2)")
+                     .arg(device->canDeviceName())
+                     .arg(devices_.size()));
+    }
 }
 
 void CanDeviceManager::onCanFrame(quint32 canId, const QByteArray &payload,
