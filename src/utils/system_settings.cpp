@@ -128,16 +128,21 @@ bool SystemSettings::setCanBitrate(const QString &interface, int bitrate,
         return false;
     }
 
-    runCommand(QStringLiteral("ifconfig"), {interface, QStringLiteral("down")});
+    runCommand(QStringLiteral("ip"),
+               {QStringLiteral("link"), QStringLiteral("set"), interface,
+                QStringLiteral("down")});
 
-    QStringList args{interface, QStringLiteral("bitrate"), QString::number(bitrate)};
+    QStringList args{QStringLiteral("link"), QStringLiteral("set"), interface,
+                     QStringLiteral("type"), QStringLiteral("can"),
+                     QStringLiteral("bitrate"), QString::number(bitrate)};
     if (tripleSampling) {
-        args << QStringLiteral("ctrlmode") << QStringLiteral("triple-sampling")
-             << QStringLiteral("on");
+        args << QStringLiteral("triple-sampling") << QStringLiteral("on");
     }
 
-    runCommand(QStringLiteral("canconfig"), args);
-    runCommand(QStringLiteral("ifconfig"), {interface, QStringLiteral("up")});
+    runCommand(QStringLiteral("ip"), args);
+    runCommand(QStringLiteral("ip"),
+               {QStringLiteral("link"), QStringLiteral("set"), interface,
+                QStringLiteral("up")});
 
     return true;
 }
