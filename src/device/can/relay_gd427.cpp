@@ -34,6 +34,16 @@ namespace device {
 
 namespace {
 const char *const kLogSource = "RelayGD427";
+
+const char *actionToString(RelayProtocol::Action action)
+{
+    switch (action) {
+    case RelayProtocol::Action::Stop:    return "stop";
+    case RelayProtocol::Action::Forward: return "fwd";
+    case RelayProtocol::Action::Reverse: return "rev";
+    }
+    return "unknown";
+}
 }  // namespace
 
 RelayGd427::RelayGd427(quint8 nodeId, comm::CanComm *bus, QObject *parent)
@@ -104,12 +114,12 @@ bool RelayGd427::control(quint8 channel, RelayProtocol::Action action)
         LOG_ERROR(kLogSource, QStringLiteral("control sendFrame failed: node=0x%1, ch=%2, action=%3")
                       .arg(nodeId_, 2, 16, QLatin1Char('0'))
                       .arg(channel)
-                      .arg(static_cast<int>(action)));
+                      .arg(actionToString(action)));
     } else {
         LOG_INFO(kLogSource, QStringLiteral("control: node=0x%1, ch=%2, action=%3")
                      .arg(nodeId_, 2, 16, QLatin1Char('0'))
                      .arg(channel)
-                     .arg(static_cast<int>(action)));
+                     .arg(actionToString(action)));
     }
     return ok;
 }
@@ -143,17 +153,17 @@ bool RelayGd427::controlMulti(const RelayProtocol::Action actions[4])
     if (!ok) {
         LOG_ERROR(kLogSource, QStringLiteral("controlMulti sendFrame failed: node=0x%1, actions=[%2,%3,%4,%5]")
                       .arg(nodeId_, 2, 16, QLatin1Char('0'))
-                      .arg(static_cast<int>(actions[0]))
-                      .arg(static_cast<int>(actions[1]))
-                      .arg(static_cast<int>(actions[2]))
-                      .arg(static_cast<int>(actions[3])));
+                      .arg(actionToString(actions[0]))
+                      .arg(actionToString(actions[1]))
+                      .arg(actionToString(actions[2]))
+                      .arg(actionToString(actions[3])));
     } else {
         LOG_INFO(kLogSource, QStringLiteral("controlMulti: node=0x%1, actions=[%2,%3,%4,%5]")
                      .arg(nodeId_, 2, 16, QLatin1Char('0'))
-                     .arg(static_cast<int>(actions[0]))
-                     .arg(static_cast<int>(actions[1]))
-                     .arg(static_cast<int>(actions[2]))
-                     .arg(static_cast<int>(actions[3])));
+                     .arg(actionToString(actions[0]))
+                     .arg(actionToString(actions[1]))
+                     .arg(actionToString(actions[2]))
+                     .arg(actionToString(actions[3])));
     }
     return ok;
 }

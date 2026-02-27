@@ -440,7 +440,7 @@ bool CanComm::tryResetInterface()
     // 检查冷却时间
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
     if (lastResetTimeMs_ > 0 && (now - lastResetTimeMs_) < kResetCooldownMs) {
-        LOG_INFO(kLogSource,
+        LOG_WARNING(kLogSource,
                   QStringLiteral("CAN interface reset cooldown active, remaining %1ms")
                       .arg(kResetCooldownMs - (now - lastResetTimeMs_)));
         return false;
