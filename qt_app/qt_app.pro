@@ -8,6 +8,8 @@ greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 CONFIG += c++11
 
+INCLUDEPATH += src
+
 TEMPLATE = app
 TARGET = fanzhou_rpc_client
 
@@ -35,7 +37,8 @@ SOURCES += \
     src/log_widget.cpp \
     src/settings_widget.cpp \
     src/relay_control_dialog.cpp \
-    src/screen_manager.cpp
+    src/screen_manager.cpp \
+    src/views/dashboard_page.cpp
 
 HEADERS += \
     src/mainwindow.h \
@@ -53,7 +56,9 @@ HEADERS += \
     src/settings_widget.h \
     src/relay_control_dialog.h \
     src/style_constants.h \
-    src/screen_manager.h
+    src/screen_manager.h \
+    src/models/data_models.h \
+    src/views/dashboard_page.h
 
 # Resources
 RESOURCES += \
