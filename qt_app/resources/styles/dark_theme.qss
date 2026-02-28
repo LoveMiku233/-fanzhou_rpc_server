@@ -96,14 +96,22 @@ QMainWindow {
 }
 
 .deviceCard {
-    background-color: rgba(30, 41, 59, 0.7);
-    border: 1px solid rgba(148, 163, 184, 0.1);
+    background-color: #1e293b;
+    border: 1px solid rgba(51, 65, 85, 0.8);
     border-radius: 10px;
     padding: 10px;
 }
 
 .deviceCard:hover {
     border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.deviceCard QLabel {
+    background: transparent;
+}
+
+.deviceCard QPushButton {
+    border: none;
 }
 
 .sensorCard {
@@ -482,4 +490,61 @@ QProgressBar {
 
 QProgressBar::chunk {
     border-radius: 3px;
+}
+
+/* ── 对话框 ──────────────────────────────────── */
+QDialog {
+    background-color: #1e293b;
+    border: 1px solid #334155;
+}
+
+QDialog QLabel {
+    color: #e2e8f0;
+    background: transparent;
+}
+
+QDialog QLineEdit {
+    background-color: #283548;
+    color: #e2e8f0;
+    border: 1px solid #475569;
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+
+QDialog QLineEdit:focus {
+    border-color: #0ea5e9;
+}
+
+QDialog QComboBox {
+    background-color: #283548;
+    color: #e2e8f0;
+    border: 1px solid #475569;
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+
+QDialog QPushButton {
+    background-color: #334155;
+    color: #e2e8f0;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 16px;
+    min-height: 28px;
+}
+
+QDialog QPushButton:hover {
+    background-color: #475569;
+}
+
+/* ── 控件类型卡片标记 ────────────────────────── */
+.toggleCard {
+    border-left: 3px solid #10b981;
+}
+
+.forwardReverseCard {
+    border-left: 3px solid #f59e0b;
+}
+
+.sliderCard {
+    border-left: 3px solid #3b82f6;
 }
