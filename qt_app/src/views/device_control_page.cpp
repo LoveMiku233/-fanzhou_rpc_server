@@ -987,7 +987,8 @@ void DeviceControlPage::onAddGroup()
     if (name.isEmpty()) return;
 
     static const char *colorKeys[] = {"blue","emerald","amber","purple","red","cyan"};
-    QString color = colorKeys[colorBox->currentIndex()];
+    int idx = colorBox->currentIndex();
+    QString color = (idx >= 0 && idx < 6) ? colorKeys[idx] : "blue";
 
     Models::DeviceGroup g;
     g.id = QString("group_%1").arg(groups_.size() + 1);
@@ -1124,7 +1125,7 @@ void DeviceControlPage::onAddDevice()
 
     bool nodeOk = false;
     int node = nodeEdit->text().toInt(&nodeOk);
-    if (nodeOk) dev.nodeId = node;
+    if (nodeOk && node >= 0) dev.nodeId = node;
 
     bool chOk = false;
     int ch = channelEdit->text().toInt(&chOk);
@@ -1307,7 +1308,7 @@ void DeviceControlPage::onGroupListReceived(const QJsonValue &result,
         Models::DeviceGroup g;
         g.id = QString::number(go.value("groupId").toInt());
         g.name = go.value("name").toString();
-        g.color = "blue"; // RPC groups don't have a color field yet
+        g.color = "blue"; // TODO: RPC server does not include color yet; default to blue
 
         QJsonArray devices = go.value("devices").toArray();
         for (const QJsonValue &dv : devices) {
