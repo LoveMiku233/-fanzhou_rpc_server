@@ -52,10 +52,12 @@ private slots:
     void updateClock();
     void onConnectionChanged(bool connected);
     void refreshCurrentPage();
+    void tryConnect();
 
 private:
     void setupUi();
     void setupConnections();
+    void startAutoConnect();
 
     QPushButton *createNavButton(const QString &icon, const QString &label,
                                  int pageIndex);
@@ -91,8 +93,10 @@ private:
     // Timer
     QTimer *clockTimer_;
     QTimer *refreshTimer_;
+    QTimer *reconnectTimer_;
 
     int currentPage_;
+    bool wasConnected_;
 };
 
 #endif // MAINWINDOW_H

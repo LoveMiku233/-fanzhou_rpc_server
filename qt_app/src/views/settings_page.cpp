@@ -10,6 +10,8 @@
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -320,6 +322,79 @@ QWidget *SettingsPage::createNetworkPanel()
     btnRow->addWidget(btnTestConnection_);
     btnRow->addWidget(btnSaveNetwork_);
     vl->addLayout(btnRow);
+
+    // Connect test button: ping the RPC server
+    connect(btnTestConnection_, &QPushButton::clicked, this, [this]() {
+        if (!rpcClient_) return;
+
+        networkStatusLabel_->setText(
+            QString::fromUtf8("  ⏳  正在测试连接..."));
+        networkStatusLabel_->setStyleSheet(
+            QString("background:%1; color:%2; font-size:%3px;"
+                    "border-radius:6px; padding:0 8px;")
+                .arg(Style::kColorWarning)
+                .arg(Style::kColorTextWhite)
+                .arg(Style::kFontSmall));
+
+        if (rpcClient_->isConnected()) {
+            rpcClient_->callAsync(
+                QStringLiteral("rpc.ping"),
+                QJsonObject(),
+                [this](const QJsonValue &result, const QJsonObject &error) {
+                    if (error.isEmpty()) {
+                        networkStatusLabel_->setText(
+                            QString::fromUtf8("  ✓  RPC服务器连接正常"));
+                        networkStatusLabel_->setStyleSheet(
+                            QString("background:%1; color:%2; font-size:%3px;"
+                                    "border-radius:6px; padding:0 8px;")
+                                .arg(Style::kColorSuccess)
+                                .arg(Style::kColorTextWhite)
+                                .arg(Style::kFontSmall));
+                    } else {
+                        networkStatusLabel_->setText(
+                            QString::fromUtf8("  ✗  RPC调用失败"));
+                        networkStatusLabel_->setStyleSheet(
+                            QString("background:%1; color:%2; font-size:%3px;"
+                                    "border-radius:6px; padding:0 8px;")
+                                .arg(Style::kColorDanger)
+                                .arg(Style::kColorTextWhite)
+                                .arg(Style::kFontSmall));
+                    }
+                },
+                3000);
+        } else {
+            networkStatusLabel_->setText(
+                QString::fromUtf8("  ✗  未连接到RPC服务器"));
+            networkStatusLabel_->setStyleSheet(
+                QString("background:%1; color:%2; font-size:%3px;"
+                        "border-radius:6px; padding:0 8px;")
+                    .arg(Style::kColorDanger)
+                    .arg(Style::kColorTextWhite)
+                    .arg(Style::kFontSmall));
+        }
+    });
+
+    // Connect save button: update RPC endpoint from IP/port fields
+    connect(btnSaveNetwork_, &QPushButton::clicked, this, [this]() {
+        if (!rpcClient_) return;
+
+        QString ip = editIp_->text().trimmed();
+        int port = spinPort_->value();
+        if (!ip.isEmpty()) {
+            rpcClient_->setEndpoint(ip, static_cast<quint16>(port));
+            rpcClient_->disconnectFromServer();
+            rpcClient_->connectToServerAsync();
+
+            networkStatusLabel_->setText(
+                QString::fromUtf8("  ⏳  已保存，正在重新连接 %1:%2 ...").arg(ip).arg(port));
+            networkStatusLabel_->setStyleSheet(
+                QString("background:%1; color:%2; font-size:%3px;"
+                        "border-radius:6px; padding:0 8px;")
+                    .arg(Style::kColorWarning)
+                    .arg(Style::kColorTextWhite)
+                    .arg(Style::kFontSmall));
+        }
+    });
 
     vl->addStretch();
     return panel;
