@@ -38,7 +38,9 @@ SOURCES += \
     src/settings_widget.cpp \
     src/relay_control_dialog.cpp \
     src/screen_manager.cpp \
-    src/views/dashboard_page.cpp
+    src/views/dashboard_page.cpp \
+    src/views/device_control_page.cpp \
+    src/views/scene_page.cpp
 
 HEADERS += \
     src/mainwindow.h \
@@ -58,7 +60,9 @@ HEADERS += \
     src/style_constants.h \
     src/screen_manager.h \
     src/models/data_models.h \
-    src/views/dashboard_page.h
+    src/views/dashboard_page.h \
+    src/views/device_control_page.h \
+    src/views/scene_page.h
 
 # Resources
 RESOURCES += \
