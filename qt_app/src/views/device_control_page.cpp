@@ -1,16 +1,27 @@
 /**
  * @file views/device_control_page.cpp
  * @brief 设备控制页面实现
+ *
+ * 支持从RPC Server获取分组数据，支持多种控件类型（滑块、双态、正反转），
+ * 提供添加/删除分组、添加/删除/编辑设备等操作界面。
  */
 
 #include "views/device_control_page.h"
 #include "rpc_client.h"
 #include "style_constants.h"
 
+#include <QComboBox>
+#include <QDialog>
+#include <QFormLayout>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QLabel>
+#include <QLineEdit>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -64,6 +75,61 @@ static QString groupTabColor(const QString &color)
     return Style::kColorAccentBlue;
 }
 
+// Common card frame style with consistent background
+static QString cardFrameStyle(const char *accentColor)
+{
+    return QString(
+        "QFrame[class=\"deviceCard\"] {"
+        "  background:%1; border-radius:%2px;"
+        "  border:1px solid %3; border-left:3px solid %4; }")
+        .arg(Style::kColorBgPanel).arg(Style::kCardRadius)
+        .arg(Style::kColorBorder).arg(accentColor);
+}
+
+// Small icon-button used in card headers
+static QPushButton *createSmallIconBtn(const QString &text, const char *color,
+                                       const char *hoverColor)
+{
+    QPushButton *btn = new QPushButton(text);
+    btn->setFixedSize(22, 22);
+    btn->setCursor(Qt::PointingHandCursor);
+    btn->setStyleSheet(
+        QString("QPushButton { background:transparent; color:%1; border:none;"
+                "  font-size:12px; border-radius:4px; padding:0; }"
+                "QPushButton:hover { background:%2; color:white; }")
+            .arg(color).arg(hoverColor));
+    return btn;
+}
+
+// Dialog stylesheet for consistent dark theme
+static QString dialogStyle()
+{
+    return QString(
+        "QDialog { background:%1; }"
+        "QLabel { color:%2; font-size:%3px; background:transparent; }"
+        "QLineEdit { background:%4; color:%2; border:1px solid %5;"
+        "  border-radius:4px; padding:4px 8px; font-size:%3px; }"
+        "QLineEdit:focus { border-color:%6; }"
+        "QComboBox { background:%4; color:%2; border:1px solid %5;"
+        "  border-radius:4px; padding:4px 8px; font-size:%3px; }"
+        "QComboBox::drop-down { border:none; width:20px; }"
+        "QComboBox::down-arrow { border-left:4px solid transparent;"
+        "  border-right:4px solid transparent; border-top:5px solid %7; margin-right:6px; }"
+        "QComboBox QAbstractItemView { background:%4; color:%2;"
+        "  border:1px solid %5; selection-background-color:%6; }"
+        "QPushButton { background:%5; color:%2; border:none;"
+        "  border-radius:4px; padding:6px 16px; font-size:%3px; min-height:28px; }"
+        "QPushButton:hover { background:%8; }")
+        .arg(Style::kColorBgPanel)     // %1
+        .arg(Style::kColorTextPrimary) // %2
+        .arg(Style::kFontSmall)        // %3
+        .arg(Style::kColorBgCard)      // %4
+        .arg(Style::kColorBorder)      // %5
+        .arg(Style::kColorAccentBlue)  // %6
+        .arg(Style::kColorTextMuted)   // %7
+        .arg(Style::kColorBorderLight);// %8
+}
+
 // ---------------------------------------------------------------------------
 // DeviceControlPage
 // ---------------------------------------------------------------------------
@@ -72,6 +138,7 @@ DeviceControlPage::DeviceControlPage(RpcClient *rpc, QWidget *parent)
     : QWidget(parent)
     , rpcClient_(rpc)
     , currentGroupIndex_(0)
+    , deleteGroupBtn_(nullptr)
 {
     initDemoData();
     setupUi();
@@ -91,20 +158,22 @@ void DeviceControlPage::initDemoData()
         DeviceGroup g;
         g.id = "curtain"; g.name = QString::fromUtf8("卷帘组"); g.color = "blue";
 
-        auto mkDC = [](const char *id, const char *name, const char *st,
-                       int val, const char *spec, const char *fault = "") {
+        auto mkDev = [](const char *id, const char *name, const char *st,
+                       int val, const char *spec, const char *ct,
+                       const char *fault = "") {
             DeviceInfo d;
             d.id = id; d.name = QString::fromUtf8(name); d.type = "dc";
             d.status = st; d.value = val; d.spec = spec;
+            d.controlType = ct;
             d.fault = QString::fromUtf8(fault);
             return d;
         };
-        g.devices << mkDC("c1", "南侧卷帘-1", "running", 75, "24V")
-                  << mkDC("c2", "南侧卷帘-2", "stopped",  0, "24V")
-                  << mkDC("c3", "北侧卷帘-1", "manual",  45, "24V")
-                  << mkDC("c4", "北侧卷帘-2", "fault",    0, "24V", "电机过载")
-                  << mkDC("c5", "顶部卷帘-1", "stopped",  0, "24V")
-                  << mkDC("c6", "顶部卷帘-2", "running", 60, "24V");
+        g.devices << mkDev("c1", "南侧卷帘-1", "running", 75, "24V", "slider")
+                  << mkDev("c2", "南侧卷帘-2", "stopped",  0, "24V", "slider")
+                  << mkDev("c3", "北侧卷帘-1", "manual",  45, "24V", "forward_reverse")
+                  << mkDev("c4", "北侧卷帘-2", "fault",    0, "24V", "slider", "电机过载")
+                  << mkDev("c5", "顶部卷帘-1", "stopped",  0, "24V", "toggle")
+                  << mkDev("c6", "顶部卷帘-2", "running", 60, "24V", "slider");
         groups_ << g;
     }
 
@@ -118,6 +187,7 @@ void DeviceControlPage::initDemoData()
             DeviceInfo d;
             d.id = id; d.name = QString::fromUtf8(name); d.type = "ac";
             d.status = st; d.spec = spec; d.runtime = rt; d.current = cur;
+            d.controlType = "forward_reverse";
             return d;
         };
         g.devices << mkAC("f1", "风机-1",   "running", "380V 1.5kW", "04:32:18", "2.8A")
@@ -132,9 +202,11 @@ void DeviceControlPage::initDemoData()
         g.id = "shade"; g.name = QString::fromUtf8("遮阳网组"); g.color = "amber";
 
         DeviceInfo d1; d1.id = "s1"; d1.name = QString::fromUtf8("外遮阳网");
-        d1.type = "dc"; d1.status = "running"; d1.value = 60; d1.spec = QString::fromUtf8("推杆驱动");
+        d1.type = "dc"; d1.status = "running"; d1.value = 60;
+        d1.spec = QString::fromUtf8("推杆驱动"); d1.controlType = "slider";
         DeviceInfo d2; d2.id = "s2"; d2.name = QString::fromUtf8("内遮阳网");
-        d2.type = "dc"; d2.status = "stopped"; d2.value = 0; d2.spec = QString::fromUtf8("推杆驱动");
+        d2.type = "dc"; d2.status = "stopped"; d2.value = 0;
+        d2.spec = QString::fromUtf8("推杆驱动"); d2.controlType = "toggle";
 
         g.devices << d1 << d2;
         groups_ << g;
@@ -147,10 +219,10 @@ void DeviceControlPage::initDemoData()
 
         DeviceInfo d1; d1.id = "i1"; d1.name = QString::fromUtf8("滴灌区-A");
         d1.type = "ac"; d1.status = "running"; d1.spec = QString::fromUtf8("电磁阀");
-        d1.flow = "1250L"; d1.pressure = "0.25MPa";
+        d1.flow = "1250L"; d1.pressure = "0.25MPa"; d1.controlType = "toggle";
         DeviceInfo d2; d2.id = "i2"; d2.name = QString::fromUtf8("喷雾系统");
         d2.type = "ac"; d2.status = "manual"; d2.spec = QString::fromUtf8("高压泵 2.2kW");
-        d2.flow = "850L"; d2.pressure = "3.5MPa";
+        d2.flow = "850L"; d2.pressure = "3.5MPa"; d2.controlType = "forward_reverse";
 
         g.devices << d1 << d2;
         groups_ << g;
@@ -183,9 +255,9 @@ void DeviceControlPage::setupUi()
     scrollLeftBtn_->setFixedSize(24, 28);
     scrollLeftBtn_->setCursor(Qt::PointingHandCursor);
     scrollLeftBtn_->setStyleSheet(
-        QString("QPushButton { background:%1; color:white; border:none; border-radius:4px; font-size:10px; }"
-                "QPushButton:hover { background:%2; }")
-            .arg(Style::kColorBgCard).arg(Style::kColorBorderLight));
+        QString("QPushButton { background:%1; color:%2; border:none; border-radius:4px; font-size:10px; }"
+                "QPushButton:hover { background:%3; color:white; }")
+            .arg(Style::kColorBgCard).arg(Style::kColorTextSecondary).arg(Style::kColorBorderLight));
     tabBarLayout->addWidget(scrollLeftBtn_);
 
     // Scrollable tab area
@@ -220,18 +292,31 @@ void DeviceControlPage::setupUi()
     tabBarLayout->addWidget(sep);
 
     // 添加分组
-    addGroupBtn_ = new QPushButton(QString::fromUtf8("+ 添加分组"));
+    addGroupBtn_ = new QPushButton(QString::fromUtf8("+ 分组"));
     addGroupBtn_->setFixedHeight(28);
     addGroupBtn_->setCursor(Qt::PointingHandCursor);
     addGroupBtn_->setStyleSheet(
-        QString("QPushButton { background:%1; color:white; border:none; border-radius:6px;"
-                "  font-size:%2px; padding:0 10px; }"
-                "QPushButton:hover { background:%3; }")
-            .arg(Style::kColorBgCard).arg(Style::kFontSmall).arg(Style::kColorBorderLight));
+        QString("QPushButton { background:%1; color:%2; border:none; border-radius:6px;"
+                "  font-size:%3px; padding:0 10px; }"
+                "QPushButton:hover { background:%4; color:white; }")
+            .arg(Style::kColorBgCard).arg(Style::kColorTextSecondary)
+            .arg(Style::kFontSmall).arg(Style::kColorBorderLight));
     tabBarLayout->addWidget(addGroupBtn_);
 
+    // 删除分组
+    deleteGroupBtn_ = new QPushButton(QString::fromUtf8("- 分组"));
+    deleteGroupBtn_->setFixedHeight(28);
+    deleteGroupBtn_->setCursor(Qt::PointingHandCursor);
+    deleteGroupBtn_->setStyleSheet(
+        QString("QPushButton { background:%1; color:%2; border:none; border-radius:6px;"
+                "  font-size:%3px; padding:0 10px; }"
+                "QPushButton:hover { background:%4; color:white; }")
+            .arg(Style::kColorBgCard).arg(Style::kColorTextMuted)
+            .arg(Style::kFontSmall).arg(Style::kColorDanger));
+    tabBarLayout->addWidget(deleteGroupBtn_);
+
     // 添加设备
-    addDeviceBtn_ = new QPushButton(QString::fromUtf8("+ 添加设备"));
+    addDeviceBtn_ = new QPushButton(QString::fromUtf8("+ 设备"));
     addDeviceBtn_->setFixedHeight(28);
     addDeviceBtn_->setCursor(Qt::PointingHandCursor);
     addDeviceBtn_->setStyleSheet(
@@ -243,7 +328,7 @@ void DeviceControlPage::setupUi()
 
     root->addWidget(tabBar);
 
-    // ── Scroll connections ─────────────────────────────
+    // ── Button connections ─────────────────────────────
     connect(scrollLeftBtn_, &QPushButton::clicked, this, [this]() {
         tabScrollArea_->horizontalScrollBar()->setValue(
             tabScrollArea_->horizontalScrollBar()->value() - 120);
@@ -252,6 +337,9 @@ void DeviceControlPage::setupUi()
         tabScrollArea_->horizontalScrollBar()->setValue(
             tabScrollArea_->horizontalScrollBar()->value() + 120);
     });
+    connect(addGroupBtn_, &QPushButton::clicked, this, &DeviceControlPage::onAddGroup);
+    connect(deleteGroupBtn_, &QPushButton::clicked, this, &DeviceControlPage::onDeleteGroup);
+    connect(addDeviceBtn_, &QPushButton::clicked, this, &DeviceControlPage::onAddDevice);
 
     // ── Device card scroll area ─────────────────────────
     cardScrollArea_ = new QScrollArea;
@@ -266,6 +354,8 @@ void DeviceControlPage::setupUi()
             .arg(Style::kColorBgDark).arg(Style::kColorBorder));
 
     cardContainer_ = new QWidget;
+    cardContainer_->setStyleSheet(
+        QString("background:%1;").arg(Style::kColorBgDark));
     cardScrollArea_->setWidget(cardContainer_);
 
     root->addWidget(cardScrollArea_, 1);
@@ -299,7 +389,6 @@ void DeviceControlPage::renderGroupTabs()
         btn->setCursor(Qt::PointingHandCursor);
         btn->setProperty("class", (i == currentGroupIndex_) ? "groupTabActive" : "groupTab");
 
-        QString accent = groupTabColor(g.color);
         if (i == currentGroupIndex_) {
             btn->setStyleSheet(
                 QString("QPushButton { background:qlineargradient(x1:0,y1:0,x2:1,y2:1,"
@@ -326,6 +415,11 @@ void DeviceControlPage::renderGroupTabs()
         tabButtons_ << btn;
     }
     tabLayout_->addStretch();
+
+    // Update delete group button state
+    if (deleteGroupBtn_) {
+        deleteGroupBtn_->setEnabled(!groups_.isEmpty());
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -357,9 +451,7 @@ void DeviceControlPage::renderDevices()
 
     for (int i = 0; i < group.devices.size(); ++i) {
         const Models::DeviceInfo &dev = group.devices[i];
-        QWidget *card = (dev.type == "dc")
-                            ? createDCDeviceCard(dev)
-                            : createACDeviceCard(dev);
+        QWidget *card = createDeviceCard(dev);
         grid->addWidget(card, i / cols, i % cols);
     }
 
@@ -374,38 +466,46 @@ void DeviceControlPage::renderDevices()
 }
 
 // ---------------------------------------------------------------------------
-// createDCDeviceCard
+// createDeviceCard - dispatch by controlType
 // ---------------------------------------------------------------------------
 
-QWidget *DeviceControlPage::createDCDeviceCard(const Models::DeviceInfo &dev)
+QWidget *DeviceControlPage::createDeviceCard(const Models::DeviceInfo &dev)
 {
-    QFrame *card = new QFrame;
-    card->setProperty("class", "deviceCard");
-    card->setStyleSheet(
-        QString("QFrame[class=\"deviceCard\"] {"
-                "  background:%1; border-radius:%2px;"
-                "  border-left:4px solid %3; }")
-            .arg(Style::kColorBgPanel).arg(Style::kCardRadius)
-            .arg(Style::kColorInfo));
+    if (dev.controlType == "toggle")
+        return createToggleCard(dev);
+    if (dev.controlType == "forward_reverse")
+        return createForwardReverseCard(dev);
+    if (dev.type == "ac")
+        return createACDeviceCard(dev);
+    // Default: slider card
+    return createSliderCard(dev);
+}
 
-    QVBoxLayout *vl = new QVBoxLayout(card);
-    vl->setContentsMargins(10, 8, 10, 8);
-    vl->setSpacing(6);
+// ---------------------------------------------------------------------------
+// createCardHeader - common header for all card types
+// ---------------------------------------------------------------------------
 
-    // ── Header: name + status badge ──
+QHBoxLayout *DeviceControlPage::createCardHeader(const Models::DeviceInfo &dev,
+                                                  QVBoxLayout *parent)
+{
     QHBoxLayout *header = new QHBoxLayout;
-    header->setSpacing(6);
+    header->setSpacing(4);
 
     QVBoxLayout *nameCol = new QVBoxLayout;
     nameCol->setSpacing(0);
 
     QLabel *nameLabel = new QLabel(dev.name);
     nameLabel->setStyleSheet(
-        QString("color:white; font-size:%1px; font-weight:bold;").arg(Style::kFontSmall));
+        QString("color:white; font-size:%1px; font-weight:bold; background:transparent;")
+            .arg(Style::kFontSmall));
 
-    QLabel *specLabel = new QLabel(QString("DC | %1").arg(dev.spec));
+    QString specStr = dev.spec;
+    if (!dev.type.isEmpty())
+        specStr = QString("%1 | %2").arg(dev.type.toUpper()).arg(dev.spec);
+    QLabel *specLabel = new QLabel(specStr);
     specLabel->setStyleSheet(
-        QString("color:%1; font-size:%2px;").arg(Style::kColorTextMuted).arg(Style::kFontTiny));
+        QString("color:%1; font-size:%2px; background:transparent;")
+            .arg(Style::kColorTextMuted).arg(Style::kFontTiny));
 
     nameCol->addWidget(nameLabel);
     nameCol->addWidget(specLabel);
@@ -415,9 +515,46 @@ QWidget *DeviceControlPage::createDCDeviceCard(const Models::DeviceInfo &dev)
     badge->setStyleSheet(statusBadgeStyle(dev.status));
     badge->setFixedHeight(18);
 
+    // Edit button
+    QPushButton *editBtn = createSmallIconBtn(
+        QString::fromUtf8("✎"), Style::kColorTextMuted, Style::kColorAccentBlue);
+    QString devId = dev.id;
+    connect(editBtn, &QPushButton::clicked, this, [this, devId]() {
+        onEditDevice(devId);
+    });
+
+    // Delete button
+    QPushButton *delBtn = createSmallIconBtn(
+        QString::fromUtf8("✕"), Style::kColorTextMuted, Style::kColorDanger);
+    connect(delBtn, &QPushButton::clicked, this, [this, devId]() {
+        onDeleteDevice(devId);
+    });
+
     header->addLayout(nameCol, 1);
     header->addWidget(badge, 0, Qt::AlignTop);
-    vl->addLayout(header);
+    header->addWidget(editBtn, 0, Qt::AlignTop);
+    header->addWidget(delBtn, 0, Qt::AlignTop);
+
+    parent->addLayout(header);
+    return header;
+}
+
+// ---------------------------------------------------------------------------
+// createSliderCard
+// ---------------------------------------------------------------------------
+
+QWidget *DeviceControlPage::createSliderCard(const Models::DeviceInfo &dev)
+{
+    QFrame *card = new QFrame;
+    card->setProperty("class", "deviceCard");
+    card->setStyleSheet(cardFrameStyle(Style::kColorInfo));
+
+    QVBoxLayout *vl = new QVBoxLayout(card);
+    vl->setContentsMargins(10, 8, 10, 8);
+    vl->setSpacing(6);
+
+    // ── Header ──
+    createCardHeader(dev, vl);
 
     // ── Value row ──
     bool isFault = (dev.status == "fault");
@@ -427,11 +564,12 @@ QWidget *DeviceControlPage::createDCDeviceCard(const Models::DeviceInfo &dev)
                                      ? QString::fromUtf8("状态")
                                      : QString::fromUtf8("开度"));
     valLabel->setStyleSheet(
-        QString("color:%1; font-size:%2px;").arg(Style::kColorTextMuted).arg(Style::kFontSmall));
+        QString("color:%1; font-size:%2px; background:transparent;")
+            .arg(Style::kColorTextMuted).arg(Style::kFontSmall));
 
     QLabel *valNum = new QLabel(isFault ? "--" : QString("%1%").arg(dev.value));
     valNum->setStyleSheet(
-        QString("color:%1; font-size:%2px; font-weight:bold;")
+        QString("color:%1; font-size:%2px; font-weight:bold; background:transparent;")
             .arg(isFault ? Style::kColorDanger : Style::kColorAccentCyan)
             .arg(Style::kFontSmall));
 
@@ -470,7 +608,214 @@ QWidget *DeviceControlPage::createDCDeviceCard(const Models::DeviceInfo &dev)
     if (!dev.fault.isEmpty()) {
         QLabel *faultLabel = new QLabel(dev.fault);
         faultLabel->setStyleSheet(
-            QString("color:%1; font-size:%2px;").arg(Style::kColorDanger).arg(Style::kFontTiny));
+            QString("color:%1; font-size:%2px; background:transparent;")
+                .arg(Style::kColorDanger).arg(Style::kFontTiny));
+        vl->addWidget(faultLabel);
+    }
+
+    return card;
+}
+
+// ---------------------------------------------------------------------------
+// createToggleCard
+// ---------------------------------------------------------------------------
+
+QWidget *DeviceControlPage::createToggleCard(const Models::DeviceInfo &dev)
+{
+    QFrame *card = new QFrame;
+    card->setProperty("class", "deviceCard");
+    card->setStyleSheet(cardFrameStyle(Style::kColorSuccess));
+
+    QVBoxLayout *vl = new QVBoxLayout(card);
+    vl->setContentsMargins(10, 8, 10, 8);
+    vl->setSpacing(6);
+
+    // ── Header ──
+    createCardHeader(dev, vl);
+
+    // ── Info rows (if AC device) ──
+    if (!dev.flow.isEmpty()) {
+        auto addInfoRow = [&](const QString &label, const QString &value, const char *vc) {
+            QHBoxLayout *row = new QHBoxLayout;
+            QLabel *lbl = new QLabel(label);
+            lbl->setStyleSheet(
+                QString("color:%1; font-size:%2px; background:transparent;")
+                    .arg(Style::kColorTextMuted).arg(Style::kFontSmall));
+            QLabel *val = new QLabel(value);
+            val->setStyleSheet(
+                QString("color:%1; font-size:%2px; background:transparent;")
+                    .arg(vc).arg(Style::kFontSmall));
+            row->addWidget(lbl);
+            row->addStretch();
+            row->addWidget(val);
+            vl->addLayout(row);
+        };
+        addInfoRow(QString::fromUtf8("流量"), dev.flow, Style::kColorAccentCyan);
+        addInfoRow(QString::fromUtf8("压力"), dev.pressure, Style::kColorAccentCyan);
+    }
+
+    // ── Toggle button (开/关) ──
+    bool isOn = (dev.status == "running" || dev.status == "manual");
+    bool isFault = (dev.status == "fault");
+
+    QPushButton *toggleBtn = new QPushButton(
+        isOn ? QString::fromUtf8("● 已开启") : QString::fromUtf8("○ 已关闭"));
+    toggleBtn->setFixedHeight(Style::kBtnHeightSmall);
+    toggleBtn->setCursor(isFault ? Qt::ForbiddenCursor : Qt::PointingHandCursor);
+    toggleBtn->setEnabled(!isFault);
+
+    if (isOn) {
+        toggleBtn->setStyleSheet(
+            QString("QPushButton { background:%1; color:white; border:none;"
+                    "  border-radius:6px; font-size:%2px; font-weight:bold; }"
+                    "QPushButton:hover { background:#059669; }")
+                .arg(Style::kColorSuccess).arg(Style::kFontSmall));
+    } else {
+        toggleBtn->setStyleSheet(
+            QString("QPushButton { background:%1; color:%2; border:1px solid %3;"
+                    "  border-radius:6px; font-size:%4px; }"
+                    "QPushButton:hover { background:%3; color:white; }")
+                .arg(Style::kColorBgCard).arg(Style::kColorTextSecondary)
+                .arg(Style::kColorBorder).arg(Style::kFontSmall));
+    }
+
+    QString devId = dev.id;
+    connect(toggleBtn, &QPushButton::clicked, this, [this, toggleBtn, devId, isOn]() {
+        // TODO: 用户实现具体的开关逻辑
+        // 切换按钮视觉状态
+        Q_UNUSED(toggleBtn)
+        Q_UNUSED(devId)
+        Q_UNUSED(isOn)
+    });
+    vl->addWidget(toggleBtn);
+
+    // ── Fault info ──
+    if (!dev.fault.isEmpty()) {
+        QLabel *faultLabel = new QLabel(dev.fault);
+        faultLabel->setStyleSheet(
+            QString("color:%1; font-size:%2px; background:transparent;")
+                .arg(Style::kColorDanger).arg(Style::kFontTiny));
+        vl->addWidget(faultLabel);
+    }
+
+    return card;
+}
+
+// ---------------------------------------------------------------------------
+// createForwardReverseCard
+// ---------------------------------------------------------------------------
+
+QWidget *DeviceControlPage::createForwardReverseCard(const Models::DeviceInfo &dev)
+{
+    QFrame *card = new QFrame;
+    card->setProperty("class", "deviceCard");
+    card->setStyleSheet(cardFrameStyle(Style::kColorWarning));
+
+    QVBoxLayout *vl = new QVBoxLayout(card);
+    vl->setContentsMargins(10, 8, 10, 8);
+    vl->setSpacing(6);
+
+    // ── Header ──
+    createCardHeader(dev, vl);
+
+    // ── Info rows (if AC device) ──
+    if (!dev.runtime.isEmpty()) {
+        auto addInfoRow = [&](const QString &label, const QString &value, const char *vc) {
+            QHBoxLayout *row = new QHBoxLayout;
+            QLabel *lbl = new QLabel(label);
+            lbl->setStyleSheet(
+                QString("color:%1; font-size:%2px; background:transparent;")
+                    .arg(Style::kColorTextMuted).arg(Style::kFontSmall));
+            QLabel *val = new QLabel(value);
+            val->setStyleSheet(
+                QString("color:%1; font-size:%2px; background:transparent;")
+                    .arg(vc).arg(Style::kFontSmall));
+            row->addWidget(lbl);
+            row->addStretch();
+            row->addWidget(val);
+            vl->addLayout(row);
+        };
+        const char *rtColor = (dev.status == "running")
+                                  ? Style::kColorEmerald : Style::kColorTextMuted;
+        addInfoRow(QString::fromUtf8("运行时间"), dev.runtime, rtColor);
+        addInfoRow(QString::fromUtf8("电流"),
+                   dev.current.isEmpty() ? "--" : dev.current,
+                   Style::kColorAccentCyan);
+    }
+
+    // ── Forward / Stop / Reverse buttons ──
+    bool isFault = (dev.status == "fault");
+
+    QHBoxLayout *btnRow = new QHBoxLayout;
+    btnRow->setSpacing(6);
+
+    QPushButton *revBtn = new QPushButton(QString::fromUtf8("◀ 反转"));
+    revBtn->setFixedHeight(Style::kBtnHeightSmall);
+    revBtn->setCursor(isFault ? Qt::ForbiddenCursor : Qt::PointingHandCursor);
+    revBtn->setEnabled(!isFault);
+    revBtn->setStyleSheet(
+        !isFault
+            ? QString("QPushButton { background:%1; color:white; border:none;"
+                      "  border-radius:4px; font-size:%2px; font-weight:bold; }"
+                      "QPushButton:hover { background:%3; }")
+                  .arg(Style::kColorWarning).arg(Style::kFontSmall).arg("#d97706")
+            : QString("QPushButton { background:%1; color:%2; border:none;"
+                      "  border-radius:4px; font-size:%3px; }")
+                  .arg(Style::kColorBgCard).arg(Style::kColorTextMuted).arg(Style::kFontSmall));
+
+    QPushButton *stopBtn = new QPushButton(QString::fromUtf8("■ 停止"));
+    stopBtn->setFixedHeight(Style::kBtnHeightSmall);
+    stopBtn->setCursor(isFault ? Qt::ForbiddenCursor : Qt::PointingHandCursor);
+    stopBtn->setEnabled(!isFault);
+    stopBtn->setStyleSheet(
+        !isFault
+            ? QString("QPushButton { background:%1; color:white; border:none;"
+                      "  border-radius:4px; font-size:%2px; font-weight:bold; }"
+                      "QPushButton:hover { background:#dc2626; }")
+                  .arg(Style::kColorDanger).arg(Style::kFontSmall)
+            : QString("QPushButton { background:%1; color:%2; border:none;"
+                      "  border-radius:4px; font-size:%3px; }")
+                  .arg(Style::kColorBgCard).arg(Style::kColorTextMuted).arg(Style::kFontSmall));
+
+    QPushButton *fwdBtn = new QPushButton(QString::fromUtf8("正转 ▶"));
+    fwdBtn->setFixedHeight(Style::kBtnHeightSmall);
+    fwdBtn->setCursor(isFault ? Qt::ForbiddenCursor : Qt::PointingHandCursor);
+    fwdBtn->setEnabled(!isFault);
+    fwdBtn->setStyleSheet(
+        !isFault
+            ? QString("QPushButton { background:%1; color:white; border:none;"
+                      "  border-radius:4px; font-size:%2px; font-weight:bold; }"
+                      "QPushButton:hover { background:#059669; }")
+                  .arg(Style::kColorSuccess).arg(Style::kFontSmall)
+            : QString("QPushButton { background:%1; color:%2; border:none;"
+                      "  border-radius:4px; font-size:%3px; }")
+                  .arg(Style::kColorBgCard).arg(Style::kColorTextMuted).arg(Style::kFontSmall));
+
+    QString devId = dev.id;
+    connect(revBtn, &QPushButton::clicked, this, [devId]() {
+        // TODO: 用户实现反转逻辑 (RPC: relay.control action=rev)
+        Q_UNUSED(devId)
+    });
+    connect(stopBtn, &QPushButton::clicked, this, [devId]() {
+        // TODO: 用户实现停止逻辑 (RPC: relay.control action=stop)
+        Q_UNUSED(devId)
+    });
+    connect(fwdBtn, &QPushButton::clicked, this, [devId]() {
+        // TODO: 用户实现正转逻辑 (RPC: relay.control action=fwd)
+        Q_UNUSED(devId)
+    });
+
+    btnRow->addWidget(revBtn, 1);
+    btnRow->addWidget(stopBtn, 1);
+    btnRow->addWidget(fwdBtn, 1);
+    vl->addLayout(btnRow);
+
+    // ── Fault info ──
+    if (!dev.fault.isEmpty()) {
+        QLabel *faultLabel = new QLabel(dev.fault);
+        faultLabel->setStyleSheet(
+            QString("color:%1; font-size:%2px; background:transparent;")
+                .arg(Style::kColorDanger).arg(Style::kFontTiny));
         vl->addWidget(faultLabel);
     }
 
@@ -485,43 +830,14 @@ QWidget *DeviceControlPage::createACDeviceCard(const Models::DeviceInfo &dev)
 {
     QFrame *card = new QFrame;
     card->setProperty("class", "deviceCard");
-    card->setStyleSheet(
-        QString("QFrame[class=\"deviceCard\"] {"
-                "  background:%1; border-radius:%2px;"
-                "  border-left:4px solid %3; }")
-            .arg(Style::kColorBgPanel).arg(Style::kCardRadius)
-            .arg(Style::kColorSuccess));
+    card->setStyleSheet(cardFrameStyle(Style::kColorSuccess));
 
     QVBoxLayout *vl = new QVBoxLayout(card);
     vl->setContentsMargins(10, 8, 10, 8);
     vl->setSpacing(4);
 
     // ── Header ──
-    QHBoxLayout *header = new QHBoxLayout;
-    header->setSpacing(6);
-
-    QVBoxLayout *nameCol = new QVBoxLayout;
-    nameCol->setSpacing(0);
-
-    QLabel *nameLabel = new QLabel(dev.name);
-    nameLabel->setStyleSheet(
-        QString("color:white; font-size:%1px; font-weight:bold;").arg(Style::kFontSmall));
-
-    QLabel *specLabel = new QLabel(dev.spec);
-    specLabel->setStyleSheet(
-        QString("color:%1; font-size:%2px;").arg(Style::kColorTextMuted).arg(Style::kFontTiny));
-
-    nameCol->addWidget(nameLabel);
-    nameCol->addWidget(specLabel);
-
-    QLabel *badge = new QLabel(QString::fromUtf8(statusText(dev.status)));
-    badge->setProperty("class", statusClass(dev.status));
-    badge->setStyleSheet(statusBadgeStyle(dev.status));
-    badge->setFixedHeight(18);
-
-    header->addLayout(nameCol, 1);
-    header->addWidget(badge, 0, Qt::AlignTop);
-    vl->addLayout(header);
+    createCardHeader(dev, vl);
 
     // ── Info rows ──
     auto addInfoRow = [&](const QString &label, const QString &value,
@@ -529,11 +845,12 @@ QWidget *DeviceControlPage::createACDeviceCard(const Models::DeviceInfo &dev)
         QHBoxLayout *row = new QHBoxLayout;
         QLabel *lbl = new QLabel(label);
         lbl->setStyleSheet(
-            QString("color:%1; font-size:%2px;")
+            QString("color:%1; font-size:%2px; background:transparent;")
                 .arg(Style::kColorTextMuted).arg(Style::kFontSmall));
         QLabel *val = new QLabel(value);
         val->setStyleSheet(
-            QString("color:%1; font-size:%2px;").arg(valueColor).arg(Style::kFontSmall));
+            QString("color:%1; font-size:%2px; background:transparent;")
+                .arg(valueColor).arg(Style::kFontSmall));
         row->addWidget(lbl);
         row->addStretch();
         row->addWidget(val);
@@ -588,6 +905,16 @@ QWidget *DeviceControlPage::createACDeviceCard(const Models::DeviceInfo &dev)
                       "  border-radius:4px; font-size:%3px; }")
                   .arg(Style::kColorBgCard).arg(Style::kColorTextMuted).arg(Style::kFontSmall));
 
+    QString devId = dev.id;
+    connect(stopBtn, &QPushButton::clicked, this, [devId]() {
+        // TODO: 用户实现停止逻辑
+        Q_UNUSED(devId)
+    });
+    connect(startBtn, &QPushButton::clicked, this, [devId]() {
+        // TODO: 用户实现启动逻辑
+        Q_UNUSED(devId)
+    });
+
     btnRow->addWidget(stopBtn, 1);
     btnRow->addWidget(startBtn, 1);
     vl->addLayout(btnRow);
@@ -596,10 +923,443 @@ QWidget *DeviceControlPage::createACDeviceCard(const Models::DeviceInfo &dev)
 }
 
 // ---------------------------------------------------------------------------
-// refreshData (stub)
+// onAddGroup
+// ---------------------------------------------------------------------------
+
+void DeviceControlPage::onAddGroup()
+{
+    QDialog dlg(this);
+    dlg.setWindowTitle(QString::fromUtf8("添加分组"));
+    dlg.setFixedSize(320, 200);
+    dlg.setStyleSheet(dialogStyle());
+
+    QVBoxLayout *layout = new QVBoxLayout(&dlg);
+    layout->setSpacing(12);
+    layout->setContentsMargins(16, 16, 16, 16);
+
+    QLabel *title = new QLabel(QString::fromUtf8("新建设备分组"));
+    title->setStyleSheet(
+        QString("color:white; font-size:%1px; font-weight:bold; background:transparent;")
+            .arg(Style::kFontMedium));
+    layout->addWidget(title);
+
+    QFormLayout *form = new QFormLayout;
+    form->setSpacing(8);
+
+    QLineEdit *nameEdit = new QLineEdit;
+    nameEdit->setPlaceholderText(QString::fromUtf8("输入分组名称"));
+    form->addRow(QString::fromUtf8("名称:"), nameEdit);
+
+    QComboBox *colorBox = new QComboBox;
+    colorBox->addItems({
+        QString::fromUtf8("蓝色 (blue)"),
+        QString::fromUtf8("绿色 (emerald)"),
+        QString::fromUtf8("琥珀 (amber)"),
+        QString::fromUtf8("紫色 (purple)"),
+        QString::fromUtf8("红色 (red)"),
+        QString::fromUtf8("青色 (cyan)")
+    });
+    form->addRow(QString::fromUtf8("颜色:"), colorBox);
+
+    layout->addLayout(form);
+
+    QHBoxLayout *btnRow = new QHBoxLayout;
+    QPushButton *cancelBtn = new QPushButton(QString::fromUtf8("取消"));
+    QPushButton *okBtn = new QPushButton(QString::fromUtf8("确定"));
+    okBtn->setStyleSheet(
+        QString("QPushButton { background:%1; color:white; border:none;"
+                "  border-radius:4px; padding:6px 16px; font-size:%2px; }"
+                "QPushButton:hover { background:%3; }")
+            .arg(Style::kColorAccentBlue).arg(Style::kFontSmall).arg(Style::kColorGradientEnd));
+
+    btnRow->addStretch();
+    btnRow->addWidget(cancelBtn);
+    btnRow->addWidget(okBtn);
+    layout->addLayout(btnRow);
+
+    connect(cancelBtn, &QPushButton::clicked, &dlg, &QDialog::reject);
+    connect(okBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
+
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+
+    QString name = nameEdit->text().trimmed();
+    if (name.isEmpty()) return;
+
+    static const char *colorKeys[] = {"blue","emerald","amber","purple","red","cyan"};
+    int idx = colorBox->currentIndex();
+    QString color = (idx >= 0 && idx < 6) ? colorKeys[idx] : "blue";
+
+    Models::DeviceGroup g;
+    g.id = QString("group_%1").arg(groups_.size() + 1);
+    g.name = name;
+    g.color = color;
+
+    // TODO: 用户实现 RPC 调用 group.create
+    groups_ << g;
+    currentGroupIndex_ = groups_.size() - 1;
+    renderGroupTabs();
+    renderDevices();
+}
+
+// ---------------------------------------------------------------------------
+// onDeleteGroup
+// ---------------------------------------------------------------------------
+
+void DeviceControlPage::onDeleteGroup()
+{
+    if (groups_.isEmpty() || currentGroupIndex_ < 0 ||
+        currentGroupIndex_ >= groups_.size())
+        return;
+
+    const Models::DeviceGroup &g = groups_[currentGroupIndex_];
+
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle(QString::fromUtf8("删除分组"));
+    msgBox.setText(QString::fromUtf8("确定要删除分组「%1」吗？\n该操作不可撤销。").arg(g.name));
+    msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+    msgBox.setDefaultButton(QMessageBox::No);
+    msgBox.setStyleSheet(dialogStyle());
+
+    if (msgBox.exec() != QMessageBox::Yes)
+        return;
+
+    // TODO: 用户实现 RPC 调用 group.delete
+    groups_.removeAt(currentGroupIndex_);
+    if (currentGroupIndex_ >= groups_.size())
+        currentGroupIndex_ = groups_.size() - 1;
+    if (currentGroupIndex_ < 0)
+        currentGroupIndex_ = 0;
+
+    renderGroupTabs();
+    renderDevices();
+}
+
+// ---------------------------------------------------------------------------
+// onAddDevice
+// ---------------------------------------------------------------------------
+
+void DeviceControlPage::onAddDevice()
+{
+    if (groups_.isEmpty()) return;
+
+    QDialog dlg(this);
+    dlg.setWindowTitle(QString::fromUtf8("添加设备"));
+    dlg.setFixedSize(360, 320);
+    dlg.setStyleSheet(dialogStyle());
+
+    QVBoxLayout *layout = new QVBoxLayout(&dlg);
+    layout->setSpacing(12);
+    layout->setContentsMargins(16, 16, 16, 16);
+
+    QLabel *title = new QLabel(QString::fromUtf8("添加新设备"));
+    title->setStyleSheet(
+        QString("color:white; font-size:%1px; font-weight:bold; background:transparent;")
+            .arg(Style::kFontMedium));
+    layout->addWidget(title);
+
+    QFormLayout *form = new QFormLayout;
+    form->setSpacing(8);
+
+    QLineEdit *nameEdit = new QLineEdit;
+    nameEdit->setPlaceholderText(QString::fromUtf8("输入设备名称"));
+    form->addRow(QString::fromUtf8("名称:"), nameEdit);
+
+    QComboBox *typeBox = new QComboBox;
+    typeBox->addItem(QString::fromUtf8("直流设备 (DC)"), "dc");
+    typeBox->addItem(QString::fromUtf8("交流设备 (AC)"), "ac");
+    form->addRow(QString::fromUtf8("类型:"), typeBox);
+
+    QComboBox *controlBox = new QComboBox;
+    controlBox->addItem(QString::fromUtf8("滑块 (Slider)"), "slider");
+    controlBox->addItem(QString::fromUtf8("双态按钮 (Toggle)"), "toggle");
+    controlBox->addItem(QString::fromUtf8("正反转按钮 (Forward/Reverse)"), "forward_reverse");
+    form->addRow(QString::fromUtf8("控件:"), controlBox);
+
+    QLineEdit *specEdit = new QLineEdit;
+    specEdit->setPlaceholderText(QString::fromUtf8("如: 24V, 380V 1.5kW"));
+    form->addRow(QString::fromUtf8("规格:"), specEdit);
+
+    QLineEdit *nodeEdit = new QLineEdit;
+    nodeEdit->setPlaceholderText(QString::fromUtf8("继电器节点ID（可选）"));
+    form->addRow(QString::fromUtf8("节点:"), nodeEdit);
+
+    QLineEdit *channelEdit = new QLineEdit;
+    channelEdit->setPlaceholderText(QString::fromUtf8("通道号 0-3（可选）"));
+    form->addRow(QString::fromUtf8("通道:"), channelEdit);
+
+    layout->addLayout(form);
+
+    QHBoxLayout *btnRow = new QHBoxLayout;
+    QPushButton *cancelBtn = new QPushButton(QString::fromUtf8("取消"));
+    QPushButton *okBtn = new QPushButton(QString::fromUtf8("确定"));
+    okBtn->setStyleSheet(
+        QString("QPushButton { background:%1; color:white; border:none;"
+                "  border-radius:4px; padding:6px 16px; font-size:%2px; }"
+                "QPushButton:hover { background:%3; }")
+            .arg(Style::kColorAccentBlue).arg(Style::kFontSmall).arg(Style::kColorGradientEnd));
+
+    btnRow->addStretch();
+    btnRow->addWidget(cancelBtn);
+    btnRow->addWidget(okBtn);
+    layout->addLayout(btnRow);
+
+    connect(cancelBtn, &QPushButton::clicked, &dlg, &QDialog::reject);
+    connect(okBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
+
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+
+    QString name = nameEdit->text().trimmed();
+    if (name.isEmpty()) return;
+
+    Models::DeviceInfo dev;
+    dev.id = QString("dev_%1_%2").arg(groups_[currentGroupIndex_].id)
+                 .arg(groups_[currentGroupIndex_].devices.size() + 1);
+    dev.name = name;
+    dev.type = typeBox->currentData().toString();
+    dev.controlType = controlBox->currentData().toString();
+    dev.spec = specEdit->text().trimmed();
+    dev.status = "stopped";
+    dev.value = 0;
+
+    bool nodeOk = false;
+    int node = nodeEdit->text().toInt(&nodeOk);
+    if (nodeOk && node >= 0) dev.nodeId = node;
+
+    bool chOk = false;
+    int ch = channelEdit->text().toInt(&chOk);
+    if (chOk && ch >= 0 && ch <= 3) dev.channel = ch;
+
+    // TODO: 用户实现 RPC 调用 group.addDevice
+    groups_[currentGroupIndex_].devices << dev;
+    renderDevices();
+}
+
+// ---------------------------------------------------------------------------
+// onDeleteDevice
+// ---------------------------------------------------------------------------
+
+void DeviceControlPage::onDeleteDevice(const QString &deviceId)
+{
+    if (currentGroupIndex_ < 0 || currentGroupIndex_ >= groups_.size())
+        return;
+
+    Models::DeviceGroup &group = groups_[currentGroupIndex_];
+
+    // Find device name for confirmation
+    QString devName;
+    for (const auto &d : group.devices) {
+        if (d.id == deviceId) {
+            devName = d.name;
+            break;
+        }
+    }
+
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle(QString::fromUtf8("删除设备"));
+    msgBox.setText(QString::fromUtf8("确定要删除设备「%1」吗？").arg(devName));
+    msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+    msgBox.setDefaultButton(QMessageBox::No);
+    msgBox.setStyleSheet(dialogStyle());
+
+    if (msgBox.exec() != QMessageBox::Yes)
+        return;
+
+    // TODO: 用户实现 RPC 调用 group.removeDevice
+    for (int i = 0; i < group.devices.size(); ++i) {
+        if (group.devices[i].id == deviceId) {
+            group.devices.removeAt(i);
+            break;
+        }
+    }
+    renderDevices();
+}
+
+// ---------------------------------------------------------------------------
+// onEditDevice
+// ---------------------------------------------------------------------------
+
+void DeviceControlPage::onEditDevice(const QString &deviceId)
+{
+    if (currentGroupIndex_ < 0 || currentGroupIndex_ >= groups_.size())
+        return;
+
+    Models::DeviceGroup &group = groups_[currentGroupIndex_];
+
+    int devIdx = -1;
+    for (int i = 0; i < group.devices.size(); ++i) {
+        if (group.devices[i].id == deviceId) {
+            devIdx = i;
+            break;
+        }
+    }
+    if (devIdx < 0) return;
+
+    Models::DeviceInfo &dev = group.devices[devIdx];
+
+    QDialog dlg(this);
+    dlg.setWindowTitle(QString::fromUtf8("编辑设备"));
+    dlg.setFixedSize(360, 320);
+    dlg.setStyleSheet(dialogStyle());
+
+    QVBoxLayout *layout = new QVBoxLayout(&dlg);
+    layout->setSpacing(12);
+    layout->setContentsMargins(16, 16, 16, 16);
+
+    QLabel *title = new QLabel(QString::fromUtf8("编辑设备控制"));
+    title->setStyleSheet(
+        QString("color:white; font-size:%1px; font-weight:bold; background:transparent;")
+            .arg(Style::kFontMedium));
+    layout->addWidget(title);
+
+    QFormLayout *form = new QFormLayout;
+    form->setSpacing(8);
+
+    QLineEdit *nameEdit = new QLineEdit(dev.name);
+    form->addRow(QString::fromUtf8("名称:"), nameEdit);
+
+    QComboBox *typeBox = new QComboBox;
+    typeBox->addItem(QString::fromUtf8("直流设备 (DC)"), "dc");
+    typeBox->addItem(QString::fromUtf8("交流设备 (AC)"), "ac");
+    typeBox->setCurrentIndex(dev.type == "ac" ? 1 : 0);
+    form->addRow(QString::fromUtf8("类型:"), typeBox);
+
+    QComboBox *controlBox = new QComboBox;
+    controlBox->addItem(QString::fromUtf8("滑块 (Slider)"), "slider");
+    controlBox->addItem(QString::fromUtf8("双态按钮 (Toggle)"), "toggle");
+    controlBox->addItem(QString::fromUtf8("正反转按钮 (Forward/Reverse)"), "forward_reverse");
+    int ctIdx = 0;
+    if (dev.controlType == "toggle") ctIdx = 1;
+    else if (dev.controlType == "forward_reverse") ctIdx = 2;
+    controlBox->setCurrentIndex(ctIdx);
+    form->addRow(QString::fromUtf8("控件:"), controlBox);
+
+    QLineEdit *specEdit = new QLineEdit(dev.spec);
+    form->addRow(QString::fromUtf8("规格:"), specEdit);
+
+    QLineEdit *nodeEdit = new QLineEdit(dev.nodeId >= 0 ? QString::number(dev.nodeId) : "");
+    nodeEdit->setPlaceholderText(QString::fromUtf8("继电器节点ID（可选）"));
+    form->addRow(QString::fromUtf8("节点:"), nodeEdit);
+
+    QLineEdit *channelEdit = new QLineEdit(dev.channel >= 0 ? QString::number(dev.channel) : "");
+    channelEdit->setPlaceholderText(QString::fromUtf8("通道号 0-3（可选）"));
+    form->addRow(QString::fromUtf8("通道:"), channelEdit);
+
+    layout->addLayout(form);
+
+    QHBoxLayout *btnRow = new QHBoxLayout;
+    QPushButton *cancelBtn = new QPushButton(QString::fromUtf8("取消"));
+    QPushButton *okBtn = new QPushButton(QString::fromUtf8("保存"));
+    okBtn->setStyleSheet(
+        QString("QPushButton { background:%1; color:white; border:none;"
+                "  border-radius:4px; padding:6px 16px; font-size:%2px; }"
+                "QPushButton:hover { background:%3; }")
+            .arg(Style::kColorAccentBlue).arg(Style::kFontSmall).arg(Style::kColorGradientEnd));
+
+    btnRow->addStretch();
+    btnRow->addWidget(cancelBtn);
+    btnRow->addWidget(okBtn);
+    layout->addLayout(btnRow);
+
+    connect(cancelBtn, &QPushButton::clicked, &dlg, &QDialog::reject);
+    connect(okBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
+
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+
+    QString newName = nameEdit->text().trimmed();
+    if (!newName.isEmpty()) dev.name = newName;
+    dev.type = typeBox->currentData().toString();
+    dev.controlType = controlBox->currentData().toString();
+    dev.spec = specEdit->text().trimmed();
+
+    bool nodeOk = false;
+    int node = nodeEdit->text().toInt(&nodeOk);
+    dev.nodeId = nodeOk ? node : -1;
+
+    bool chOk = false;
+    int ch = channelEdit->text().toInt(&chOk);
+    dev.channel = (chOk && ch >= 0 && ch <= 3) ? ch : -1;
+
+    // TODO: 用户实现 RPC 同步更新
+    renderDevices();
+}
+
+// ---------------------------------------------------------------------------
+// onGroupListReceived  (RPC callback)
+// ---------------------------------------------------------------------------
+
+void DeviceControlPage::onGroupListReceived(const QJsonValue &result,
+                                             const QJsonObject &error)
+{
+    if (!error.isEmpty() || !result.isObject())
+        return;
+
+    QJsonObject obj = result.toObject();
+    if (!obj.value("ok").toBool())
+        return;
+
+    QJsonArray groupsArr = obj.value("groups").toArray();
+
+    groups_.clear();
+    for (const QJsonValue &gv : groupsArr) {
+        QJsonObject go = gv.toObject();
+        Models::DeviceGroup g;
+        g.id = QString::number(go.value("groupId").toInt());
+        g.name = go.value("name").toString();
+        g.color = "blue"; // TODO: RPC server does not include color yet; default to blue
+
+        QJsonArray devices = go.value("devices").toArray();
+        for (const QJsonValue &dv : devices) {
+            Models::DeviceInfo dev;
+            dev.nodeId = dv.toInt();
+            dev.id = QString("node_%1").arg(dev.nodeId);
+            dev.name = QString::fromUtf8("设备 %1").arg(dev.nodeId);
+            dev.type = "ac";
+            dev.status = "stopped";
+            dev.controlType = "forward_reverse";
+            g.devices << dev;
+        }
+
+        QJsonArray channels = go.value("channels").toArray();
+        for (const QJsonValue &cv : channels) {
+            QJsonObject co = cv.toObject();
+            Models::DeviceInfo dev;
+            dev.nodeId = co.value("node").toInt();
+            dev.channel = co.value("channel").toInt();
+            dev.id = QString("ch_%1_%2").arg(dev.nodeId).arg(dev.channel);
+            dev.name = QString::fromUtf8("通道 %1-%2").arg(dev.nodeId).arg(dev.channel);
+            dev.type = "dc";
+            dev.status = "stopped";
+            dev.controlType = "forward_reverse";
+            g.devices << dev;
+        }
+
+        groups_ << g;
+    }
+
+    if (currentGroupIndex_ >= groups_.size())
+        currentGroupIndex_ = groups_.isEmpty() ? 0 : groups_.size() - 1;
+
+    renderGroupTabs();
+    renderDevices();
+}
+
+// ---------------------------------------------------------------------------
+// refreshData
 // ---------------------------------------------------------------------------
 
 void DeviceControlPage::refreshData()
 {
-    // TODO: fetch data via rpcClient_ and update groups_ / re-render
+    if (!rpcClient_ || !rpcClient_->isConnected())
+        return;
+
+    rpcClient_->callAsync(
+        QStringLiteral("group.list"),
+        QJsonObject(),
+        [this](const QJsonValue &result, const QJsonObject &error) {
+            onGroupListReceived(result, error);
+        },
+        3000);
 }

@@ -20,19 +20,23 @@ namespace Models {
 struct DeviceInfo {
     QString id;
     QString name;
-    QString type;       // "dc" 或 "ac"
-    QString status;     // "running", "stopped", "fault", "manual"
-    int     value;      // DC设备开度 (0-100)
-    QString spec;       // 规格描述
-    QString fault;      // 故障信息
+    QString type;           // "dc" 或 "ac"
+    QString status;         // "running", "stopped", "fault", "manual"
+    int     value;          // DC设备开度 (0-100)
+    QString spec;           // 规格描述
+    QString fault;          // 故障信息
+    QString controlType;    // "slider", "toggle", "forward_reverse"
     // AC 设备特有
     QString runtime;
     QString current;
     QString flow;
     QString pressure;
+    // RPC 标识
+    int     nodeId;         // 继电器节点ID
+    int     channel;        // 通道号
 
     DeviceInfo()
-        : value(0) {}
+        : value(0), controlType("slider"), nodeId(-1), channel(-1) {}
 };
 
 struct DeviceGroup {
