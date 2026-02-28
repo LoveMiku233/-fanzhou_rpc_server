@@ -689,9 +689,11 @@ QWidget *DeviceControlPage::createToggleCard(const Models::DeviceInfo &dev)
             params[QStringLiteral("ch")] = channel;
             params[QStringLiteral("action")] = isOn ? QStringLiteral("stop")
                                                      : QStringLiteral("fwd");
-            rpcClient_->callAsync(QStringLiteral("relay.control"), params);
+            rpcClient_->callAsync(QStringLiteral("relay.control"), params,
+                [this](const QJsonValue &, const QJsonObject &) {
+                    refreshData();
+                }, 3000);
         }
-        refreshData();
     });
     vl->addWidget(toggleBtn);
 

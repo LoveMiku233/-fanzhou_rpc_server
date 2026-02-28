@@ -376,22 +376,27 @@ void MainWindow::onConnectionChanged(bool connected)
                 .arg(Style::kColorSuccess)
                 .arg(Style::kFontSmall));
     } else {
-        connectionIndicator_->setText(QStringLiteral("● 离线"));
+        bool isReconnecting = reconnectTimer_ && reconnectTimer_->isActive();
+        connectionIndicator_->setText(
+            isReconnecting ? QStringLiteral("● 重连中") : QStringLiteral("● 离线"));
         connectionIndicator_->setStyleSheet(
             QStringLiteral("color: %1; font-size: %2px;")
-                .arg(Style::kColorDanger)
+                .arg(isReconnecting ? Style::kColorWarning : Style::kColorDanger)
                 .arg(Style::kFontSmall));
-        headerStatus_->setText(QStringLiteral("连接中..."));
+        headerStatus_->setText(
+            isReconnecting ? QStringLiteral("连接中...") : QStringLiteral("离线"));
         headerStatus_->setStyleSheet(
             QStringLiteral("QLabel#headerStatus {"
-                           "  background: rgba(245,158,11,0.2);"
-                           "  color: %1;"
-                           "  border: 1px solid rgba(245,158,11,0.3);"
+                           "  background: rgba(%1,0.2);"
+                           "  color: %2;"
+                           "  border: 1px solid rgba(%1,0.3);"
                            "  border-radius: 10px;"
                            "  padding: 2px 8px;"
-                           "  font-size: %2px;"
+                           "  font-size: %3px;"
                            "}")
-                .arg(Style::kColorWarning)
+                .arg(isReconnecting ? QStringLiteral("245,158,11")
+                                    : QStringLiteral("239,68,68"))
+                .arg(isReconnecting ? Style::kColorWarning : Style::kColorDanger)
                 .arg(Style::kFontSmall));
     }
 }

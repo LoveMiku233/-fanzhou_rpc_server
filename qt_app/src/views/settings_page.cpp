@@ -340,7 +340,7 @@ QWidget *SettingsPage::createNetworkPanel()
             rpcClient_->callAsync(
                 QStringLiteral("rpc.ping"),
                 QJsonObject(),
-                [this](const QJsonValue &result, const QJsonObject &error) {
+                [this](const QJsonValue &, const QJsonObject &error) {
                     if (error.isEmpty()) {
                         networkStatusLabel_->setText(
                             QString::fromUtf8("  ✓  RPC服务器连接正常"));
