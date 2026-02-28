@@ -1,135 +1,90 @@
 /**
  * @file style_constants.h
- * @brief UI常量定义 - 1024x600低分辨率触摸屏优化
+ * @brief UI样式常量定义
  *
- * 定义统一的UI尺寸常量，确保所有控件大小一致
- * 适配7寸1024x600触摸屏
+ * 定义全局UI布局和颜色常量，匹配深色主题设计。
+ * 目标分辨率：1024x600
  */
 
 #ifndef STYLE_CONSTANTS_H
 #define STYLE_CONSTANTS_H
 
-namespace UIConstants {
+#include <QString>
 
-// ==================== 布局常量 ====================
-// 主窗口最大尺寸（适配1024x600屏幕，减去40px任务栏高度）
-constexpr int MAX_WINDOW_WIDTH = 1024;
-constexpr int MAX_WINDOW_HEIGHT = 560;
+namespace Style {
 
-// 侧边栏宽度
-constexpr int SIDEBAR_WIDTH = 80;
+// ── 屏幕与布局 ──────────────────────────────
+const int kScreenWidth  = 1024;
+const int kScreenHeight = 600;
+const int kSidebarWidth = 80;
+const int kHeaderHeight = 44;
+const int kPageMargin   = 12;
+const int kCardSpacing  = 10;
+const int kCardRadius   = 10;
 
-// 内容区域可用宽度
-constexpr int CONTENT_WIDTH = MAX_WINDOW_WIDTH - SIDEBAR_WIDTH;
+// ── 字体大小 ─────────────────────────────────
+const int kFontTiny   = 10;
+const int kFontSmall  = 11;
+const int kFontNormal = 12;
+const int kFontMedium = 14;
+const int kFontLarge  = 16;
+const int kFontXLarge = 20;
+const int kFontTitle  = 24;
 
-// ==================== 边距和间距 ====================
-// 页面边距
-constexpr int PAGE_MARGIN = 10;
-constexpr int PAGE_SPACING = 10;
+// ── 按钮尺寸 ─────────────────────────────────
+const int kBtnHeightSmall  = 28;
+const int kBtnHeightNormal = 34;
+const int kBtnHeightLarge  = 40;
 
-// 卡片边距
-constexpr int CARD_MARGIN = 8;
-constexpr int CARD_SPACING = 6;
+// ── 深色主题色板 ─────────────────────────────
+// 基础背景色
+const char kColorBgDark[]       = "#0f172a";   // 最深背景
+const char kColorBgPanel[]      = "#1e293b";   // 面板背景
+const char kColorBgCard[]       = "#283548";   // 卡片背景
+const char kColorBgInput[]      = "#1e293b";   // 输入框背景
+const char kColorBgSidebar[]    = "#1a2332";   // 侧边栏背景
 
-// 对话框边距
-constexpr int DIALOG_MARGIN = 12;
-constexpr int DIALOG_SPACING = 8;
+// 边框色
+const char kColorBorder[]       = "#334155";   // 默认边框
+const char kColorBorderLight[]  = "#475569";   // 浅边框
+const char kColorBorderFocus[]  = "#0ea5e9";   // 聚焦边框
 
-// ==================== 控件高度（统一） ====================
-// 小按钮高度（图标按钮等）
-constexpr int BTN_HEIGHT_SMALL = 36;
+// 文本色
+const char kColorTextPrimary[]  = "#e2e8f0";   // 主文本
+const char kColorTextSecondary[]= "#94a3b8";   // 次要文本
+const char kColorTextMuted[]    = "#64748b";   // 弱化文本
+const char kColorTextWhite[]    = "#ffffff";   // 白色文本
 
-// 标准按钮高度
-constexpr int BTN_HEIGHT = 40;
+// 主题强调色
+const char kColorAccentBlue[]   = "#0ea5e9";   // 蓝色强调
+const char kColorAccentCyan[]   = "#38bdf8";   // 青色强调
+const char kColorGradientStart[]= "#0ea5e9";   // 渐变起始
+const char kColorGradientEnd[]  = "#2563eb";   // 渐变结束
 
-// 大按钮高度（主要操作）
-constexpr int BTN_HEIGHT_LARGE = 44;
+// 状态色
+const char kColorSuccess[]      = "#10b981";   // 成功/运行
+const char kColorWarning[]      = "#f59e0b";   // 警告/手动
+const char kColorDanger[]       = "#ef4444";   // 危险/故障
+const char kColorInfo[]         = "#3b82f6";   // 信息
 
-// 紧急/急停按钮高度（需要更突出的显示）
-constexpr int BTN_HEIGHT_EMERGENCY = 50;
+// 数据色
+const char kColorOrange[]       = "#fb923c";   // 温度
+const char kColorBlue[]         = "#60a5fa";   // 湿度
+const char kColorPurple[]       = "#a78bfa";   // CO2
+const char kColorYellow[]       = "#facc15";   // 光照
+const char kColorEmerald[]      = "#34d399";   // 土壤/正常
 
-// 侧边栏菜单按钮高度（包含图标和文字两行）
-constexpr int MENU_BTN_HEIGHT = 52;
+// ── 页面索引 ─────────────────────────────────
+enum PageIndex {
+    PageDashboard = 0,
+    PageDeviceControl,
+    PageScenes,
+    PageAlarms,
+    PageSensors,
+    PageSettings,
+    PageCount
+};
 
-// 输入框高度
-constexpr int INPUT_HEIGHT = 40;
-
-// ==================== 控件最小宽度 ====================
-// 小按钮最小宽度
-constexpr int BTN_MIN_WIDTH_SMALL = 50;
-
-// 标准按钮最小宽度
-constexpr int BTN_MIN_WIDTH = 70;
-
-// 大按钮最小宽度
-constexpr int BTN_MIN_WIDTH_LARGE = 90;
-
-// 输入框最小宽度
-constexpr int INPUT_MIN_WIDTH = 80;
-
-// ==================== 对话框尺寸 ====================
-// 小对话框（如确认框）
-constexpr int DIALOG_WIDTH_SMALL = 300;
-constexpr int DIALOG_HEIGHT_SMALL = 200;
-
-// 标准对话框
-constexpr int DIALOG_WIDTH = 480;
-constexpr int DIALOG_HEIGHT = 400;
-
-// 大对话框（如策略编辑）
-constexpr int DIALOG_WIDTH_LARGE = 560;
-constexpr int DIALOG_HEIGHT_LARGE = 480;
-
-// ==================== 卡片尺寸 ====================
-// 卡片最小高度
-constexpr int CARD_MIN_HEIGHT = 100;
-
-// 卡片最大宽度（两列布局时）
-constexpr int CARD_MAX_WIDTH = (CONTENT_WIDTH - PAGE_MARGIN * 2 - PAGE_SPACING) / 2;
-
-// ==================== 字体大小 ====================
-// 页面标题
-constexpr int FONT_SIZE_TITLE = 18;
-
-// 卡片标题
-constexpr int FONT_SIZE_CARD_TITLE = 14;
-
-// 正文
-constexpr int FONT_SIZE_BODY = 12;
-
-// 小字（提示、状态）
-constexpr int FONT_SIZE_SMALL = 11;
-
-// 大数值显示（如传感器数值）
-constexpr int FONT_SIZE_VALUE = 28;
-
-// ==================== 表格尺寸 ====================
-// 表格最小高度
-constexpr int TABLE_MIN_HEIGHT = 80;
-
-// 表格最大高度
-constexpr int TABLE_MAX_HEIGHT = 140;
-
-// 表格行高
-constexpr int TABLE_ROW_HEIGHT = 28;
-
-// ==================== 滚动区域 ====================
-// 滚动条宽度
-constexpr int SCROLLBAR_WIDTH = 10;
-
-// ==================== 圆角 ====================
-// 按钮圆角
-constexpr int BORDER_RADIUS_BTN = 6;
-
-// 卡片圆角
-constexpr int BORDER_RADIUS_CARD = 10;
-
-// 对话框圆角
-constexpr int BORDER_RADIUS_DIALOG = 12;
-
-// 输入框圆角
-constexpr int BORDER_RADIUS_INPUT = 6;
-
-} // namespace UIConstants
+} // namespace Style
 
 #endif // STYLE_CONSTANTS_H
