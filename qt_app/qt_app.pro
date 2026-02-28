@@ -40,7 +40,8 @@ SOURCES += \
     src/screen_manager.cpp \
     src/views/dashboard_page.cpp \
     src/views/device_control_page.cpp \
-    src/views/scene_page.cpp
+    src/views/scene_page.cpp \
+    src/views/alarm_page.cpp
 
 HEADERS += \
     src/mainwindow.h \
@@ -62,7 +63,8 @@ HEADERS += \
     src/models/data_models.h \
     src/views/dashboard_page.h \
     src/views/device_control_page.h \
-    src/views/scene_page.h
+    src/views/scene_page.h \
+    src/views/alarm_page.h
 
 # Resources
 RESOURCES += \
