@@ -25,47 +25,25 @@ SOURCES += \
     src/main.cpp \
     src/mainwindow.cpp \
     src/rpc_client.cpp \
-    src/device_widget.cpp \
-    src/group_widget.cpp \
-    src/strategy_widget.cpp \
-    src/strategy_dialog.cpp \
-    src/sensor_widget.cpp \
-    src/connection_dialog.cpp \
-    src/connection_widget.cpp \
-    src/relay_control_widget.cpp \
-    src/home_widget.cpp \
-    src/log_widget.cpp \
-    src/settings_widget.cpp \
-    src/relay_control_dialog.cpp \
     src/screen_manager.cpp \
     src/views/dashboard_page.cpp \
     src/views/device_control_page.cpp \
     src/views/scene_page.cpp \
     src/views/alarm_page.cpp \
+    src/views/sensor_page.cpp \
     src/views/settings_page.cpp
 
 HEADERS += \
     src/mainwindow.h \
     src/rpc_client.h \
-    src/device_widget.h \
-    src/group_widget.h \
-    src/strategy_widget.h \
-    src/strategy_dialog.h \
-    src/sensor_widget.h \
-    src/connection_dialog.h \
-    src/connection_widget.h \
-    src/relay_control_widget.h \
-    src/home_widget.h \
-    src/log_widget.h \
-    src/settings_widget.h \
-    src/relay_control_dialog.h \
-    src/style_constants.h \
     src/screen_manager.h \
+    src/style_constants.h \
     src/models/data_models.h \
     src/views/dashboard_page.h \
     src/views/device_control_page.h \
     src/views/scene_page.h \
     src/views/alarm_page.h \
+    src/views/sensor_page.h \
     src/views/settings_page.h
 
 # Resources

@@ -10,6 +10,7 @@
 
 #include <QWidget>
 
+class QFrame;
 class QLabel;
 class QProgressBar;
 class QPushButton;
