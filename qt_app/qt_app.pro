@@ -41,7 +41,8 @@ SOURCES += \
     src/views/dashboard_page.cpp \
     src/views/device_control_page.cpp \
     src/views/scene_page.cpp \
-    src/views/alarm_page.cpp
+    src/views/alarm_page.cpp \
+    src/views/settings_page.cpp
 
 HEADERS += \
     src/mainwindow.h \
@@ -64,7 +65,8 @@ HEADERS += \
     src/views/dashboard_page.h \
     src/views/device_control_page.h \
     src/views/scene_page.h \
-    src/views/alarm_page.h
+    src/views/alarm_page.h \
+    src/views/settings_page.h
 
 # Resources
 RESOURCES += \
