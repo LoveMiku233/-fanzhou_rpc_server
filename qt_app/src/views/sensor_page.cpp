@@ -1,6 +1,8 @@
 /**
  * @file views/sensor_page.cpp
  * @brief 传感器数据监测页面实现
+ *
+ * 支持从RPC Server获取传感器列表并显示。
  */
 
 #include "views/sensor_page.h"
@@ -10,6 +12,9 @@
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QLabel>
 #include <QScrollArea>
 #include <QVBoxLayout>
@@ -38,6 +43,18 @@ QString SensorPage::getTypeName(const QString &type)
     return type;
 }
 
+QString SensorPage::mapDeviceTypeToSensorType(const QString &typeName)
+{
+    QString lower = typeName.toLower();
+    if (lower.contains("temp"))     return "temp";
+    if (lower.contains("humid"))    return "humidity";
+    if (lower.contains("light") || lower.contains("lux")) return "light";
+    if (lower.contains("co2"))      return "co2";
+    if (lower.contains("soil") || lower.contains("ec") || lower.contains("ph"))
+        return "soil";
+    return "temp";  // default fallback
+}
+
 // ---------------------------------------------------------------------------
 // SensorPage
 // ---------------------------------------------------------------------------
@@ -45,6 +62,8 @@ QString SensorPage::getTypeName(const QString &type)
 SensorPage::SensorPage(RpcClient *rpc, QWidget *parent)
     : QWidget(parent)
     , rpcClient_(rpc)
+    , hasRpcData_(false)
+    , statusLabel_(nullptr)
 {
     // Demo data matching index3.html
     auto add = [this](const char *id, const char *name, const char *type,
@@ -132,6 +151,13 @@ void SensorPage::setupUi()
     titleLayout->addWidget(titleText);
     titleLayout->addStretch();
     titleLayout->addWidget(countLabel_);
+
+    statusLabel_ = new QLabel(QString::fromUtf8("● 本地数据"));
+    statusLabel_->setStyleSheet(
+        QString("color:%1; font-size:%2px; border:none;")
+            .arg(Style::kColorTextMuted).arg(Style::kFontTiny));
+    titleLayout->addSpacing(8);
+    titleLayout->addWidget(statusLabel_);
 
     root->addWidget(titleBar);
 
@@ -281,10 +307,90 @@ QWidget *SensorPage::createSensorCard(const Models::SensorInfo &sensor)
 }
 
 // ---------------------------------------------------------------------------
-// refreshData (stub)
+// onSensorListReceived  (RPC callback)
+// ---------------------------------------------------------------------------
+
+void SensorPage::onSensorListReceived(const QJsonValue &result,
+                                       const QJsonObject &error)
+{
+    if (!error.isEmpty() || !result.isObject())
+        return;
+
+    QJsonObject obj = result.toObject();
+    if (!obj.value("ok").toBool())
+        return;
+
+    QJsonArray sensorArr = obj.value("sensors").toArray();
+
+    sensors_.clear();
+    hasRpcData_ = true;
+
+    for (const QJsonValue &sv : sensorArr) {
+        QJsonObject so = sv.toObject();
+        Models::SensorInfo sensor;
+
+        sensor.id = so.value("sensorId").toString();
+        sensor.name = so.value("name").toString();
+        sensor.unit = so.value("unit").toString();
+
+        // Determine sensor type from typeName or name
+        QString typeName = so.value("typeName").toString();
+        if (!typeName.isEmpty()) {
+            sensor.type = mapDeviceTypeToSensorType(typeName);
+        } else {
+            // Infer from name
+            sensor.type = mapDeviceTypeToSensorType(sensor.name);
+        }
+
+        // Value
+        if (so.value("hasValue").toBool()) {
+            sensor.value = so.value("value").toDouble(0.0);
+        } else {
+            sensor.value = 0.0;
+        }
+
+        // Location: use source info
+        QString source = so.value("source").toString();
+        if (source == "mqtt") {
+            sensor.location = QString::fromUtf8("云端(MQTT)");
+        } else {
+            sensor.location = QString::fromUtf8("本地设备");
+        }
+
+        // Update time
+        sensor.lastUpdate = so.value("updateTime").toString();
+        if (sensor.lastUpdate.isEmpty()) {
+            sensor.lastUpdate = "--";
+        }
+
+        sensors_.append(sensor);
+    }
+
+    if (statusLabel_) {
+        statusLabel_->setText(
+            QString::fromUtf8("● 已连接服务器"));
+        statusLabel_->setStyleSheet(
+            QString("color:%1; font-size:%2px; border:none;")
+                .arg(Style::kColorSuccess).arg(Style::kFontTiny));
+    }
+
+    renderSensors();
+}
+
+// ---------------------------------------------------------------------------
+// refreshData  (fetch from RPC server)
 // ---------------------------------------------------------------------------
 
 void SensorPage::refreshData()
 {
-    // TODO: fetch sensor data via rpcClient_ and update sensors_
+    if (!rpcClient_ || !rpcClient_->isConnected())
+        return;
+
+    rpcClient_->callAsync(
+        QStringLiteral("sensor.list"),
+        QJsonObject(),
+        [this](const QJsonValue &result, const QJsonObject &error) {
+            onSensorListReceived(result, error);
+        },
+        3000);
 }

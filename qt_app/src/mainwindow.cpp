@@ -46,6 +46,7 @@ MainWindow::MainWindow(RpcClient *rpc, ScreenManager *screen, QWidget *parent)
     , sensorPage_(nullptr)
     , settingsPage_(nullptr)
     , clockTimer_(nullptr)
+    , refreshTimer_(nullptr)
     , currentPage_(Style::PageDashboard)
 {
     for (int i = 0; i < 6; ++i)
@@ -60,6 +61,12 @@ MainWindow::MainWindow(RpcClient *rpc, ScreenManager *screen, QWidget *parent)
     connect(clockTimer_, &QTimer::timeout, this, &MainWindow::updateClock);
     clockTimer_->start();
     updateClock();
+
+    // Start periodic data refresh (every 5 seconds)
+    refreshTimer_ = new QTimer(this);
+    refreshTimer_->setInterval(5000);
+    connect(refreshTimer_, &QTimer::timeout, this, &MainWindow::refreshCurrentPage);
+    refreshTimer_->start();
 }
 
 MainWindow::~MainWindow() = default;
@@ -250,10 +257,17 @@ void MainWindow::setupConnections()
     if (rpcClient_) {
         connect(rpcClient_, &RpcClient::connected, this, [this]() {
             onConnectionChanged(true);
+            // Refresh current page on reconnect
+            refreshCurrentPage();
         });
         connect(rpcClient_, &RpcClient::disconnected, this, [this]() {
             onConnectionChanged(false);
         });
+    }
+
+    // Connect alarm count changes to badge
+    if (alarmPage_) {
+        connect(alarmPage_, &AlarmPage::alarmCountChanged, this, &MainWindow::setAlarmCount);
     }
 }
 
@@ -276,6 +290,9 @@ void MainWindow::switchToPage(int index)
         navButtons_[i]->style()->unpolish(navButtons_[i]);
         navButtons_[i]->style()->polish(navButtons_[i]);
     }
+
+    // Refresh page data on switch
+    refreshCurrentPage();
 }
 
 // ── Alarm Badge ──────────────────────────────────────────
@@ -314,5 +331,33 @@ void MainWindow::onConnectionChanged(bool connected)
             QStringLiteral("color: %1; font-size: %2px;")
                 .arg(Style::kColorDanger)
                 .arg(Style::kFontSmall));
+    }
+}
+
+// ── Auto Refresh ─────────────────────────────────────────
+
+void MainWindow::refreshCurrentPage()
+{
+    if (!rpcClient_ || !rpcClient_->isConnected())
+        return;
+
+    switch (currentPage_) {
+    case Style::PageDashboard:
+        if (dashboardPage_) dashboardPage_->refreshData();
+        break;
+    case Style::PageDeviceControl:
+        if (deviceControlPage_) deviceControlPage_->refreshData();
+        break;
+    case Style::PageScenes:
+        if (scenePage_) scenePage_->refreshData();
+        break;
+    case Style::PageAlarms:
+        if (alarmPage_) alarmPage_->refreshData();
+        break;
+    case Style::PageSensors:
+        if (sensorPage_) sensorPage_->refreshData();
+        break;
+    default:
+        break;
     }
 }

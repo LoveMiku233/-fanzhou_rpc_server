@@ -51,6 +51,7 @@ public:
 private slots:
     void updateClock();
     void onConnectionChanged(bool connected);
+    void refreshCurrentPage();
 
 private:
     void setupUi();
@@ -89,6 +90,7 @@ private:
 
     // Timer
     QTimer *clockTimer_;
+    QTimer *refreshTimer_;
 
     int currentPage_;
 };

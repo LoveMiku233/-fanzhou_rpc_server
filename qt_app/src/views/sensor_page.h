@@ -3,6 +3,7 @@
  * @brief 传感器数据监测页面 - 传感器卡片网格
  *
  * 匹配 index3.html 传感器视图，1024×600 深色主题。
+ * 支持从RPC Server获取传感器列表并显示。
  */
 
 #ifndef SENSOR_PAGE_H
@@ -15,6 +16,8 @@
 class QLabel;
 class QScrollArea;
 class QGridLayout;
+class QJsonValue;
+class QJsonObject;
 class RpcClient;
 
 class SensorPage : public QWidget
@@ -25,7 +28,7 @@ public:
     explicit SensorPage(RpcClient *rpc, QWidget *parent = nullptr);
     ~SensorPage() override = default;
 
-    /** 刷新页面数据（预留） */
+    /** 刷新页面数据（从RPC Server获取） */
     void refreshData();
 
 private:
@@ -35,14 +38,20 @@ private:
 
     static const char *getTypeColor(const QString &type);
     static QString getTypeName(const QString &type);
+    static QString mapDeviceTypeToSensorType(const QString &typeName);
+
+    /** RPC回调：传感器列表 */
+    void onSensorListReceived(const QJsonValue &result, const QJsonObject &error);
 
     RpcClient *rpcClient_;
 
     // 数据
     QList<Models::SensorInfo> sensors_;
+    bool hasRpcData_;
 
     // 标题栏
     QLabel *countLabel_;
+    QLabel *statusLabel_;
 
     // 传感器网格容器
     QScrollArea *scrollArea_;
