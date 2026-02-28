@@ -554,7 +554,7 @@ void ScenePage::onStrategyListReceived(const QJsonValue &result,
             scene.type = "auto";
         }
 
-        scene.active = so.value("enabled").toBool() && so.value("running").toBool();
+        scene.active = so.value("enabled").toBool();
 
         // Build conditions from the conditions array
         QJsonArray condArr = so.value("conditions").toArray();

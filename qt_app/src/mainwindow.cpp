@@ -24,6 +24,10 @@
 #include <QDateTime>
 #include <QStyle>
 
+namespace {
+const int kRefreshIntervalMs = 5000;
+}
+
 // ── Construction / Destruction ───────────────────────────
 
 MainWindow::MainWindow(RpcClient *rpc, ScreenManager *screen, QWidget *parent)
@@ -64,7 +68,7 @@ MainWindow::MainWindow(RpcClient *rpc, ScreenManager *screen, QWidget *parent)
 
     // Start periodic data refresh (every 5 seconds)
     refreshTimer_ = new QTimer(this);
-    refreshTimer_->setInterval(5000);
+    refreshTimer_->setInterval(kRefreshIntervalMs);
     connect(refreshTimer_, &QTimer::timeout, this, &MainWindow::refreshCurrentPage);
     refreshTimer_->start();
 }

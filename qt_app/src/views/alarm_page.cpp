@@ -38,6 +38,11 @@ static QString levelText(const QString &level)
     return QString::fromUtf8("提示");
 }
 
+// RPC-generated alarms use IDs starting from this value
+static const int kRpcAlarmIdStart = 100;
+// Milliseconds per minute for duration calculations
+static const double kMsPerMinute = 60000.0;
+
 static QPushButton *makeTabButton(const QString &text, const char *color)
 {
     QPushButton *btn = new QPushButton(text);
@@ -467,7 +472,7 @@ void AlarmPage::onDeviceStatusReceived(const QJsonValue &result,
     // Parse relay node statuses and generate alarms for offline/fault devices
     QJsonArray nodes = obj.value("nodes").toArray();
 
-    int nextId = 100;  // Use high IDs for RPC-generated alarms
+    int nextId = kRpcAlarmIdStart;
     QList<Models::AlarmInfo> rpcAlarms;
 
     for (const QJsonValue &nv : nodes) {
@@ -487,7 +492,7 @@ void AlarmPage::onDeviceStatusReceived(const QJsonValue &result,
                 a.desc = QString::fromUtf8("设备从未响应，请检查连接");
                 a.duration = "--";
             } else {
-                int minutes = static_cast<int>(ageMs / 60000);
+                int minutes = static_cast<int>(ageMs / kMsPerMinute);
                 a.desc = QString::fromUtf8("设备已离线，最后响应 %1 分钟前").arg(minutes);
                 a.duration = QString::fromUtf8("%1分钟").arg(minutes);
             }
@@ -498,10 +503,10 @@ void AlarmPage::onDeviceStatusReceived(const QJsonValue &result,
         }
     }
 
-    // Merge with existing demo alarms - replace only RPC-generated alarms (id >= 100)
+    // Merge with existing demo alarms - replace only RPC-generated alarms
     QList<Models::AlarmInfo> merged;
     for (const Models::AlarmInfo &a : alarms_) {
-        if (a.id < 100) {
+        if (a.id < kRpcAlarmIdStart) {
             merged.append(a);
         }
     }
