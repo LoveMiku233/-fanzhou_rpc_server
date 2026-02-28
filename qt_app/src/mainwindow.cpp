@@ -26,6 +26,7 @@
 
 namespace {
 const int kRefreshIntervalMs = 5000;
+const int kReconnectIntervalMs = 3000;
 }
 
 // ── Construction / Destruction ───────────────────────────
@@ -51,7 +52,9 @@ MainWindow::MainWindow(RpcClient *rpc, ScreenManager *screen, QWidget *parent)
     , settingsPage_(nullptr)
     , clockTimer_(nullptr)
     , refreshTimer_(nullptr)
+    , reconnectTimer_(nullptr)
     , currentPage_(Style::PageDashboard)
+    , wasConnected_(false)
 {
     for (int i = 0; i < 6; ++i)
         navButtons_[i] = nullptr;
@@ -71,6 +74,14 @@ MainWindow::MainWindow(RpcClient *rpc, ScreenManager *screen, QWidget *parent)
     refreshTimer_->setInterval(kRefreshIntervalMs);
     connect(refreshTimer_, &QTimer::timeout, this, &MainWindow::refreshCurrentPage);
     refreshTimer_->start();
+
+    // Setup reconnect timer
+    reconnectTimer_ = new QTimer(this);
+    reconnectTimer_->setInterval(kReconnectIntervalMs);
+    connect(reconnectTimer_, &QTimer::timeout, this, &MainWindow::tryConnect);
+
+    // Auto-connect to RPC server on startup
+    startAutoConnect();
 }
 
 MainWindow::~MainWindow() = default;
@@ -261,17 +272,40 @@ void MainWindow::setupConnections()
     if (rpcClient_) {
         connect(rpcClient_, &RpcClient::connected, this, [this]() {
             onConnectionChanged(true);
+            wasConnected_ = true;
+            // Stop reconnect timer on successful connection
+            if (reconnectTimer_->isActive())
+                reconnectTimer_->stop();
             // Refresh current page on reconnect
             refreshCurrentPage();
         });
         connect(rpcClient_, &RpcClient::disconnected, this, [this]() {
             onConnectionChanged(false);
+            // Start auto-reconnect timer when disconnected
+            if (!reconnectTimer_->isActive())
+                reconnectTimer_->start();
+        });
+        connect(rpcClient_, &RpcClient::transportError, this, [this](const QString &) {
+            // On transport error, ensure reconnect timer is running
+            if (!rpcClient_->isConnected() && !reconnectTimer_->isActive())
+                reconnectTimer_->start();
         });
     }
 
     // Connect alarm count changes to badge
     if (alarmPage_) {
         connect(alarmPage_, &AlarmPage::alarmCountChanged, this, &MainWindow::setAlarmCount);
+    }
+
+    // Connect emergency stop to RPC call
+    if (dashboardPage_ && rpcClient_) {
+        connect(dashboardPage_, &DashboardPage::emergencyStopClicked, this, [this]() {
+            if (rpcClient_->isConnected()) {
+                rpcClient_->callAsync(
+                    QStringLiteral("relay.stopAll"),
+                    QJsonObject());
+            }
+        });
     }
 }
 
@@ -329,13 +363,71 @@ void MainWindow::onConnectionChanged(bool connected)
             QStringLiteral("color: %1; font-size: %2px;")
                 .arg(Style::kColorSuccess)
                 .arg(Style::kFontSmall));
+        headerStatus_->setText(QStringLiteral("运行中"));
+        headerStatus_->setStyleSheet(
+            QStringLiteral("QLabel#headerStatus {"
+                           "  background: rgba(16,185,129,0.2);"
+                           "  color: %1;"
+                           "  border: 1px solid rgba(16,185,129,0.3);"
+                           "  border-radius: 10px;"
+                           "  padding: 2px 8px;"
+                           "  font-size: %2px;"
+                           "}")
+                .arg(Style::kColorSuccess)
+                .arg(Style::kFontSmall));
     } else {
-        connectionIndicator_->setText(QStringLiteral("● 离线"));
+        bool isReconnecting = reconnectTimer_ && reconnectTimer_->isActive();
+        connectionIndicator_->setText(
+            isReconnecting ? QStringLiteral("● 重连中") : QStringLiteral("● 离线"));
         connectionIndicator_->setStyleSheet(
             QStringLiteral("color: %1; font-size: %2px;")
-                .arg(Style::kColorDanger)
+                .arg(isReconnecting ? Style::kColorWarning : Style::kColorDanger)
+                .arg(Style::kFontSmall));
+        headerStatus_->setText(
+            isReconnecting ? QStringLiteral("连接中...") : QStringLiteral("离线"));
+        headerStatus_->setStyleSheet(
+            QStringLiteral("QLabel#headerStatus {"
+                           "  background: rgba(%1,0.2);"
+                           "  color: %2;"
+                           "  border: 1px solid rgba(%1,0.3);"
+                           "  border-radius: 10px;"
+                           "  padding: 2px 8px;"
+                           "  font-size: %3px;"
+                           "}")
+                .arg(isReconnecting ? QStringLiteral("245,158,11")
+                                    : QStringLiteral("239,68,68"))
+                .arg(isReconnecting ? Style::kColorWarning : Style::kColorDanger)
                 .arg(Style::kFontSmall));
     }
+}
+
+// ── Auto Connect ─────────────────────────────────────────
+
+void MainWindow::startAutoConnect()
+{
+    if (!rpcClient_)
+        return;
+
+    // Initial connection attempt (async, non-blocking)
+    onConnectionChanged(false);
+    rpcClient_->connectToServerAsync();
+
+    // Start reconnect timer in case initial connection fails
+    if (!reconnectTimer_->isActive())
+        reconnectTimer_->start();
+}
+
+void MainWindow::tryConnect()
+{
+    if (!rpcClient_)
+        return;
+
+    if (rpcClient_->isConnected()) {
+        reconnectTimer_->stop();
+        return;
+    }
+
+    rpcClient_->connectToServerAsync();
 }
 
 // ── Auto Refresh ─────────────────────────────────────────

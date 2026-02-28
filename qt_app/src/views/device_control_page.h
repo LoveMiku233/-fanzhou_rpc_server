@@ -17,6 +17,7 @@ class QLabel;
 class QPushButton;
 class QScrollArea;
 class QHBoxLayout;
+class QVBoxLayout;
 class QSlider;
 class QComboBox;
 class QLineEdit;

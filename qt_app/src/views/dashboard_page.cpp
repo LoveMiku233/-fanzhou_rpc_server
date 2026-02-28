@@ -11,6 +11,9 @@
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QLabel>
 #include <QProgressBar>
 #include <QPushButton>
@@ -287,5 +290,99 @@ void DashboardPage::setupUi()
 
 void DashboardPage::refreshData()
 {
-    // TODO: fetch data via rpcClient_ and update labels / bars
+    if (!rpcClient_ || !rpcClient_->isConnected())
+        return;
+
+    // Fetch relay status for a quick system health check
+    rpcClient_->callAsync(
+        QStringLiteral("relay.statusAll"),
+        QJsonObject(),
+        [this](const QJsonValue &result, const QJsonObject &error) {
+            if (!error.isEmpty() || !result.isObject())
+                return;
+
+            QJsonObject obj = result.toObject();
+            if (!obj.value(QStringLiteral("ok")).toBool())
+                return;
+
+            // Use node status data to update indoor environment display
+            QJsonArray nodes = obj.value(QStringLiteral("nodes")).toArray();
+            int onlineCount = 0;
+            for (const QJsonValue &nv : nodes) {
+                QJsonObject no = nv.toObject();
+                if (no.value(QStringLiteral("online")).toBool())
+                    ++onlineCount;
+            }
+
+            // Update trend placeholder with actual status
+            if (trendPlaceholder_) {
+                trendPlaceholder_->setText(
+                    QString::fromUtf8("系统在线节点: %1 / %2    |    24小时趋势图表")
+                        .arg(onlineCount)
+                        .arg(nodes.size()));
+            }
+        },
+        3000);
+
+    // Fetch sensor data to update indoor environment
+    rpcClient_->callAsync(
+        QStringLiteral("sensor.list"),
+        QJsonObject(),
+        [this](const QJsonValue &result, const QJsonObject &error) {
+            if (!error.isEmpty() || !result.isObject())
+                return;
+
+            QJsonObject obj = result.toObject();
+            if (!obj.value(QStringLiteral("ok")).toBool())
+                return;
+
+            QJsonArray sensors = obj.value(QStringLiteral("sensors")).toArray();
+
+            double avgTemp = 0, avgHum = 0, avgCo2 = 0, avgLight = 0;
+            int tempCnt = 0, humCnt = 0, co2Cnt = 0, lightCnt = 0;
+
+            for (const QJsonValue &sv : sensors) {
+                QJsonObject so = sv.toObject();
+                if (!so.value(QStringLiteral("hasValue")).toBool())
+                    continue;
+
+                double val = so.value(QStringLiteral("value")).toDouble();
+                QString typeName = so.value(QStringLiteral("typeName")).toString().toLower();
+
+                if (typeName.contains("temp")) {
+                    avgTemp += val; ++tempCnt;
+                } else if (typeName.contains("humid")) {
+                    avgHum += val; ++humCnt;
+                } else if (typeName.contains("co2")) {
+                    avgCo2 += val; ++co2Cnt;
+                } else if (typeName.contains("light") || typeName.contains("lux")) {
+                    avgLight += val; ++lightCnt;
+                }
+            }
+
+            // Update indoor environment
+            if (tempCnt > 0) {
+                double t = avgTemp / tempCnt;
+                indoorTempValue_->setText(QString::fromUtf8("%1°C").arg(t, 0, 'f', 1));
+                indoorTempBar_->setValue(qBound(0, static_cast<int>(t * 2), 100));
+            }
+            if (humCnt > 0) {
+                double h = avgHum / humCnt;
+                indoorHumidityValue_->setText(QString::fromUtf8("%1%").arg(h, 0, 'f', 0));
+                indoorHumidityBar_->setValue(qBound(0, static_cast<int>(h), 100));
+            }
+            if (co2Cnt > 0) {
+                double c = avgCo2 / co2Cnt;
+                indoorCo2Value_->setText(QString::fromUtf8("%1 ppm").arg(c, 0, 'f', 0));
+                indoorCo2Bar_->setValue(qBound(0, static_cast<int>(c / 20), 100));
+            }
+            if (lightCnt > 0) {
+                double l = avgLight / lightCnt;
+                indoorLightValue_->setText(
+                    l >= 1000 ? QString::fromUtf8("%1 lux").arg(static_cast<int>(l))
+                              : QString::fromUtf8("%1 lux").arg(l, 0, 'f', 0));
+                indoorLightBar_->setValue(qBound(0, static_cast<int>(l / 500), 100));
+            }
+        },
+        3000);
 }

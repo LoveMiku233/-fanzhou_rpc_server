@@ -680,12 +680,20 @@ QWidget *DeviceControlPage::createToggleCard(const Models::DeviceInfo &dev)
     }
 
     QString devId = dev.id;
-    connect(toggleBtn, &QPushButton::clicked, this, [this, toggleBtn, devId, isOn]() {
-        // TODO: 用户实现具体的开关逻辑
-        // 切换按钮视觉状态
-        Q_UNUSED(toggleBtn)
-        Q_UNUSED(devId)
-        Q_UNUSED(isOn)
+    int nodeId = dev.nodeId;
+    int channel = dev.channel;
+    connect(toggleBtn, &QPushButton::clicked, this, [this, devId, isOn, nodeId, channel]() {
+        if (rpcClient_ && rpcClient_->isConnected() && nodeId >= 0 && channel >= 0) {
+            QJsonObject params;
+            params[QStringLiteral("node")] = nodeId;
+            params[QStringLiteral("ch")] = channel;
+            params[QStringLiteral("action")] = isOn ? QStringLiteral("stop")
+                                                     : QStringLiteral("fwd");
+            rpcClient_->callAsync(QStringLiteral("relay.control"), params,
+                [this](const QJsonValue &, const QJsonObject &) {
+                    refreshData();
+                }, 3000);
+        }
     });
     vl->addWidget(toggleBtn);
 
@@ -792,17 +800,34 @@ QWidget *DeviceControlPage::createForwardReverseCard(const Models::DeviceInfo &d
                   .arg(Style::kColorBgCard).arg(Style::kColorTextMuted).arg(Style::kFontSmall));
 
     QString devId = dev.id;
-    connect(revBtn, &QPushButton::clicked, this, [devId]() {
-        // TODO: 用户实现反转逻辑 (RPC: relay.control action=rev)
-        Q_UNUSED(devId)
+    int nodeId = dev.nodeId;
+    int channel = dev.channel;
+    connect(revBtn, &QPushButton::clicked, this, [this, nodeId, channel]() {
+        if (rpcClient_ && rpcClient_->isConnected() && nodeId >= 0 && channel >= 0) {
+            QJsonObject params;
+            params[QStringLiteral("node")] = nodeId;
+            params[QStringLiteral("ch")] = channel;
+            params[QStringLiteral("action")] = QStringLiteral("rev");
+            rpcClient_->callAsync(QStringLiteral("relay.control"), params);
+        }
     });
-    connect(stopBtn, &QPushButton::clicked, this, [devId]() {
-        // TODO: 用户实现停止逻辑 (RPC: relay.control action=stop)
-        Q_UNUSED(devId)
+    connect(stopBtn, &QPushButton::clicked, this, [this, nodeId, channel]() {
+        if (rpcClient_ && rpcClient_->isConnected() && nodeId >= 0 && channel >= 0) {
+            QJsonObject params;
+            params[QStringLiteral("node")] = nodeId;
+            params[QStringLiteral("ch")] = channel;
+            params[QStringLiteral("action")] = QStringLiteral("stop");
+            rpcClient_->callAsync(QStringLiteral("relay.control"), params);
+        }
     });
-    connect(fwdBtn, &QPushButton::clicked, this, [devId]() {
-        // TODO: 用户实现正转逻辑 (RPC: relay.control action=fwd)
-        Q_UNUSED(devId)
+    connect(fwdBtn, &QPushButton::clicked, this, [this, nodeId, channel]() {
+        if (rpcClient_ && rpcClient_->isConnected() && nodeId >= 0 && channel >= 0) {
+            QJsonObject params;
+            params[QStringLiteral("node")] = nodeId;
+            params[QStringLiteral("ch")] = channel;
+            params[QStringLiteral("action")] = QStringLiteral("fwd");
+            rpcClient_->callAsync(QStringLiteral("relay.control"), params);
+        }
     });
 
     btnRow->addWidget(revBtn, 1);
@@ -906,13 +931,25 @@ QWidget *DeviceControlPage::createACDeviceCard(const Models::DeviceInfo &dev)
                   .arg(Style::kColorBgCard).arg(Style::kColorTextMuted).arg(Style::kFontSmall));
 
     QString devId = dev.id;
-    connect(stopBtn, &QPushButton::clicked, this, [devId]() {
-        // TODO: 用户实现停止逻辑
-        Q_UNUSED(devId)
+    int nodeId = dev.nodeId;
+    int channel = dev.channel;
+    connect(stopBtn, &QPushButton::clicked, this, [this, nodeId, channel]() {
+        if (rpcClient_ && rpcClient_->isConnected() && nodeId >= 0 && channel >= 0) {
+            QJsonObject params;
+            params[QStringLiteral("node")] = nodeId;
+            params[QStringLiteral("ch")] = channel;
+            params[QStringLiteral("action")] = QStringLiteral("stop");
+            rpcClient_->callAsync(QStringLiteral("relay.control"), params);
+        }
     });
-    connect(startBtn, &QPushButton::clicked, this, [devId]() {
-        // TODO: 用户实现启动逻辑
-        Q_UNUSED(devId)
+    connect(startBtn, &QPushButton::clicked, this, [this, nodeId, channel]() {
+        if (rpcClient_ && rpcClient_->isConnected() && nodeId >= 0 && channel >= 0) {
+            QJsonObject params;
+            params[QStringLiteral("node")] = nodeId;
+            params[QStringLiteral("ch")] = channel;
+            params[QStringLiteral("action")] = QStringLiteral("fwd");
+            rpcClient_->callAsync(QStringLiteral("relay.control"), params);
+        }
     });
 
     btnRow->addWidget(stopBtn, 1);
@@ -995,7 +1032,12 @@ void DeviceControlPage::onAddGroup()
     g.name = name;
     g.color = color;
 
-    // TODO: 用户实现 RPC 调用 group.create
+    // RPC: group.create
+    if (rpcClient_ && rpcClient_->isConnected()) {
+        QJsonObject params;
+        params[QStringLiteral("name")] = name;
+        rpcClient_->callAsync(QStringLiteral("group.create"), params);
+    }
     groups_ << g;
     currentGroupIndex_ = groups_.size() - 1;
     renderGroupTabs();
@@ -1024,7 +1066,12 @@ void DeviceControlPage::onDeleteGroup()
     if (msgBox.exec() != QMessageBox::Yes)
         return;
 
-    // TODO: 用户实现 RPC 调用 group.delete
+    // RPC: group.delete
+    if (rpcClient_ && rpcClient_->isConnected()) {
+        QJsonObject params;
+        params[QStringLiteral("groupId")] = g.id.toInt();
+        rpcClient_->callAsync(QStringLiteral("group.delete"), params);
+    }
     groups_.removeAt(currentGroupIndex_);
     if (currentGroupIndex_ >= groups_.size())
         currentGroupIndex_ = groups_.size() - 1;
@@ -1131,7 +1178,13 @@ void DeviceControlPage::onAddDevice()
     int ch = channelEdit->text().toInt(&chOk);
     if (chOk && ch >= 0 && ch <= 3) dev.channel = ch;
 
-    // TODO: 用户实现 RPC 调用 group.addDevice
+    // RPC: group.addDevice
+    if (rpcClient_ && rpcClient_->isConnected()) {
+        QJsonObject params;
+        params[QStringLiteral("groupId")] = groups_[currentGroupIndex_].id.toInt();
+        params[QStringLiteral("node")] = dev.nodeId;
+        rpcClient_->callAsync(QStringLiteral("group.addDevice"), params);
+    }
     groups_[currentGroupIndex_].devices << dev;
     renderDevices();
 }
@@ -1166,7 +1219,18 @@ void DeviceControlPage::onDeleteDevice(const QString &deviceId)
     if (msgBox.exec() != QMessageBox::Yes)
         return;
 
-    // TODO: 用户实现 RPC 调用 group.removeDevice
+    // RPC: group.removeDevice
+    if (rpcClient_ && rpcClient_->isConnected()) {
+        for (const Models::DeviceInfo &d : group.devices) {
+            if (d.id == deviceId) {
+                QJsonObject params;
+                params[QStringLiteral("groupId")] = group.id.toInt();
+                params[QStringLiteral("node")] = d.nodeId;
+                rpcClient_->callAsync(QStringLiteral("group.removeDevice"), params);
+                break;
+            }
+        }
+    }
     for (int i = 0; i < group.devices.size(); ++i) {
         if (group.devices[i].id == deviceId) {
             group.devices.removeAt(i);
@@ -1282,7 +1346,6 @@ void DeviceControlPage::onEditDevice(const QString &deviceId)
     int ch = channelEdit->text().toInt(&chOk);
     dev.channel = (chOk && ch >= 0 && ch <= 3) ? ch : -1;
 
-    // TODO: 用户实现 RPC 同步更新
     renderDevices();
 }
 
