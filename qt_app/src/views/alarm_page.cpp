@@ -1,14 +1,20 @@
 /**
  * @file views/alarm_page.cpp
  * @brief 报警看板页面实现
+ *
+ * 支持从RPC Server获取报警相关设备状态并显示。
  */
 
 #include "views/alarm_page.h"
 #include "rpc_client.h"
 #include "style_constants.h"
 
+#include <QDateTime>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollArea>
@@ -31,6 +37,11 @@ static QString levelText(const QString &level)
     if (level == "warning")  return QString::fromUtf8("警告");
     return QString::fromUtf8("提示");
 }
+
+// RPC-generated alarms use IDs starting from this value
+static const int kRpcAlarmIdStart = 100;
+// Milliseconds per minute for duration calculations
+static const double kMsPerMinute = 60000.0;
 
 static QPushButton *makeTabButton(const QString &text, const char *color)
 {
@@ -128,10 +139,15 @@ void AlarmPage::setupUi()
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
+    // Set page background to ensure consistent dark theme
+    setStyleSheet(QString("AlarmPage { background-color: %1; }")
+                      .arg(Style::kColorBgDark));
+
     // ── Top tab bar ──────────────────────────────
     QWidget *tabBar = new QWidget;
     tabBar->setStyleSheet(
-        QString("background:rgba(30,41,59,0.3); border-bottom:1px solid %1;")
+        QString("background-color:%1; border-bottom:1px solid %2;")
+            .arg(Style::kColorBgPanel)
             .arg(Style::kColorBorder));
 
     QHBoxLayout *tabLayout = new QHBoxLayout(tabBar);
@@ -176,6 +192,8 @@ void AlarmPage::setupUi()
             .arg(Style::kColorBorderLight));
 
     listContainer_ = new QWidget;
+    listContainer_->setStyleSheet(
+        QString("background-color:%1;").arg(Style::kColorBgDark));
     listLayout_ = new QVBoxLayout(listContainer_);
     listLayout_->setContentsMargins(Style::kPageMargin, Style::kPageMargin,
                                     Style::kPageMargin, Style::kPageMargin);
@@ -188,7 +206,8 @@ void AlarmPage::setupUi()
     // ── Bottom stats bar ─────────────────────────
     QWidget *statsBar = new QWidget;
     statsBar->setStyleSheet(
-        QString("background:rgba(30,41,59,0.3); border-top:1px solid %1;")
+        QString("background-color:%1; border-top:1px solid %2;")
+            .arg(Style::kColorBgPanel)
             .arg(Style::kColorBorder));
 
     QHBoxLayout *statsLayout = new QHBoxLayout(statsBar);
@@ -437,10 +456,82 @@ void AlarmPage::updateStats()
 }
 
 // ---------------------------------------------------------------------------
-// refreshData (stub)
+// onDeviceStatusReceived  (RPC callback)
+// ---------------------------------------------------------------------------
+
+void AlarmPage::onDeviceStatusReceived(const QJsonValue &result,
+                                        const QJsonObject &error)
+{
+    if (!error.isEmpty() || !result.isObject())
+        return;
+
+    QJsonObject obj = result.toObject();
+    if (!obj.value("ok").toBool())
+        return;
+
+    // Parse relay node statuses and generate alarms for offline/fault devices
+    QJsonArray nodes = obj.value("nodes").toArray();
+
+    int nextId = kRpcAlarmIdStart;
+    QList<Models::AlarmInfo> rpcAlarms;
+
+    for (const QJsonValue &nv : nodes) {
+        QJsonObject no = nv.toObject();
+        int node = no.value("node").toInt();
+        bool online = no.value("online").toBool();
+        double ageMs = no.value("ageMs").toDouble(-1);
+
+        if (!online) {
+            Models::AlarmInfo a;
+            a.id = nextId++;
+            a.level = "critical";
+            a.title = QString::fromUtf8("设备离线");
+            a.device = QString::fromUtf8("节点 %1").arg(node);
+
+            if (ageMs < 0) {
+                a.desc = QString::fromUtf8("设备从未响应，请检查连接");
+                a.duration = "--";
+            } else {
+                int minutes = static_cast<int>(ageMs / kMsPerMinute);
+                a.desc = QString::fromUtf8("设备已离线，最后响应 %1 分钟前").arg(minutes);
+                a.duration = QString::fromUtf8("%1分钟").arg(minutes);
+            }
+
+            a.time = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
+            a.confirmed = false;
+            rpcAlarms.append(a);
+        }
+    }
+
+    // Merge with existing demo alarms - replace only RPC-generated alarms
+    QList<Models::AlarmInfo> merged;
+    for (const Models::AlarmInfo &a : alarms_) {
+        if (a.id < kRpcAlarmIdStart) {
+            merged.append(a);
+        }
+    }
+    merged.append(rpcAlarms);
+    alarms_ = merged;
+
+    renderAlarms();
+    updateStats();
+}
+
+// ---------------------------------------------------------------------------
+// refreshData  (fetch from RPC server)
 // ---------------------------------------------------------------------------
 
 void AlarmPage::refreshData()
 {
-    // TODO: fetch alarm data via rpcClient_ and update alarms_
+    if (!rpcClient_ || !rpcClient_->isConnected())
+        return;
+
+    // Fetch device nodes to generate alarms for offline devices
+    rpcClient_->callAsync(
+        QStringLiteral("relay.nodes"),
+        QJsonObject(),
+        [this](const QJsonValue &result, const QJsonObject &error) {
+            onDeviceStatusReceived(result, error);
+        },
+        3000);
 }

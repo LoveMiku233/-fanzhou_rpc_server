@@ -1,6 +1,8 @@
 /**
  * @file views/scene_page.cpp
  * @brief 场景管理页面实现
+ *
+ * 支持从RPC Server获取策略/场景数据并显示。
  */
 
 #include "views/scene_page.h"
@@ -10,6 +12,9 @@
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollArea>
@@ -58,11 +63,13 @@ ScenePage::ScenePage(RpcClient *rpc, QWidget *parent)
     : QWidget(parent)
     , rpcClient_(rpc)
     , currentFilter_("all")
+    , hasRpcData_(false)
     , tabLayout_(nullptr)
     , newSceneBtn_(nullptr)
     , cardScrollArea_(nullptr)
     , cardContainer_(nullptr)
     , cardGrid_(nullptr)
+    , statusLabel_(nullptr)
 {
     initDemoData();
     setupUi();
@@ -231,6 +238,15 @@ void ScenePage::setupUi()
 
     cardScrollArea_->setWidget(cardContainer_);
     root->addWidget(cardScrollArea_, 1);
+
+    // ── Status label at bottom ───────────────────────────
+    statusLabel_ = new QLabel(QString::fromUtf8("已加载本地示例数据，连接服务器后自动刷新"));
+    statusLabel_->setStyleSheet(
+        QString("color:%1; font-size:%2px; padding:4px %3px;")
+            .arg(Style::kColorTextMuted)
+            .arg(Style::kFontTiny)
+            .arg(Style::kPageMargin));
+    root->addWidget(statusLabel_);
 }
 
 // ---------------------------------------------------------------------------
@@ -271,6 +287,8 @@ void ScenePage::renderScenes()
 
     // Vertical spacer at bottom
     cardGrid_->setRowStretch(row + 1, 1);
+
+    updateTabCounts();
 }
 
 // ---------------------------------------------------------------------------
@@ -419,6 +437,14 @@ QWidget *ScenePage::createSceneCard(const Models::SceneInfo &scene)
 
         const int sceneId = scene.id;
         connect(execBtn, &QPushButton::clicked, this, [this, sceneId]() {
+            // Trigger the scene via RPC server if connected
+            if (rpcClient_ && rpcClient_->isConnected()) {
+                QJsonObject params;
+                params["id"] = sceneId;
+                rpcClient_->callAsync(
+                    QStringLiteral("auto.strategy.trigger"),
+                    params);
+            }
             for (int i = 0; i < scenes_.size(); ++i) {
                 if (scenes_[i].id == sceneId) {
                     scenes_[i].triggers += 1;
@@ -454,6 +480,16 @@ bool ScenePage::eventFilter(QObject *obj, QEvent *event)
             for (int i = 0; i < scenes_.size(); ++i) {
                 if (scenes_[i].id == sceneId) {
                     scenes_[i].active = !scenes_[i].active;
+
+                    // Send enable/disable to RPC server if connected
+                    if (rpcClient_ && rpcClient_->isConnected()) {
+                        QJsonObject params;
+                        params["id"] = sceneId;
+                        params["enabled"] = scenes_[i].active;
+                        rpcClient_->callAsync(
+                            QStringLiteral("auto.strategy.enable"),
+                            params);
+                    }
                     break;
                 }
             }
@@ -465,10 +501,109 @@ bool ScenePage::eventFilter(QObject *obj, QEvent *event)
 }
 
 // ---------------------------------------------------------------------------
-// refreshData (stub)
+// updateTabCounts
+// ---------------------------------------------------------------------------
+
+void ScenePage::updateTabCounts()
+{
+    int allCount = scenes_.size();
+    int autoCount = 0;
+    int manualCount = 0;
+    for (int i = 0; i < scenes_.size(); ++i) {
+        if (scenes_.at(i).type == "auto") ++autoCount;
+        else ++manualCount;
+    }
+
+    if (tabButtons_.size() >= 3) {
+        tabButtons_[0]->setText(QString::fromUtf8("全部场景 (%1)").arg(allCount));
+        tabButtons_[1]->setText(QString::fromUtf8("自动场景 (%1)").arg(autoCount));
+        tabButtons_[2]->setText(QString::fromUtf8("手动场景 (%1)").arg(manualCount));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// onStrategyListReceived  (RPC callback)
+// ---------------------------------------------------------------------------
+
+void ScenePage::onStrategyListReceived(const QJsonValue &result,
+                                        const QJsonObject &error)
+{
+    if (!error.isEmpty() || !result.isObject())
+        return;
+
+    QJsonObject obj = result.toObject();
+    if (!obj.value("ok").toBool())
+        return;
+
+    QJsonArray strategies = obj.value("strategies").toArray();
+
+    scenes_.clear();
+    hasRpcData_ = true;
+
+    for (const QJsonValue &sv : strategies) {
+        QJsonObject so = sv.toObject();
+        Models::SceneInfo scene;
+        scene.id = so.value("id").toInt();
+        scene.name = so.value("name").toString();
+
+        // Map strategy type to scene type
+        QString stype = so.value("type").toString().toLower();
+        if (stype == "manual") {
+            scene.type = "manual";
+        } else {
+            scene.type = "auto";
+        }
+
+        scene.active = so.value("enabled").toBool();
+
+        // Build conditions from the conditions array
+        QJsonArray condArr = so.value("conditions").toArray();
+        for (const QJsonValue &cv : condArr) {
+            QJsonObject co = cv.toObject();
+            QString condStr = co.value("identifier").toString()
+                + co.value("op").toString()
+                + co.value("value").toString();
+            if (!condStr.isEmpty()) {
+                scene.conditions << condStr;
+            }
+        }
+
+        // Use version as trigger count indicator
+        scene.triggers = so.value("version").toInt(0);
+
+        // Format last run / update time
+        QString updateTime = so.value("updateTime").toString();
+        if (!updateTime.isEmpty()) {
+            scene.lastRun = updateTime;
+        } else {
+            scene.lastRun = QString::fromUtf8("--");
+        }
+
+        scenes_.append(scene);
+    }
+
+    if (statusLabel_) {
+        statusLabel_->setText(
+            QString::fromUtf8("已从服务器加载 %1 个场景/策略").arg(scenes_.size()));
+    }
+
+    renderScenes();
+}
+
+// ---------------------------------------------------------------------------
+// refreshData  (fetch from RPC server)
 // ---------------------------------------------------------------------------
 
 void ScenePage::refreshData()
 {
-    // TODO: fetch scene data via rpcClient_ and update
+    if (!rpcClient_ || !rpcClient_->isConnected())
+        return;
+
+    rpcClient_->callAsync(
+        QStringLiteral("auto.strategy.list"),
+        QJsonObject(),
+        [this](const QJsonValue &result, const QJsonObject &error) {
+            onStrategyListReceived(result, error);
+        },
+        3000);
 }

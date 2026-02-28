@@ -3,6 +3,7 @@
  * @brief 报警看板页面 - 报警列表/过滤/确认
  *
  * 匹配 index3.html 报警看板视图，1024×600 深色主题。
+ * 支持从RPC Server获取报警数据并显示。
  */
 
 #ifndef ALARM_PAGE_H
@@ -16,6 +17,8 @@ class QLabel;
 class QPushButton;
 class QScrollArea;
 class QVBoxLayout;
+class QJsonValue;
+class QJsonObject;
 class RpcClient;
 
 class AlarmPage : public QWidget
@@ -26,7 +29,7 @@ public:
     explicit AlarmPage(RpcClient *rpc, QWidget *parent = nullptr);
     ~AlarmPage() override = default;
 
-    /** 刷新页面数据（预留） */
+    /** 刷新页面数据（从RPC Server获取） */
     void refreshData();
 
 signals:
@@ -38,6 +41,9 @@ private:
     void renderAlarms();
     QWidget *createAlarmItem(const Models::AlarmInfo &alarm);
     void updateStats();
+
+    /** RPC回调：报警设备状态 */
+    void onDeviceStatusReceived(const QJsonValue &result, const QJsonObject &error);
 
     RpcClient *rpcClient_;
 
