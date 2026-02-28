@@ -1,0 +1,1918 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1024, height=600, initial-scale=1.0">
+    <title>泛舟智能科技控制柜系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap');
+        
+        body {
+            font-family: 'Inter', 'Noto Sans SC', sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            overflow: hidden;
+            width: 1024px;
+            height: 600px;
+        }
+        
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+        }
+        
+        .neon-border {
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.3), inset 0 0 20px rgba(56, 189, 248, 0.1);
+            border: 1px solid rgba(56, 189, 248, 0.5);
+        }
+        
+        .danger-glow {
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
+            animation: pulse-red 2s infinite;
+        }
+        
+        @keyframes pulse-red {
+            0%, 100% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); }
+            50% { box-shadow: 0 0 40px rgba(239, 68, 68, 0.9); }
+        }
+        
+        .status-running { background: linear-gradient(135deg, #10b981, #059669); }
+        .status-stopped { background: linear-gradient(135deg, #64748b, #475569); }
+        .status-fault { background: linear-gradient(135deg, #ef4444, #dc2626); }
+        .status-manual { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #38bdf8;
+            cursor: pointer;
+            border-radius: 50%;
+            box-shadow: 0 0 8px rgba(56, 189, 248, 0.8);
+        }
+        
+        .nav-tab-active {
+            background: linear-gradient(135deg, #0ea5e9, #2563eb);
+            color: white;
+            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4);
+        }
+        
+        /* 子页面Tab样式 */
+        .sub-tab {
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        
+        .sub-tab::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #0ea5e9, #2563eb);
+            transition: width 0.3s ease;
+        }
+        
+        .sub-tab.active {
+            color: #38bdf8;
+            background: rgba(56, 189, 248, 0.1);
+        }
+        
+        .sub-tab.active::after {
+            width: 100%;
+        }
+        
+        .gauge-container {
+            position: relative;
+            width: 120px;
+            height: 120px;
+        }
+        
+        .emergency-btn {
+            background: radial-gradient(circle at 30% 30%, #ef4444, #991b1b);
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.5), inset 0 2px 10px rgba(255, 255, 255, 0.2);
+            transition: all 0.3s;
+        }
+        
+        .emergency-btn:active {
+            transform: scale(0.95);
+            box-shadow: 0 2px 5px rgba(239, 68, 68, 0.5);
+        }
+        
+        .device-card {
+            transition: all 0.3s ease;
+        }
+        
+        .device-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+        
+        .alarm-critical { border-left: 4px solid #ef4444; background: rgba(239, 68, 68, 0.1); }
+        .alarm-warning { border-left: 4px solid #f59e0b; background: rgba(245, 158, 11, 0.1); }
+        .alarm-info { border-left: 4px solid #3b82f6; background: rgba(59, 130, 246, 0.1); }
+        
+        .scroll-hide::-webkit-scrollbar { display: none; }
+        .scroll-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .scene-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .scene-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 30px -5px rgba(0, 0, 0, 0.5);
+        }
+        
+        .scene-active {
+            border: 2px solid #10b981;
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(5, 150, 105, 0.25));
+        }
+        
+        .scene-manual { border-left: 4px solid #f59e0b; }
+        .scene-auto { border-left: 4px solid #10b981; }
+        
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+        
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #475569;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .slider {
+            background-color: #10b981;
+        }
+        
+        input:checked + .slider:before {
+            transform: translateX(20px);
+        }
+        
+        .modal-backdrop {
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+        }
+
+        /* 自定义滚动条 */
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: rgba(30, 41, 59, 0.5);
+            border-radius: 3px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: rgba(71, 85, 105, 0.8);
+            border-radius: 3px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: rgba(100, 116, 139, 1);
+        }
+    </style>
+<base target="_blank">
+<base target="_blank">
+</head>
+<body class="bg-slate-900 text-slate-200 select-none flex">
+
+    <!-- 左侧导航栏 -->
+    <aside class="w-20 bg-slate-800/80 border-r border-slate-700 flex flex-col items-center py-4 z-50 backdrop-blur-md">
+        <div class="mb-6">
+            <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">
+                <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+            </div>
+        </div>
+
+        <nav class="flex-1 w-full space-y-2 px-2">
+            <button onclick="switchMainTab('dashboard')" class="main-nav-btn nav-tab-active w-full aspect-square rounded-xl flex flex-col items-center justify-center space-y-1 transition-all" data-tab="dashboard">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+                <span class="text-[10px]">驾驶舱</span>
+            </button>
+            
+            <button onclick="switchMainTab('devices')" class="main-nav-btn w-full aspect-square rounded-xl flex flex-col items-center justify-center space-y-1 text-slate-400 hover:bg-slate-700/50 transition-all" data-tab="devices">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                <span class="text-[10px]">设备控制</span>
+            </button>
+            
+            <button onclick="switchMainTab('scenes')" class="main-nav-btn w-full aspect-square rounded-xl flex flex-col items-center justify-center space-y-1 text-slate-400 hover:bg-slate-700/50 transition-all" data-tab="scenes">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                <span class="text-[10px]">场景管理</span>
+            </button>
+            
+            <button onclick="switchMainTab('alarms')" class="main-nav-btn w-full aspect-square rounded-xl flex flex-col items-center justify-center space-y-1 text-slate-400 hover:bg-slate-700/50 transition-all relative" data-tab="alarms">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                <span class="text-[10px]">报警看板</span>
+                <span class="absolute top-1 right-1 w-4 h-4 bg-red-500 rounded-full text-[8px] flex items-center justify-center text-white font-bold animate-pulse" id="alarm-badge">3</span>
+            </button>
+
+            <button onclick="switchMainTab('sensors')" class="main-nav-btn w-full aspect-square rounded-xl flex flex-col items-center justify-center space-y-1 text-slate-400 hover:bg-slate-700/50 transition-all" data-tab="sensors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                <span class="text-[10px]">传感器</span>
+            </button>
+            
+            <button onclick="switchMainTab('settings')" class="main-nav-btn w-full aspect-square rounded-xl flex flex-col items-center justify-center space-y-1 text-slate-400 hover:bg-slate-700/50 transition-all" data-tab="settings">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                <span class="text-[10px]">系统设置</span>
+            </button>
+        </nav>
+
+        <div class="h-4"></div>
+    </aside>
+
+    <!-- 主内容区域 -->
+    <main class="flex-1 h-full overflow-hidden relative bg-slate-900 flex flex-col">
+        
+        <!-- 顶部标题栏 -->
+        <header class="h-12 bg-slate-800/50 border-b border-slate-700 flex items-center justify-between px-4 backdrop-blur-sm flex-shrink-0">
+            <div class="flex items-center space-x-3">
+                <h1 class="text-lg font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">泛舟智能科技控制柜系统</h1>
+                <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs border border-emerald-500/30">运行中</span>
+            </div>
+            <div class="flex items-center space-x-4 text-sm">
+                <div class="flex items-center space-x-2 text-slate-400">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"></path></svg>
+                    <span class="text-emerald-400">在线</span>
+                </div>
+                <div class="text-slate-300 font-mono" id="header-time">12:00:00</div>
+            </div>
+        </header>
+
+        <!-- 内容区 -->
+        <div class="flex-1 relative overflow-hidden">
+            
+            <!-- 1. 驾驶舱视图 -->
+            <section id="dashboard" class="main-content absolute inset-0 p-4 grid grid-cols-12 grid-rows-12 gap-3">
+                <!-- 气象站数据 -->
+                <div class="col-span-3 row-span-5 glass-panel rounded-xl p-4 flex flex-col">
+                    <h3 class="text-sm font-bold text-cyan-400 mb-3 flex items-center">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"></path></svg>
+                        室外气象站
+                    </h3>
+                    <div class="space-y-3 flex-1">
+                        <div class="flex justify-between items-center p-2 bg-slate-800/50 rounded-lg">
+                            <span class="text-slate-400 text-xs">温度</span>
+                            <span class="text-xl font-bold text-orange-400">28.5°C</span>
+                        </div>
+                        <div class="flex justify-between items-center p-2 bg-slate-800/50 rounded-lg">
+                            <span class="text-slate-400 text-xs">湿度</span>
+                            <span class="text-xl font-bold text-blue-400">65%</span>
+                        </div>
+                        <div class="flex justify-between items-center p-2 bg-slate-800/50 rounded-lg">
+                            <span class="text-slate-400 text-xs">风速</span>
+                            <span class="text-xl font-bold text-emerald-400">3.2 m/s</span>
+                        </div>
+                        <div class="flex justify-between items-center p-2 bg-slate-800/50 rounded-lg">
+                            <span class="text-slate-400 text-xs">光照</span>
+                            <span class="text-xl font-bold text-yellow-400">45000 Lx</span>
+                        </div>
+                        <div class="flex justify-between items-center p-2 bg-slate-800/50 rounded-lg">
+                            <span class="text-slate-400 text-xs">降雨量</span>
+                            <span class="text-xl font-bold text-cyan-400">0.0 mm</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 棚内环境仪表盘 -->
+                <div class="col-span-6 row-span-5 glass-panel rounded-xl p-4">
+                    <h3 class="text-sm font-bold text-emerald-400 mb-2 flex items-center">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                        棚内环境监测
+                    </h3>
+                    <div class="grid grid-cols-4 gap-2 h-[calc(100%-2rem)]">
+                        <div class="flex flex-col items-center justify-center">
+                            <div id="gauge-temp" class="w-full h-24"></div>
+                            <span class="text-xs text-slate-400 mt-1">空气温度</span>
+                            <span class="text-lg font-bold text-orange-400">26.2°C</span>
+                        </div>
+                        <div class="flex flex-col items-center justify-center">
+                            <div id="gauge-humidity" class="w-full h-24"></div>
+                            <span class="text-xs text-slate-400 mt-1">空气湿度</span>
+                            <span class="text-lg font-bold text-blue-400">78%</span>
+                        </div>
+                        <div class="flex flex-col items-center justify-center">
+                            <div id="gauge-co2" class="w-full h-24"></div>
+                            <span class="text-xs text-slate-400 mt-1">CO₂浓度</span>
+                            <span class="text-lg font-bold text-purple-400">420 ppm</span>
+                        </div>
+                        <div class="flex flex-col items-center justify-center">
+                            <div id="gauge-light" class="w-full h-24"></div>
+                            <span class="text-xs text-slate-400 mt-1">光照强度</span>
+                            <span class="text-lg font-bold text-yellow-400">35000 Lx</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 紧急停止 -->
+                <div class="col-span-3 row-span-5 glass-panel rounded-xl p-4 flex flex-col items-center justify-center relative overflow-hidden">
+                    <div class="absolute inset-0 bg-red-500/10 animate-pulse"></div>
+                    <button onclick="emergencyStop()" class="emergency-btn w-28 h-28 rounded-full flex flex-col items-center justify-center text-white font-bold text-base relative z-10 border-4 border-red-800 shadow-2xl">
+                        <svg class="w-8 h-8 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <span class="text-center leading-tight">紧急<br>停止</span>
+                    </button>
+                    <p class="text-xs text-red-400 mt-3 text-center font-medium">停止所有设备</p>
+                </div>
+
+                <!-- 环境趋势图 -->
+                <div class="col-span-12 row-span-7 glass-panel rounded-xl p-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-sm font-bold text-blue-400 flex items-center">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
+                            24小时环境趋势
+                        </h3>
+                        <div class="flex space-x-2 text-xs">
+                            <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-orange-400 mr-1"></span>温度</span>
+                            <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-blue-400 mr-1"></span>湿度</span>
+                            <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-yellow-400 mr-1"></span>光照</span>
+                        </div>
+                    </div>
+                    <div id="trend-chart" class="w-full h-[calc(100%-2rem)]"></div>
+                </div>
+
+                
+            </section>
+
+            <!-- 2. 设备控制 - Tab形式 -->
+            <section id="devices" class="main-content absolute inset-0 hidden flex flex-col">
+                <!-- Tab标签栏 -->
+                <div class="flex items-center px-2 pt-3 pb-0 border-b border-slate-700/50 bg-slate-800/30 h-12 flex-shrink-0">
+                    <!-- 左箭头 -->
+                    <button onclick="scrollDeviceTabs('left')" class="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded bg-slate-700 hover:bg-slate-600 text-white transition-colors mr-1" title="向左滚动">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                    </button>
+
+                    <div class="flex-1 flex space-x-1 overflow-x-auto overflow-y-hidden custom-scroll h-full items-center" id="device-tabs">
+                        <!-- 动态生成设备分组Tabs -->
+                    </div>
+
+                    <!-- 右箭头 -->
+                    <button onclick="scrollDeviceTabs('right')" class="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded bg-slate-700 hover:bg-slate-600 text-white transition-colors mx-1" title="向右滚动">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                    </button>
+
+                    <div class="flex items-center space-x-2 ml-2 pl-2 border-l border-slate-700/50 h-full flex-shrink-0">
+                        <button onclick="showAddGroupModal()" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs transition-colors flex items-center whitespace-nowrap" title="添加分组">
+                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            添加分组
+                        </button>
+                        <button onclick="showAddDeviceModal()" class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs transition-colors flex items-center whitespace-nowrap" title="添加设备">
+                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                            添加设备
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 设备内容区 -->
+                <div class="flex-1 overflow-y-auto custom-scroll p-4" id="device-container">
+                    <!-- 动态生成设备卡片 -->
+                </div>
+            </section>
+
+            <!-- 3. 场景管理 - Tab形式 -->
+            <section id="scenes" class="main-content absolute inset-0 hidden flex flex-col">
+                <!-- Tab标签栏 -->
+                <div class="flex items-center px-4 pt-3 pb-0 border-b border-slate-700/50 bg-slate-800/30">
+                    <div class="flex space-x-1">
+                        <button onclick="switchSceneTab('all')" class="scene-tab sub-tab active px-4 py-2 text-sm font-medium text-slate-300 hover:text-white transition-all" data-tab="all">
+                            全部场景
+                        </button>
+                        <button onclick="switchSceneTab('auto')" class="scene-tab sub-tab px-4 py-2 text-sm font-medium text-slate-300 hover:text-white transition-all" data-tab="auto">
+                            自动场景
+                        </button>
+                        <button onclick="switchSceneTab('manual')" class="scene-tab sub-tab px-4 py-2 text-sm font-medium text-slate-300 hover:text-white transition-all" data-tab="manual">
+                            手动场景
+                        </button>
+                    </div>
+                    <div class="flex items-center ml-auto pb-2">
+                        <button onclick="openSceneModal()" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm transition-colors flex items-center">
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            新建场景
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 场景内容区 -->
+                <div class="flex-1 overflow-y-auto custom-scroll p-4">
+                    <div class="grid grid-cols-4 gap-4" id="scene-grid">
+                        <!-- 动态生成场景卡片 -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- 4. 报警看板 - Tab形式 -->
+            <section id="alarms" class="main-content absolute inset-0 hidden flex flex-col">
+                <!-- Tab标签栏 -->
+                <div class="flex items-center px-4 pt-3 pb-0 border-b border-slate-700/50 bg-slate-800/30">
+                    <div class="flex space-x-1">
+                        <button onclick="switchAlarmTab('all')" class="alarm-tab sub-tab active px-4 py-2 text-sm font-medium text-slate-300 hover:text-white transition-all" data-tab="all">
+                            全部 (5)
+                        </button>
+                        <button onclick="switchAlarmTab('critical')" class="alarm-tab sub-tab px-4 py-2 text-sm font-medium text-red-400 hover:text-red-300 transition-all" data-tab="critical">
+                            紧急 (2)
+                        </button>
+                        <button onclick="switchAlarmTab('warning')" class="alarm-tab sub-tab px-4 py-2 text-sm font-medium text-amber-400 hover:text-amber-300 transition-all" data-tab="warning">
+                            警告 (2)
+                        </button>
+                        <button onclick="switchAlarmTab('info')" class="alarm-tab sub-tab px-4 py-2 text-sm font-medium text-blue-400 hover:text-blue-300 transition-all" data-tab="info">
+                            提示 (1)
+                        </button>
+                    </div>
+                    <div class="flex items-center space-x-3 ml-auto pb-2">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xs text-slate-400">自动刷新</span>
+                            <label class="switch">
+                                <input type="checkbox" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <button onclick="acknowledgeAll()" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs transition-colors">
+                            一键确认
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 报警内容区 -->
+                <div class="flex-1 overflow-y-auto custom-scroll p-4 space-y-2" id="alarm-list">
+                    <!-- 动态生成报警项 -->
+                </div>
+
+                <!-- 底部统计 -->
+                <div class="p-3 border-t border-slate-700/50 bg-slate-800/30 flex justify-between items-center text-sm">
+                    <div class="flex space-x-6">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                            <span class="text-slate-400">未确认紧急:</span>
+                            <span class="text-red-400 font-bold" id="uncritical-count">2</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                            <span class="text-slate-400">未确认警告:</span>
+                            <span class="text-amber-400 font-bold" id="unwarning-count">2</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 5. 传感器管理 -->
+            <section id="sensors" class="main-content absolute inset-0 hidden flex flex-col">
+                <!-- 标题栏 -->
+                <div class="flex items-center justify-between px-4 py-3 border-b border-slate-700/50 bg-slate-800/30">
+                    <h3 class="text-sm font-bold text-white flex items-center">
+                        <svg class="w-4 h-4 mr-2 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                        传感器数据监测
+                    </h3>
+                    <span class="text-xs text-slate-400" id="sensor-count">共 18 个传感器</span>
+                </div>
+
+                <!-- 传感器内容区 -->
+                <div class="flex-1 overflow-y-auto custom-scroll p-4">
+                    <div class="grid grid-cols-4 gap-3" id="sensor-grid">
+                        <!-- 动态生成传感器卡片 -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- 6. 系统设置 - Tab形式 -->
+            <section id="settings" class="main-content absolute inset-0 hidden flex flex-col">
+                <!-- Tab标签栏 -->
+                <div class="flex items-center px-4 pt-3 pb-0 border-b border-slate-700/50 bg-slate-800/30">
+                    <div class="flex space-x-1">
+                        <button onclick="switchSettingTab('network')" class="setting-tab sub-tab active px-4 py-2 text-sm font-medium text-slate-300 hover:text-white transition-all flex items-center" data-tab="network">
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"></path></svg>
+                            网络配置
+                        </button>
+                        <button onclick="switchSettingTab('mqtt')" class="setting-tab sub-tab px-4 py-2 text-sm font-medium text-slate-300 hover:text-white transition-all flex items-center" data-tab="mqtt">
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
+                            MQTT配置
+                        </button>
+                        <button onclick="switchSettingTab('about')" class="setting-tab sub-tab px-4 py-2 text-sm font-medium text-slate-300 hover:text-white transition-all flex items-center" data-tab="about">
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            关于系统
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 设置内容区 -->
+                <div class="flex-1 overflow-y-auto custom-scroll p-4">
+                    <!-- 网络配置 -->
+                    <div id="setting-panel-network" class="setting-panel glass-panel rounded-xl p-6">
+                        <h3 class="text-lg font-bold text-white mb-4 flex items-center">
+                            <svg class="w-5 h-5 mr-2 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"></path></svg>
+                            以太网配置
+                        </h3>
+                        
+                        <div class="grid grid-cols-2 gap-6">
+                            <div>
+                                <label class="text-sm text-slate-400 block mb-2">IP地址获取方式</label>
+                                <div class="flex space-x-4">
+                                    <label class="flex items-center space-x-2 cursor-pointer">
+                                        <input type="radio" name="ip-type" value="static" checked class="text-cyan-500 focus:ring-cyan-500 bg-slate-800 border-slate-600">
+                                        <span class="text-sm text-white">静态IP</span>
+                                    </label>
+                                    <label class="flex items-center space-x-2 cursor-pointer">
+                                        <input type="radio" name="ip-type" value="dhcp" class="text-cyan-500 focus:ring-cyan-500 bg-slate-800 border-slate-600">
+                                        <span class="text-sm text-white">DHCP自动获取</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="text-sm text-slate-400 block mb-2">MAC地址</label>
+                                <input type="text" value="00:1A:2B:3C:4D:5E" disabled class="w-full bg-slate-800/50 border border-slate-700 rounded px-3 py-2 text-sm text-slate-500 cursor-not-allowed">
+                            </div>
+
+                            <div>
+                                <label class="text-sm text-slate-400 block mb-2">IP地址</label>
+                                <input type="text" value="192.168.1.100" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                            </div>
+
+                            <div>
+                                <label class="text-sm text-slate-400 block mb-2">子网掩码</label>
+                                <input type="text" value="255.255.255.0" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                            </div>
+
+                            <div>
+                                <label class="text-sm text-slate-400 block mb-2">默认网关</label>
+                                <input type="text" value="192.168.1.1" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                            </div>
+
+                            <div>
+                                <label class="text-sm text-slate-400 block mb-2">首选DNS</label>
+                                <input type="text" value="8.8.8.8" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                            </div>
+
+                            <div>
+                                <label class="text-sm text-slate-400 block mb-2">备用DNS</label>
+                                <input type="text" value="114.114.114.114" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                            </div>
+
+                            <div>
+                                <label class="text-sm text-slate-400 block mb-2">端口号</label>
+                                <input type="number" value="8080" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                            </div>
+                        </div>
+
+                        <div class="flex items-center space-x-2 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg mt-4">
+                            <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <span class="text-sm text-emerald-400">网络连接正常 • 延迟 2ms</span>
+                        </div>
+
+                        <div class="flex justify-end space-x-3 pt-4 border-t border-slate-700 mt-4">
+                            <button class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-white transition-colors">测试连接</button>
+                            <button class="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded text-sm text-white transition-colors">保存配置</button>
+                        </div>
+                    </div>
+
+                    <!-- MQTT配置 -->
+                    <div id="setting-panel-mqtt" class="setting-panel glass-panel rounded-xl p-6 hidden">
+                        <h3 class="text-lg font-bold text-white mb-4 flex items-center">
+                            <svg class="w-5 h-5 mr-2 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
+                            MQTT 通信配置
+                        </h3>
+                        
+                        <div class="grid grid-cols-2 gap-6">
+                            <div>
+                                <label class="text-sm text-slate-400 block mb-2">服务器地址</label>
+                                <input type="text" value="mqtt.greenhouse.local" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                            </div>
+
+                            <div>
+                                <label class="text-sm text-slate-400 block mb-2">端口号</label>
+                                <input type="number" value="1883" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                            </div>
+
+                            <div>
+                                <label class="text-sm text-slate-400 block mb-2">客户端ID</label>
+                                <input type="text" value="GH_CTRL_001" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                            </div>
+
+                            <div>
+                                <label class="text-sm text-slate-400 block mb-2">用户名</label>
+                                <input type="text" value="admin" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                            </div>
+
+                            <div>
+                                <label class="text-sm text-slate-400 block mb-2">密码</label>
+                                <input type="password" value="********" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                            </div>
+
+                            <div>
+                                <label class="text-sm text-slate-400 block mb-2">KeepAlive (秒)</label>
+                                <input type="number" value="60" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                            </div>
+                        </div>
+
+                        <div class="space-y-3 mt-4">
+                            <div>
+                                <label class="text-sm text-slate-400 block mb-2">数据发布主题 (Publish)</label>
+                                <input type="text" value="greenhouse/gh001/sensors/data" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                            </div>
+                            <div>
+                                <label class="text-sm text-slate-400 block mb-2">命令订阅主题 (Subscribe)</label>
+                                <input type="text" value="greenhouse/gh001/commands/control" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                            </div>
+                            <div>
+                                <label class="text-sm text-slate-400 block mb-2">状态上报间隔 (秒)</label>
+                                <input type="number" value="5" class="w-32 bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg mt-4">
+                            <div class="flex items-center space-x-2">
+                                <div class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                                <span class="text-sm text-emerald-400">MQTT 已连接</span>
+                            </div>
+                            <span class="text-xs text-slate-500">上次心跳: 2秒前</span>
+                        </div>
+
+                        <div class="flex justify-end space-x-3 pt-4 border-t border-slate-700 mt-4">
+                            <button class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-white transition-colors">断开连接</button>
+                            <button class="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded text-sm text-white transition-colors">保存并重启</button>
+                        </div>
+                    </div>
+
+                    <!-- 关于系统 -->
+                    <div id="setting-panel-about" class="setting-panel glass-panel rounded-xl p-6 hidden">
+                        <div class="text-center py-12">
+                            <div class="w-24 h-24 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-2xl mx-auto mb-6 flex items-center justify-center shadow-lg shadow-blue-500/30">
+                                <svg class="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            </div>
+                            <h2 class="text-3xl font-bold text-white mb-2">泛舟智能科技</h2>
+                            <p class="text-slate-400 text-base mb-6">智能温室控制系统</p>
+                            
+                            <div class="grid grid-cols-2 gap-4 max-w-md mx-auto mb-6">
+                                <div class="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+                                    <div class="text-xs text-slate-500 mb-1">软件版本</div>
+                                    <div class="text-sm text-white font-mono">v2.1.0</div>
+                                </div>
+                                <div class="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+                                    <div class="text-xs text-slate-500 mb-1">硬件版本</div>
+                                    <div class="text-sm text-white font-mono">v1.2.0</div>
+                                </div>
+                                <div class="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+                                    <div class="text-xs text-slate-500 mb-1">编译日期</div>
+                                    <div class="text-sm text-white font-mono">2024-01-15</div>
+                                </div>
+                                <div class="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+                                    <div class="text-xs text-slate-500 mb-1">设备ID</div>
+                                    <div class="text-sm text-white font-mono">GH-001-A</div>
+                                </div>
+                            </div>
+                            
+                            <div class="text-xs text-slate-600">
+                                <p>© 2024 泛舟智能科技. All rights reserved.</p>
+                                <p class="mt-1">江苏省兴化市经济开发区</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- 弹窗保持不变 -->
+    <!-- 添加分组弹窗 -->
+    <div id="add-group-modal" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50">
+        <div class="glass-panel rounded-xl p-6 w-96 border border-slate-600 shadow-2xl">
+            <h3 class="text-lg font-bold text-white mb-4">添加设备分组</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-sm text-slate-400 block mb-2">分组名称</label>
+                    <input type="text" id="new-group-name" placeholder="例如：顶部通风组" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                </div>
+                <div>
+                    <label class="text-sm text-slate-400 block mb-2">分组颜色</label>
+                    <div class="flex space-x-3">
+                        <button onclick="selectGroupColor('blue')" class="color-select w-10 h-10 rounded-full bg-blue-500 ring-2 ring-offset-2 ring-offset-slate-800 ring-blue-500 transition-all hover:scale-110" data-color="blue"></button>
+                        <button onclick="selectGroupColor('emerald')" class="color-select w-10 h-10 rounded-full bg-emerald-500 transition-all hover:scale-110" data-color="emerald"></button>
+                        <button onclick="selectGroupColor('amber')" class="color-select w-10 h-10 rounded-full bg-amber-500 transition-all hover:scale-110" data-color="amber"></button>
+                        <button onclick="selectGroupColor('purple')" class="color-select w-10 h-10 rounded-full bg-purple-500 transition-all hover:scale-110" data-color="purple"></button>
+                        <button onclick="selectGroupColor('red')" class="color-select w-10 h-10 rounded-full bg-red-500 transition-all hover:scale-110" data-color="red"></button>
+                    </div>
+                </div>
+            </div>
+            <div class="flex justify-end space-x-3 mt-6">
+                <button onclick="closeAddGroupModal()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-white transition-colors">取消</button>
+                <button onclick="confirmAddGroup()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm text-white transition-colors">确认添加</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加设备弹窗 -->
+    <div id="add-device-modal" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50">
+        <div class="glass-panel rounded-xl p-6 w-[500px] border border-slate-600 shadow-2xl max-h-[80vh] overflow-y-auto custom-scroll">
+            <h3 class="text-lg font-bold text-white mb-4">添加新设备</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-sm text-slate-400 block mb-2">设备名称</label>
+                    <input type="text" id="new-device-name" placeholder="例如：南侧卷帘-3" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-sm text-slate-400 block mb-2">所属分组</label>
+                        <select id="new-device-group" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                            <!-- 动态选项 -->
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-sm text-slate-400 block mb-2">设备类型</label>
+                        <select id="new-device-type" onchange="onDeviceTypeChange()" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                            <option value="dc">直流电机 (连续调节)</option>
+                            <option value="ac">交流设备 (启停控制)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="dc-config" class="space-y-3">
+                    <div>
+                        <label class="text-sm text-slate-400 block mb-2">电压规格</label>
+                        <select class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white">
+                            <option>24V DC</option>
+                            <option>12V DC</option>
+                            <option>48V DC</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="ac-config" class="space-y-3 hidden">
+                    <div>
+                        <label class="text-sm text-slate-400 block mb-2">电压规格</label>
+                        <select class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white">
+                            <option>220V AC</option>
+                            <option>380V AC</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-sm text-slate-400 block mb-2">功率/备注</label>
+                        <input type="text" placeholder="例如：1.5kW" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                    </div>
+                </div>
+            </div>
+            <div class="flex justify-end space-x-3 mt-6">
+                <button onclick="closeAddDeviceModal()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-white transition-colors">取消</button>
+                <button onclick="confirmAddDevice()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm text-white transition-colors">确认添加</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 场景编辑弹窗 -->
+    <div id="scene-modal" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50">
+        <div class="glass-panel rounded-xl p-6 w-[600px] border border-slate-600 shadow-2xl max-h-[85vh] overflow-y-auto custom-scroll">
+            <h3 class="text-lg font-bold text-white mb-4" id="scene-modal-title">新建场景</h3>
+            
+            <div class="space-y-4">
+                <!-- 基本信息 -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-sm text-slate-400 block mb-2">场景名称</label>
+                        <input type="text" id="scene-name" placeholder="例如：夏季高温模式" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                    </div>
+                    <div>
+                        <label class="text-sm text-slate-400 block mb-2">场景类型</label>
+                        <div class="flex space-x-4 mt-2">
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="radio" name="scene-type" value="auto" checked class="text-emerald-500 focus:ring-emerald-500 bg-slate-800 border-slate-600" onchange="toggleSceneType()">
+                                <span class="text-sm text-white">自动触发</span>
+                            </label>
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="radio" name="scene-type" value="manual" class="text-amber-500 focus:ring-amber-500 bg-slate-800 border-slate-600" onchange="toggleSceneType()">
+                                <span class="text-sm text-white">手动执行</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 自动触发条件 -->
+                <div id="auto-conditions" class="space-y-3">
+                    <div class="flex justify-between items-center">
+                        <label class="text-sm text-slate-400">触发条件 (满足任意条件即触发)</label>
+                        <select id="condition-logic" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white">
+                            <option value="any">任意条件</option>
+                            <option value="all">所有条件</option>
+                        </select>
+                    </div>
+                    
+                    <div class="space-y-2" id="conditions-list">
+                        <div class="flex items-center space-x-2 bg-slate-800/50 p-2 rounded">
+                            <input type="checkbox" checked class="rounded bg-slate-700 border-slate-600">
+                            <span class="text-xs text-slate-300">温度 ></span>
+                            <input type="number" value="30" class="w-16 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white">
+                            <span class="text-xs text-slate-300">°C</span>
+                            <button onclick="removeCondition(this)" class="ml-auto text-red-400 hover:text-red-300 text-xs">删除</button>
+                        </div>
+                        <div class="flex items-center space-x-2 bg-slate-800/50 p-2 rounded">
+                            <input type="checkbox" checked class="rounded bg-slate-700 border-slate-600">
+                            <span class="text-xs text-slate-300">定时</span>
+                            <input type="time" value="09:00" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white">
+                            <button onclick="removeCondition(this)" class="ml-auto text-red-400 hover:text-red-300 text-xs">删除</button>
+                        </div>
+                    </div>
+                    
+                    <button onclick="addCondition()" class="text-xs text-cyan-400 hover:text-cyan-300 flex items-center">
+                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        添加条件
+                    </button>
+                </div>
+
+                <!-- 执行动作 -->
+                <div class="space-y-3">
+                    <label class="text-sm text-slate-400 block">执行动作</label>
+                    <div class="space-y-2" id="actions-list">
+                        <div class="flex items-center justify-between bg-slate-800/50 p-2 rounded">
+                            <div class="flex items-center space-x-2">
+                                <span class="text-xs text-white">南侧卷帘-1</span>
+                                <span class="text-xs text-slate-400">→</span>
+                                <span class="text-xs text-cyan-400">开启至 80%</span>
+                            </div>
+                            <button onclick="removeAction(this)" class="text-red-400 hover:text-red-300 text-xs">删除</button>
+                        </div>
+                    </div>
+                    
+                    <button onclick="addAction()" class="text-xs text-cyan-400 hover:text-cyan-300 flex items-center">
+                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        添加设备动作
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex justify-end space-x-3 mt-6 pt-4 border-t border-slate-700">
+                <button onclick="closeSceneModal()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-white transition-colors">取消</button>
+                <button onclick="confirmSaveScene()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded text-sm text-white transition-colors">保存场景</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 数据存储
+        let deviceGroups = [
+            { id: 'curtain', name: '卷帘组', color: 'blue', devices: [
+                { id: 'c1', name: '南侧卷帘-1', type: 'dc', status: 'running', value: 75, spec: '24V' },
+                { id: 'c2', name: '南侧卷帘-2', type: 'dc', status: 'stopped', value: 0, spec: '24V' },
+                { id: 'c3', name: '北侧卷帘-1', type: 'dc', status: 'manual', value: 45, spec: '24V' },
+                { id: 'c4', name: '北侧卷帘-2', type: 'dc', status: 'fault', value: 0, spec: '24V', fault: '电机过载' },
+                { id: 'c5', name: '顶部卷帘-1', type: 'dc', status: 'stopped', value: 0, spec: '24V' },
+                { id: 'c6', name: '顶部卷帘-2', type: 'dc', status: 'running', value: 60, spec: '24V' }
+            ]},
+            { id: 'fan', name: '风机组', color: 'emerald', devices: [
+                { id: 'f1', name: '风机-1', type: 'ac', status: 'running', spec: '380V 1.5kW', runtime: '04:32:18', current: '2.8A' },
+                { id: 'f2', name: '风机-2', type: 'ac', status: 'stopped', spec: '380V 1.5kW', runtime: '00:00:00', current: '0.0A' },
+                { id: 'f3', name: '环流风机', type: 'ac', status: 'manual', spec: '220V 0.75kW', runtime: '08:45:33', current: '3.4A' }
+            ]},
+            { id: 'shade', name: '遮阳网组', color: 'amber', devices: [
+                { id: 's1', name: '外遮阳网', type: 'dc', status: 'running', value: 60, spec: '推杆驱动' },
+                { id: 's2', name: '内遮阳网', type: 'dc', status: 'stopped', value: 0, spec: '推杆驱动' }
+            ]},
+            { id: 'irrigation', name: '灌溉组', color: 'cyan', devices: [
+                { id: 'i1', name: '滴灌区-A', type: 'ac', status: 'running', spec: '电磁阀', flow: '1250L', pressure: '0.25MPa' },
+                { id: 'i2', name: '喷雾系统', type: 'ac', status: 'manual', spec: '高压泵 2.2kW', flow: '850L', pressure: '3.5MPa' }
+            ]}
+        ];
+
+        let scenes = [
+            { id: 1, name: '夏季通风模式', type: 'auto', active: true, conditions: ['温度>30°C', '定时09:00'], triggers: 3, lastRun: '今日 14:32' },
+            { id: 2, name: '夜间保温模式', type: 'auto', active: false, conditions: ['定时18:00'], triggers: 0, lastRun: '昨日 18:00' },
+            { id: 3, name: '暴雨保护模式', type: 'auto', active: false, conditions: ['雨量>5mm', '风速>10m/s'], triggers: 0, lastRun: '从未' },
+            { id: 4, name: '手动全开', type: 'manual', active: false, conditions: [], triggers: 12, lastRun: '今日 10:15' },
+            { id: 5, name: '紧急关闭', type: 'manual', active: false, conditions: [], triggers: 2, lastRun: '昨日 16:20' },
+            { id: 6, name: '施肥灌溉', type: 'manual', active: false, conditions: [], triggers: 5, lastRun: '今日 08:30' }
+        ];
+
+        let alarms = [
+            { id: 1, level: 'critical', title: '设备故障', device: '北侧卷帘-2', desc: '电机过载保护触发', time: '2024-01-15 14:23:15', duration: '45分钟', confirmed: false },
+            { id: 2, level: 'critical', title: '通讯中断', device: '风机-4', desc: '控制柜通讯超时 (>30s)', time: '2024-01-15 14:20:03', duration: '48分钟', confirmed: false },
+            { id: 3, level: 'warning', title: '压力异常', device: '滴灌区-A', desc: '压力低于设定值 (0.15 < 0.20 MPa)', time: '2024-01-15 14:10:22', duration: '58分钟', confirmed: false },
+            { id: 4, level: 'warning', title: '能耗预警', device: '系统', desc: '今日用电量超过昨日同期 15%', time: '2024-01-15 13:45:00', duration: '--', confirmed: false },
+            { id: 5, level: 'info', title: '维护提醒', device: '喷雾系统', desc: '滤芯建议更换 (已运行 500 小时)', time: '2024-01-15 09:00:00', duration: '--', confirmed: true }
+        ];
+
+        let currentGroup = 'curtain';
+        let selectedGroupColor = 'blue';
+        let editingSceneId = null;
+        let currentSceneFilter = 'all';
+        let currentAlarmFilter = 'all';
+        let currentSettingTab = 'network';
+
+        // 传感器数据（简化版）
+        let sensors = [
+            { id: 'temp-1', name: '棚内温度-东', type: 'temp', value: 26.5, unit: '°C', location: '东侧区域', lastUpdate: '2024-01-15 14:32:18' },
+            { id: 'temp-2', name: '棚内温度-西', type: 'temp', value: 27.2, unit: '°C', location: '西侧区域', lastUpdate: '2024-01-15 14:32:15' },
+            { id: 'temp-3', name: '棚内温度-中', type: 'temp', value: 26.8, unit: '°C', location: '中央区域', lastUpdate: '2024-01-15 14:32:20' },
+            { id: 'temp-4', name: '土壤温度-1', type: 'temp', value: 22.3, unit: '°C', location: '种植区A', lastUpdate: '2024-01-15 14:32:10' },
+            { id: 'temp-5', name: '土壤温度-2', type: 'temp', value: 22.1, unit: '°C', location: '种植区B', lastUpdate: '2024-01-15 14:32:12' },
+
+            { id: 'hum-1', name: '空气湿度-东', type: 'humidity', value: 78.5, unit: '%', location: '东侧区域', lastUpdate: '2024-01-15 14:32:18' },
+            { id: 'hum-2', name: '空气湿度-西', type: 'humidity', value: 76.2, unit: '%', location: '西侧区域', lastUpdate: '2024-01-15 14:32:15' },
+            { id: 'hum-3', name: '土壤湿度-1', type: 'humidity', value: 65.3, unit: '%', location: '种植区A', lastUpdate: '2024-01-15 14:32:08' },
+            { id: 'hum-4', name: '土壤湿度-2', type: 'humidity', value: 58.7, unit: '%', location: '种植区B', lastUpdate: '2024-01-15 14:32:10' },
+
+            { id: 'light-1', name: '光照强度-东', type: 'light', value: 35200, unit: 'Lx', location: '东侧顶部', lastUpdate: '2024-01-15 14:32:22' },
+            { id: 'light-2', name: '光照强度-西', type: 'light', value: 34800, unit: 'Lx', location: '西侧顶部', lastUpdate: '2024-01-15 14:32:20' },
+            { id: 'light-3', name: '光合有效辐射', type: 'light', value: 850, unit: 'μmol', location: '中央区域', lastUpdate: '2024-01-15 14:32:18' },
+
+            { id: 'co2-1', name: 'CO₂浓度-东', type: 'co2', value: 425, unit: 'ppm', location: '东侧区域', lastUpdate: '2024-01-15 14:32:16' },
+            { id: 'co2-2', name: 'CO₂浓度-西', type: 'co2', value: 418, unit: 'ppm', location: '西侧区域', lastUpdate: '2024-01-15 14:32:14' },
+
+            { id: 'soil-1', name: '土壤EC值-1', type: 'soil', value: 1.25, unit: 'mS/cm', location: '种植区A', lastUpdate: '2024-01-15 14:32:05' },
+            { id: 'soil-2', name: '土壤EC值-2', type: 'soil', value: 1.32, unit: 'mS/cm', location: '种植区B', lastUpdate: '2024-01-15 14:32:07' },
+            { id: 'soil-3', name: '土壤pH值-1', type: 'soil', value: 6.8, unit: 'pH', location: '种植区A', lastUpdate: '2024-01-15 14:32:03' },
+            { id: 'soil-4', name: '土壤pH值-2', type: 'soil', value: 6.5, unit: 'pH', location: '种植区B', lastUpdate: '2024-01-15 14:32:06' }
+        ];
+
+        // 初始化图表
+        let tempGauge, humidityGauge, co2Gauge, lightGauge, trendChart;
+
+        function initCharts() {
+            // 温度仪表盘
+            tempGauge = echarts.init(document.getElementById('gauge-temp'));
+            tempGauge.setOption({
+                series: [{
+                    type: 'gauge',
+                    startAngle: 180,
+                    endAngle: 0,
+                    min: 0,
+                    max: 50,
+                    splitNumber: 5,
+                    radius: '90%',
+                    center: ['50%', '70%'],
+                    axisLine: {
+                        lineStyle: {
+                            width: 8,
+                            color: [[0.3, '#3b82f6'], [0.7, '#10b981'], [1, '#ef4444']]
+                        }
+                    },
+                    pointer: {
+                        itemStyle: { color: 'auto' },
+                        width: 4
+                    },
+                    axisTick: { show: false },
+                    splitLine: { length: 8, lineStyle: { width: 2, color: '#999' } },
+                    axisLabel: { distance: 12, color: '#999', fontSize: 10 },
+                    detail: { show: false },
+                    data: [{ value: 26.2 }]
+                }]
+            });
+
+            // 湿度仪表盘
+            humidityGauge = echarts.init(document.getElementById('gauge-humidity'));
+            humidityGauge.setOption({
+                series: [{
+                    type: 'gauge',
+                    startAngle: 180,
+                    endAngle: 0,
+                    min: 0,
+                    max: 100,
+                    radius: '90%',
+                    center: ['50%', '70%'],
+                    axisLine: {
+                        lineStyle: {
+                            width: 8,
+                            color: [[0.3, '#f59e0b'], [0.7, '#10b981'], [1, '#3b82f6']]
+                        }
+                    },
+                    pointer: {
+                        itemStyle: { color: 'auto' },
+                        width: 4
+                    },
+                    axisTick: { show: false },
+                    splitLine: { length: 8, lineStyle: { width: 2, color: '#999' } },
+                    axisLabel: { distance: 12, color: '#999', fontSize: 10 },
+                    detail: { show: false },
+                    data: [{ value: 78 }]
+                }]
+            });
+
+            // CO2仪表盘
+            co2Gauge = echarts.init(document.getElementById('gauge-co2'));
+            co2Gauge.setOption({
+                series: [{
+                    type: 'gauge',
+                    startAngle: 180,
+                    endAngle: 0,
+                    min: 300,
+                    max: 1000,
+                    radius: '90%',
+                    center: ['50%', '70%'],
+                    axisLine: {
+                        lineStyle: {
+                            width: 8,
+                            color: [[0.3, '#10b981'], [0.7, '#f59e0b'], [1, '#ef4444']]
+                        }
+                    },
+                    pointer: {
+                        itemStyle: { color: 'auto' },
+                        width: 4
+                    },
+                    axisTick: { show: false },
+                    splitLine: { length: 8, lineStyle: { width: 2, color: '#999' } },
+                    axisLabel: { distance: 12, color: '#999', fontSize: 8, formatter: '{value}' },
+                    detail: { show: false },
+                    data: [{ value: 420 }]
+                }]
+            });
+
+            // 光照仪表盘
+            lightGauge = echarts.init(document.getElementById('gauge-light'));
+            lightGauge.setOption({
+                series: [{
+                    type: 'gauge',
+                    startAngle: 180,
+                    endAngle: 0,
+                    min: 0,
+                    max: 80000,
+                    radius: '90%',
+                    center: ['50%', '70%'],
+                    axisLine: {
+                        lineStyle: {
+                            width: 8,
+                            color: [[0.3, '#1e293b'], [0.6, '#f59e0b'], [1, '#fbbf24']]
+                        }
+                    },
+                    pointer: {
+                        itemStyle: { color: '#fbbf24' },
+                        width: 4
+                    },
+                    axisTick: { show: false },
+                    splitLine: { length: 8, lineStyle: { width: 2, color: '#999' } },
+                    axisLabel: { distance: 12, color: '#999', fontSize: 8, formatter: function(v) { return v/1000 + 'k'; } },
+                    detail: { show: false },
+                    data: [{ value: 35000 }]
+                }]
+            });
+
+            // 趋势图
+            trendChart = echarts.init(document.getElementById('trend-chart'));
+            const hours = [];
+            const tempData = [];
+            const humidityData = [];
+            const lightData = [];
+            
+            for (let i = 0; i < 24; i++) {
+                hours.push(i + ':00');
+                tempData.push(20 + Math.random() * 10);
+                humidityData.push(60 + Math.random() * 20);
+                lightData.push(Math.random() * 60000);
+            }
+
+            trendChart.setOption({
+                grid: { top: 10, right: 10, bottom: 20, left: 30 },
+                xAxis: {
+                    type: 'category',
+                    data: hours,
+                    axisLine: { lineStyle: { color: '#475569' } },
+                    axisLabel: { color: '#94a3b8', fontSize: 10 }
+                },
+                yAxis: {
+                    type: 'value',
+                    splitLine: { lineStyle: { color: '#334155' } },
+                    axisLabel: { color: '#94a3b8', fontSize: 10 }
+                },
+                series: [
+                    {
+                        name: '温度',
+                        type: 'line',
+                        smooth: true,
+                        data: tempData,
+                        lineStyle: { color: '#fb923c', width: 2 },
+                        itemStyle: { color: '#fb923c' },
+                        showSymbol: false
+                    },
+                    {
+                        name: '湿度',
+                        type: 'line',
+                        smooth: true,
+                        data: humidityData,
+                        lineStyle: { color: '#60a5fa', width: 2 },
+                        itemStyle: { color: '#60a5fa' },
+                        showSymbol: false
+                    },
+                    {
+                        name: '光照',
+                        type: 'line',
+                        smooth: true,
+                        data: lightData,
+                        lineStyle: { color: '#facc15', width: 2 },
+                        itemStyle: { color: '#facc15' },
+                        showSymbol: false,
+                        yAxisIndex: 0
+                    }
+                ]
+            });
+        }
+
+        // 主导航切换
+        function switchMainTab(tabName) {
+            // 隐藏所有主内容
+            document.querySelectorAll('.main-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(tabName).classList.remove('hidden');
+            
+            // 更新主导航按钮样式
+            document.querySelectorAll('.main-nav-btn').forEach(btn => {
+                if (btn.dataset.tab === tabName) {
+                    btn.classList.add('nav-tab-active');
+                    btn.classList.remove('text-slate-400');
+                } else {
+                    btn.classList.remove('nav-tab-active');
+                    btn.classList.add('text-slate-400');
+                }
+            });
+
+            // 初始化各页面
+            if (tabName === 'dashboard') {
+                setTimeout(() => {
+                    tempGauge && tempGauge.resize();
+                    humidityGauge && humidityGauge.resize();
+                    co2Gauge && co2Gauge.resize();
+                    lightGauge && lightGauge.resize();
+                    trendChart && trendChart.resize();
+                }, 100);
+            } else if (tabName === 'devices') {
+                renderDeviceTabs();
+                renderDevices();
+            } else if (tabName === 'scenes') {
+                renderScenes();
+            } else if (tabName === 'alarms') {
+                renderAlarms();
+            } else if (tabName === 'sensors') {
+                renderSensors();
+            } else if (tabName === 'settings') {
+                // 设置页面保持当前Tab
+            }
+        }
+
+        // 渲染设备分组Tabs
+        function renderDeviceTabs() {
+            const container = document.getElementById('device-tabs');
+            container.innerHTML = '';
+            
+            deviceGroups.forEach(group => {
+                const tab = document.createElement('button');
+                tab.className = `sub-tab px-4 py-2 text-sm font-medium whitespace-nowrap flex items-center space-x-2 ${group.id === currentGroup ? 'active' : 'text-slate-300 hover:text-white'}`;
+                tab.onclick = () => switchDeviceGroup(group.id);
+                tab.innerHTML = `
+                    <span>${group.name}</span>
+                    <span class="text-xs opacity-60">(${group.devices.length})</span>
+                    <button onclick="deleteGroup(event, '${group.id}')" class="ml-1 opacity-0 hover:opacity-100 text-red-400 hover:text-red-300 transition-opacity">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                `;
+                container.appendChild(tab);
+            });
+        }
+
+        // 切换设备组
+        function switchDeviceGroup(groupId) {
+            currentGroup = groupId;
+            renderDeviceTabs();
+            renderDevices();
+        }
+
+        // 渲染设备列表 - 一行三个
+        function renderDevices() {
+            const container = document.getElementById('device-container');
+            const group = deviceGroups.find(g => g.id === currentGroup);
+            if (!group) return;
+
+            container.innerHTML = '';
+            
+            const grid = document.createElement('div');
+            grid.className = 'grid grid-cols-3 gap-3';
+            
+            group.devices.forEach(device => {
+                const card = document.createElement('div');
+                card.className = `device-card glass-panel rounded-xl p-3 border-l-4 flex flex-col`;
+                card.style.borderLeftColor = device.type === 'dc' ? '#3b82f6' : '#10b981';
+                
+                let content = '';
+                if (device.type === 'dc') {
+                    const isFault = device.status === 'fault';
+                    content = `
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="min-w-0 flex-1">
+                                <h4 class="font-bold text-white text-sm truncate">${device.name}</h4>
+                                <span class="text-[10px] text-slate-400 block truncate">DC | ${device.spec}</span>
+                            </div>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold status-${device.status} text-white whitespace-nowrap ml-2">
+                                ${device.status === 'running' ? '运行' : device.status === 'stopped' ? '停止' : device.status === 'fault' ? '故障' : '手动'}
+                            </span>
+                        </div>
+                        <div class="space-y-2 flex-1">
+                            <div class="flex justify-between text-xs">
+                                <span class="text-slate-400">${device.status === 'fault' ? '状态' : '开度'}</span>
+                                <span class="${device.status === 'fault' ? 'text-red-400' : 'text-cyan-400'} font-mono font-bold" id="${device.id}-val">
+                                    ${device.status === 'fault' ? '--' : device.value + '%'}
+                                </span>
+                            </div>
+                            <input type="range" min="0" max="100" value="${device.value}" 
+                                ${device.status === 'fault' ? 'disabled' : ''}
+                                class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb ${device.status === 'fault' ? 'opacity-50 cursor-not-allowed' : ''}" 
+                                oninput="updateDeviceValue('${device.id}', this.value)">
+                            ${device.fault ? `<div class="text-[10px] text-red-400 mt-1 truncate">${device.fault}</div>` : ''}
+                        </div>
+                    `;
+                } else {
+                    content = `
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="min-w-0 flex-1">
+                                <h4 class="font-bold text-white text-sm truncate">${device.name}</h4>
+                                <span class="text-[10px] text-slate-400 block truncate">${device.spec}</span>
+                            </div>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold status-${device.status} text-white whitespace-nowrap ml-2">
+                                ${device.status === 'running' ? '运行' : device.status === 'stopped' ? '停止' : device.status === 'fault' ? '故障' : '手动'}
+                            </span>
+                        </div>
+                        <div class="space-y-1 flex-1 text-xs">
+                            ${device.runtime ? `
+                                <div class="flex justify-between">
+                                    <span class="text-slate-400">运行时间</span>
+                                    <span class="${device.status === 'running' ? 'text-emerald-400' : 'text-slate-500'} font-mono">${device.runtime}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-400">电流</span>
+                                    <span class="text-cyan-400 font-mono">${device.current || '--'}</span>
+                                </div>
+                            ` : ''}
+                            ${device.flow ? `
+                                <div class="flex justify-between">
+                                    <span class="text-slate-400">流量</span>
+                                    <span class="text-cyan-400 font-mono">${device.flow}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-400">压力</span>
+                                    <span class="text-cyan-400 font-mono">${device.pressure}</span>
+                                </div>
+                            ` : ''}
+                        </div>
+                        <div class="mt-2 flex space-x-2">
+                            <button onclick="toggleDevice('${device.id}', 'stop')" 
+                                class="flex-1 py-1.5 rounded ${device.status === 'running' || device.status === 'manual' ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-700 text-slate-400 cursor-not-allowed'} text-white text-xs font-medium transition-colors"
+                                ${device.status !== 'running' && device.status !== 'manual' ? 'disabled' : ''}>
+                                停止
+                            </button>
+                            <button onclick="toggleDevice('${device.id}', 'start')" 
+                                class="flex-1 py-1.5 rounded ${device.status === 'stopped' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-700 text-slate-400 cursor-not-allowed'} text-white text-xs font-medium transition-colors"
+                                ${device.status !== 'stopped' ? 'disabled' : ''}>
+                                启动
+                            </button>
+                        </div>
+                    `;
+                }
+                
+                card.innerHTML = content;
+                grid.appendChild(card);
+            });
+            
+            container.appendChild(grid);
+        }
+
+        // 更新设备值
+        function updateDeviceValue(deviceId, value) {
+            const el = document.getElementById(deviceId + '-val');
+            if (el) el.textContent = value + '%';
+        }
+
+        // 切换设备状态
+        function toggleDevice(deviceId, action) {
+            for (let group of deviceGroups) {
+                const device = group.devices.find(d => d.id === deviceId);
+                if (device) {
+                    device.status = action === 'start' ? 'running' : 'stopped';
+                    renderDevices();
+                    break;
+                }
+            }
+        }
+
+        // 删除分组
+        function deleteGroup(event, groupId) {
+            event.stopPropagation();
+            if (confirm('确定删除此分组？分组内的设备也将被删除。')) {
+                deviceGroups = deviceGroups.filter(g => g.id !== groupId);
+                if (currentGroup === groupId && deviceGroups.length > 0) {
+                    currentGroup = deviceGroups[0].id;
+                }
+                renderDeviceTabs();
+                renderDevices();
+            }
+        }
+
+        // 场景Tab切换
+        function switchSceneTab(tabName) {
+            currentSceneFilter = tabName;
+            
+            document.querySelectorAll('.scene-tab').forEach(tab => {
+                if (tab.dataset.tab === tabName) {
+                    tab.classList.add('active');
+                    tab.classList.remove('text-slate-300');
+                } else {
+                    tab.classList.remove('active');
+                    tab.classList.add('text-slate-300');
+                }
+            });
+            
+            renderScenes();
+        }
+
+        // 渲染场景卡片
+        function renderScenes() {
+            const container = document.getElementById('scene-grid');
+            container.innerHTML = '';
+            
+            scenes.forEach(scene => {
+                if (currentSceneFilter !== 'all' && scene.type !== currentSceneFilter) return;
+                
+                const card = document.createElement('div');
+                card.className = `scene-card glass-panel rounded-xl p-4 ${scene.type === 'auto' ? 'scene-auto' : 'scene-manual'} ${scene.active ? 'scene-active' : ''}`;
+                card.onclick = () => toggleScene(scene.id);
+                
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-3">
+                        <div class="flex items-center space-x-2 min-w-0">
+                            <span class="text-lg flex-shrink-0">${scene.type === 'auto' ? '🤖' : '👆'}</span>
+                            <div class="min-w-0">
+                                <h4 class="font-bold text-white text-sm truncate">${scene.name}</h4>
+                                <span class="text-xs ${scene.type === 'auto' ? 'text-emerald-400' : 'text-amber-400'}">
+                                    ${scene.type === 'auto' ? '自动场景' : '手动场景'}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="flex space-x-1 flex-shrink-0">
+                            ${scene.active ? '<span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>' : ''}
+                            <button onclick="editScene(event, ${scene.id})" class="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-2 mb-3">
+                        ${scene.conditions.length > 0 ? `
+                            <div class="text-xs text-slate-400">触发条件:</div>
+                            <div class="flex flex-wrap gap-1">
+                                ${scene.conditions.map(c => `<span class="text-[10px] px-1.5 py-0.5 bg-slate-800 rounded text-slate-300">${c}</span>`).join('')}
+                            </div>
+                        ` : '<div class="text-xs text-slate-500">手动点击执行</div>'}
+                    </div>
+                    
+                    <div class="flex justify-between items-center pt-2 border-t border-slate-700/50 text-xs">
+                        <span class="text-slate-400">今日: ${scene.triggers}次</span>
+                        <span class="text-slate-500 truncate ml-2">${scene.lastRun}</span>
+                    </div>
+                    
+                    ${scene.type === 'manual' ? `
+                        <button onclick="executeScene(event, ${scene.id})" class="w-full mt-2 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-lg text-xs text-white font-medium transition-colors">
+                            立即执行
+                        </button>
+                    ` : ''}
+                `;
+                
+                container.appendChild(card);
+            });
+        }
+
+        // 切换场景激活状态
+        function toggleScene(sceneId) {
+            const scene = scenes.find(s => s.id === sceneId);
+            if (scene.type === 'auto') {
+                scene.active = !scene.active;
+                renderScenes();
+            }
+        }
+
+        // 执行手动场景
+        function executeScene(event, sceneId) {
+            event.stopPropagation();
+            const scene = scenes.find(s => s.id === sceneId);
+            scene.triggers++;
+            scene.lastRun = '刚刚';
+            alert(`执行场景: ${scene.name}`);
+            renderScenes();
+        }
+
+        // 编辑场景
+        function editScene(event, sceneId) {
+            event.stopPropagation();
+            editingSceneId = sceneId;
+            const scene = scenes.find(s => s.id === sceneId);
+            
+            document.getElementById('scene-modal-title').textContent = '编辑场景';
+            document.getElementById('scene-name').value = scene.name;
+            
+            document.querySelector(`input[name="scene-type"][value="${scene.type}"]`).checked = true;
+            toggleSceneType();
+            
+            document.getElementById('scene-modal').classList.remove('hidden');
+            document.getElementById('scene-modal').classList.add('flex');
+        }
+
+        // 报警Tab切换
+        function switchAlarmTab(tabName) {
+            currentAlarmFilter = tabName;
+            
+            document.querySelectorAll('.alarm-tab').forEach(tab => {
+                if (tab.dataset.tab === tabName) {
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                }
+            });
+            
+            renderAlarms();
+        }
+
+        // 渲染报警
+        function renderAlarms() {
+            const container = document.getElementById('alarm-list');
+            container.innerHTML = '';
+            
+            alarms.forEach(alarm => {
+                if (currentAlarmFilter !== 'all' && alarm.level !== currentAlarmFilter) return;
+                
+                const div = document.createElement('div');
+                div.className = `alarm-item alarm-${alarm.level} p-3 rounded-lg glass-panel flex items-center justify-between cursor-pointer hover:bg-slate-800/80 transition-colors`;
+                
+                div.innerHTML = `
+                    <div class="flex items-center space-x-3 min-w-0 flex-1">
+                        <div class="w-10 h-10 rounded-full bg-${alarm.level === 'critical' ? 'red' : alarm.level === 'warning' ? 'amber' : 'blue'}-500/20 flex items-center justify-center flex-shrink-0">
+                            <svg class="w-5 h-5 text-${alarm.level === 'critical' ? 'red' : alarm.level === 'warning' ? 'amber' : 'blue'}-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                ${alarm.level === 'critical' ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>' : 
+                                  alarm.level === 'warning' ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>' :
+                                  '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>'}
+                            </svg>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center space-x-2 flex-wrap">
+                                <span class="font-bold text-white text-sm">${alarm.title}</span>
+                                <span class="text-[10px] px-1.5 py-0.5 rounded bg-${alarm.level === 'critical' ? 'red' : alarm.level === 'warning' ? 'amber' : 'blue'}-500/20 text-${alarm.level === 'critical' ? 'red' : alarm.level === 'warning' ? 'amber' : 'blue'}-400">
+                                    ${alarm.level === 'critical' ? '紧急' : alarm.level === 'warning' ? '警告' : '提示'}
+                                </span>
+                                <span class="text-[10px] ${alarm.confirmed ? 'text-emerald-400' : 'text-slate-500'}">${alarm.confirmed ? '已处理' : '未处理'}</span>
+                            </div>
+                            <div class="text-sm text-slate-300 mt-0.5 truncate">${alarm.device} - ${alarm.desc}</div>
+                            <div class="text-xs text-slate-500 mt-1">${alarm.time} • 持续 ${alarm.duration}</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2 flex-shrink-0 ml-2">
+                        ${!alarm.confirmed ? `
+                            <button onclick="acknowledgeAlarm(event, ${alarm.id})" class="px-3 py-1.5 bg-${alarm.level === 'critical' ? 'red' : 'amber'}-600 hover:bg-${alarm.level === 'critical' ? 'red' : 'amber'}-700 rounded text-xs text-white transition-colors">确认</button>
+                        ` : '<span class="px-3 py-1.5 bg-slate-700 text-slate-400 rounded text-xs">已确认</span>'}
+                    </div>
+                `;
+                
+                container.appendChild(div);
+            });
+            
+            updateAlarmStats();
+        }
+
+        // 确认报警
+        function acknowledgeAlarm(event, alarmId) {
+            event.stopPropagation();
+            const alarm = alarms.find(a => a.id === alarmId);
+            alarm.confirmed = true;
+            renderAlarms();
+        }
+
+        // 一键确认
+        function acknowledgeAll() {
+            alarms.forEach(a => a.confirmed = true);
+            renderAlarms();
+        }
+
+        // 更新报警统计
+        function updateAlarmStats() {
+            const unconfirmed = alarms.filter(a => !a.confirmed);
+            const critical = unconfirmed.filter(a => a.level === 'critical').length;
+            const warning = unconfirmed.filter(a => a.level === 'warning').length;
+            
+            document.getElementById('alarm-badge').textContent = unconfirmed.length;
+            document.getElementById('alarm-badge').style.display = unconfirmed.length > 0 ? 'flex' : 'none';
+            document.getElementById('uncritical-count').textContent = critical;
+            document.getElementById('unwarning-count').textContent = warning;
+            
+            // 更新Tab数字
+            document.querySelectorAll('.alarm-tab').forEach(tab => {
+                const type = tab.dataset.tab;
+                const count = type === 'all' ? alarms.length : alarms.filter(a => a.level === type).length;
+                const text = type === 'all' ? `全部 (${count})` : type === 'critical' ? `紧急 (${count})` : type === 'warning' ? `警告 (${count})` : `提示 (${count})`;
+                tab.innerHTML = text;
+            });
+        }
+
+        // 设置Tab切换
+        function switchSettingTab(tabName) {
+            currentSettingTab = tabName;
+            
+            document.querySelectorAll('.setting-tab').forEach(tab => {
+                if (tab.dataset.tab === tabName) {
+                    tab.classList.add('active');
+                    tab.classList.remove('text-slate-300');
+                } else {
+                    tab.classList.remove('active');
+                    tab.classList.add('text-slate-300');
+                }
+            });
+            
+            document.querySelectorAll('.setting-panel').forEach(panel => {
+                panel.classList.add('hidden');
+            });
+            document.getElementById('setting-panel-' + tabName).classList.remove('hidden');
+        }
+
+        // 弹窗函数保持不变...
+        function showAddGroupModal() {
+            document.getElementById('add-group-modal').classList.remove('hidden');
+            document.getElementById('add-group-modal').classList.add('flex');
+            document.getElementById('new-group-name').value = '';
+        }
+
+        function closeAddGroupModal() {
+            document.getElementById('add-group-modal').classList.add('hidden');
+            document.getElementById('add-group-modal').classList.remove('flex');
+        }
+
+        function selectGroupColor(color) {
+            selectedGroupColor = color;
+            document.querySelectorAll('.color-select').forEach(btn => {
+                if (btn.dataset.color === color) {
+                    btn.classList.add('ring-2', 'ring-offset-2', 'ring-offset-slate-800', `ring-${color}-500`);
+                } else {
+                    btn.classList.remove('ring-2', 'ring-offset-2', 'ring-offset- slate-800', `ring-${btn.dataset.color}-500`);
+                }
+            });
+        }
+
+        function confirmAddGroup() {
+            const name = document.getElementById('new-group-name').value;
+            if (!name) {
+                alert('请输入分组名称');
+                return;
+            }
+            
+            const id = 'group_' + Date.now();
+            deviceGroups.push({
+                id: id,
+                name: name,
+                color: selectedGroupColor,
+                devices: []
+            });
+            
+            closeAddGroupModal();
+            currentGroup = id;
+            renderDeviceTabs();
+            renderDevices();
+        }
+
+        function showAddDeviceModal() {
+            const select = document.getElementById('new-device-group');
+            select.innerHTML = '';
+            deviceGroups.forEach(group => {
+                const option = document.createElement('option');
+                option.value = group.id;
+                option.textContent = group.name;
+                select.appendChild(option);
+            });
+            
+            document.getElementById('add-device-modal').classList.remove('hidden');
+            document.getElementById('add-device-modal').classList.add('flex');
+            document.getElementById('new-device-name').value = '';
+        }
+
+        function closeAddDeviceModal() {
+            document.getElementById('add-device-modal').classList.add('hidden');
+            document.getElementById('add-device-modal').classList.remove('flex');
+        }
+
+        function onDeviceTypeChange() {
+            const type = document.getElementById('new-device-type').value;
+            document.getElementById('dc-config').classList.toggle('hidden', type !== 'dc');
+            document.getElementById('ac-config').classList.toggle('hidden', type !== 'ac');
+        }
+
+        function confirmAddDevice() {
+            const name = document.getElementById('new-device-name').value;
+            const groupId = document.getElementById('new-device-group').value;
+            const type = document.getElementById('new-device-type').value;
+            
+            if (!name) {
+                alert('请输入设备名称');
+                return;
+            }
+            
+            const group = deviceGroups.find(g => g.id === groupId);
+            const newDevice = {
+                id: 'dev_' + Date.now(),
+                name: name,
+                type: type,
+                status: 'stopped',
+                spec: type === 'dc' ? '24V' : '220V'
+            };
+            
+            if (type === 'dc') {
+                newDevice.value = 0;
+            } else {
+                newDevice.runtime = '00:00:00';
+                newDevice.current = '0.0A';
+            }
+            
+            group.devices.push(newDevice);
+            closeAddDeviceModal();
+            
+            if (currentGroup !== groupId) {
+                currentGroup = groupId;
+            }
+            renderDeviceTabs();
+            renderDevices();
+        }
+
+        function openSceneModal() {
+            editingSceneId = null;
+            document.getElementById('scene-modal-title').textContent = '新建场景';
+            document.getElementById('scene-name').value = '';
+            document.querySelector('input[name="scene-type"][value="auto"]').checked = true;
+            toggleSceneType();
+            document.getElementById('scene-modal').classList.remove('hidden');
+            document.getElementById('scene-modal').classList.add('flex');
+        }
+
+        function closeSceneModal() {
+            document.getElementById('scene-modal').classList.add('hidden');
+            document.getElementById('scene-modal').classList.remove('flex');
+        }
+
+        function toggleSceneType() {
+            const type = document.querySelector('input[name="scene-type"]:checked').value;
+            document.getElementById('auto-conditions').classList.toggle('hidden', type !== 'auto');
+        }
+
+        function addCondition() {
+            const div = document.createElement('div');
+            div.className = 'flex items-center space-x-2 bg-slate-800/50 p-2 rounded';
+            div.innerHTML = `
+                <input type="checkbox" checked class="rounded bg-slate-700 border-slate-600">
+                <select class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white">
+                    <option>温度</option>
+                    <option>湿度</option>
+                    <option>光照</option>
+                    <option>CO2</option>
+                </select>
+                <select class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white">
+                    <option>></option>
+                    <option><</option>
+                    <option>=</option>
+                </select>
+                <input type="number" class="w-16 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white">
+                <button onclick="removeCondition(this)" class="ml-auto text-red-400 hover:text-red-300 text-xs">删除</button>
+            `;
+            document.getElementById('conditions-list').appendChild(div);
+        }
+
+        function removeCondition(btn) {
+            btn.parentElement.remove();
+        }
+
+        function addAction() {
+            alert('添加设备动作功能');
+        }
+
+        function removeAction(btn) {
+            btn.parentElement.remove();
+        }
+
+        function confirmSaveScene() {
+            const name = document.getElementById('scene-name').value;
+            const type = document.querySelector('input[name="scene-type"]:checked').value;
+            
+            if (!name) {
+                alert('请输入场景名称');
+                return;
+            }
+            
+            if (editingSceneId) {
+                const scene = scenes.find(s => s.id === editingSceneId);
+                scene.name = name;
+                scene.type = type;
+            } else {
+                scenes.push({
+                    id: Date.now(),
+                    name: name,
+                    type: type,
+                    active: false,
+                    conditions: type === 'auto' ? ['新条件'] : [],
+                    triggers: 0,
+                    lastRun: '从未'
+                });
+            }
+            
+            closeSceneModal();
+            renderScenes();
+        }
+
+        function emergencyStop() {
+            if (confirm('确定要紧急停止所有设备吗？')) {
+                deviceGroups.forEach(group => {
+                    group.devices.forEach(device => {
+                        if (device.status !== 'fault') {
+                            device.status = 'stopped';
+                        }
+                    });
+                });
+                alert('所有设备已紧急停止！');
+                if (!document.getElementById('devices').classList.contains('hidden')) {
+                    renderDevices();
+                }
+            }
+        }
+
+        function scrollDeviceTabs(direction) {
+            const container = document.getElementById('device-tabs');
+            const scrollAmount = 100;
+            if (direction === 'left') {
+                container.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
+            } else {
+                container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+            }
+        }
+
+        function updateClock() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('zh-CN', { hour12: false });
+            const headerTime = document.getElementById('header-time');
+            if (headerTime) headerTime.textContent = timeStr;
+        }
+
+        // 初始化
+        window.onload = function() {
+            initCharts();
+            updateClock();
+            setInterval(updateClock, 1000);
+            selectGroupColor('blue');
+            
+            window.addEventListener('resize', () => {
+                tempGauge && tempGauge.resize();
+                humidityGauge && humidityGauge.resize();
+                co2Gauge && co2Gauge.resize();
+                lightGauge && lightGauge.resize();
+                trendChart && trendChart.resize();
+            });
+        };
+
+        // 渲染传感器卡片（简化版）
+        function renderSensors() {
+            const container = document.getElementById('sensor-grid');
+            if (!container) return;
+
+            container.innerHTML = '';
+
+            sensors.forEach(sensor => {
+                const card = document.createElement('div');
+                card.className = 'glass-panel rounded-lg p-3 cursor-pointer hover:bg-slate-800/80 transition-all border border-slate-700/50 hover:border-cyan-500/50';
+                card.onclick = () => openSensorLog(sensor.id);
+
+                const typeColors = {
+                    temp: 'text-orange-400',
+                    humidity: 'text-blue-400',
+                    light: 'text-yellow-400',
+                    co2: 'text-purple-400',
+                    soil: 'text-emerald-400'
+                };
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-xs text-slate-400">${sensor.location}</span>
+                        <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">${sensor.type === 'temp' ? '温度' : sensor.type === 'humidity' ? '湿度' : sensor.type === 'light' ? '光照' : sensor.type === 'co2' ? 'CO₂' : '土壤'}</span>
+                    </div>
+                    <h4 class="font-medium text-white text-sm mb-2 truncate">${sensor.name}</h4>
+                    <div class="flex items-baseline space-x-1 mb-2">
+                        <span class="text-2xl font-bold ${typeColors[sensor.type]}">${sensor.value}</span>
+                        <span class="text-xs text-slate-400">${sensor.unit}</span>
+                    </div>
+                    <div class="text-[10px] text-slate-500 flex items-center">
+                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        ${sensor.lastUpdate}
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        // 打开传感器日志弹窗（列表形式，无图表）
+        function openSensorLog(sensorId) {
+            const sensor = sensors.find(s => s.id === sensorId);
+            if (!sensor) return;
+
+            // 生成模拟历史数据（24条，每小时一条）
+            const logData = [];
+            for (let i = 23; i >= 0; i--) {
+                const time = new Date();
+                time.setHours(time.getHours() - i);
+                const timeStr = time.getFullYear() + '-' + String(time.getMonth()+1).padStart(2, '0') + '-' + String(time.getDate()).padStart(2, '0') + ' ' + String(time.getHours()).padStart(2, '0') + ':00:00';
+
+                let baseValue = sensor.value;
+                let variation = (Math.random() - 0.5) * 2;
+                let value = (baseValue + variation).toFixed(1);
+
+                logData.push({ time: timeStr, value: value + sensor.unit });
+            }
+
+            const modal = document.createElement('div');
+            modal.id = 'sensor-log-modal';
+            modal.className = 'fixed inset-0 modal-backdrop flex items-center justify-center z-50';
+
+            const typeColor = sensor.type === 'temp' ? 'orange' : sensor.type === 'humidity' ? 'blue' : sensor.type === 'light' ? 'yellow' : sensor.type === 'co2' ? 'purple' : 'emerald';
+
+            modal.innerHTML = `
+                <div class="glass-panel rounded-xl w-[600px] h-[500px] border border-slate-600 shadow-2xl flex flex-col">
+                    <div class="flex justify-between items-center p-4 border-b border-slate-700">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-8 h-8 rounded-full bg-${typeColor}-500/20 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-${typeColor}-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                            </div>
+                            <div>
+                                <h3 class="text-base font-bold text-white">${sensor.name}</h3>
+                                <p class="text-xs text-slate-400">${sensor.location}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <span class="text-xl font-bold text-${typeColor}-400">${sensor.value}${sensor.unit}</span>
+                            <button onclick="closeSensorLogModal()" class="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex-1 overflow-hidden flex flex-col">
+                        <div class="p-3 bg-slate-800/30 border-b border-slate-700 flex justify-between items-center">
+                            <span class="text-xs text-slate-400">最近24小时数据记录</span>
+                            <span class="text-xs text-slate-500">共 ${logData.length} 条</span>
+                        </div>
+                        <div class="flex-1 overflow-y-auto custom-scroll p-0">
+                            <table class="w-full text-sm">
+                                <thead class="bg-slate-800/50 sticky top-0">
+                                    <tr>
+                                        <th class="text-left py-2 px-4 text-xs font-medium text-slate-400">时间</th>
+                                        <th class="text-right py-2 px-4 text-xs font-medium text-slate-400">数值</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-700/50">
+                                    ${logData.map((log, index) => `
+                                        <tr class="hover:bg-slate-800/30 ${index === 0 ? 'bg-cyan-500/5' : ''}">
+                                            <td class="py-2 px-4 text-slate-300 font-mono text-xs">${log.time}</td>
+                                            <td class="py-2 px-4 text-right font-bold text-${typeColor}-400">${log.value}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+        }
+
+        // 关闭传感器日志弹窗
+        function closeSensorLogModal() {
+            const modal = document.getElementById('sensor-log-modal');
+            if (modal) {
+                modal.remove();
+            }
+        }
+    </script>
+</body>
+</html>
