@@ -332,8 +332,8 @@ public:
     QList<AutoStrategyState> strategyStates() const;
     bool setStrategyEnabled(int strategyId, bool enabled);
     bool triggerStrategy(int strategyId);
-    bool createStrategy(const AutoStrategy &config, bool *isUpdate, QString *error = nullptr);
-    bool deleteStrategy(int strategyId, QString *error = nullptr, bool *alreadyDeleted = nullptr);
+    bool createStrategy(const AutoStrategy &config, bool *isUpdate, QString *error = nullptr, bool syncToCloud = true);
+    bool deleteStrategy(int strategyId, QString *error = nullptr, bool *alreadyDeleted = nullptr, bool syncToCloud = true);
     bool setStrategyId(int old_id, int new_id);
     //
     bool isInEffectiveTime(const AutoStrategy &s, const QTime &now) const;
