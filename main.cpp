@@ -147,10 +147,10 @@ int main(int argc, char *argv[])
                  .arg(configPath));
 
     // 7. 启动U盘监控
-    fanzhou::UsbMonitor usbMonitor;
-    usbMonitor.setRpcLogPath(config.log.logToFile ? config.log.logFilePath : kDefaultLogPath);
-    usbMonitor.start(5000);
-    LOG_INFO(kLogSource, QStringLiteral("USB monitor started"));
+//    fanzhou::UsbMonitor usbMonitor;
+//    usbMonitor.setRpcLogPath(config.log.logToFile ? config.log.logFilePath : kDefaultLogPath);
+//    usbMonitor.start(5000);
+//    LOG_INFO(kLogSource, QStringLiteral("USB monitor started"));
 
     return app.exec();
 }
