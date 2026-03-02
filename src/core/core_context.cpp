@@ -540,6 +540,7 @@ void CoreContext::evaluateAllStrategies()
     for (AutoStrategy &s : strategys_) {
         if (deletedStrategies_.contains(s.strategyId)) continue;
         if (s.enabled == false) continue;                  // not enabled, skip
+        if (s.strategyType == QStringLiteral("manual")) continue; // manual策略仅通过手动触发
 
         if (!isInEffectiveTime(s, now.time()))   // not within the effective time
             continue;
