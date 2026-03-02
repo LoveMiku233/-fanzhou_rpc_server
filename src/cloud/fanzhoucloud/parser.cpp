@@ -73,7 +73,14 @@ bool parseAutoStrategyFromJson(const QJsonObject &obj, core::AutoStrategy &s, QS
                 return fail("action missing identifierValue");
 
             const QString identifier = aobj.value("identifier").toString();
-            const int value = aobj.value("identifierValue").toInt();
+            // Handle identifierValue as either number or string
+            const QJsonValue idVal = aobj.value("identifierValue");
+            int value = 0;
+            if (idVal.isString()) {
+                value = idVal.toString().toInt();
+            } else {
+                value = idVal.toInt();
+            }
 
             int node = 0;
             int channel = -1;
@@ -217,7 +224,14 @@ bool parseSceneActions(const QJsonArray &arr,
             return fail("action missing identifier or identifierValue");
 
         const QString identifier = obj.value("identifier").toString();
-        const int value = obj.value("identifierValue").toInt();
+        // Handle identifierValue as either number or string
+        const QJsonValue idVal = obj.value("identifierValue");
+        int value = 0;
+        if (idVal.isString()) {
+            value = idVal.toString().toInt();
+        } else {
+            value = idVal.toInt();
+        }
 
         int node = 0;
         int channel = -1;
