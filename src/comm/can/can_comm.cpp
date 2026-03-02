@@ -299,74 +299,25 @@ void CanComm::onTxPump()
     }
 
     if (errno == ENOBUFS || errno == EAGAIN || errno == EWOULDBLOCK) {
-        // 使用指数退避策略：退避时间 = kTxBackoffMs * 2^multiplier
-        // 安全：multiplier <= kMaxBackoffMultiplier (5)，最大退避 = 10 * 32 = 320ms
-        const int backoff = kTxBackoffMs * (1 << txBackoffMultiplier_);
-        txBackoffMs_ = backoff;
-        // 增加乘数用于下次退避（带上限）
-        if (txBackoffMultiplier_ < kMaxBackoffMultiplier) {
-            ++txBackoffMultiplier_;
-            txConsecutiveMaxBackoffCount_ = 0;  // 未达到最大退避，重置计数器
-        } else {
-            // 已达到最大退避，增加连续计数
-            ++txConsecutiveMaxBackoffCount_;
-        }
-        LOG_DEBUG(kLogSource, QStringLiteral("TX buffer full, backing off %1ms").arg(backoff));
-
-        // 当达到最大退避时，输出一次详细的诊断信息
-        // 这通常表示CAN总线未正确连接或配置
-        if (txBackoffMultiplier_ == kMaxBackoffMultiplier && !txDiagLogged_) {
-            txDiagLogged_ = true;
-            LOG_WARNING(kLogSource,
-                        QStringLiteral("CAN TX buffer full. Possible causes:\n"
-                                       "  1. No CAN device connected (no ACK)\n"
-                                       "  2. CAN interface misconfigured (bitrate mismatch)\n"
-                                       "  3. Missing termination resistor (120 ohm)\n"
-                                       "  4. Wiring issue (CAN_H/CAN_L)\n"
-                                       "Check 'ip -details link show %1' for interface status")
-                            .arg(config_.interface));
-        }
-
-        // 如果连续达到最大退避次数超过限制，丢弃当前帧并重置退避
-        // 这防止系统因持续的总线问题而永久卡死
-        if (txConsecutiveMaxBackoffCount_ >= kMaxConsecutiveMaxBackoffRetries) {
-            const bool extended = (item.frame.can_id & CAN_EFF_FLAG) != 0;
-            const quint32 droppedCanId = item.frame.can_id & (extended ? CAN_EFF_MASK : CAN_SFF_MASK);
-            LOG_WARNING(kLogSource,
-                        QStringLiteral("TX persistent failure, dropping frame: id=0x%1, dlc=%2, retried %3 times")
-                            .arg(droppedCanId, 0, 16)
-                            .arg(item.frame.can_dlc)
-                            .arg(txConsecutiveMaxBackoffCount_));
-            emit errorOccurred(
-                QStringLiteral("CAN TX persistent failure, frame dropped (id=0x%1)")
-                    .arg(droppedCanId, 0, 16));
-            txQueue_.dequeue();
-            // 重置退避状态，允许系统尝试恢复
-            txBackoffMultiplier_ = 0;
-            txBackoffMs_ = 0;
-            txConsecutiveMaxBackoffCount_ = 0;
-            txDiagLogged_ = false;
-
-            // 增加丢帧计数
-            ++droppedFrameCount_;
-
-            // 如果丢帧次数超过阈值，尝试重置CAN接口
-            // 这可以解决因总线状态异常导致的持续发送失败问题
-            if (droppedFrameCount_ >= kResetThreshold) {
-                LOG_WARNING(kLogSource,
-                            QStringLiteral("Dropped %1 frames consecutively, attempting CAN interface reset...")
-                                .arg(droppedFrameCount_));
-                if (tryResetInterface()) {
-                    droppedFrameCount_ = 0;
-                    LOG_INFO(kLogSource, QStringLiteral("CAN interface reset successful, communication recovered"));
-                } else {
-                    // 重置失败，重置丢帧计数以避免每次丢帧都触发无效的重置尝试
-                    droppedFrameCount_ = 0;
-                    LOG_ERROR(kLogSource,
-                              QStringLiteral("CAN interface reset failed. "
-                                             "Will retry after dropping %1 more frames.")
-                                  .arg(kResetThreshold));
-                }
+        // TX buffer满，直接重启CAN接口，不进行退避
+        LOG_WARNING(kLogSource,
+                    QStringLiteral("TX buffer full, attempting to restart CAN interface"));
+        if (!tryResetInterface()) {
+            // 重置失败（冷却时间/达到最大重置次数/重置进行中），丢弃当前帧避免死循环
+            // 注意：item 是本地拷贝，tryResetInterface 失败后可能队列已被 close() 清空
+            if (!txQueue_.isEmpty()) {
+                const bool extended = (item.frame.can_id & CAN_EFF_FLAG) != 0;
+                const quint32 droppedCanId = item.frame.can_id & (extended ? CAN_EFF_MASK : CAN_SFF_MASK);
+                ++droppedFrameCount_;
+                LOG_ERROR(kLogSource,
+                          QStringLiteral("CAN reset failed, dropping frame: id=0x%1, dlc=%2 (dropped %3)")
+                              .arg(droppedCanId, 0, 16)
+                              .arg(item.frame.can_dlc)
+                              .arg(droppedFrameCount_));
+                emit errorOccurred(
+                    QStringLiteral("CAN TX buffer full, reset failed, frame dropped (id=0x%1)")
+                        .arg(droppedCanId, 0, 16));
+                txQueue_.dequeue();
             }
         }
         return;
