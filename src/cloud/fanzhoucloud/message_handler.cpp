@@ -111,7 +111,7 @@ bool CloudMessageHandler::applyStrategies(
             return false;
         }
 
-        if (!ctx_->createStrategy(cfg, &isUpdate, &err)) {
+        if (!ctx_->createStrategy(cfg, &isUpdate, &err, false)) {
             errMsg = err;
             return false;
         }
@@ -308,7 +308,7 @@ bool CloudMessageHandler::handleStrategyCommand(
         QString delErr;
         for (int id : ids) {
             bool alreadyDeleted = false;
-            if (!ctx_->deleteStrategy(id, &delErr, &alreadyDeleted)) {
+            if (!ctx_->deleteStrategy(id, &delErr, &alreadyDeleted, false)) {
                 if (alreadyDeleted) {
                     LOG_INFO(kLogSource,
                              QStringLiteral("Skip delete for %1: %2")

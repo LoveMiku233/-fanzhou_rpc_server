@@ -633,7 +633,7 @@ bool CoreContext::triggerStrategy(int strategyId)
 }
 
 // @
-bool CoreContext::createStrategy(const AutoStrategy &config, bool *isUpdate, QString *error)
+bool CoreContext::createStrategy(const AutoStrategy &config, bool *isUpdate, QString *error, bool syncToCloud)
 {
     // 查找现有策略（无视版本号，找到就更新）
     for (int i = 0; i < strategys_.size(); ++i) {
@@ -665,7 +665,7 @@ bool CoreContext::createStrategy(const AutoStrategy &config, bool *isUpdate, QSt
 
         // ========== 同步到云端（携带 +1 后的版本号）==========
 
-        if (cloudMessageHandler) {
+        if (syncToCloud && cloudMessageHandler) {
             QJsonObject msg;
             msg.insert("method", QStringLiteral("set"));
             if (!cloudMessageHandler->sendStrategyCommand(s, msg)) {
@@ -696,7 +696,7 @@ bool CoreContext::createStrategy(const AutoStrategy &config, bool *isUpdate, QSt
 
     // ========== 同步新建到云端 ==========
     // 删除sceneId
-    if (cloudMessageHandler) {
+    if (syncToCloud && cloudMessageHandler) {
         QJsonObject msg;
         msg.insert("method", QStringLiteral("set"));
         if (!cloudMessageHandler->sendStrategyCommand(strategys_.last(), msg)) {
@@ -711,7 +711,7 @@ bool CoreContext::createStrategy(const AutoStrategy &config, bool *isUpdate, QSt
 }
 
 
-bool CoreContext::deleteStrategy(int strategyId, QString *error, bool *alreadyDeleted)
+bool CoreContext::deleteStrategy(int strategyId, QString *error, bool *alreadyDeleted, bool syncToCloud)
 {
     const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
     if (alreadyDeleted) *alreadyDeleted = false;
@@ -732,26 +732,28 @@ bool CoreContext::deleteStrategy(int strategyId, QString *error, bool *alreadyDe
             LOG_INFO(kLogSource, QStringLiteral("Deleted strategy %1").arg(strategyId));
 
             // ========== 同步删除到云端 ==========
-            int channelId = cloudMessageHandler->getChannelId();
-            if (cloudMessageHandler && channelId >= 0) {
-                QJsonObject cloudMsg;
-                cloudMsg.insert("data", strategyId);  // 单个ID直接传整数
-                cloudMsg.insert("type", strategyType);
-                cloudMsg.insert("requestId", QStringLiteral("local_del_%1_%2")
-                    .arg(strategyId)
-                    .arg(nowMs));
-                cloudMsg.insert("timestamp", nowMs);
-
-                if (!cloudMessageHandler->sendDeleteCommand(channelId, cloudMsg)) {
-                    LOG_WARNING(kLogSource,
-                        QStringLiteral("Failed to sync delete to cloud for strategy %1")
-                        .arg(strategyId));
-                    // 继续返回 true，本地删除已成功，云端同步失败可重试或记录
-                } else {
-                    LOG_DEBUG(kLogSource,
-                        QStringLiteral("Synced delete to cloud: strategy=%1, channel=%2")
+            if (syncToCloud && cloudMessageHandler) {
+                int channelId = cloudMessageHandler->getChannelId();
+                if (channelId >= 0) {
+                    QJsonObject cloudMsg;
+                    cloudMsg.insert("data", strategyId);  // 单个ID直接传整数
+                    cloudMsg.insert("type", strategyType);
+                    cloudMsg.insert("requestId", QStringLiteral("local_del_%1_%2")
                         .arg(strategyId)
-                        .arg(channelId));
+                        .arg(nowMs));
+                    cloudMsg.insert("timestamp", nowMs);
+
+                    if (!cloudMessageHandler->sendDeleteCommand(channelId, cloudMsg)) {
+                        LOG_WARNING(kLogSource,
+                            QStringLiteral("Failed to sync delete to cloud for strategy %1")
+                            .arg(strategyId));
+                        // 继续返回 true，本地删除已成功，云端同步失败可重试或记录
+                    } else {
+                        LOG_DEBUG(kLogSource,
+                            QStringLiteral("Synced delete to cloud: strategy=%1, channel=%2")
+                            .arg(strategyId)
+                            .arg(channelId));
+                    }
                 }
             }
             // ====================================
