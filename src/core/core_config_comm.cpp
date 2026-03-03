@@ -23,6 +23,9 @@ bool CoreConfig::loadCan(const QJsonObject &root)
         if (canObj.contains(QStringLiteral("canFd"))) {
             can.canFd = canObj[QStringLiteral("canFd")].toBool(can.canFd);
         }
+        if (canObj.contains(QStringLiteral("restartMs"))) {
+            can.restartMs = canObj[QStringLiteral("restartMs")].toInt(can.restartMs);
+        }
     } else {
         return false;
     }
@@ -37,6 +40,7 @@ void CoreConfig::saveCan(QJsonObject &root) const
     canObj[QStringLiteral("bitrate")] = can.bitrate;
     canObj[QStringLiteral("tripleSampling")] = can.tripleSampling;
     canObj[QStringLiteral("canFd")] = can.canFd;
+    canObj[QStringLiteral("restartMs")] = can.restartMs;
     root[QStringLiteral("can")] = canObj;
 }
 

@@ -24,6 +24,7 @@
 
 #include <QDateTime>
 #include <QDebug>
+#include <QElapsedTimer>
 #include <QProcess>
 
 #include <cerrno>
@@ -518,6 +519,10 @@ bool CanComm::tryResetInterface()
     ++txResetAttemptCount_;
     lastResetTimeMs_ = now;
 
+    // 计时：测量整个重置过程的耗时
+    QElapsedTimer resetTimer;
+    resetTimer.start();
+
     LOG_WARNING(kLogSource,
              QStringLiteral("Resetting CAN interface %1 (attempt %2/%3)")
                  .arg(config_.interface)
@@ -535,7 +540,10 @@ bool CanComm::tryResetInterface()
                               config_.interface, QStringLiteral("down")});
         process.start();
         if (!process.waitForFinished(kProcessTimeoutMs)) {
-            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 down timed out").arg(config_.interface));
+            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 down timed out (elapsed %2ms)")
+                          .arg(config_.interface)
+                          .arg(resetTimer.elapsed()));
+            lastResetDurationMs_ = resetTimer.elapsed();
             resetInProgress_ = false;
             return false;
         }
@@ -550,7 +558,7 @@ bool CanComm::tryResetInterface()
         }
     }
 
-    // 3. 重新配置CAN波特率（接口必须在down状态下配置）
+    // 3. 重新配置CAN波特率和restart-ms（接口必须在down状态下配置）
     if (config_.bitrate > 0) {
         QProcess process;
         process.setProgram(QStringLiteral("ip"));
@@ -560,12 +568,19 @@ bool CanComm::tryResetInterface()
         if (config_.tripleSampling) {
             args << QStringLiteral("triple-sampling") << QStringLiteral("on");
         }
+        // 配置 restart-ms：CAN控制器在bus-off后自动重启的延迟
+        // 这样即使没有手动重置，硬件也能自动从bus-off状态恢复
+        if (config_.restartMs > 0) {
+            args << QStringLiteral("restart-ms") << QString::number(config_.restartMs);
+        }
         process.setArguments(args);
         process.start();
         if (!process.waitForFinished(kProcessTimeoutMs)) {
-            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 type can bitrate %2 timed out")
+            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 type can bitrate %2 timed out (elapsed %3ms)")
                           .arg(config_.interface)
-                          .arg(config_.bitrate));
+                          .arg(config_.bitrate)
+                          .arg(resetTimer.elapsed()));
+            lastResetDurationMs_ = resetTimer.elapsed();
             resetInProgress_ = false;
             return false;
         }
@@ -576,9 +591,10 @@ bool CanComm::tryResetInterface()
                             .arg(config_.bitrate)
                             .arg(QString::fromUtf8(process.readAllStandardError())));
         } else {
-            LOG_INFO(kLogSource, QStringLiteral("CAN interface %1 bitrate reconfigured to %2")
+            LOG_INFO(kLogSource, QStringLiteral("CAN interface %1 reconfigured: bitrate=%2, restart-ms=%3")
                          .arg(config_.interface)
-                         .arg(config_.bitrate));
+                         .arg(config_.bitrate)
+                         .arg(config_.restartMs));
         }
     }
 
@@ -592,7 +608,10 @@ bool CanComm::tryResetInterface()
                               QStringLiteral("up")});
         process.start();
         if (!process.waitForFinished(kProcessTimeoutMs)) {
-            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 up timed out").arg(config_.interface));
+            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 up timed out (elapsed %2ms)")
+                          .arg(config_.interface)
+                          .arg(resetTimer.elapsed()));
+            lastResetDurationMs_ = resetTimer.elapsed();
             resetInProgress_ = false;
             return false;
         }
@@ -601,6 +620,7 @@ bool CanComm::tryResetInterface()
                       QStringLiteral("ip link set %1 up failed: %2")
                           .arg(config_.interface)
                           .arg(QString::fromUtf8(process.readAllStandardError())));
+            lastResetDurationMs_ = resetTimer.elapsed();
             resetInProgress_ = false;
             return false;
         }
@@ -609,19 +629,22 @@ bool CanComm::tryResetInterface()
 
     // 5. 重新打开socket
     const bool reopened = open();
+    lastResetDurationMs_ = resetTimer.elapsed();
     resetInProgress_ = false;
 
     if (reopened) {
         LOG_INFO(kLogSource,
-                 QStringLiteral("CAN interface %1 reset successful, socket reopened")
-                     .arg(config_.interface));
+                 QStringLiteral("CAN interface %1 reset successful in %2ms, socket reopened")
+                     .arg(config_.interface)
+                     .arg(lastResetDurationMs_));
         // 重置成功后，重置重试计数器（允许未来再次重试）
         txResetAttemptCount_ = 0;
         return true;
     } else {
         LOG_ERROR(kLogSource,
-                  QStringLiteral("CAN interface %1 reset completed but socket reopen failed")
-                      .arg(config_.interface));
+                  QStringLiteral("CAN interface %1 reset completed in %2ms but socket reopen failed")
+                      .arg(config_.interface)
+                      .arg(lastResetDurationMs_));
         return false;
     }
 }

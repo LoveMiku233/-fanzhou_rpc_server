@@ -28,6 +28,7 @@ struct CanConfig {
     int bitrate = 250000;                        ///< CAN波特率
     bool tripleSampling = true;                  ///< 启用三次采样
     bool canFd = false;                          ///< 启用CAN FD模式
+    int restartMs = 100;                         ///< CAN控制器bus-off自动重启延迟（毫秒），0表示禁用
 };
 
 /**
@@ -97,6 +98,12 @@ public:
     bool isResetInProgress() const { return resetInProgress_; }
 
     /**
+     * @brief 获取最后一次重置的耗时（毫秒）
+     * @return 最后重置耗时，未重置过返回0
+     */
+    qint64 lastResetDurationMs() const { return lastResetDurationMs_; }
+
+    /**
      * @brief 发送CAN帧
      * @param canId CAN标识符
      * @param payload 帧数据（经典CAN最大8字节）
@@ -145,6 +152,7 @@ private:
     bool resetInProgress_ = false; ///< 接口重置是否正在进行中
     int droppedFrameCount_ = 0;    ///< 连续丢帧计数
     qint64 lastResetTimeMs_ = 0;   ///< 最后一次接口重置的时间戳
+    qint64 lastResetDurationMs_ = 0; ///< 最后一次接口重置的耗时（毫秒）
     int txConsecutiveNobufs_ = 0;  ///< 连续ENOBUFS次数
 
     // 空闲探测相关
@@ -156,7 +164,7 @@ private:
     static constexpr int kTxIntervalMs = 2;
     static constexpr int kMaxResetAttempts = 3;  ///< 最大接口重置尝试次数
     static constexpr int kResetCooldownMs = 5000;  ///< 接口重置冷却时间（毫秒）
-    static constexpr int kProcessTimeoutMs = 5000;  ///< 外部进程执行超时（毫秒）
+    static constexpr int kProcessTimeoutMs = 3000;  ///< 外部进程执行超时（毫秒）
     static constexpr int kNobufsRetryThreshold = 50;  ///< 连续ENOBUFS次数阈值，超过才重启接口（约100ms）
     static constexpr int kNobufsLogInterval = 10;     ///< ENOBUFS日志输出间隔（避免刷屏）
     static constexpr int kIdleProbeIntervalMs = 5000;  ///< 空闲探测定时器间隔（毫秒）

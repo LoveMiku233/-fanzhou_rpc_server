@@ -149,6 +149,7 @@ bool CoreContext::initCan()
     canConfig.bitrate = coreConfig.can.bitrate;
     canConfig.tripleSampling = coreConfig.can.tripleSampling;
     canConfig.canFd = false;
+    canConfig.restartMs = coreConfig.can.restartMs;
 
     canBus = new comm::CanComm(canConfig, this);
     connect(canBus, &comm::CanComm::errorOccurred, this, [](const QString &error) {
@@ -1972,6 +1973,7 @@ QJsonObject CoreContext::exportConfig() const
     canObj[QStringLiteral("interface")] = coreConfig.can.interface;
     canObj[QStringLiteral("bitrate")] = coreConfig.can.bitrate;
     canObj[QStringLiteral("tripleSampling")] = coreConfig.can.tripleSampling;
+    canObj[QStringLiteral("restartMs")] = coreConfig.can.restartMs;
     
     // CAN状态诊断信息（帮助诊断"CAN无法发送"的问题）
     if (canBus) {

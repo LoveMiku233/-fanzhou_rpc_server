@@ -11,6 +11,7 @@ struct CanConfig {
     int bitrate = 250000;
     bool tripleSampling = true;
     bool canFd = false;
+    int restartMs = 100;  ///< CAN控制器bus-off自动重启延迟（毫秒），0表示禁用
 };
 
 
