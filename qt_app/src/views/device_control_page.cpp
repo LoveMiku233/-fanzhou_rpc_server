@@ -1423,6 +1423,57 @@ void DeviceControlPage::refreshData()
         QJsonObject(),
         [this](const QJsonValue &result, const QJsonObject &error) {
             onGroupListReceived(result, error);
+
+            // After groups are loaded, fetch relay status to update device states
+            if (rpcClient_ && rpcClient_->isConnected()) {
+                rpcClient_->callAsync(
+                    QStringLiteral("relay.statusAll"),
+                    QJsonObject(),
+                    [this](const QJsonValue &statusResult, const QJsonObject &statusError) {
+                        if (!statusError.isEmpty() || !statusResult.isObject())
+                            return;
+
+                        QJsonObject sObj = statusResult.toObject();
+                        if (!sObj.value(QStringLiteral("ok")).toBool())
+                            return;
+
+                        QJsonArray nodes = sObj.value(QStringLiteral("nodes")).toArray();
+
+                        // Build a map of node online status
+                        QHash<int, bool> nodeOnline;
+                        for (const QJsonValue &nv : nodes) {
+                            QJsonObject no = nv.toObject();
+                            int nodeId = no.value(QStringLiteral("node")).toInt();
+                            bool online = no.value(QStringLiteral("online")).toBool();
+                            nodeOnline[nodeId] = online;
+                        }
+
+                        // Update device statuses based on node online status
+                        bool changed = false;
+                        for (int g = 0; g < groups_.size(); ++g) {
+                            for (int d = 0; d < groups_[g].devices.size(); ++d) {
+                                Models::DeviceInfo &dev = groups_[g].devices[d];
+                                if (dev.nodeId >= 0 && nodeOnline.contains(dev.nodeId)) {
+                                    bool online = nodeOnline[dev.nodeId];
+                                    if (!online && dev.status != "fault") {
+                                        dev.status = "fault";
+                                        dev.fault = QString::fromUtf8("\xe8\x8a\x82\xe7\x82\xb9\xe7\xa6\xbb\xe7\xba\xbf"); // 节点离线
+                                        changed = true;
+                                    } else if (online && dev.status == "fault"
+                                               && dev.fault == QString::fromUtf8("\xe8\x8a\x82\xe7\x82\xb9\xe7\xa6\xbb\xe7\xba\xbf")) {
+                                        dev.status = "stopped";
+                                        dev.fault.clear();
+                                        changed = true;
+                                    }
+                                }
+                            }
+                        }
+                        if (changed) {
+                            renderDevices();
+                        }
+                    },
+                    3000);
+            }
         },
         3000);
 }

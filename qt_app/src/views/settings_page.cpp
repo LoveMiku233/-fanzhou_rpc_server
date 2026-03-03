@@ -520,6 +520,89 @@ QWidget *SettingsPage::createMqttPanel()
     btnRow->addWidget(btnMqttSave_);
     vl->addLayout(btnRow);
 
+    // Connect MQTT save button: send MQTT config to RPC server
+    connect(btnMqttSave_, &QPushButton::clicked, this, [this]() {
+        if (!rpcClient_) return;
+
+        mqttStatusLabel_->setText(
+            QString::fromUtf8("MQTT \xe4\xbf\x9d\xe5\xad\x98\xe4\xb8\xad...")); // MQTT 保存中...
+        mqttStatusLabel_->setStyleSheet(
+            QString("color:%1; font-size:%2px;")
+                .arg(Style::kColorWarning)
+                .arg(Style::kFontNormal));
+
+        if (rpcClient_->isConnected()) {
+            QJsonObject params;
+            QJsonObject mqttConfig;
+            mqttConfig[QStringLiteral("server")] = editMqttServer_->text().trimmed();
+            mqttConfig[QStringLiteral("port")] = spinMqttPort_->value();
+            mqttConfig[QStringLiteral("clientId")] = editMqttClientId_->text().trimmed();
+            mqttConfig[QStringLiteral("username")] = editMqttUser_->text().trimmed();
+            mqttConfig[QStringLiteral("password")] = editMqttPassword_->text().trimmed();
+            mqttConfig[QStringLiteral("keepAlive")] = spinMqttKeepAlive_->value();
+            mqttConfig[QStringLiteral("pubTopic")] = editMqttPubTopic_->text().trimmed();
+            mqttConfig[QStringLiteral("subTopic")] = editMqttSubTopic_->text().trimmed();
+            mqttConfig[QStringLiteral("reportInterval")] = spinMqttReportInterval_->value();
+            params[QStringLiteral("mqtt")] = mqttConfig;
+
+            rpcClient_->callAsync(
+                QStringLiteral("config.save"),
+                params,
+                [this](const QJsonValue &, const QJsonObject &error) {
+                    if (error.isEmpty()) {
+                        mqttStatusLabel_->setText(
+                            QString::fromUtf8("MQTT \xe9\x85\x8d\xe7\xbd\xae\xe5\xb7\xb2\xe4\xbf\x9d\xe5\xad\x98")); // MQTT 配置已保存
+                        mqttStatusLabel_->setStyleSheet(
+                            QString("color:%1; font-size:%2px;")
+                                .arg(Style::kColorSuccess)
+                                .arg(Style::kFontNormal));
+                    } else {
+                        mqttStatusLabel_->setText(
+                            QString::fromUtf8("MQTT \xe4\xbf\x9d\xe5\xad\x98\xe5\xa4\xb1\xe8\xb4\xa5")); // MQTT 保存失败
+                        mqttStatusLabel_->setStyleSheet(
+                            QString("color:%1; font-size:%2px;")
+                                .arg(Style::kColorDanger)
+                                .arg(Style::kFontNormal));
+                    }
+                },
+                3000);
+        } else {
+            mqttStatusLabel_->setText(
+                QString::fromUtf8("\xe6\x9c\xaa\xe8\xbf\x9e\xe6\x8e\xa5\xe5\x88\xb0RPC\xe6\x9c\x8d\xe5\x8a\xa1\xe5\x99\xa8")); // 未连接到RPC服务器
+            mqttStatusLabel_->setStyleSheet(
+                QString("color:%1; font-size:%2px;")
+                    .arg(Style::kColorDanger)
+                    .arg(Style::kFontNormal));
+        }
+    });
+
+    // Connect MQTT disconnect button
+    connect(btnMqttDisconnect_, &QPushButton::clicked, this, [this]() {
+        if (!rpcClient_) return;
+
+        if (rpcClient_->isConnected()) {
+            QJsonObject params;
+            QJsonObject mqttConfig;
+            mqttConfig[QStringLiteral("enabled")] = false;
+            params[QStringLiteral("mqtt")] = mqttConfig;
+
+            rpcClient_->callAsync(
+                QStringLiteral("config.save"),
+                params,
+                [this](const QJsonValue &, const QJsonObject &error) {
+                    if (error.isEmpty()) {
+                        mqttStatusLabel_->setText(
+                            QString::fromUtf8("MQTT \xe5\xb7\xb2\xe6\x96\xad\xe5\xbc\x80")); // MQTT 已断开
+                        mqttStatusLabel_->setStyleSheet(
+                            QString("color:%1; font-size:%2px;")
+                                .arg(Style::kColorTextMuted)
+                                .arg(Style::kFontNormal));
+                    }
+                },
+                3000);
+        }
+    });
+
     vl->addStretch();
     return panel;
 }
@@ -576,17 +659,17 @@ QWidget *SettingsPage::createAboutPanel()
 
     vl->addSpacing(16);
 
-    // 2×2 info grid
+    // 2×2 info grid with dynamic labels
     QGridLayout *infoGrid = new QGridLayout;
     infoGrid->setHorizontalSpacing(24);
     infoGrid->setVerticalSpacing(10);
 
-    struct InfoItem { const char *label; const char *value; };
+    struct InfoItem { const char *label; const char *value; QLabel **outLabel; };
     InfoItem items[] = {
-        { "\xe8\xbd\xaf\xe4\xbb\xb6\xe7\x89\x88\xe6\x9c\xac", "v2.1.0"      },  // 软件版本
-        { "\xe7\xa1\xac\xe4\xbb\xb6\xe7\x89\x88\xe6\x9c\xac", "v1.2.0"      },  // 硬件版本
-        { "\xe7\xbc\x96\xe8\xaf\x91\xe6\x97\xa5\xe6\x9c\x9f", "2024-01-15"  },  // 编译日期
-        { "\xe8\xae\xbe\xe5\xa4\x87ID",                         "GH-001-A"    },  // 设备ID
+        { "\xe8\xbd\xaf\xe4\xbb\xb6\xe7\x89\x88\xe6\x9c\xac", "v2.1.0",      &aboutSwVersionLabel_  },  // 软件版本
+        { "\xe7\xa1\xac\xe4\xbb\xb6\xe7\x89\x88\xe6\x9c\xac", "v1.2.0",      &aboutHwVersionLabel_  },  // 硬件版本
+        { "\xe7\xbc\x96\xe8\xaf\x91\xe6\x97\xa5\xe6\x9c\x9f", "2024-01-15",  &aboutBuildDateLabel_  },  // 编译日期
+        { "\xe8\xae\xbe\xe5\xa4\x87ID",                         "GH-001-A",    &aboutDeviceIdLabel_   },  // 设备ID
     };
 
     for (int i = 0; i < 4; ++i) {
@@ -600,14 +683,14 @@ QWidget *SettingsPage::createAboutPanel()
                 .arg(Style::kColorTextMuted)
                 .arg(Style::kFontNormal));
 
-        QLabel *val = new QLabel(QString::fromUtf8(items[i].value));
-        val->setStyleSheet(
+        *items[i].outLabel = new QLabel(QString::fromUtf8(items[i].value));
+        (*items[i].outLabel)->setStyleSheet(
             QString("color:%1; font-size:%2px; font-weight:bold;")
                 .arg(Style::kColorTextPrimary)
                 .arg(Style::kFontNormal));
 
         infoGrid->addWidget(lbl, r, c);
-        infoGrid->addWidget(val, r, c + 1);
+        infoGrid->addWidget(*items[i].outLabel, r, c + 1);
     }
 
     vl->addLayout(infoGrid);
@@ -626,4 +709,43 @@ QWidget *SettingsPage::createAboutPanel()
 
     vl->addStretch();
     return panel;
+}
+
+// ---------------------------------------------------------------------------
+// refreshSysInfo  (fetch from RPC server)
+// ---------------------------------------------------------------------------
+
+void SettingsPage::refreshSysInfo()
+{
+    if (!rpcClient_ || !rpcClient_->isConnected())
+        return;
+
+    rpcClient_->callAsync(
+        QStringLiteral("sys.info"),
+        QJsonObject(),
+        [this](const QJsonValue &result, const QJsonObject &error) {
+            if (!error.isEmpty() || !result.isObject())
+                return;
+
+            QJsonObject obj = result.toObject();
+            if (!obj.value("ok").toBool())
+                return;
+
+            QString swVer = obj.value("version").toString();
+            if (!swVer.isEmpty() && aboutSwVersionLabel_)
+                aboutSwVersionLabel_->setText(swVer);
+
+            QString hwVer = obj.value("hwVersion").toString();
+            if (!hwVer.isEmpty() && aboutHwVersionLabel_)
+                aboutHwVersionLabel_->setText(hwVer);
+
+            QString buildDate = obj.value("buildDate").toString();
+            if (!buildDate.isEmpty() && aboutBuildDateLabel_)
+                aboutBuildDateLabel_->setText(buildDate);
+
+            QString deviceId = obj.value("deviceId").toString();
+            if (!deviceId.isEmpty() && aboutDeviceIdLabel_)
+                aboutDeviceIdLabel_->setText(deviceId);
+        },
+        3000);
 }
