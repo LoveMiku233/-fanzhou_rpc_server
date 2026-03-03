@@ -85,12 +85,6 @@ public:
     int droppedFrameCount() const { return droppedFrameCount_; }
 
     /**
-     * @brief 获取退避乘数
-     * @return 当前退避乘数
-     */
-    int backoffMultiplier() const { return txBackoffMultiplier_; }
-
-    /**
      * @brief 获取最后一次重置的时间戳
      * @return 最后重置时间戳（毫秒）
      */
@@ -138,10 +132,6 @@ private:
     };
     QQueue<TxItem> txQueue_;
     QTimer *txTimer_ = nullptr;
-    int txBackoffMs_ = 0;
-    int txBackoffMultiplier_ = 0;  ///< 用于指数退避的乘数
-    bool txDiagLogged_ = false;    ///< 是否已输出TX诊断信息（避免重复输出）
-    int txConsecutiveMaxBackoffCount_ = 0;  ///< 连续达到最大退避的次数
     int txResetAttemptCount_ = 0;  ///< 接口重置尝试次数
     bool resetInProgress_ = false; ///< 接口重置是否正在进行中
     int droppedFrameCount_ = 0;    ///< 连续丢帧计数
@@ -149,12 +139,8 @@ private:
 
     static constexpr int kMaxTxQueueSize = 512;
     static constexpr int kTxIntervalMs = 2;
-    static constexpr int kTxBackoffMs = 10;
-    static constexpr int kMaxBackoffMultiplier = 5;  ///< 最大退避乘数 (10ms * 2^5 = 320ms)
-    static constexpr int kMaxConsecutiveMaxBackoffRetries = 3;  ///< 最大连续重试次数，超过后尝试重置接口（减少等待时间）
-    static constexpr int kResetThreshold = 3;  ///< 丢弃帧次数阈值，超过后触发接口重置
     static constexpr int kMaxResetAttempts = 3;  ///< 最大接口重置尝试次数
-    static constexpr int kResetCooldownMs = 5000;  ///< 接口重置冷却时间（毫秒）- 缩短以加快恢复
+    static constexpr int kResetCooldownMs = 5000;  ///< 接口重置冷却时间（毫秒）
     static constexpr int kProcessTimeoutMs = 5000;  ///< 外部进程执行超时（毫秒）
 
     /**
