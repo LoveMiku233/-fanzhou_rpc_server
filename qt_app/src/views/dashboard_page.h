@@ -3,6 +3,7 @@
  * @brief 驾驶舱页面 - 气象/环境/紧急停止/趋势
  *
  * 匹配 index3.html 驾驶舱视图，1024×600 深色主题。
+ * 集成 relay.statusAll、sensor.list、can.status RPC方法。
  */
 
 #ifndef DASHBOARD_PAGE_H
@@ -56,6 +57,9 @@ private:
 
     // 紧急停止按钮
     QPushButton *emergencyStopBtn_;
+
+    // CAN总线状态
+    QLabel *canStatusLabel_;
 
     // 趋势图占位
     QLabel *trendPlaceholder_;
