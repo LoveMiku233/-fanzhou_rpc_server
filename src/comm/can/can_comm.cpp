@@ -24,6 +24,7 @@
 
 #include <QDateTime>
 #include <QDebug>
+#include <QElapsedTimer>
 #include <QProcess>
 
 #include <cerrno>
@@ -163,6 +164,16 @@ bool CanComm::open()
     }
     txTimer_->start();
 
+    // Setup idle probe timer
+    if (!idleProbeTimer_) {
+        idleProbeTimer_ = new QTimer(this);
+        idleProbeTimer_->setSingleShot(false);
+        idleProbeTimer_->setInterval(kIdleProbeIntervalMs);
+        connect(idleProbeTimer_, &QTimer::timeout, this, &CanComm::onIdleCheck);
+    }
+    idleProbeTimer_->start();
+    lastSuccessfulTxMs_ = QDateTime::currentMSecsSinceEpoch();
+
     // Setup read notifier
     readNotifier_ = new QSocketNotifier(socket_, QSocketNotifier::Read, this);
     connect(readNotifier_, &QSocketNotifier::activated, this, &CanComm::onReadable);
@@ -192,8 +203,12 @@ void CanComm::close()
     if (txTimer_) {
         txTimer_->stop();
     }
+    if (idleProbeTimer_) {
+        idleProbeTimer_->stop();
+    }
     txQueue_.clear();
     txConsecutiveNobufs_ = 0;
+    idleProbeErrors_ = 0;
     // 注意：不重置 droppedFrameCount_、txResetAttemptCount_ 和 lastResetTimeMs_
     // 以便在重新打开时继续追踪状态
 
@@ -292,6 +307,9 @@ void CanComm::onTxPump()
         txConsecutiveNobufs_ = 0;
         // 成功发送后重置丢帧计数
         droppedFrameCount_ = 0;
+        // 更新最后成功发送时间，重置空闲探测错误计数
+        lastSuccessfulTxMs_ = QDateTime::currentMSecsSinceEpoch();
+        idleProbeErrors_ = 0;
         return;
     }
 
@@ -396,6 +414,76 @@ void CanComm::onReadable()
     }
 }
 
+/**
+ * @brief 空闲探测检查
+ * 
+ * 当CAN总线长时间无成功发送时，通过直接写入socket的方式
+ * 探测总线是否正常工作。如果连续多次探测失败，说明总线
+ * 可能处于错误状态（如bus-off），此时触发接口重置。
+ * 
+ * 这解决了"无控制指令下发时CAN总线错误无法被检测和重置"的问题。
+ */
+void CanComm::onIdleCheck()
+{
+    if (socket_ < 0 || resetInProgress_) {
+        return;
+    }
+
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const qint64 idleDuration = now - lastSuccessfulTxMs_;
+
+    // 总线未处于空闲状态（有正常发送活动），重置空闲错误计数
+    if (idleDuration < kIdleThresholdMs) {
+        idleProbeErrors_ = 0;
+        return;
+    }
+
+    // 总线空闲，发送探测帧以检查总线健康状态
+    // 使用CAN ID 0x7FF（标准帧最高ID、最低优先级），空数据，不影响设备。
+    // 选择此ID因为：1) 继电器协议使用 0x100-0x380 范围，不会冲突；
+    // 2) 最低优先级不会抢占正常通信；3) 无设备监听此ID，帧将被忽略。
+    struct can_frame frame {};
+    frame.can_id = 0x7FF;
+    frame.can_dlc = 0;
+
+    errno = 0;
+    const ssize_t n = ::write(socket_, &frame, sizeof(frame));
+
+    if (n == sizeof(frame)) {
+        // 探测成功，总线正常工作
+        LOG_DEBUG(kLogSource,
+                  QStringLiteral("Idle probe OK (idle %1ms)").arg(idleDuration));
+        idleProbeErrors_ = 0;
+        lastSuccessfulTxMs_ = now;
+        return;
+    }
+
+    // 探测失败，累计错误
+    ++idleProbeErrors_;
+    LOG_WARNING(kLogSource,
+                QStringLiteral("Idle probe failed (errno=%1, consecutive=%2/%3, idle %4ms)")
+                    .arg(errno)
+                    .arg(idleProbeErrors_)
+                    .arg(kIdleProbeErrorThreshold)
+                    .arg(idleDuration));
+
+    // 仅在首次失败时通知上层模块发送设备查询帧，避免重复触发过多查询
+    if (idleProbeErrors_ == 1) {
+        emit idleProbeNeeded();
+    }
+
+    // 连续失败次数超过阈值，重置CAN接口
+    if (idleProbeErrors_ >= kIdleProbeErrorThreshold) {
+        LOG_WARNING(kLogSource,
+                    QStringLiteral("Idle probe error threshold reached (%1), "
+                                   "resetting CAN interface %2")
+                        .arg(idleProbeErrors_)
+                        .arg(config_.interface));
+        idleProbeErrors_ = 0;
+        tryResetInterface();
+    }
+}
+
 bool CanComm::tryResetInterface()
 {
     // 防止重入
@@ -431,6 +519,10 @@ bool CanComm::tryResetInterface()
     ++txResetAttemptCount_;
     lastResetTimeMs_ = now;
 
+    // 计时：测量整个重置过程的耗时
+    QElapsedTimer resetTimer;
+    resetTimer.start();
+
     LOG_WARNING(kLogSource,
              QStringLiteral("Resetting CAN interface %1 (attempt %2/%3)")
                  .arg(config_.interface)
@@ -448,7 +540,10 @@ bool CanComm::tryResetInterface()
                               config_.interface, QStringLiteral("down")});
         process.start();
         if (!process.waitForFinished(kProcessTimeoutMs)) {
-            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 down timed out").arg(config_.interface));
+            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 down timed out (elapsed %2ms)")
+                          .arg(config_.interface)
+                          .arg(resetTimer.elapsed()));
+            lastResetDurationMs_ = resetTimer.elapsed();
             resetInProgress_ = false;
             return false;
         }
@@ -463,7 +558,7 @@ bool CanComm::tryResetInterface()
         }
     }
 
-    // 3. 重新配置CAN波特率（接口必须在down状态下配置）
+    // 3. 重新配置CAN波特率和restart-ms（接口必须在down状态下配置）
     if (config_.bitrate > 0) {
         QProcess process;
         process.setProgram(QStringLiteral("ip"));
@@ -473,12 +568,21 @@ bool CanComm::tryResetInterface()
         if (config_.tripleSampling) {
             args << QStringLiteral("triple-sampling") << QStringLiteral("on");
         }
+        // 配置 restart-ms：CAN控制器在bus-off后自动重启的延迟
+        // 这样即使没有手动重置，硬件也能自动从bus-off状态恢复
+        // 限制范围：1-10000ms，防止误配置
+        if (config_.restartMs > 0) {
+            const int clampedRestartMs = qBound(1, config_.restartMs, 10000);
+            args << QStringLiteral("restart-ms") << QString::number(clampedRestartMs);
+        }
         process.setArguments(args);
         process.start();
         if (!process.waitForFinished(kProcessTimeoutMs)) {
-            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 type can bitrate %2 timed out")
+            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 type can bitrate %2 timed out (elapsed %3ms)")
                           .arg(config_.interface)
-                          .arg(config_.bitrate));
+                          .arg(config_.bitrate)
+                          .arg(resetTimer.elapsed()));
+            lastResetDurationMs_ = resetTimer.elapsed();
             resetInProgress_ = false;
             return false;
         }
@@ -489,9 +593,10 @@ bool CanComm::tryResetInterface()
                             .arg(config_.bitrate)
                             .arg(QString::fromUtf8(process.readAllStandardError())));
         } else {
-            LOG_INFO(kLogSource, QStringLiteral("CAN interface %1 bitrate reconfigured to %2")
+            LOG_INFO(kLogSource, QStringLiteral("CAN interface %1 reconfigured: bitrate=%2, restart-ms=%3")
                          .arg(config_.interface)
-                         .arg(config_.bitrate));
+                         .arg(config_.bitrate)
+                         .arg(config_.restartMs));
         }
     }
 
@@ -505,7 +610,10 @@ bool CanComm::tryResetInterface()
                               QStringLiteral("up")});
         process.start();
         if (!process.waitForFinished(kProcessTimeoutMs)) {
-            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 up timed out").arg(config_.interface));
+            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 up timed out (elapsed %2ms)")
+                          .arg(config_.interface)
+                          .arg(resetTimer.elapsed()));
+            lastResetDurationMs_ = resetTimer.elapsed();
             resetInProgress_ = false;
             return false;
         }
@@ -514,6 +622,7 @@ bool CanComm::tryResetInterface()
                       QStringLiteral("ip link set %1 up failed: %2")
                           .arg(config_.interface)
                           .arg(QString::fromUtf8(process.readAllStandardError())));
+            lastResetDurationMs_ = resetTimer.elapsed();
             resetInProgress_ = false;
             return false;
         }
@@ -522,19 +631,22 @@ bool CanComm::tryResetInterface()
 
     // 5. 重新打开socket
     const bool reopened = open();
+    lastResetDurationMs_ = resetTimer.elapsed();
     resetInProgress_ = false;
 
     if (reopened) {
         LOG_INFO(kLogSource,
-                 QStringLiteral("CAN interface %1 reset successful, socket reopened")
-                     .arg(config_.interface));
+                 QStringLiteral("CAN interface %1 reset successful in %2ms, socket reopened")
+                     .arg(config_.interface)
+                     .arg(lastResetDurationMs_));
         // 重置成功后，重置重试计数器（允许未来再次重试）
         txResetAttemptCount_ = 0;
         return true;
     } else {
         LOG_ERROR(kLogSource,
-                  QStringLiteral("CAN interface %1 reset completed but socket reopen failed")
-                      .arg(config_.interface));
+                  QStringLiteral("CAN interface %1 reset completed in %2ms but socket reopen failed")
+                      .arg(config_.interface)
+                      .arg(lastResetDurationMs_));
         return false;
     }
 }

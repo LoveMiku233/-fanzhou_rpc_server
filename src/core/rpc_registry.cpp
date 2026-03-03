@@ -783,6 +783,11 @@ void RpcRegistry::registerCan()
                 const qint64 now = QDateTime::currentMSecsSinceEpoch();
                 result[QStringLiteral("timeSinceLastResetMs")] = static_cast<double>(now - lastResetMs);
             }
+
+            const qint64 lastResetDuration = context_->canBus->lastResetDurationMs();
+            if (lastResetDuration > 0) {
+                result[QStringLiteral("lastResetDurationMs")] = static_cast<double>(lastResetDuration);
+            }
         }
 
         // 如果CAN未打开，提供诊断信息

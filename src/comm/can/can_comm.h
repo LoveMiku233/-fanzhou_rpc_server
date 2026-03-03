@@ -28,6 +28,7 @@ struct CanConfig {
     int bitrate = 250000;                        ///< CAN波特率
     bool tripleSampling = true;                  ///< 启用三次采样
     bool canFd = false;                          ///< 启用CAN FD模式
+    int restartMs = 100;                         ///< CAN控制器bus-off自动重启延迟（毫秒），0表示禁用
 };
 
 /**
@@ -97,6 +98,12 @@ public:
     bool isResetInProgress() const { return resetInProgress_; }
 
     /**
+     * @brief 获取最后一次重置的耗时（毫秒）
+     * @return 最后重置耗时，未重置过返回0
+     */
+    qint64 lastResetDurationMs() const { return lastResetDurationMs_; }
+
+    /**
      * @brief 发送CAN帧
      * @param canId CAN标识符
      * @param payload 帧数据（经典CAN最大8字节）
@@ -118,9 +125,18 @@ signals:
     void canFrameReceived(quint32 canId, QByteArray payload,
                           bool extended, bool rtr);
 
+    /**
+     * @brief 总线空闲时发出，上层可连接此信号发送设备查询帧
+     *
+     * 当CAN总线长时间无发送活动时定期发出，便于上层模块
+     * 发送查询帧以保持总线活跃并检测错误。
+     */
+    void idleProbeNeeded();
+
 private slots:
     void onReadable();
     void onTxPump();
+    void onIdleCheck();
 
 private:
     CanConfig config_;
@@ -136,15 +152,24 @@ private:
     bool resetInProgress_ = false; ///< 接口重置是否正在进行中
     int droppedFrameCount_ = 0;    ///< 连续丢帧计数
     qint64 lastResetTimeMs_ = 0;   ///< 最后一次接口重置的时间戳
+    qint64 lastResetDurationMs_ = 0; ///< 最后一次接口重置的耗时（毫秒）
     int txConsecutiveNobufs_ = 0;  ///< 连续ENOBUFS次数
+
+    // 空闲探测相关
+    QTimer *idleProbeTimer_ = nullptr;      ///< 空闲探测定时器
+    qint64 lastSuccessfulTxMs_ = 0;         ///< 最后一次成功发送的时间戳（毫秒）
+    int idleProbeErrors_ = 0;               ///< 连续空闲探测失败次数
 
     static constexpr int kMaxTxQueueSize = 512;
     static constexpr int kTxIntervalMs = 2;
     static constexpr int kMaxResetAttempts = 3;  ///< 最大接口重置尝试次数
     static constexpr int kResetCooldownMs = 5000;  ///< 接口重置冷却时间（毫秒）
-    static constexpr int kProcessTimeoutMs = 5000;  ///< 外部进程执行超时（毫秒）
+    static constexpr int kProcessTimeoutMs = 3000;  ///< 外部进程执行超时（毫秒），ip命令通常在几十毫秒内完成
     static constexpr int kNobufsRetryThreshold = 50;  ///< 连续ENOBUFS次数阈值，超过才重启接口（约100ms）
     static constexpr int kNobufsLogInterval = 10;     ///< ENOBUFS日志输出间隔（避免刷屏）
+    static constexpr int kIdleProbeIntervalMs = 5000;  ///< 空闲探测定时器间隔（毫秒）
+    static constexpr int kIdleThresholdMs = 10000;     ///< 判定总线空闲的阈值（毫秒）
+    static constexpr int kIdleProbeErrorThreshold = 3; ///< 连续空闲探测失败次数阈值，超过则重置接口
 
     /**
      * @brief 尝试重置CAN接口以恢复通信

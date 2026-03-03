@@ -149,10 +149,20 @@ bool CoreContext::initCan()
     canConfig.bitrate = coreConfig.can.bitrate;
     canConfig.tripleSampling = coreConfig.can.tripleSampling;
     canConfig.canFd = false;
+    canConfig.restartMs = coreConfig.can.restartMs;
 
     canBus = new comm::CanComm(canConfig, this);
     connect(canBus, &comm::CanComm::errorOccurred, this, [](const QString &error) {
         LOG_ERROR("CAN", QStringLiteral("Error: %1").arg(error));
+    });
+
+    // 连接空闲探测信号：总线空闲时查询所有设备以保持通信活跃
+    connect(canBus, &comm::CanComm::idleProbeNeeded, this, [this]() {
+        for (auto *relay : relays) {
+            if (relay) {
+                relay->queryAll();
+            }
+        }
     });
 
     if (!canBus->open()) {
@@ -1963,6 +1973,7 @@ QJsonObject CoreContext::exportConfig() const
     canObj[QStringLiteral("interface")] = coreConfig.can.interface;
     canObj[QStringLiteral("bitrate")] = coreConfig.can.bitrate;
     canObj[QStringLiteral("tripleSampling")] = coreConfig.can.tripleSampling;
+    canObj[QStringLiteral("restartMs")] = coreConfig.can.restartMs;
     
     // CAN状态诊断信息（帮助诊断"CAN无法发送"的问题）
     if (canBus) {

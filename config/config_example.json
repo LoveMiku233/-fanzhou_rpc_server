@@ -21,7 +21,8 @@
     "ifname": "can0",
     "bitrate": 125000,
     "tripleSampling": true,
-    "canFd": false
+    "canFd": false,
+    "restartMs": 100
   },
   "screen": {
     "brightness": 100,
