@@ -438,7 +438,9 @@ void CanComm::onIdleCheck()
     }
 
     // 总线空闲，发送探测帧以检查总线健康状态
-    // 使用CAN ID 0x7FF（标准帧最高ID）和空数据，不影响设备
+    // 使用CAN ID 0x7FF（标准帧最高ID、最低优先级），空数据，不影响设备。
+    // 选择此ID因为：1) 继电器协议使用 0x100-0x380 范围，不会冲突；
+    // 2) 最低优先级不会抢占正常通信；3) 无设备监听此ID，帧将被忽略。
     struct can_frame frame {};
     frame.can_id = 0x7FF;
     frame.can_dlc = 0;
@@ -464,8 +466,10 @@ void CanComm::onIdleCheck()
                     .arg(kIdleProbeErrorThreshold)
                     .arg(idleDuration));
 
-    // 通知上层模块总线处于空闲状态，可发送设备查询帧
-    emit idleProbeNeeded();
+    // 仅在首次失败时通知上层模块发送设备查询帧，避免重复触发过多查询
+    if (idleProbeErrors_ == 1) {
+        emit idleProbeNeeded();
+    }
 
     // 连续失败次数超过阈值，重置CAN接口
     if (idleProbeErrors_ >= kIdleProbeErrorThreshold) {
