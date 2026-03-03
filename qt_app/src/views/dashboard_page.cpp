@@ -324,7 +324,7 @@ void DashboardPage::refreshData()
         },
         3000);
 
-    // Fetch sensor data to update indoor environment
+    // Fetch sensor data to update indoor environment and weather
     rpcClient_->callAsync(
         QStringLiteral("sensor.list"),
         QJsonObject(),
@@ -341,6 +341,10 @@ void DashboardPage::refreshData()
             double avgTemp = 0, avgHum = 0, avgCo2 = 0, avgLight = 0;
             int tempCnt = 0, humCnt = 0, co2Cnt = 0, lightCnt = 0;
 
+            // Weather data accumulators (outdoor sensors)
+            double wTemp = 0, wHum = 0, wWind = 0, wLight = 0, wRain = 0;
+            int wTempCnt = 0, wHumCnt = 0, wWindCnt = 0, wLightCnt = 0, wRainCnt = 0;
+
             for (const QJsonValue &sv : sensors) {
                 QJsonObject so = sv.toObject();
                 if (!so.value(QStringLiteral("hasValue")).toBool())
@@ -348,15 +352,36 @@ void DashboardPage::refreshData()
 
                 double val = so.value(QStringLiteral("value")).toDouble();
                 QString typeName = so.value(QStringLiteral("typeName")).toString().toLower();
+                QString name = so.value(QStringLiteral("name")).toString().toLower();
+                QString source = so.value(QStringLiteral("source")).toString().toLower();
 
-                if (typeName.contains("temp")) {
-                    avgTemp += val; ++tempCnt;
-                } else if (typeName.contains("humid")) {
-                    avgHum += val; ++humCnt;
-                } else if (typeName.contains("co2")) {
-                    avgCo2 += val; ++co2Cnt;
-                } else if (typeName.contains("light") || typeName.contains("lux")) {
-                    avgLight += val; ++lightCnt;
+                // Classify as outdoor weather if source is mqtt or name contains outdoor keywords
+                bool isOutdoor = source == "mqtt"
+                    || name.contains(QString::fromUtf8("\xe5\xae\xa4\xe5\xa4\x96"))  // 室外
+                    || name.contains(QString::fromUtf8("\xe6\xb0\x94\xe8\xb1\xa1"));  // 气象
+
+                if (isOutdoor) {
+                    if (typeName.contains("temp")) {
+                        wTemp += val; ++wTempCnt;
+                    } else if (typeName.contains("humid")) {
+                        wHum += val; ++wHumCnt;
+                    } else if (typeName.contains("wind")) {
+                        wWind += val; ++wWindCnt;
+                    } else if (typeName.contains("light") || typeName.contains("lux")) {
+                        wLight += val; ++wLightCnt;
+                    } else if (typeName.contains("rain")) {
+                        wRain += val; ++wRainCnt;
+                    }
+                } else {
+                    if (typeName.contains("temp")) {
+                        avgTemp += val; ++tempCnt;
+                    } else if (typeName.contains("humid")) {
+                        avgHum += val; ++humCnt;
+                    } else if (typeName.contains("co2")) {
+                        avgCo2 += val; ++co2Cnt;
+                    } else if (typeName.contains("light") || typeName.contains("lux")) {
+                        avgLight += val; ++lightCnt;
+                    }
                 }
             }
 
@@ -382,6 +407,30 @@ void DashboardPage::refreshData()
                     l >= 1000 ? QString::fromUtf8("%1 lux").arg(static_cast<int>(l))
                               : QString::fromUtf8("%1 lux").arg(l, 0, 'f', 0));
                 indoorLightBar_->setValue(qBound(0, static_cast<int>(l / 500), 100));
+            }
+
+            // Update outdoor weather station
+            if (wTempCnt > 0) {
+                double t = wTemp / wTempCnt;
+                weatherTempValue_->setText(QString::fromUtf8("%1°C").arg(t, 0, 'f', 1));
+            }
+            if (wHumCnt > 0) {
+                double h = wHum / wHumCnt;
+                weatherHumidityValue_->setText(QString::fromUtf8("%1%").arg(h, 0, 'f', 0));
+            }
+            if (wWindCnt > 0) {
+                double w = wWind / wWindCnt;
+                weatherWindValue_->setText(QString::fromUtf8("%1 m/s").arg(w, 0, 'f', 1));
+            }
+            if (wLightCnt > 0) {
+                double l = wLight / wLightCnt;
+                weatherLightValue_->setText(
+                    l >= 1000 ? QString::fromUtf8("%1 lux").arg(static_cast<int>(l))
+                              : QString::fromUtf8("%1 lux").arg(l, 0, 'f', 0));
+            }
+            if (wRainCnt > 0) {
+                double r = wRain / wRainCnt;
+                weatherRainValue_->setText(QString::fromUtf8("%1 mm").arg(r, 0, 'f', 1));
             }
         },
         3000);

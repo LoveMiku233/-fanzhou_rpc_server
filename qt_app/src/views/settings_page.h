@@ -26,6 +26,9 @@ public:
     explicit SettingsPage(RpcClient *rpc, QWidget *parent = nullptr);
     ~SettingsPage() override = default;
 
+    /** 刷新关于面板系统信息（从RPC Server获取） */
+    void refreshSysInfo();
+
 private:
     void setupUi();
     QWidget *createNetworkPanel();
@@ -67,6 +70,12 @@ private:
     QLabel    *mqttStatusLabel_;
     QPushButton *btnMqttDisconnect_;
     QPushButton *btnMqttSave_;
+
+    // ── About panel dynamic labels ──
+    QLabel *aboutSwVersionLabel_;
+    QLabel *aboutHwVersionLabel_;
+    QLabel *aboutBuildDateLabel_;
+    QLabel *aboutDeviceIdLabel_;
 };
 
 #endif // SETTINGS_PAGE_H

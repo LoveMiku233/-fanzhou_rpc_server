@@ -453,6 +453,9 @@ void MainWindow::refreshCurrentPage()
     case Style::PageSensors:
         if (sensorPage_) sensorPage_->refreshData();
         break;
+    case Style::PageSettings:
+        if (settingsPage_) settingsPage_->refreshSysInfo();
+        break;
     default:
         break;
     }
