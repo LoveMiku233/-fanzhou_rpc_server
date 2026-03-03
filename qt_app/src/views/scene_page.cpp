@@ -658,49 +658,33 @@ void ScenePage::refreshData()
     if (!rpcClient_ || !rpcClient_->isConnected())
         return;
 
-    // Fetch main strategy list
+    // Fetch main strategy list first (clears scenes_)
     rpcClient_->callAsync(
         QStringLiteral("auto.strategy.list"),
         QJsonObject(),
         [this](const QJsonValue &result, const QJsonObject &error) {
             onStrategyListReceived(result, error);
-
-            // Also fetch relay strategies
-            if (rpcClient_ && rpcClient_->isConnected()) {
-                rpcClient_->callAsync(
-                    QStringLiteral("auto.relay.list"),
-                    QJsonObject(),
-                    [this](const QJsonValue &r, const QJsonObject &e) {
-                        appendRelayStrategies(r, e, scenes_, 10000);
-                        // Fetch sensor strategies
-                        if (rpcClient_ && rpcClient_->isConnected()) {
-                            rpcClient_->callAsync(
-                                QStringLiteral("auto.sensor.list"),
-                                QJsonObject(),
-                                [this](const QJsonValue &r2, const QJsonObject &e2) {
-                                    appendRelayStrategies(r2, e2, scenes_, 20000);
-                                    // Fetch sensor-relay strategies
-                                    if (rpcClient_ && rpcClient_->isConnected()) {
-                                        rpcClient_->callAsync(
-                                            QStringLiteral("auto.sensorRelay.list"),
-                                            QJsonObject(),
-                                            [this](const QJsonValue &r3, const QJsonObject &e3) {
-                                                appendRelayStrategies(r3, e3, scenes_, 30000);
-                                                if (statusLabel_) {
-                                                    statusLabel_->setText(
-                                                        QString::fromUtf8("已从服务器加载 %1 个场景/策略")
-                                                            .arg(scenes_.size()));
-                                                }
-                                                renderScenes();
-                                            },
-                                            3000);
-                                    }
-                                },
-                                3000);
-                        }
-                    },
-                    3000);
-            }
         },
         3000);
+
+    // Fetch additional strategy types in parallel (append to scenes_)
+    auto fetchAdditional = [this](const QString &method, int idOffset) {
+        rpcClient_->callAsync(
+            method,
+            QJsonObject(),
+            [this, idOffset](const QJsonValue &r, const QJsonObject &e) {
+                appendRelayStrategies(r, e, scenes_, idOffset);
+                if (statusLabel_) {
+                    statusLabel_->setText(
+                        QString::fromUtf8("已从服务器加载 %1 个场景/策略")
+                            .arg(scenes_.size()));
+                }
+                renderScenes();
+            },
+            3000);
+    };
+
+    fetchAdditional(QStringLiteral("auto.relay.list"),        10000);
+    fetchAdditional(QStringLiteral("auto.sensor.list"),       20000);
+    fetchAdditional(QStringLiteral("auto.sensorRelay.list"),  30000);
 }
