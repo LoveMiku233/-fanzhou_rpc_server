@@ -32,6 +32,10 @@
 // helpers
 // ---------------------------------------------------------------------------
 
+// Fault message used for node-offline detection; only faults with this exact
+// message are auto-cleared when the node comes back online.
+static const QString kNodeOfflineFault = QString::fromUtf8("\xe8\x8a\x82\xe7\x82\xb9\xe7\xa6\xbb\xe7\xba\xbf"); // 节点离线
+
 static const char *statusText(const QString &status)
 {
     if (status == "running") return "\xe8\xbf\x90\xe8\xa1\x8c";   // 运行
@@ -1457,10 +1461,10 @@ void DeviceControlPage::refreshData()
                                     bool online = nodeOnline[dev.nodeId];
                                     if (!online && dev.status != "fault") {
                                         dev.status = "fault";
-                                        dev.fault = QString::fromUtf8("\xe8\x8a\x82\xe7\x82\xb9\xe7\xa6\xbb\xe7\xba\xbf"); // 节点离线
+                                        dev.fault = kNodeOfflineFault;
                                         changed = true;
                                     } else if (online && dev.status == "fault"
-                                               && dev.fault == QString::fromUtf8("\xe8\x8a\x82\xe7\x82\xb9\xe7\xa6\xbb\xe7\xba\xbf")) {
+                                               && dev.fault == kNodeOfflineFault) {
                                         dev.status = "stopped";
                                         dev.fault.clear();
                                         changed = true;
