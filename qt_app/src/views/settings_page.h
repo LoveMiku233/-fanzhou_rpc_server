@@ -1,8 +1,9 @@
 /**
  * @file views/settings_page.h
- * @brief 系统设置页面 - 网络配置/MQTT配置/关于系统
+ * @brief 系统设置页面 - 网络配置/MQTT配置/时间管理/关于系统
  *
  * 匹配 index3.html 设置视图，1024×600 深色主题。
+ * 集成 sys.network.*, sys.time.*, config.save 等RPC方法。
  */
 
 #ifndef SETTINGS_PAGE_H
@@ -33,6 +34,7 @@ private:
     void setupUi();
     QWidget *createNetworkPanel();
     QWidget *createMqttPanel();
+    QWidget *createTimePanel();
     QWidget *createAboutPanel();
 
     void switchTab(int index);
@@ -70,6 +72,16 @@ private:
     QLabel    *mqttStatusLabel_;
     QPushButton *btnMqttDisconnect_;
     QPushButton *btnMqttSave_;
+
+    // ── Time panel fields ──
+    QLabel      *currentTimeLabel_;
+    QLabel      *hwclockLabel_;
+    QLineEdit   *editSetTime_;
+    QLabel      *timeStatusLabel_;
+    QPushButton *btnRefreshTime_;
+    QPushButton *btnSetTime_;
+    QPushButton *btnSyncHwclock_;
+    QPushButton *btnReadHwclock_;
 
     // ── About panel dynamic labels ──
     QLabel *aboutSwVersionLabel_;

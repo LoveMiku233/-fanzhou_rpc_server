@@ -20,6 +20,7 @@
 #include <QStackedWidget>
 #include <QStyle>
 #include <QVBoxLayout>
+#include <QDateTime>
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -146,10 +147,11 @@ void SettingsPage::setupUi()
     TabDef tabs[] = {
         { "\xe7\xbd\x91\xe7\xbb\x9c\xe9\x85\x8d\xe7\xbd\xae" },  // 网络配置
         { "MQTT\xe9\x85\x8d\xe7\xbd\xae" },                        // MQTT配置
+        { "\xe6\x97\xb6\xe9\x97\xb4\xe7\xae\xa1\xe7\x90\x86" },  // 时间管理
         { "\xe5\x85\xb3\xe4\xba\x8e\xe7\xb3\xbb\xe7\xbb\x9f" },  // 关于系统
     };
 
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 4; ++i) {
         QPushButton *btn = new QPushButton(QString::fromUtf8(tabs[i].label));
         btn->setCursor(Qt::PointingHandCursor);
         btn->setFixedHeight(Style::kBtnHeightSmall);
@@ -187,6 +189,7 @@ void SettingsPage::setupUi()
     contentStack_ = new QStackedWidget;
     contentStack_->addWidget(createNetworkPanel());
     contentStack_->addWidget(createMqttPanel());
+    contentStack_->addWidget(createTimePanel());
     contentStack_->addWidget(createAboutPanel());
     contentStack_->setCurrentIndex(0);
     root->addWidget(contentStack_, 1);
@@ -323,7 +326,7 @@ QWidget *SettingsPage::createNetworkPanel()
     btnRow->addWidget(btnSaveNetwork_);
     vl->addLayout(btnRow);
 
-    // Connect test button: ping the RPC server
+    // Connect test button: use sys.network.ping via RPC
     connect(btnTestConnection_, &QPushButton::clicked, this, [this]() {
         if (!rpcClient_) return;
 
@@ -337,22 +340,43 @@ QWidget *SettingsPage::createNetworkPanel()
                 .arg(Style::kFontSmall));
 
         if (rpcClient_->isConnected()) {
+            // Use sys.network.ping for real network connectivity test
+            QJsonObject params;
+            params[QStringLiteral("host")] = editGateway_->text().trimmed().isEmpty()
+                ? QStringLiteral("127.0.0.1")
+                : editGateway_->text().trimmed();
+            params[QStringLiteral("count")] = 2;
+            params[QStringLiteral("timeout")] = 5;
             rpcClient_->callAsync(
-                QStringLiteral("rpc.ping"),
-                QJsonObject(),
-                [this](const QJsonValue &, const QJsonObject &error) {
-                    if (error.isEmpty()) {
-                        networkStatusLabel_->setText(
-                            QString::fromUtf8("  ✓  RPC服务器连接正常"));
-                        networkStatusLabel_->setStyleSheet(
-                            QString("background:%1; color:%2; font-size:%3px;"
-                                    "border-radius:6px; padding:0 8px;")
-                                .arg(Style::kColorSuccess)
-                                .arg(Style::kColorTextWhite)
-                                .arg(Style::kFontSmall));
+                QStringLiteral("sys.network.ping"),
+                params,
+                [this](const QJsonValue &result, const QJsonObject &error) {
+                    if (error.isEmpty() && result.isObject()) {
+                        QJsonObject obj = result.toObject();
+                        bool reachable = obj.value(QStringLiteral("reachable")).toBool();
+                        QString host = obj.value(QStringLiteral("host")).toString();
+                        if (reachable) {
+                            networkStatusLabel_->setText(
+                                QString::fromUtf8("  ✓  网络连接正常 • %1 可达").arg(host));
+                            networkStatusLabel_->setStyleSheet(
+                                QString("background:%1; color:%2; font-size:%3px;"
+                                        "border-radius:6px; padding:0 8px;")
+                                    .arg(Style::kColorSuccess)
+                                    .arg(Style::kColorTextWhite)
+                                    .arg(Style::kFontSmall));
+                        } else {
+                            networkStatusLabel_->setText(
+                                QString::fromUtf8("  ✗  网络不可达 • %1").arg(host));
+                            networkStatusLabel_->setStyleSheet(
+                                QString("background:%1; color:%2; font-size:%3px;"
+                                        "border-radius:6px; padding:0 8px;")
+                                    .arg(Style::kColorDanger)
+                                    .arg(Style::kColorTextWhite)
+                                    .arg(Style::kFontSmall));
+                        }
                     } else {
                         networkStatusLabel_->setText(
-                            QString::fromUtf8("  ✗  RPC调用失败"));
+                            QString::fromUtf8("  ✗  网络测试失败"));
                         networkStatusLabel_->setStyleSheet(
                             QString("background:%1; color:%2; font-size:%3px;"
                                     "border-radius:6px; padding:0 8px;")
@@ -361,7 +385,7 @@ QWidget *SettingsPage::createNetworkPanel()
                                 .arg(Style::kFontSmall));
                     }
                 },
-                3000);
+                5000);
         } else {
             networkStatusLabel_->setText(
                 QString::fromUtf8("  ✗  未连接到RPC服务器"));
@@ -374,26 +398,66 @@ QWidget *SettingsPage::createNetworkPanel()
         }
     });
 
-    // Connect save button: update RPC endpoint from IP/port fields
+    // Connect save button: update RPC endpoint and optionally set static IP via RPC
     connect(btnSaveNetwork_, &QPushButton::clicked, this, [this]() {
         if (!rpcClient_) return;
 
         QString ip = editIp_->text().trimmed();
         int port = spinPort_->value();
-        if (!ip.isEmpty()) {
-            rpcClient_->setEndpoint(ip, static_cast<quint16>(port));
-            rpcClient_->disconnectFromServer();
-            rpcClient_->connectToServerAsync();
+        if (ip.isEmpty()) return;
 
-            networkStatusLabel_->setText(
-                QString::fromUtf8("  ⏳  已保存，正在重新连接 %1:%2 ...").arg(ip).arg(port));
-            networkStatusLabel_->setStyleSheet(
-                QString("background:%1; color:%2; font-size:%3px;"
-                        "border-radius:6px; padding:0 8px;")
-                    .arg(Style::kColorWarning)
-                    .arg(Style::kColorTextWhite)
-                    .arg(Style::kFontSmall));
+        // If connected, also configure the device network via sys.network.setStaticIp
+        if (rpcClient_->isConnected() && radioStaticIp_->isChecked()) {
+            QJsonObject params;
+            params[QStringLiteral("interface")] = QStringLiteral("eth0");
+            params[QStringLiteral("address")] = ip;
+            QString subnet = editSubnet_->text().trimmed();
+            if (!subnet.isEmpty())
+                params[QStringLiteral("netmask")] = subnet;
+            QString gateway = editGateway_->text().trimmed();
+            if (!gateway.isEmpty())
+                params[QStringLiteral("gateway")] = gateway;
+
+            rpcClient_->callAsync(
+                QStringLiteral("sys.network.setStaticIp"),
+                params,
+                [this, ip, port](const QJsonValue &, const QJsonObject &error) {
+                    if (error.isEmpty()) {
+                        networkStatusLabel_->setText(
+                            QString::fromUtf8("  ✓  网络配置已保存到设备"));
+                        networkStatusLabel_->setStyleSheet(
+                            QString("background:%1; color:%2; font-size:%3px;"
+                                    "border-radius:6px; padding:0 8px;")
+                                .arg(Style::kColorSuccess)
+                                .arg(Style::kColorTextWhite)
+                                .arg(Style::kFontSmall));
+                    } else {
+                        networkStatusLabel_->setText(
+                            QString::fromUtf8("  ⚠  设备网络配置失败，仅更新了本地连接"));
+                        networkStatusLabel_->setStyleSheet(
+                            QString("background:%1; color:%2; font-size:%3px;"
+                                    "border-radius:6px; padding:0 8px;")
+                                .arg(Style::kColorWarning)
+                                .arg(Style::kColorTextWhite)
+                                .arg(Style::kFontSmall));
+                    }
+                },
+                5000);
         }
+
+        // Update local RPC endpoint
+        rpcClient_->setEndpoint(ip, static_cast<quint16>(port));
+        rpcClient_->disconnectFromServer();
+        rpcClient_->connectToServerAsync();
+
+        networkStatusLabel_->setText(
+            QString::fromUtf8("  ⏳  已保存，正在重新连接 %1:%2 ...").arg(ip).arg(port));
+        networkStatusLabel_->setStyleSheet(
+            QString("background:%1; color:%2; font-size:%3px;"
+                    "border-radius:6px; padding:0 8px;")
+                .arg(Style::kColorWarning)
+                .arg(Style::kColorTextWhite)
+                .arg(Style::kFontSmall));
     });
 
     vl->addStretch();
@@ -601,6 +665,246 @@ QWidget *SettingsPage::createMqttPanel()
                 },
                 3000);
         }
+    });
+
+    vl->addStretch();
+    return panel;
+}
+
+// ---------------------------------------------------------------------------
+// Time management panel
+// ---------------------------------------------------------------------------
+
+QWidget *SettingsPage::createTimePanel()
+{
+    QFrame *panel = new QFrame;
+    panel->setProperty("class", "glassPanel");
+
+    QVBoxLayout *vl = new QVBoxLayout(panel);
+    vl->setContentsMargins(Style::kPageMargin, Style::kPageMargin,
+                           Style::kPageMargin, Style::kPageMargin);
+    vl->setSpacing(10);
+
+    // Title
+    QHBoxLayout *titleRow = new QHBoxLayout;
+    QLabel *icon = new QLabel(QString::fromUtf8("\xf0\x9f\x95\x90")); // 🕐
+    icon->setStyleSheet(QString("font-size:%1px;").arg(Style::kFontLarge));
+    QLabel *title = new QLabel(QString::fromUtf8("\xe7\xb3\xbb\xe7\xbb\x9f\xe6\x97\xb6\xe9\x97\xb4\xe7\xae\xa1\xe7\x90\x86")); // 系统时间管理
+    title->setStyleSheet(
+        QString("color:%1; font-size:%2px; font-weight:bold;")
+            .arg(Style::kColorAccentCyan)
+            .arg(Style::kFontMedium));
+    titleRow->addWidget(icon);
+    titleRow->addWidget(title);
+    titleRow->addStretch();
+    vl->addLayout(titleRow);
+
+    // 2-column grid
+    QGridLayout *grid = new QGridLayout;
+    grid->setHorizontalSpacing(16);
+    grid->setVerticalSpacing(8);
+    grid->setColumnStretch(1, 1);
+    grid->setColumnStretch(3, 1);
+
+    int row = 0;
+
+    // 系统时间 / 硬件时钟
+    grid->addWidget(makeFieldLabel(QString::fromUtf8("\xe7\xb3\xbb\xe7\xbb\x9f\xe6\x97\xb6\xe9\x97\xb4")), row, 0); // 系统时间
+    currentTimeLabel_ = new QLabel(QString::fromUtf8("--"));
+    currentTimeLabel_->setStyleSheet(
+        QString("color:%1; font-size:%2px; font-weight:bold;")
+            .arg(Style::kColorTextPrimary)
+            .arg(Style::kFontNormal));
+    grid->addWidget(currentTimeLabel_, row, 1);
+
+    grid->addWidget(makeFieldLabel(QString::fromUtf8("\xe7\xa1\xac\xe4\xbb\xb6\xe6\x97\xb6\xe9\x92\x9f")), row, 2); // 硬件时钟
+    hwclockLabel_ = new QLabel(QString::fromUtf8("--"));
+    hwclockLabel_->setStyleSheet(
+        QString("color:%1; font-size:%2px; font-weight:bold;")
+            .arg(Style::kColorTextPrimary)
+            .arg(Style::kFontNormal));
+    grid->addWidget(hwclockLabel_, row, 3);
+
+    ++row;
+
+    // 设置时间
+    grid->addWidget(makeFieldLabel(QString::fromUtf8("\xe8\xae\xbe\xe7\xbd\xae\xe6\x97\xb6\xe9\x97\xb4")), row, 0); // 设置时间
+    editSetTime_ = makeInput(QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss"));
+    grid->addWidget(editSetTime_, row, 1, 1, 3);
+
+    vl->addLayout(grid);
+
+    // Status banner
+    timeStatusLabel_ = new QLabel(
+        QString::fromUtf8("  \xe2\x8f\xb3  \xe7\x82\xb9\xe5\x87\xbb\xe2\x80\x9c\xe5\x88\xb7\xe6\x96\xb0\xe2\x80\x9d\xe8\x8e\xb7\xe5\x8f\x96\xe6\x9c\x8d\xe5\x8a\xa1\xe5\x99\xa8\xe6\x97\xb6\xe9\x97\xb4")); // ⏳ 点击"刷新"获取服务器时间
+    timeStatusLabel_->setAlignment(Qt::AlignCenter);
+    timeStatusLabel_->setFixedHeight(Style::kBtnHeightSmall);
+    timeStatusLabel_->setStyleSheet(
+        QString("background:%1; color:%2; font-size:%3px;"
+                "border-radius:6px; padding:0 8px;")
+            .arg(Style::kColorBgCard)
+            .arg(Style::kColorTextSecondary)
+            .arg(Style::kFontSmall));
+    vl->addWidget(timeStatusLabel_);
+
+    // Buttons
+    QHBoxLayout *btnRow = new QHBoxLayout;
+    btnRow->setSpacing(8);
+    btnRow->addStretch();
+
+    btnRefreshTime_ = makeSecondaryButton(QString::fromUtf8("\xe5\x88\xb7\xe6\x96\xb0\xe6\x97\xb6\xe9\x97\xb4")); // 刷新时间
+    btnReadHwclock_ = makeSecondaryButton(QString::fromUtf8("\xe8\xaf\xbb\xe5\x8f\x96\xe7\xa1\xac\xe4\xbb\xb6\xe6\x97\xb6\xe9\x92\x9f")); // 读取硬件时钟
+    btnSetTime_     = makePrimaryButton(QString::fromUtf8("\xe8\xae\xbe\xe7\xbd\xae\xe6\x97\xb6\xe9\x97\xb4")); // 设置时间
+    btnSyncHwclock_ = makePrimaryButton(QString::fromUtf8("\xe5\x90\x8c\xe6\xad\xa5\xe5\x88\xb0\xe7\xa1\xac\xe4\xbb\xb6\xe6\x97\xb6\xe9\x92\x9f")); // 同步到硬件时钟
+
+    btnRow->addWidget(btnRefreshTime_);
+    btnRow->addWidget(btnReadHwclock_);
+    btnRow->addWidget(btnSetTime_);
+    btnRow->addWidget(btnSyncHwclock_);
+    vl->addLayout(btnRow);
+
+    // Connect refresh time button: sys.time.get
+    connect(btnRefreshTime_, &QPushButton::clicked, this, [this]() {
+        if (!rpcClient_ || !rpcClient_->isConnected()) return;
+
+        rpcClient_->callAsync(
+            QStringLiteral("sys.time.get"),
+            QJsonObject(),
+            [this](const QJsonValue &result, const QJsonObject &error) {
+                if (!error.isEmpty() || !result.isObject()) {
+                    timeStatusLabel_->setText(QString::fromUtf8("  ✗  获取时间失败"));
+                    timeStatusLabel_->setStyleSheet(
+                        QString("background:%1; color:%2; font-size:%3px;"
+                                "border-radius:6px; padding:0 8px;")
+                            .arg(Style::kColorDanger)
+                            .arg(Style::kColorTextWhite)
+                            .arg(Style::kFontSmall));
+                    return;
+                }
+                QJsonObject obj = result.toObject();
+                QString datetime = obj.value(QStringLiteral("datetime")).toString();
+                if (!datetime.isEmpty()) {
+                    currentTimeLabel_->setText(datetime);
+                    editSetTime_->setText(datetime);
+                }
+                timeStatusLabel_->setText(QString::fromUtf8("  ✓  时间已刷新"));
+                timeStatusLabel_->setStyleSheet(
+                    QString("background:%1; color:%2; font-size:%3px;"
+                            "border-radius:6px; padding:0 8px;")
+                        .arg(Style::kColorSuccess)
+                        .arg(Style::kColorTextWhite)
+                        .arg(Style::kFontSmall));
+            },
+            3000);
+    });
+
+    // Connect read hwclock button: sys.time.readHwclock
+    connect(btnReadHwclock_, &QPushButton::clicked, this, [this]() {
+        if (!rpcClient_ || !rpcClient_->isConnected()) return;
+
+        rpcClient_->callAsync(
+            QStringLiteral("sys.time.readHwclock"),
+            QJsonObject(),
+            [this](const QJsonValue &result, const QJsonObject &error) {
+                if (!error.isEmpty() || !result.isObject()) {
+                    timeStatusLabel_->setText(QString::fromUtf8("  ✗  读取硬件时钟失败"));
+                    timeStatusLabel_->setStyleSheet(
+                        QString("background:%1; color:%2; font-size:%3px;"
+                                "border-radius:6px; padding:0 8px;")
+                            .arg(Style::kColorDanger)
+                            .arg(Style::kColorTextWhite)
+                            .arg(Style::kFontSmall));
+                    return;
+                }
+                QJsonObject obj = result.toObject();
+                QString hwclock = obj.value(QStringLiteral("hwclock")).toString();
+                if (!hwclock.isEmpty())
+                    hwclockLabel_->setText(hwclock);
+                timeStatusLabel_->setText(QString::fromUtf8("  ✓  硬件时钟已读取"));
+                timeStatusLabel_->setStyleSheet(
+                    QString("background:%1; color:%2; font-size:%3px;"
+                            "border-radius:6px; padding:0 8px;")
+                        .arg(Style::kColorSuccess)
+                        .arg(Style::kColorTextWhite)
+                        .arg(Style::kFontSmall));
+            },
+            3000);
+    });
+
+    // Connect set time button: sys.time.set
+    connect(btnSetTime_, &QPushButton::clicked, this, [this]() {
+        if (!rpcClient_ || !rpcClient_->isConnected()) return;
+
+        QString datetime = editSetTime_->text().trimmed();
+        if (datetime.isEmpty()) return;
+
+        QJsonObject params;
+        params[QStringLiteral("datetime")] = datetime;
+
+        timeStatusLabel_->setText(QString::fromUtf8("  ⏳  正在设置时间..."));
+        timeStatusLabel_->setStyleSheet(
+            QString("background:%1; color:%2; font-size:%3px;"
+                    "border-radius:6px; padding:0 8px;")
+                .arg(Style::kColorWarning)
+                .arg(Style::kColorTextWhite)
+                .arg(Style::kFontSmall));
+
+        rpcClient_->callAsync(
+            QStringLiteral("sys.time.set"),
+            params,
+            [this](const QJsonValue &result, const QJsonObject &error) {
+                if (!error.isEmpty()) {
+                    timeStatusLabel_->setText(QString::fromUtf8("  ✗  设置时间失败"));
+                    timeStatusLabel_->setStyleSheet(
+                        QString("background:%1; color:%2; font-size:%3px;"
+                                "border-radius:6px; padding:0 8px;")
+                            .arg(Style::kColorDanger)
+                            .arg(Style::kColorTextWhite)
+                            .arg(Style::kFontSmall));
+                    return;
+                }
+                QJsonObject obj = result.toObject();
+                QString newTime = obj.value(QStringLiteral("datetime")).toString();
+                if (!newTime.isEmpty())
+                    currentTimeLabel_->setText(newTime);
+                timeStatusLabel_->setText(QString::fromUtf8("  ✓  系统时间已设置"));
+                timeStatusLabel_->setStyleSheet(
+                    QString("background:%1; color:%2; font-size:%3px;"
+                            "border-radius:6px; padding:0 8px;")
+                        .arg(Style::kColorSuccess)
+                        .arg(Style::kColorTextWhite)
+                        .arg(Style::kFontSmall));
+            },
+            3000);
+    });
+
+    // Connect sync hwclock button: sys.time.saveHwclock
+    connect(btnSyncHwclock_, &QPushButton::clicked, this, [this]() {
+        if (!rpcClient_ || !rpcClient_->isConnected()) return;
+
+        rpcClient_->callAsync(
+            QStringLiteral("sys.time.saveHwclock"),
+            QJsonObject(),
+            [this](const QJsonValue &, const QJsonObject &error) {
+                if (error.isEmpty()) {
+                    timeStatusLabel_->setText(QString::fromUtf8("  ✓  已同步到硬件时钟"));
+                    timeStatusLabel_->setStyleSheet(
+                        QString("background:%1; color:%2; font-size:%3px;"
+                                "border-radius:6px; padding:0 8px;")
+                            .arg(Style::kColorSuccess)
+                            .arg(Style::kColorTextWhite)
+                            .arg(Style::kFontSmall));
+                } else {
+                    timeStatusLabel_->setText(QString::fromUtf8("  ✗  同步硬件时钟失败"));
+                    timeStatusLabel_->setStyleSheet(
+                        QString("background:%1; color:%2; font-size:%3px;"
+                                "border-radius:6px; padding:0 8px;")
+                            .arg(Style::kColorDanger)
+                            .arg(Style::kColorTextWhite)
+                            .arg(Style::kFontSmall));
+                }
+            },
+            3000);
     });
 
     vl->addStretch();
