@@ -149,8 +149,6 @@ bool CanComm::open()
         txTimer_->setInterval(kTxIntervalMs);
         connect(txTimer_, &QTimer::timeout, this, &CanComm::onTxPump);
     }
-    txBackoffMs_ = 0;
-    txBackoffMultiplier_ = 0;
     txTimer_->start();
 
     // Setup read notifier
@@ -183,10 +181,6 @@ void CanComm::close()
         txTimer_->stop();
     }
     txQueue_.clear();
-    txBackoffMs_ = 0;
-    txBackoffMultiplier_ = 0;
-    txDiagLogged_ = false;
-    txConsecutiveMaxBackoffCount_ = 0;
     // 注意：不重置 droppedFrameCount_、txResetAttemptCount_ 和 lastResetTimeMs_
     // 以便在重新打开时继续追踪状态
 
@@ -269,14 +263,6 @@ void CanComm::onTxPump()
         return;
     }
 
-    if (txBackoffMs_ > 0) {
-        txBackoffMs_ -= txTimer_->interval();
-        if (txBackoffMs_ < 0) {
-            txBackoffMs_ = 0;
-        }
-        return;
-    }
-
     const TxItem item = txQueue_.head();
     errno = 0;
     const ssize_t n = ::write(socket_, &item.frame, sizeof(item.frame));
@@ -290,34 +276,34 @@ void CanComm::onTxPump()
                       .arg(canIdWithoutFlags, 0, 16)
                       .arg(item.frame.can_dlc));
         txQueue_.dequeue();
-        // 成功发送后重置退避乘数、诊断标志和丢帧计数
-        txBackoffMultiplier_ = 0;
-        txDiagLogged_ = false;
-        txConsecutiveMaxBackoffCount_ = 0;
-        droppedFrameCount_ = 0;  // 成功发送，重置丢帧计数
+        // 成功发送后重置丢帧计数
+        droppedFrameCount_ = 0;
         return;
     }
 
     if (errno == ENOBUFS || errno == EAGAIN || errno == EWOULDBLOCK) {
-        // TX buffer满，直接重启CAN接口，不进行退避
+        // TX buffer满，立即重启CAN接口（这是解决TX buffer full的唯一有效方法）
+        const int pendingFrames = txQueue_.size();
         LOG_WARNING(kLogSource,
-                    QStringLiteral("TX buffer full, attempting to restart CAN interface"));
+                    QStringLiteral("TX buffer full (errno=%1), pending frames=%2, "
+                                   "immediately restarting CAN interface %3")
+                        .arg(errno)
+                        .arg(pendingFrames)
+                        .arg(config_.interface));
         if (!tryResetInterface()) {
-            // 重置失败（冷却时间/达到最大重置次数/重置进行中），丢弃当前帧避免死循环
-            // 注意：item 是本地拷贝，tryResetInterface 失败后可能队列已被 close() 清空
-            if (!txQueue_.isEmpty()) {
-                const bool extended = (item.frame.can_id & CAN_EFF_FLAG) != 0;
-                const quint32 droppedCanId = item.frame.can_id & (extended ? CAN_EFF_MASK : CAN_SFF_MASK);
-                ++droppedFrameCount_;
+            // 重置失败（冷却时间/达到最大重置次数/重置进行中），清空整个TX队列避免无意义积压
+            const int droppedCount = txQueue_.size();
+            if (droppedCount > 0) {
+                droppedFrameCount_ += droppedCount;
                 LOG_ERROR(kLogSource,
-                          QStringLiteral("CAN reset failed, dropping frame: id=0x%1, dlc=%2 (dropped %3)")
-                              .arg(droppedCanId, 0, 16)
-                              .arg(item.frame.can_dlc)
+                          QStringLiteral("CAN interface reset failed, clearing TX queue: "
+                                         "dropped %1 frames (total dropped: %2)")
+                              .arg(droppedCount)
                               .arg(droppedFrameCount_));
                 emit errorOccurred(
-                    QStringLiteral("CAN TX buffer full, reset failed, frame dropped (id=0x%1)")
-                        .arg(droppedCanId, 0, 16));
-                txQueue_.dequeue();
+                    QStringLiteral("CAN TX buffer full, reset failed, dropped %1 frames")
+                        .arg(droppedCount));
+                txQueue_.clear();
             }
         }
         return;
@@ -395,6 +381,11 @@ bool CanComm::tryResetInterface()
                   QStringLiteral("CAN interface reset cooldown active, remaining %1ms")
                       .arg(kResetCooldownMs - (now - lastResetTimeMs_)));
         return false;
+    }
+
+    // 冷却时间已过，重置尝试计数器（允许再次重试）
+    if (lastResetTimeMs_ > 0) {
+        txResetAttemptCount_ = 0;
     }
 
     // 检查重置次数限制

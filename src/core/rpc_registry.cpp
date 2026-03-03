@@ -775,7 +775,6 @@ void RpcRegistry::registerCan()
         if (hasCanBus) {
             result[QStringLiteral("resetAttemptCount")] = context_->canBus->resetAttemptCount();
             result[QStringLiteral("droppedFrameCount")] = context_->canBus->droppedFrameCount();
-            result[QStringLiteral("backoffMultiplier")] = context_->canBus->backoffMultiplier();
             result[QStringLiteral("resetInProgress")] = context_->canBus->isResetInProgress();
             
             const qint64 lastResetMs = context_->canBus->lastResetTimeMs();
