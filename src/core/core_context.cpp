@@ -155,6 +155,15 @@ bool CoreContext::initCan()
         LOG_ERROR("CAN", QStringLiteral("Error: %1").arg(error));
     });
 
+    // 连接空闲探测信号：总线空闲时查询所有设备以保持通信活跃
+    connect(canBus, &comm::CanComm::idleProbeNeeded, this, [this]() {
+        for (auto *relay : relays) {
+            if (relay) {
+                relay->queryAll();
+            }
+        }
+    });
+
     if (!canBus->open()) {
         LOG_WARNING(kLogSource,
                     QStringLiteral("CAN open failed, RPC service will start but CAN methods will not work"));

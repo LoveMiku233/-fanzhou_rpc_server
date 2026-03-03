@@ -163,6 +163,16 @@ bool CanComm::open()
     }
     txTimer_->start();
 
+    // Setup idle probe timer
+    if (!idleProbeTimer_) {
+        idleProbeTimer_ = new QTimer(this);
+        idleProbeTimer_->setSingleShot(false);
+        idleProbeTimer_->setInterval(kIdleProbeIntervalMs);
+        connect(idleProbeTimer_, &QTimer::timeout, this, &CanComm::onIdleCheck);
+    }
+    idleProbeTimer_->start();
+    lastSuccessfulTxMs_ = QDateTime::currentMSecsSinceEpoch();
+
     // Setup read notifier
     readNotifier_ = new QSocketNotifier(socket_, QSocketNotifier::Read, this);
     connect(readNotifier_, &QSocketNotifier::activated, this, &CanComm::onReadable);
@@ -192,8 +202,12 @@ void CanComm::close()
     if (txTimer_) {
         txTimer_->stop();
     }
+    if (idleProbeTimer_) {
+        idleProbeTimer_->stop();
+    }
     txQueue_.clear();
     txConsecutiveNobufs_ = 0;
+    idleProbeErrors_ = 0;
     // 注意：不重置 droppedFrameCount_、txResetAttemptCount_ 和 lastResetTimeMs_
     // 以便在重新打开时继续追踪状态
 
@@ -292,6 +306,9 @@ void CanComm::onTxPump()
         txConsecutiveNobufs_ = 0;
         // 成功发送后重置丢帧计数
         droppedFrameCount_ = 0;
+        // 更新最后成功发送时间，重置空闲探测错误计数
+        lastSuccessfulTxMs_ = QDateTime::currentMSecsSinceEpoch();
+        idleProbeErrors_ = 0;
         return;
     }
 
@@ -393,6 +410,72 @@ void CanComm::onReadable()
 
     if (readNotifier_) {
         readNotifier_->setEnabled(true);
+    }
+}
+
+/**
+ * @brief 空闲探测检查
+ * 
+ * 当CAN总线长时间无成功发送时，通过直接写入socket的方式
+ * 探测总线是否正常工作。如果连续多次探测失败，说明总线
+ * 可能处于错误状态（如bus-off），此时触发接口重置。
+ * 
+ * 这解决了"无控制指令下发时CAN总线错误无法被检测和重置"的问题。
+ */
+void CanComm::onIdleCheck()
+{
+    if (socket_ < 0 || resetInProgress_) {
+        return;
+    }
+
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const qint64 idleDuration = now - lastSuccessfulTxMs_;
+
+    // 总线未处于空闲状态（有正常发送活动），重置空闲错误计数
+    if (idleDuration < kIdleThresholdMs) {
+        idleProbeErrors_ = 0;
+        return;
+    }
+
+    // 总线空闲，发送探测帧以检查总线健康状态
+    // 使用CAN ID 0x7FF（标准帧最高ID）和空数据，不影响设备
+    struct can_frame frame {};
+    frame.can_id = 0x7FF;
+    frame.can_dlc = 0;
+
+    errno = 0;
+    const ssize_t n = ::write(socket_, &frame, sizeof(frame));
+
+    if (n == sizeof(frame)) {
+        // 探测成功，总线正常工作
+        LOG_DEBUG(kLogSource,
+                  QStringLiteral("Idle probe OK (idle %1ms)").arg(idleDuration));
+        idleProbeErrors_ = 0;
+        lastSuccessfulTxMs_ = now;
+        return;
+    }
+
+    // 探测失败，累计错误
+    ++idleProbeErrors_;
+    LOG_WARNING(kLogSource,
+                QStringLiteral("Idle probe failed (errno=%1, consecutive=%2/%3, idle %4ms)")
+                    .arg(errno)
+                    .arg(idleProbeErrors_)
+                    .arg(kIdleProbeErrorThreshold)
+                    .arg(idleDuration));
+
+    // 通知上层模块总线处于空闲状态，可发送设备查询帧
+    emit idleProbeNeeded();
+
+    // 连续失败次数超过阈值，重置CAN接口
+    if (idleProbeErrors_ >= kIdleProbeErrorThreshold) {
+        LOG_WARNING(kLogSource,
+                    QStringLiteral("Idle probe error threshold reached (%1), "
+                                   "resetting CAN interface %2")
+                        .arg(idleProbeErrors_)
+                        .arg(config_.interface));
+        idleProbeErrors_ = 0;
+        tryResetInterface();
     }
 }
 
