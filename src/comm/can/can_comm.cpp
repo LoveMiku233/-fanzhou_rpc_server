@@ -384,7 +384,7 @@ bool CanComm::tryResetInterface()
     }
 
     // 冷却时间已过，重置尝试计数器（允许再次重试）
-    if (lastResetTimeMs_ > 0 && (now - lastResetTimeMs_) >= kResetCooldownMs) {
+    if (lastResetTimeMs_ > 0) {
         txResetAttemptCount_ = 0;
     }
 
