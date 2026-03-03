@@ -91,6 +91,18 @@ bool CanComm::open()
         LOG_DEBUG(kLogSource, QStringLiteral("Actual socket SO_SNDBUF size: %1 bytes").arg(sndbuf_size));
     }
 
+    // 尝试增大发送缓冲区以减少ENOBUFS频率
+    int desired_sndbuf = 65536;  // 64KB
+    if (setsockopt(socket_, SOL_SOCKET, SO_SNDBUF, &desired_sndbuf, sizeof(desired_sndbuf)) == 0) {
+        // 再次读取实际值（内核可能会翻倍）
+        socklen_t actual_len = sizeof(sndbuf_size);
+        if (getsockopt(socket_, SOL_SOCKET, SO_SNDBUF, &sndbuf_size, &actual_len) == 0) {
+            LOG_INFO(kLogSource, QStringLiteral("SO_SNDBUF set to %1 bytes").arg(sndbuf_size));
+        }
+    } else {
+        LOG_WARNING(kLogSource, QStringLiteral("Failed to set SO_SNDBUF: %1").arg(utils::sysErrorString("setsockopt")));
+    }
+
     // 如果需要，启用CAN FD模式
     // Enable CAN FD if requested
     if (config_.canFd) {
@@ -181,6 +193,7 @@ void CanComm::close()
         txTimer_->stop();
     }
     txQueue_.clear();
+    txConsecutiveNobufs_ = 0;
     // 注意：不重置 droppedFrameCount_、txResetAttemptCount_ 和 lastResetTimeMs_
     // 以便在重新打开时继续追踪状态
 
@@ -276,22 +289,39 @@ void CanComm::onTxPump()
                       .arg(canIdWithoutFlags, 0, 16)
                       .arg(item.frame.can_dlc));
         txQueue_.dequeue();
+        txConsecutiveNobufs_ = 0;
         // 成功发送后重置丢帧计数
         droppedFrameCount_ = 0;
         return;
     }
 
     if (errno == ENOBUFS || errno == EAGAIN || errno == EWOULDBLOCK) {
-        // TX buffer满，立即重启CAN接口（这是解决TX buffer full的唯一有效方法）
-        const int pendingFrames = txQueue_.size();
+        ++txConsecutiveNobufs_;
+
+        // 偶尔的buffer full：不做任何操作，帧留在队头，等下一个timer周期(2ms后)自动重试
+        if (txConsecutiveNobufs_ <= kNobufsRetryThreshold) {
+            // 只在首次和每10次输出日志，避免日志刷屏
+            if (txConsecutiveNobufs_ == 1 || txConsecutiveNobufs_ % kNobufsLogInterval == 0) {
+                LOG_DEBUG(kLogSource,
+                          QStringLiteral("TX buffer full (errno=%1), will retry next cycle (%2/%3), pending=%4")
+                              .arg(errno)
+                              .arg(txConsecutiveNobufs_)
+                              .arg(kNobufsRetryThreshold)
+                              .arg(txQueue_.size()));
+            }
+            return;  // 不dequeue，不重启，2ms后onTxPump会再次被调用
+        }
+
+        // 连续多次都失败 → 可能是真正的总线问题，才重启接口
         LOG_WARNING(kLogSource,
-                    QStringLiteral("TX buffer full (errno=%1), pending frames=%2, "
-                                   "immediately restarting CAN interface %3")
-                        .arg(errno)
-                        .arg(pendingFrames)
+                    QStringLiteral("TX buffer full %1 consecutive times (~%2ms), "
+                                   "resetting CAN interface %3")
+                        .arg(txConsecutiveNobufs_)
+                        .arg(txConsecutiveNobufs_ * kTxIntervalMs)
                         .arg(config_.interface));
+        txConsecutiveNobufs_ = 0;
+
         if (!tryResetInterface()) {
-            // 重置失败（冷却时间/达到最大重置次数/重置进行中），清空整个TX队列避免无意义积压
             const int droppedCount = txQueue_.size();
             if (droppedCount > 0) {
                 droppedFrameCount_ += droppedCount;
@@ -470,7 +500,9 @@ bool CanComm::tryResetInterface()
         QProcess process;
         process.setProgram(QStringLiteral("ip"));
         process.setArguments({QStringLiteral("link"), QStringLiteral("set"),
-                              config_.interface, QStringLiteral("up")});
+                              config_.interface,
+                              QStringLiteral("txqueuelen"), QStringLiteral("128"),
+                              QStringLiteral("up")});
         process.start();
         if (!process.waitForFinished(kProcessTimeoutMs)) {
             LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 up timed out").arg(config_.interface));

@@ -136,12 +136,15 @@ private:
     bool resetInProgress_ = false; ///< 接口重置是否正在进行中
     int droppedFrameCount_ = 0;    ///< 连续丢帧计数
     qint64 lastResetTimeMs_ = 0;   ///< 最后一次接口重置的时间戳
+    int txConsecutiveNobufs_ = 0;  ///< 连续ENOBUFS次数
 
     static constexpr int kMaxTxQueueSize = 512;
     static constexpr int kTxIntervalMs = 2;
     static constexpr int kMaxResetAttempts = 3;  ///< 最大接口重置尝试次数
     static constexpr int kResetCooldownMs = 5000;  ///< 接口重置冷却时间（毫秒）
     static constexpr int kProcessTimeoutMs = 5000;  ///< 外部进程执行超时（毫秒）
+    static constexpr int kNobufsRetryThreshold = 50;  ///< 连续ENOBUFS次数阈值，超过才重启接口（约100ms）
+    static constexpr int kNobufsLogInterval = 10;     ///< ENOBUFS日志输出间隔（避免刷屏）
 
     /**
      * @brief 尝试重置CAN接口以恢复通信
