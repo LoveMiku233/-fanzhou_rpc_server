@@ -464,9 +464,14 @@ bool CoreContext::isInEffectiveTime(const AutoStrategy &s, const QTime &now) con
 
 void CoreContext::executeActions(const QList<StrategyAction> &actions)
 {
-//    for (auto a : actions) {
-//
-//    }
+    int cnt = 0;
+    for (const auto &a : actions) {
+        cnt++;
+        const QString source = QStringLiteral("strategy_action:%1").arg(cnt);
+        enqueueControl(a.node, a.channel,
+                       static_cast<device::RelayProtocol::Action>(a.identifierValue),
+                       source, true);
+    }
 }
 
 bool CoreContext::evaluateConditions(const QList<StrategyCondition> &conditions,
@@ -553,13 +558,11 @@ void CoreContext::evaluateAllStrategies()
             continue;
 
         s.lastTriggered = now;
-        int cnt = 0;
-        for (auto &a: s.actions) {
-            cnt++;
-            const QString source = QStringLiteral("auto:%1 count:%2").arg(s.strategyName).arg(cnt);
-            enqueueControl(a.node, a.channel, static_cast<device::RelayProtocol::Action>(a.identifierValue), source, true);
-            LOG_DEBUG(kLogSource, source);
-        }
+        LOG_INFO(kLogSource, QStringLiteral("Strategy %1 [%2] triggered, executing %3 actions sequentially")
+                     .arg(s.strategyId)
+                     .arg(s.strategyName)
+                     .arg(s.actions.size()));
+        executeActions(s.actions);
 
 
 //          ;2
@@ -602,6 +605,23 @@ bool CoreContext::setStrategyEnabled(int strategyId, bool enabled)
             LOG_INFO(kLogSource, QStringLiteral("Strategy %1 set enabled=%2")
                      .arg(strategyId)
                      .arg(enabled));
+
+            if (!enabled && !s.actions.isEmpty()) {
+                // 策略关闭时，逐个执行Stop动作，避免冲击电网
+                LOG_INFO(kLogSource, QStringLiteral("Strategy %1 disabled, stopping %2 actions sequentially")
+                         .arg(strategyId)
+                         .arg(s.actions.size()));
+                int cnt = 0;
+                for (const auto &a : s.actions) {
+                    cnt++;
+                    const QString source = QStringLiteral("strategy_disable:%1 action:%2")
+                                               .arg(s.strategyName).arg(cnt);
+                    enqueueControl(a.node, a.channel,
+                                   device::RelayProtocol::Action::Stop,
+                                   source, true);
+                }
+            }
+
             return true;
         }
     }
@@ -618,14 +638,10 @@ bool CoreContext::triggerStrategy(int strategyId)
                 return false;
             }
 
-            LOG_INFO(kLogSource, QStringLiteral("Triggering strategy %1").arg(strategyId));
-            // 执行策略动作
-            int cnt = 0;
-            for (auto &a: s.actions) {
-                cnt++;
-                const QString source = QStringLiteral("auto:%1 count:%2").arg(s.strategyName).arg(cnt);
-                enqueueControl(a.node, a.channel, static_cast<device::RelayProtocol::Action>(a.identifierValue), source, true);
-            }
+            LOG_INFO(kLogSource, QStringLiteral("Triggering strategy %1, executing %2 actions sequentially")
+                         .arg(strategyId)
+                         .arg(s.actions.size()));
+            executeActions(s.actions);
             return true;
         }
     }
