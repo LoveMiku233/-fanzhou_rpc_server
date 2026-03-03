@@ -164,7 +164,7 @@ private:
     static constexpr int kTxIntervalMs = 2;
     static constexpr int kMaxResetAttempts = 3;  ///< 最大接口重置尝试次数
     static constexpr int kResetCooldownMs = 5000;  ///< 接口重置冷却时间（毫秒）
-    static constexpr int kProcessTimeoutMs = 3000;  ///< 外部进程执行超时（毫秒）
+    static constexpr int kProcessTimeoutMs = 3000;  ///< 外部进程执行超时（毫秒），ip命令通常在几十毫秒内完成
     static constexpr int kNobufsRetryThreshold = 50;  ///< 连续ENOBUFS次数阈值，超过才重启接口（约100ms）
     static constexpr int kNobufsLogInterval = 10;     ///< ENOBUFS日志输出间隔（避免刷屏）
     static constexpr int kIdleProbeIntervalMs = 5000;  ///< 空闲探测定时器间隔（毫秒）

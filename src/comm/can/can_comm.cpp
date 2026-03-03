@@ -570,8 +570,10 @@ bool CanComm::tryResetInterface()
         }
         // 配置 restart-ms：CAN控制器在bus-off后自动重启的延迟
         // 这样即使没有手动重置，硬件也能自动从bus-off状态恢复
+        // 限制范围：1-10000ms，防止误配置
         if (config_.restartMs > 0) {
-            args << QStringLiteral("restart-ms") << QString::number(config_.restartMs);
+            const int clampedRestartMs = qBound(1, config_.restartMs, 10000);
+            args << QStringLiteral("restart-ms") << QString::number(clampedRestartMs);
         }
         process.setArguments(args);
         process.start();
