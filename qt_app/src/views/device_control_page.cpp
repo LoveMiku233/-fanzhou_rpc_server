@@ -1031,16 +1031,29 @@ void DeviceControlPage::onAddGroup()
     int idx = colorBox->currentIndex();
     QString color = (idx >= 0 && idx < 6) ? colorKeys[idx] : "blue";
 
+    // Assign a numeric group ID
+    int newGroupId = 1;
+    for (const Models::DeviceGroup &existing : groups_) {
+        int existingId = existing.id.toInt();
+        if (existingId >= newGroupId)
+            newGroupId = existingId + 1;
+    }
+
     Models::DeviceGroup g;
-    g.id = QString("group_%1").arg(groups_.size() + 1);
+    g.id = QString::number(newGroupId);
     g.name = name;
     g.color = color;
 
     // RPC: group.create
     if (rpcClient_ && rpcClient_->isConnected()) {
         QJsonObject params;
+        params[QStringLiteral("groupId")] = newGroupId;
         params[QStringLiteral("name")] = name;
-        rpcClient_->callAsync(QStringLiteral("group.create"), params);
+        rpcClient_->callAsync(QStringLiteral("group.create"), params,
+            [this](const QJsonValue &, const QJsonObject &) {
+                // Persist configuration after creating group
+                rpcClient_->callAsync(QStringLiteral("config.save"), QJsonObject());
+            }, 3000);
     }
     groups_ << g;
     currentGroupIndex_ = groups_.size() - 1;
@@ -1074,7 +1087,11 @@ void DeviceControlPage::onDeleteGroup()
     if (rpcClient_ && rpcClient_->isConnected()) {
         QJsonObject params;
         params[QStringLiteral("groupId")] = g.id.toInt();
-        rpcClient_->callAsync(QStringLiteral("group.delete"), params);
+        rpcClient_->callAsync(QStringLiteral("group.delete"), params,
+            [this](const QJsonValue &, const QJsonObject &) {
+                // Persist configuration after deleting group
+                rpcClient_->callAsync(QStringLiteral("config.save"), QJsonObject());
+            }, 3000);
     }
     groups_.removeAt(currentGroupIndex_);
     if (currentGroupIndex_ >= groups_.size())
@@ -1187,7 +1204,11 @@ void DeviceControlPage::onAddDevice()
         QJsonObject params;
         params[QStringLiteral("groupId")] = groups_[currentGroupIndex_].id.toInt();
         params[QStringLiteral("node")] = dev.nodeId;
-        rpcClient_->callAsync(QStringLiteral("group.addDevice"), params);
+        rpcClient_->callAsync(QStringLiteral("group.addDevice"), params,
+            [this](const QJsonValue &, const QJsonObject &) {
+                // Persist configuration after adding device
+                rpcClient_->callAsync(QStringLiteral("config.save"), QJsonObject());
+            }, 3000);
     }
     groups_[currentGroupIndex_].devices << dev;
     renderDevices();
@@ -1230,7 +1251,11 @@ void DeviceControlPage::onDeleteDevice(const QString &deviceId)
                 QJsonObject params;
                 params[QStringLiteral("groupId")] = group.id.toInt();
                 params[QStringLiteral("node")] = d.nodeId;
-                rpcClient_->callAsync(QStringLiteral("group.removeDevice"), params);
+                rpcClient_->callAsync(QStringLiteral("group.removeDevice"), params,
+                    [this](const QJsonValue &, const QJsonObject &) {
+                        // Persist configuration after removing device
+                        rpcClient_->callAsync(QStringLiteral("config.save"), QJsonObject());
+                    }, 3000);
                 break;
             }
         }
