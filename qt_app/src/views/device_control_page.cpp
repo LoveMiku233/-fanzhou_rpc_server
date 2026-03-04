@@ -1379,6 +1379,83 @@ void DeviceControlPage::onEditDevice(const QString &deviceId)
 }
 
 // ---------------------------------------------------------------------------
+// applyDeviceList  (RPC callback: enriches device names/types from device.list)
+// ---------------------------------------------------------------------------
+
+void DeviceControlPage::applyDeviceList(const QJsonValue &result)
+{
+    if (!result.isObject())
+        return;
+    QJsonObject obj = result.toObject();
+    if (!obj.value(QStringLiteral("ok")).toBool())
+        return;
+
+    QJsonArray devArr = obj.value(QStringLiteral("devices")).toArray();
+
+    // Build map: nodeId → {name, typeName, online}
+    QHash<int, QString> nameMap;
+    QHash<int, QString> typeMap;
+    QHash<int, bool>    onlineMap;
+    for (const QJsonValue &dv : devArr) {
+        QJsonObject d = dv.toObject();
+        int nodeId = d.value(QStringLiteral("nodeId")).toInt(-1);
+        if (nodeId < 0) continue;
+        nameMap[nodeId]   = d.value(QStringLiteral("name")).toString();
+        typeMap[nodeId]   = d.value(QStringLiteral("typeName")).toString();
+        onlineMap[nodeId] = d.value(QStringLiteral("online")).toBool(false);
+    }
+
+    bool changed = false;
+    for (int g = 0; g < groups_.size(); ++g) {
+        for (int d = 0; d < groups_[g].devices.size(); ++d) {
+            Models::DeviceInfo &dev = groups_[g].devices[d];
+            if (dev.nodeId < 0) continue;
+
+            // Update name if we got a real name from the server
+            if (nameMap.contains(dev.nodeId)) {
+                QString serverName = nameMap[dev.nodeId];
+                if (!serverName.isEmpty()) {
+                    dev.name = serverName;
+                    changed = true;
+                }
+            }
+
+            // Update type hint from server typeName
+            if (typeMap.contains(dev.nodeId)) {
+                static const char *kRelayTypeName = "gd427";
+                QString tn = typeMap[dev.nodeId].toLower();
+                // Relay devices (GD427 type) use forward/reverse control
+                if (tn.contains("relay") || tn.contains(kRelayTypeName)) {
+                    dev.type = "ac";
+                    if (dev.controlType == "slider") dev.controlType = "forward_reverse";
+                    changed = true;
+                }
+            }
+
+            // Update online/offline status
+            if (onlineMap.contains(dev.nodeId)) {
+                bool online = onlineMap[dev.nodeId];
+                if (!online && dev.status != "fault") {
+                    dev.status = "fault";
+                    dev.fault = kNodeOfflineFault;
+                    changed = true;
+                } else if (online && dev.status == "fault"
+                           && dev.fault == kNodeOfflineFault) {
+                    dev.status = "stopped";
+                    dev.fault.clear();
+                    changed = true;
+                }
+            }
+        }
+    }
+
+    if (changed) {
+        renderGroupTabs();
+        renderDevices();
+    }
+}
+
+// ---------------------------------------------------------------------------
 // onGroupListReceived  (RPC callback)
 // ---------------------------------------------------------------------------
 
@@ -1453,56 +1530,67 @@ void DeviceControlPage::refreshData()
         [this](const QJsonValue &result, const QJsonObject &error) {
             onGroupListReceived(result, error);
 
-            // After groups are loaded, fetch relay status to update device states
-            if (rpcClient_ && rpcClient_->isConnected()) {
-                rpcClient_->callAsync(
-                    QStringLiteral("relay.statusAll"),
-                    QJsonObject(),
-                    [this](const QJsonValue &statusResult, const QJsonObject &statusError) {
-                        if (!statusError.isEmpty() || !statusResult.isObject())
-                            return;
+            if (!rpcClient_ || !rpcClient_->isConnected())
+                return;
 
-                        QJsonObject sObj = statusResult.toObject();
-                        if (!sObj.value(QStringLiteral("ok")).toBool())
-                            return;
+            // Fetch device.list to enrich device names, types, and online status
+            rpcClient_->callAsync(
+                QStringLiteral("device.list"),
+                QJsonObject(),
+                [this](const QJsonValue &devResult, const QJsonObject &devError) {
+                    if (devError.isEmpty())
+                        applyDeviceList(devResult);
+                },
+                3000);
 
-                        QJsonArray nodes = sObj.value(QStringLiteral("nodes")).toArray();
+            // Also fetch relay node statuses to update device online/offline states
+            rpcClient_->callAsync(
+                QStringLiteral("relay.nodes"),
+                QJsonObject(),
+                [this](const QJsonValue &statusResult, const QJsonObject &statusError) {
+                    if (!statusError.isEmpty() || !statusResult.isObject())
+                        return;
 
-                        // Build a map of node online status
-                        QHash<int, bool> nodeOnline;
-                        for (const QJsonValue &nv : nodes) {
-                            QJsonObject no = nv.toObject();
-                            int nodeId = no.value(QStringLiteral("node")).toInt();
-                            bool online = no.value(QStringLiteral("online")).toBool();
-                            nodeOnline[nodeId] = online;
-                        }
+                    QJsonObject sObj = statusResult.toObject();
+                    if (!sObj.value(QStringLiteral("ok")).toBool())
+                        return;
 
-                        // Update device statuses based on node online status
-                        bool changed = false;
-                        for (int g = 0; g < groups_.size(); ++g) {
-                            for (int d = 0; d < groups_[g].devices.size(); ++d) {
-                                Models::DeviceInfo &dev = groups_[g].devices[d];
-                                if (dev.nodeId >= 0 && nodeOnline.contains(dev.nodeId)) {
-                                    bool online = nodeOnline[dev.nodeId];
-                                    if (!online && dev.status != "fault") {
-                                        dev.status = "fault";
-                                        dev.fault = kNodeOfflineFault;
-                                        changed = true;
-                                    } else if (online && dev.status == "fault"
-                                               && dev.fault == kNodeOfflineFault) {
-                                        dev.status = "stopped";
-                                        dev.fault.clear();
-                                        changed = true;
-                                    }
+                    QJsonArray nodes = sObj.value(QStringLiteral("nodes")).toArray();
+
+                    // Build a map of node online status
+                    QHash<int, bool> nodeOnline;
+                    for (const QJsonValue &nv : nodes) {
+                        QJsonObject no = nv.toObject();
+                        int nodeId = no.value(QStringLiteral("node")).toInt();
+                        bool online = no.value(QStringLiteral("online")).toBool();
+                        nodeOnline[nodeId] = online;
+                    }
+
+                    // Update device statuses based on node online status
+                    bool changed = false;
+                    for (int g = 0; g < groups_.size(); ++g) {
+                        for (int d = 0; d < groups_[g].devices.size(); ++d) {
+                            Models::DeviceInfo &dev = groups_[g].devices[d];
+                            if (dev.nodeId >= 0 && nodeOnline.contains(dev.nodeId)) {
+                                bool online = nodeOnline[dev.nodeId];
+                                if (!online && dev.status != "fault") {
+                                    dev.status = "fault";
+                                    dev.fault = kNodeOfflineFault;
+                                    changed = true;
+                                } else if (online && dev.status == "fault"
+                                           && dev.fault == kNodeOfflineFault) {
+                                    dev.status = "stopped";
+                                    dev.fault.clear();
+                                    changed = true;
                                 }
                             }
                         }
-                        if (changed) {
-                            renderDevices();
-                        }
-                    },
-                    3000);
-            }
+                    }
+                    if (changed) {
+                        renderDevices();
+                    }
+                },
+                3000);
         },
         3000);
 }

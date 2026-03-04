@@ -1052,4 +1052,66 @@ void SettingsPage::refreshSysInfo()
                 aboutDeviceIdLabel_->setText(deviceId);
         },
         3000);
+
+    // Fetch current network info to populate network configuration fields
+    rpcClient_->callAsync(
+        QStringLiteral("sys.network.info"),
+        QJsonObject(),
+        [this](const QJsonValue &result, const QJsonObject &error) {
+            if (!error.isEmpty() || !result.isObject())
+                return;
+
+            QJsonObject obj = result.toObject();
+            if (!obj.value(QStringLiteral("ok")).toBool())
+                return;
+
+            // The server returns the network interface info string; parse key fields
+            // Expected format: {ok, info} where info is a string or object
+            QJsonValue infoVal = obj.value(QStringLiteral("info"));
+            QString infoStr;
+            if (infoVal.isString()) {
+                infoStr = infoVal.toString();
+            } else if (infoVal.isObject()) {
+                QJsonObject infoObj = infoVal.toObject();
+                QString addr    = infoObj.value(QStringLiteral("address")).toString();
+                QString netmask = infoObj.value(QStringLiteral("netmask")).toString();
+                QString gw      = infoObj.value(QStringLiteral("gateway")).toString();
+                QString mac     = infoObj.value(QStringLiteral("mac")).toString();
+
+                if (!addr.isEmpty() && editIp_)
+                    editIp_->setText(addr);
+                if (!netmask.isEmpty() && editSubnet_)
+                    editSubnet_->setText(netmask);
+                if (!gw.isEmpty() && editGateway_)
+                    editGateway_->setText(gw);
+                if (!mac.isEmpty() && editMac_)
+                    editMac_->setText(mac);
+                return;
+            }
+
+            // Parse ip= / netmask= / gateway= from string output (ifconfig-style)
+            if (!infoStr.isEmpty()) {
+                auto extract = [&](const QString &key) -> QString {
+                    int idx = infoStr.indexOf(key);
+                    if (idx < 0) return QString();
+                    int start = idx + key.length();
+                    int end = infoStr.indexOf(' ', start);
+                    if (end < 0) end = infoStr.length();
+                    return infoStr.mid(start, end - start).trimmed();
+                };
+                QString addr    = extract(QStringLiteral("inet "));
+                QString netmask = extract(QStringLiteral("netmask "));
+                QString mac     = extract(QStringLiteral("ether "));
+                if (addr.isEmpty()) addr = extract(QStringLiteral("addr:"));
+                if (netmask.isEmpty()) netmask = extract(QStringLiteral("Mask:"));
+
+                if (!addr.isEmpty() && editIp_)
+                    editIp_->setText(addr);
+                if (!netmask.isEmpty() && editSubnet_)
+                    editSubnet_->setText(netmask);
+                if (!mac.isEmpty() && editMac_)
+                    editMac_->setText(mac);
+            }
+        },
+        3000);
 }
