@@ -302,7 +302,7 @@ void MainWindow::setupConnections()
         connect(dashboardPage_, &DashboardPage::emergencyStopClicked, this, [this]() {
             if (rpcClient_->isConnected()) {
                 rpcClient_->callAsync(
-                    QStringLiteral("relay.stopAll"),
+                    QStringLiteral("relay.emergencyStop"),
                     QJsonObject());
             }
         });

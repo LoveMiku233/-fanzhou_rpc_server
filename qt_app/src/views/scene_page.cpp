@@ -582,12 +582,71 @@ void ScenePage::onStrategyListReceived(const QJsonValue &result,
         scenes_.append(scene);
     }
 
+    // Additional strategies will be appended via onAdditionalStrategiesReceived
     if (statusLabel_) {
         statusLabel_->setText(
             QString::fromUtf8("已从服务器加载 %1 个场景/策略").arg(scenes_.size()));
     }
 
     renderScenes();
+}
+
+// ---------------------------------------------------------------------------
+// Helper to append relay/sensor strategies to scene list
+// ---------------------------------------------------------------------------
+
+static void appendRelayStrategies(const QJsonValue &result,
+                                   const QJsonObject &error,
+                                   QList<Models::SceneInfo> &scenes,
+                                   int idOffset)
+{
+    if (!error.isEmpty() || !result.isObject())
+        return;
+    QJsonObject obj = result.toObject();
+    if (!obj.value("ok").toBool())
+        return;
+
+    QJsonArray strategies = obj.value("strategies").toArray();
+    for (const QJsonValue &sv : strategies) {
+        QJsonObject so = sv.toObject();
+        Models::SceneInfo scene;
+        scene.id = so.value("id").toInt() + idOffset;
+        scene.name = so.value("name").toString();
+        scene.type = "auto";
+        scene.active = so.value("enabled").toBool();
+        scene.triggers = 0;
+
+        // Build a descriptive condition from the strategy fields
+        int nodeId = so.value("nodeId").toInt(-1);
+        int channel = so.value("channel").toInt(-1);
+        QString action = so.value("action").toString();
+        if (nodeId >= 0) {
+            QString cond = QString::fromUtf8("节点%1").arg(nodeId);
+            if (channel >= 0)
+                cond += QString::fromUtf8(" 通道%1").arg(channel);
+            if (!action.isEmpty())
+                cond += QString::fromUtf8(" %1").arg(action);
+            scene.conditions << cond;
+        }
+
+        int intervalSec = so.value("intervalSec").toInt(0);
+        if (intervalSec > 0) {
+            scene.conditions << QString::fromUtf8("间隔%1秒").arg(intervalSec);
+        }
+
+        // Sensor condition
+        QString sensorId = so.value("sensorId").toString();
+        if (!sensorId.isEmpty()) {
+            QString op = so.value("op").toString();
+            double threshold = so.value("threshold").toDouble();
+            scene.conditions << QString::fromUtf8("传感器%1 %2 %3")
+                                    .arg(sensorId, op)
+                                    .arg(threshold);
+        }
+
+        scene.lastRun = QString::fromUtf8("--");
+        scenes.append(scene);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -599,6 +658,7 @@ void ScenePage::refreshData()
     if (!rpcClient_ || !rpcClient_->isConnected())
         return;
 
+    // Fetch main strategy list first (clears scenes_)
     rpcClient_->callAsync(
         QStringLiteral("auto.strategy.list"),
         QJsonObject(),
@@ -606,4 +666,25 @@ void ScenePage::refreshData()
             onStrategyListReceived(result, error);
         },
         3000);
+
+    // Fetch additional strategy types in parallel (append to scenes_)
+    auto fetchAdditional = [this](const QString &method, int idOffset) {
+        rpcClient_->callAsync(
+            method,
+            QJsonObject(),
+            [this, idOffset](const QJsonValue &r, const QJsonObject &e) {
+                appendRelayStrategies(r, e, scenes_, idOffset);
+                if (statusLabel_) {
+                    statusLabel_->setText(
+                        QString::fromUtf8("已从服务器加载 %1 个场景/策略")
+                            .arg(scenes_.size()));
+                }
+                renderScenes();
+            },
+            3000);
+    };
+
+    fetchAdditional(QStringLiteral("auto.relay.list"),        10000);
+    fetchAdditional(QStringLiteral("auto.sensor.list"),       20000);
+    fetchAdditional(QStringLiteral("auto.sensorRelay.list"),  30000);
 }

@@ -231,8 +231,20 @@ void DashboardPage::setupUi()
             .arg(Style::kColorTextMuted)
             .arg(Style::kFontTiny));
 
+    // CAN bus status indicator
+    canStatusLabel_ = new QLabel(QString::fromUtf8("CAN: --"));
+    canStatusLabel_->setAlignment(Qt::AlignCenter);
+    canStatusLabel_->setStyleSheet(
+        QString("color:%1; font-size:%2px; background:%3;"
+                " padding:2px 8px; border-radius:4px;")
+            .arg(Style::kColorTextMuted)
+            .arg(Style::kFontTiny)
+            .arg(Style::kColorBgCard));
+
     sLayout->addWidget(emergencyStopBtn_, 0, Qt::AlignCenter);
     sLayout->addWidget(stopHint, 0, Qt::AlignCenter);
+    sLayout->addSpacing(6);
+    sLayout->addWidget(canStatusLabel_, 0, Qt::AlignCenter);
 
     connect(emergencyStopBtn_, &QPushButton::clicked,
             this, &DashboardPage::emergencyStopClicked);
@@ -431,6 +443,56 @@ void DashboardPage::refreshData()
             if (wRainCnt > 0) {
                 double r = wRain / wRainCnt;
                 weatherRainValue_->setText(QString::fromUtf8("%1 mm").arg(r, 0, 'f', 1));
+            }
+        },
+        3000);
+
+    // Fetch CAN bus status for diagnostics display
+    rpcClient_->callAsync(
+        QStringLiteral("can.status"),
+        QJsonObject(),
+        [this](const QJsonValue &result, const QJsonObject &error) {
+            if (!error.isEmpty() || !result.isObject()) {
+                if (canStatusLabel_) {
+                    canStatusLabel_->setText(QString::fromUtf8("CAN: 未知"));
+                    canStatusLabel_->setStyleSheet(
+                        QString("color:%1; font-size:%2px; background:%3;"
+                                " padding:2px 8px; border-radius:4px;")
+                            .arg(Style::kColorTextMuted)
+                            .arg(Style::kFontTiny)
+                            .arg(Style::kColorBgCard));
+                }
+                return;
+            }
+
+            QJsonObject obj = result.toObject();
+            bool opened = obj.value(QStringLiteral("opened")).toBool();
+            int txQueue = obj.value(QStringLiteral("txQueueSize")).toInt(0);
+            QString iface = obj.value(QStringLiteral("interface")).toString();
+
+            if (canStatusLabel_) {
+                if (opened) {
+                    QString text = QString::fromUtf8("CAN: %1 正常").arg(iface);
+                    if (txQueue > 0)
+                        text += QString::fromUtf8(" | 队列:%1").arg(txQueue);
+                    canStatusLabel_->setText(text);
+                    const char *bgColor = (txQueue > 10)
+                        ? Style::kColorWarning : Style::kColorSuccess;
+                    canStatusLabel_->setStyleSheet(
+                        QString("color:white; font-size:%1px; background:%2;"
+                                " padding:2px 8px; border-radius:4px;")
+                            .arg(Style::kFontTiny)
+                            .arg(bgColor));
+                } else {
+                    QString diagnostic = obj.value(QStringLiteral("diagnostic")).toString();
+                    canStatusLabel_->setText(
+                        QString::fromUtf8("CAN: 未打开"));
+                    canStatusLabel_->setStyleSheet(
+                        QString("color:white; font-size:%1px; background:%2;"
+                                " padding:2px 8px; border-radius:4px;")
+                            .arg(Style::kFontTiny)
+                            .arg(Style::kColorDanger));
+                }
             }
         },
         3000);
