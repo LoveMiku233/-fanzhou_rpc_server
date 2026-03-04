@@ -157,10 +157,6 @@ void CloudUploader::tryUploadNode(quint8 nodeId, bool force)
             state.lastUpload.secsTo(QDateTime::currentDateTimeUtc());
 
         if (elapsed < cfg_->minUploadIntervalSec) {
-            LOG_DEBUG(kLogSource,
-                      QStringLiteral("Skip upload node %1: min interval not reached (%2 s)")
-                          .arg(nodeId)
-                          .arg(elapsed));
             return;
         }
     }
@@ -190,9 +186,6 @@ void CloudUploader::tryUploadNode(quint8 nodeId, bool force)
                 !state.lastPayload.isEmpty() &&
                 payloadsEqual(state.lastPayload, payload, kCurrentTolerance)) {
 
-                LOG_DEBUG(kLogSource,
-                          QStringLiteral("Skip upload node %1: payload unchanged (within tolerance)")
-                              .arg(nodeId));
                 return;
             }
 

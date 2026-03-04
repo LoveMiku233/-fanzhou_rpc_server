@@ -12,6 +12,7 @@ struct CanConfig {
     bool tripleSampling = true;
     bool canFd = false;
     int restartMs = 100;  ///< CAN控制器bus-off自动重启延迟（毫秒），0表示禁用
+    int periodicRestartMin = 0;  ///< 定时重启CAN接口的间隔（分钟），0表示禁用
 };
 
 

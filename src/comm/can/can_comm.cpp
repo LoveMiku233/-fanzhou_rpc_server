@@ -174,6 +174,25 @@ bool CanComm::open()
     idleProbeTimer_->start();
     lastSuccessfulTxMs_ = QDateTime::currentMSecsSinceEpoch();
 
+    // Setup periodic restart timer
+    if (config_.periodicRestartMin > 0) {
+        if (!periodicRestartTimer_) {
+            periodicRestartTimer_ = new QTimer(this);
+            periodicRestartTimer_->setSingleShot(false);
+            connect(periodicRestartTimer_, &QTimer::timeout, this, [this]() {
+                LOG_INFO(kLogSource,
+                         QStringLiteral("Periodic CAN restart triggered (interval %1 min)")
+                             .arg(config_.periodicRestartMin));
+                tryResetInterface();
+            });
+        }
+        periodicRestartTimer_->setInterval(config_.periodicRestartMin * 60 * 1000);
+        periodicRestartTimer_->start();
+        LOG_INFO(kLogSource,
+                 QStringLiteral("Periodic CAN restart enabled: every %1 min")
+                     .arg(config_.periodicRestartMin));
+    }
+
     // Setup read notifier
     readNotifier_ = new QSocketNotifier(socket_, QSocketNotifier::Read, this);
     connect(readNotifier_, &QSocketNotifier::activated, this, &CanComm::onReadable);
@@ -205,6 +224,9 @@ void CanComm::close()
     }
     if (idleProbeTimer_) {
         idleProbeTimer_->stop();
+    }
+    if (periodicRestartTimer_) {
+        periodicRestartTimer_->stop();
     }
     txQueue_.clear();
     txConsecutiveNobufs_ = 0;
@@ -277,11 +299,6 @@ bool CanComm::sendFrame(quint32 canId, const QByteArray &payload, bool extended,
     }
 
     txQueue_.enqueue(TxItem{frame});
-    LOG_DEBUG(kLogSource,
-              QStringLiteral("Frame queued: id=0x%1, dlc=%2, queueSize=%3")
-                  .arg(canId, 0, 16)
-                  .arg(payload.size())
-                  .arg(txQueue_.size()));
     return true;
 }
 
@@ -296,13 +313,6 @@ void CanComm::onTxPump()
     const ssize_t n = ::write(socket_, &item.frame, sizeof(item.frame));
 
     if (n == sizeof(item.frame)) {
-        // 去除扩展帧标志位获取实际CAN ID
-        const bool extended = (item.frame.can_id & CAN_EFF_FLAG) != 0;
-        const quint32 canIdWithoutFlags = item.frame.can_id & (extended ? CAN_EFF_MASK : CAN_SFF_MASK);
-        LOG_DEBUG(kLogSource,
-                  QStringLiteral("Frame sent: id=0x%1, dlc=%2")
-                      .arg(canIdWithoutFlags, 0, 16)
-                      .arg(item.frame.can_dlc));
         txQueue_.dequeue();
         txConsecutiveNobufs_ = 0;
         // 成功发送后重置丢帧计数
@@ -451,8 +461,6 @@ void CanComm::onIdleCheck()
 
     if (n == sizeof(frame)) {
         // 探测成功，总线正常工作
-        LOG_DEBUG(kLogSource,
-                  QStringLiteral("Idle probe OK (idle %1ms)").arg(idleDuration));
         idleProbeErrors_ = 0;
         lastSuccessfulTxMs_ = now;
         return;
