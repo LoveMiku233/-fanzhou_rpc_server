@@ -75,6 +75,13 @@ bool CanComm::open()
 
     LOG_INFO(kLogSource, QStringLiteral("Opening CAN interface: %1").arg(config_.interface));
 
+    // 配置CAN接口（设置波特率、restart-ms并重新启动接口）
+    // 无论接口之前的状态如何（bus-off、未配置等），均确保以正确参数启动
+    // 注意：configureInterface()需要bitrate > 0才能配置CAN接口参数
+    if (config_.bitrate > 0 && !configureInterface()) {
+        return false;
+    }
+
     // 创建SocketCAN原始套接字
     // Create SocketCAN raw socket
     socket_ = ::socket(PF_CAN, SOCK_RAW, CAN_RAW);
@@ -492,6 +499,105 @@ void CanComm::onIdleCheck()
     }
 }
 
+bool CanComm::configureInterface()
+{
+    LOG_INFO(kLogSource,
+             QStringLiteral("Configuring CAN interface %1 (bitrate=%2, restart-ms=%3)")
+                 .arg(config_.interface)
+                 .arg(config_.bitrate)
+                 .arg(config_.restartMs > 0 ? QString::number(config_.restartMs) : QStringLiteral("disabled")));
+
+    // 1. 将接口设为 down（接口必须在down状态下才能修改CAN参数）
+    {
+        QProcess process;
+        process.setProgram(QStringLiteral("ip"));
+        process.setArguments({QStringLiteral("link"), QStringLiteral("set"),
+                              config_.interface, QStringLiteral("down")});
+        process.start();
+        if (!process.waitForFinished(kProcessTimeoutMs)) {
+            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 down timed out")
+                          .arg(config_.interface));
+            return false;
+        }
+        if (process.exitCode() != 0) {
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("ip link set %1 down failed: %2")
+                            .arg(config_.interface)
+                            .arg(QString::fromUtf8(process.readAllStandardError())));
+            // 继续尝试，因为接口可能已经是down状态
+        } else {
+            LOG_INFO(kLogSource, QStringLiteral("CAN interface %1 brought down").arg(config_.interface));
+        }
+    }
+
+    // 2. 配置CAN波特率和restart-ms
+    {
+        QProcess process;
+        process.setProgram(QStringLiteral("ip"));
+        QStringList args{QStringLiteral("link"), QStringLiteral("set"),
+                         config_.interface, QStringLiteral("type"), QStringLiteral("can"),
+                         QStringLiteral("bitrate"), QString::number(config_.bitrate)};
+        if (config_.tripleSampling) {
+            args << QStringLiteral("triple-sampling") << QStringLiteral("on");
+        }
+        // 配置 restart-ms：CAN控制器在bus-off后自动重启的延迟
+        // 这样即使没有手动重置，硬件也能自动从bus-off状态恢复
+        // 限制范围：1-10000ms，防止误配置
+        if (config_.restartMs > 0) {
+            const int clampedRestartMs = qBound(1, config_.restartMs, 10000);
+            args << QStringLiteral("restart-ms") << QString::number(clampedRestartMs);
+        }
+        process.setArguments(args);
+        process.start();
+        if (!process.waitForFinished(kProcessTimeoutMs)) {
+            LOG_ERROR(kLogSource,
+                      QStringLiteral("ip link set %1 type can bitrate %2 timed out")
+                          .arg(config_.interface)
+                          .arg(config_.bitrate));
+            return false;
+        }
+        if (process.exitCode() != 0) {
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("ip link set %1 type can bitrate %2 failed: %3")
+                            .arg(config_.interface)
+                            .arg(config_.bitrate)
+                            .arg(QString::fromUtf8(process.readAllStandardError())));
+        } else {
+            LOG_INFO(kLogSource,
+                     QStringLiteral("CAN interface %1 configured: bitrate=%2, restart-ms=%3")
+                         .arg(config_.interface)
+                         .arg(config_.bitrate)
+                         .arg(config_.restartMs));
+        }
+    }
+
+    // 3. 将接口设为 up（带txqueuelen配置）
+    {
+        QProcess process;
+        process.setProgram(QStringLiteral("ip"));
+        process.setArguments({QStringLiteral("link"), QStringLiteral("set"),
+                              config_.interface,
+                              QStringLiteral("txqueuelen"), QStringLiteral("128"),
+                              QStringLiteral("up")});
+        process.start();
+        if (!process.waitForFinished(kProcessTimeoutMs)) {
+            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 up timed out")
+                          .arg(config_.interface));
+            return false;
+        }
+        if (process.exitCode() != 0) {
+            LOG_ERROR(kLogSource,
+                      QStringLiteral("ip link set %1 up failed: %2")
+                          .arg(config_.interface)
+                          .arg(QString::fromUtf8(process.readAllStandardError())));
+            return false;
+        }
+        LOG_INFO(kLogSource, QStringLiteral("CAN interface %1 brought up").arg(config_.interface));
+    }
+
+    return true;
+}
+
 bool CanComm::tryResetInterface()
 {
     // 防止重入
@@ -540,104 +646,7 @@ bool CanComm::tryResetInterface()
     // 1. 关闭当前socket
     close();
 
-    // 2. 使用 ip link set down 关闭接口
-    {
-        QProcess process;
-        process.setProgram(QStringLiteral("ip"));
-        process.setArguments({QStringLiteral("link"), QStringLiteral("set"),
-                              config_.interface, QStringLiteral("down")});
-        process.start();
-        if (!process.waitForFinished(kProcessTimeoutMs)) {
-            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 down timed out (elapsed %2ms)")
-                          .arg(config_.interface)
-                          .arg(resetTimer.elapsed()));
-            lastResetDurationMs_ = resetTimer.elapsed();
-            resetInProgress_ = false;
-            return false;
-        }
-        if (process.exitCode() != 0) {
-            LOG_WARNING(kLogSource,
-                        QStringLiteral("ip link set %1 down failed: %2")
-                            .arg(config_.interface)
-                            .arg(QString::fromUtf8(process.readAllStandardError())));
-            // 继续尝试，因为接口可能已经是down状态
-        } else {
-            LOG_INFO(kLogSource, QStringLiteral("CAN interface %1 brought down").arg(config_.interface));
-        }
-    }
-
-    // 3. 重新配置CAN波特率和restart-ms（接口必须在down状态下配置）
-    if (config_.bitrate > 0) {
-        QProcess process;
-        process.setProgram(QStringLiteral("ip"));
-        QStringList args{QStringLiteral("link"), QStringLiteral("set"),
-                         config_.interface, QStringLiteral("type"), QStringLiteral("can"),
-                         QStringLiteral("bitrate"), QString::number(config_.bitrate)};
-        if (config_.tripleSampling) {
-            args << QStringLiteral("triple-sampling") << QStringLiteral("on");
-        }
-        // 配置 restart-ms：CAN控制器在bus-off后自动重启的延迟
-        // 这样即使没有手动重置，硬件也能自动从bus-off状态恢复
-        // 限制范围：1-10000ms，防止误配置
-        if (config_.restartMs > 0) {
-            const int clampedRestartMs = qBound(1, config_.restartMs, 10000);
-            args << QStringLiteral("restart-ms") << QString::number(clampedRestartMs);
-        }
-        process.setArguments(args);
-        process.start();
-        if (!process.waitForFinished(kProcessTimeoutMs)) {
-            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 type can bitrate %2 timed out (elapsed %3ms)")
-                          .arg(config_.interface)
-                          .arg(config_.bitrate)
-                          .arg(resetTimer.elapsed()));
-            lastResetDurationMs_ = resetTimer.elapsed();
-            resetInProgress_ = false;
-            return false;
-        }
-        if (process.exitCode() != 0) {
-            LOG_WARNING(kLogSource,
-                        QStringLiteral("ip link set %1 type can bitrate %2 failed: %3")
-                            .arg(config_.interface)
-                            .arg(config_.bitrate)
-                            .arg(QString::fromUtf8(process.readAllStandardError())));
-        } else {
-            LOG_INFO(kLogSource, QStringLiteral("CAN interface %1 reconfigured: bitrate=%2, restart-ms=%3")
-                         .arg(config_.interface)
-                         .arg(config_.bitrate)
-                         .arg(config_.restartMs));
-        }
-    }
-
-    // 4. 使用 ip link set up 重新启动接口
-    {
-        QProcess process;
-        process.setProgram(QStringLiteral("ip"));
-        process.setArguments({QStringLiteral("link"), QStringLiteral("set"),
-                              config_.interface,
-                              QStringLiteral("txqueuelen"), QStringLiteral("128"),
-                              QStringLiteral("up")});
-        process.start();
-        if (!process.waitForFinished(kProcessTimeoutMs)) {
-            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 up timed out (elapsed %2ms)")
-                          .arg(config_.interface)
-                          .arg(resetTimer.elapsed()));
-            lastResetDurationMs_ = resetTimer.elapsed();
-            resetInProgress_ = false;
-            return false;
-        }
-        if (process.exitCode() != 0) {
-            LOG_ERROR(kLogSource,
-                      QStringLiteral("ip link set %1 up failed: %2")
-                          .arg(config_.interface)
-                          .arg(QString::fromUtf8(process.readAllStandardError())));
-            lastResetDurationMs_ = resetTimer.elapsed();
-            resetInProgress_ = false;
-            return false;
-        }
-        LOG_INFO(kLogSource, QStringLiteral("CAN interface %1 brought up").arg(config_.interface));
-    }
-
-    // 5. 重新打开socket
+    // 2. 重新打开socket（open()会自动配置接口：down → 配置bitrate/restart-ms → up）
     const bool reopened = open();
     lastResetDurationMs_ = resetTimer.elapsed();
     resetInProgress_ = false;
