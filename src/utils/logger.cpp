@@ -209,12 +209,14 @@ void Logger::critical(const QString &source, const QString &message)
 
 void Logger::flush()
 {
-    QMutexLocker locker(&mutex_);
-    if (fileEnabled_) {
-        logFile_.flush();
-    }
-    if (errorFileEnabled_) {
-        errorLogFile_.flush();
+    if (fileEnabled_ || errorFileEnabled_) {
+        QMutexLocker locker(&mutex_);
+        if (fileEnabled_) {
+            logFile_.flush();
+        }
+        if (errorFileEnabled_) {
+            errorLogFile_.flush();
+        }
     }
 }
 
