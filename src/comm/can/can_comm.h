@@ -176,6 +176,17 @@ private:
     static constexpr int kIdleProbeErrorThreshold = 3; ///< 连续空闲探测失败次数阈值，超过则重置接口
 
     /**
+     * @brief 配置CAN接口（down → 设置bitrate/restart-ms → up）
+     * 
+     * 通过 ip link 命令将接口设置为正确的波特率和自动重启参数。
+     * 在 open() 和 tryResetInterface() 中均调用此方法，确保接口始终
+     * 以正确配置启动，避免因缺少 restart-ms 导致 bus-off 后无法恢复。
+     * 
+     * @return 配置并启动成功返回true
+     */
+    bool configureInterface();
+
+    /**
      * @brief 尝试重置CAN接口以恢复通信
      * 
      * 当TX buffer持续满载时，通过 ip link set down/up 命令刷新接口，
