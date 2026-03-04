@@ -50,11 +50,13 @@ public:
      * @param minLevel 最小输出日志级别
      * @param logToConsole 是否输出到控制台
      * @param maxFileSizeMB 日志文件最大大小（MB），超过后清空重建，0表示不限制
+     * @param errorLogFilePath ERROR/CRITICAL单独日志文件路径（空则不单独记录）
      */
     void init(const QString &logFilePath = QString(),
               LogLevel minLevel = LogLevel::Debug,
               bool logToConsole = true,
-              int maxFileSizeMB = 0);
+              int maxFileSizeMB = 0,
+              const QString &errorLogFilePath = QString());
 
     /**
      * @brief 设置最小日志级别
@@ -116,12 +118,15 @@ private:
     QString formatMessage(LogLevel level, const QString &source,
                           const QString &message) const;
     void checkAndRotateFile();
+    void checkAndRotateErrorFile();
 
     QFile logFile_;
+    QFile errorLogFile_;
     QMutex mutex_;
     LogLevel minLevel_ = LogLevel::Debug;
     bool initialized_ = false;
     bool fileEnabled_ = false;
+    bool errorFileEnabled_ = false;
     bool consoleEnabled_ = true;
     qint64 maxFileSizeBytes_ = 0;
 };

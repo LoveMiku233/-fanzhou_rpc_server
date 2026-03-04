@@ -29,6 +29,7 @@ struct CanConfig {
     bool tripleSampling = true;                  ///< 启用三次采样
     bool canFd = false;                          ///< 启用CAN FD模式
     int restartMs = 100;                         ///< CAN控制器bus-off自动重启延迟（毫秒），0表示禁用
+    int periodicRestartMin = 0;                  ///< 定时重启CAN接口的间隔（分钟），0表示禁用
 };
 
 /**
@@ -159,6 +160,9 @@ private:
     QTimer *idleProbeTimer_ = nullptr;      ///< 空闲探测定时器
     qint64 lastSuccessfulTxMs_ = 0;         ///< 最后一次成功发送的时间戳（毫秒）
     int idleProbeErrors_ = 0;               ///< 连续空闲探测失败次数
+
+    // 定时重启相关
+    QTimer *periodicRestartTimer_ = nullptr; ///< 定时重启CAN接口定时器
 
     static constexpr int kMaxTxQueueSize = 512;
     static constexpr int kTxIntervalMs = 2;

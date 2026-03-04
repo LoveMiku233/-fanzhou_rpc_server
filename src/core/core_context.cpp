@@ -150,6 +150,7 @@ bool CoreContext::initCan()
     canConfig.tripleSampling = coreConfig.can.tripleSampling;
     canConfig.canFd = false;
     canConfig.restartMs = coreConfig.can.restartMs;
+    canConfig.periodicRestartMin = coreConfig.can.periodicRestartMin;
 
     canBus = new comm::CanComm(canConfig, this);
     connect(canBus, &comm::CanComm::errorOccurred, this, [](const QString &error) {
@@ -1763,13 +1764,6 @@ void CoreContext::updateRelaySensorValue(quint8 nodeId, quint8 channel,
         cfg.enabled = true;
         sensorConfigs.insert(currentSensorId, cfg);
     }
-
-    LOG_DEBUG(kLogSource,
-              QStringLiteral("relay sensor update: node=%1 ch=%2 status=%3 current=%4A")
-                  .arg(nodeId)
-                  .arg(channel)
-                  .arg(modeValue)
-                  .arg(status.currentA, 0, 'f', 2));
 }
 
 

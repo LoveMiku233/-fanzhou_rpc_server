@@ -26,6 +26,9 @@ bool CoreConfig::loadCan(const QJsonObject &root)
         if (canObj.contains(QStringLiteral("restartMs"))) {
             can.restartMs = canObj[QStringLiteral("restartMs")].toInt(can.restartMs);
         }
+        if (canObj.contains(QStringLiteral("periodicRestartMin"))) {
+            can.periodicRestartMin = canObj[QStringLiteral("periodicRestartMin")].toInt(can.periodicRestartMin);
+        }
     } else {
         return false;
     }
@@ -41,6 +44,7 @@ void CoreConfig::saveCan(QJsonObject &root) const
     canObj[QStringLiteral("tripleSampling")] = can.tripleSampling;
     canObj[QStringLiteral("canFd")] = can.canFd;
     canObj[QStringLiteral("restartMs")] = can.restartMs;
+    canObj[QStringLiteral("periodicRestartMin")] = can.periodicRestartMin;
     root[QStringLiteral("can")] = canObj;
 }
 

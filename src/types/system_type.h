@@ -14,6 +14,7 @@ struct LogConfig {
     bool logToConsole = true;
     bool logToFile = true;
     QString logFilePath = QStringLiteral("/var/log/fanzhou_core/core.log");
+    QString errorLogFilePath = QStringLiteral("/var/log/fanzhou_core/error.log");  ///< ERROR/CRITICAL单独日志文件
     int logLevel = 0;  // 0=Debug, 1=Info, 2=Warning, 3=Error, 4=Critical
     int maxFileSizeMB = 10;  // 日志文件最大大小（MB）
 };
