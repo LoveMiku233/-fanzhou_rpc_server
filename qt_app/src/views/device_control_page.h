@@ -52,6 +52,8 @@ private slots:
     void onEditDevice(const QString &deviceId);
     /** RPC 分组数据返回 */
     void onGroupListReceived(const QJsonValue &result, const QJsonObject &error);
+    /** RPC device.list返回：更新设备名称/类型 */
+    void applyDeviceList(const QJsonValue &result);
 
 private:
     void setupUi();
