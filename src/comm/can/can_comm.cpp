@@ -210,6 +210,9 @@ bool CanComm::open()
     connect(readNotifier_, &QSocketNotifier::activated, this, &CanComm::onReadable);
 
     LOG_INFO(kLogSource, QStringLiteral("CAN interface %1 opened successfully").arg(config_.interface));
+    // 成功打开后，重置总恢复计数器
+    totalRecoveryAttempts_ = 0;
+    lastSuccessfulOpenMs_ = QDateTime::currentMSecsSinceEpoch();
     emit opened();
     return true;
 }
@@ -275,7 +278,7 @@ bool CanComm::sendFrame(quint32 canId, const QByteArray &payload, bool extended,
     // 检查CAN是否已打开
     if (socket_ < 0) {
         // 使用ERROR级别日志，因为这是一个需要注意的错误状态
-        LOG_ERROR(kLogSource, QStringLiteral("Error: CAN not opened"));
+        LOG_ERROR(kLogSource, QStringLiteral("Failed to send frame: CAN interface not opened"));
         emit errorOccurred(QStringLiteral("CAN not opened"));
         // 如果没有正在进行的重置且没有计划中的恢复，尝试恢复
         if (!resetInProgress_ && (!recoveryRetryTimer_ || !recoveryRetryTimer_->isActive())) {
@@ -613,9 +616,11 @@ bool CanComm::configureInterface()
                 QThread::msleep(kConfigRetryDelayMs);
                 continue;
             }
-            // 最后一次尝试仍然失败，但继续尝试启动接口
-            LOG_WARNING(kLogSource,
-                        QStringLiteral("CAN bitrate configuration failed, trying to bring interface up anyway"));
+            // 最后一次尝试仍然失败，返回错误
+            LOG_ERROR(kLogSource,
+                      QStringLiteral("CAN bitrate configuration failed after %1 attempts")
+                          .arg(kConfigRetryAttempts));
+            return false;
         } else {
             LOG_INFO(kLogSource,
                      QStringLiteral("CAN interface %1 configured: bitrate=%2, restart-ms=%3")
@@ -626,7 +631,9 @@ bool CanComm::configureInterface()
         configSuccess = true;
         break;
     }
-    // 即使配置失败也尝试启动接口，因为接口可能已经配置好了
+    if (!configSuccess) {
+        return false;
+    }
 
     // 3. 将接口设为 up（带txqueuelen配置）
     // 带重试逻辑
@@ -687,6 +694,17 @@ bool CanComm::tryResetInterface()
         return false;
     }
 
+    // 检查总恢复尝试次数限制（防止无限重试）
+    if (totalRecoveryAttempts_ >= kMaxTotalRecoveryAttempts) {
+        LOG_ERROR(kLogSource,
+                  QStringLiteral("Max total CAN recovery attempts reached (%1). "
+                                 "Please manually check CAN bus connection and configuration. "
+                                 "Restart the application to reset recovery counter.")
+                      .arg(kMaxTotalRecoveryAttempts));
+        return false;
+    }
+    ++totalRecoveryAttempts_;
+
     // 检查冷却时间
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
     if (lastResetTimeMs_ > 0 && (now - lastResetTimeMs_) < kResetCooldownMs) {
@@ -709,9 +727,11 @@ bool CanComm::tryResetInterface()
     if (txResetAttemptCount_ >= kMaxResetAttempts) {
         LOG_ERROR(kLogSource,
                   QStringLiteral("Max CAN interface reset attempts reached (%1). "
-                                 "Scheduling delayed recovery attempt.")
-                      .arg(kMaxResetAttempts));
-        // 即使达到最大重试次数，也安排延迟恢复
+                                 "Scheduling delayed recovery attempt (total %2/%3).")
+                      .arg(kMaxResetAttempts)
+                      .arg(totalRecoveryAttempts_)
+                      .arg(kMaxTotalRecoveryAttempts));
+        // 即使达到最大重试次数，也安排延迟恢复（如果总次数未超限）
         scheduleRecoveryRetry();
         return false;
     }
@@ -725,10 +745,12 @@ bool CanComm::tryResetInterface()
     resetTimer.start();
 
     LOG_WARNING(kLogSource,
-             QStringLiteral("Resetting CAN interface %1 (attempt %2/%3)")
+             QStringLiteral("Resetting CAN interface %1 (attempt %2/%3, total %4/%5)")
                  .arg(config_.interface)
                  .arg(txResetAttemptCount_)
-                 .arg(kMaxResetAttempts));
+                 .arg(kMaxResetAttempts)
+                 .arg(totalRecoveryAttempts_)
+                 .arg(kMaxTotalRecoveryAttempts));
 
     // 1. 关闭当前socket
     close();
@@ -745,6 +767,10 @@ bool CanComm::tryResetInterface()
                      .arg(lastResetDurationMs_));
         // 重置成功后，重置重试计数器（允许未来再次重试）
         txResetAttemptCount_ = 0;
+        // 记录成功打开时间，用于重置总恢复计数器
+        lastSuccessfulOpenMs_ = QDateTime::currentMSecsSinceEpoch();
+        // 重置总恢复计数器，因为现在成功了
+        totalRecoveryAttempts_ = 0;
         return true;
     } else {
         LOG_ERROR(kLogSource,
@@ -759,6 +785,14 @@ bool CanComm::tryResetInterface()
 
 void CanComm::scheduleRecoveryRetry()
 {
+    // 检查总恢复尝试次数限制
+    if (totalRecoveryAttempts_ >= kMaxTotalRecoveryAttempts) {
+        LOG_ERROR(kLogSource,
+                  QStringLiteral("Max total CAN recovery attempts reached (%1), not scheduling retry")
+                      .arg(kMaxTotalRecoveryAttempts));
+        return;
+    }
+
     // 如果定时器已经在运行，不重复安排
     if (recoveryRetryTimer_ && recoveryRetryTimer_->isActive()) {
         LOG_DEBUG(kLogSource, QStringLiteral("Recovery retry already scheduled"));
@@ -793,8 +827,10 @@ void CanComm::scheduleRecoveryRetry()
     }
 
     LOG_INFO(kLogSource,
-             QStringLiteral("Scheduling CAN interface recovery in %1ms")
-                 .arg(delayMs));
+             QStringLiteral("Scheduling CAN interface recovery in %1ms (total attempts %2/%3)")
+                 .arg(delayMs)
+                 .arg(totalRecoveryAttempts_)
+                 .arg(kMaxTotalRecoveryAttempts));
     recoveryRetryTimer_->start(delayMs);
 }
 

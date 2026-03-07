@@ -155,6 +155,8 @@ private:
     qint64 lastResetTimeMs_ = 0;   ///< 最后一次接口重置的时间戳
     qint64 lastResetDurationMs_ = 0; ///< 最后一次接口重置的耗时（毫秒）
     int txConsecutiveNobufs_ = 0;  ///< 连续ENOBUFS次数
+    int totalRecoveryAttempts_ = 0; ///< 总恢复尝试次数（防止无限重试）
+    qint64 lastSuccessfulOpenMs_ = 0; ///< 最后一次成功打开的时间戳（用于重置恢复计数器）
 
     // 空闲探测相关
     QTimer *idleProbeTimer_ = nullptr;      ///< 空闲探测定时器
@@ -170,6 +172,7 @@ private:
     static constexpr int kMaxTxQueueSize = 512;
     static constexpr int kTxIntervalMs = 2;
     static constexpr int kMaxResetAttempts = 3;  ///< 最大接口重置尝试次数
+    static constexpr int kMaxTotalRecoveryAttempts = 10; ///< 最大总恢复尝试次数（防止无限重试）
     static constexpr int kResetCooldownMs = 5000;  ///< 接口重置冷却时间（毫秒）
     static constexpr int kProcessTimeoutMs = 3000;  ///< 外部进程执行超时（毫秒），ip命令通常在几十毫秒内完成
     static constexpr int kConfigRetryAttempts = 3;  ///< 接口配置重试次数（ip link命令失败时）
