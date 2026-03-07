@@ -155,6 +155,8 @@ private:
     qint64 lastResetTimeMs_ = 0;   ///< 最后一次接口重置的时间戳
     qint64 lastResetDurationMs_ = 0; ///< 最后一次接口重置的耗时（毫秒）
     int txConsecutiveNobufs_ = 0;  ///< 连续ENOBUFS次数
+    int totalRecoveryAttempts_ = 0; ///< 总恢复尝试次数（防止无限重试）
+    qint64 lastSuccessfulOpenMs_ = 0; ///< 最后一次成功打开的时间戳（用于重置恢复计数器）
 
     // 空闲探测相关
     QTimer *idleProbeTimer_ = nullptr;      ///< 空闲探测定时器
@@ -164,11 +166,19 @@ private:
     // 定时重启相关
     QTimer *periodicRestartTimer_ = nullptr; ///< 定时重启CAN接口定时器
 
+    // 恢复重试相关
+    QTimer *recoveryRetryTimer_ = nullptr;  ///< 恢复重试定时器（重置失败后延迟重试）
+
     static constexpr int kMaxTxQueueSize = 512;
     static constexpr int kTxIntervalMs = 2;
     static constexpr int kMaxResetAttempts = 3;  ///< 最大接口重置尝试次数
+    static constexpr int kMaxTotalRecoveryAttempts = 10; ///< 最大总恢复尝试次数（防止无限重试）
     static constexpr int kResetCooldownMs = 5000;  ///< 接口重置冷却时间（毫秒）
     static constexpr int kProcessTimeoutMs = 3000;  ///< 外部进程执行超时（毫秒），ip命令通常在几十毫秒内完成
+    static constexpr int kConfigRetryAttempts = 3;  ///< 接口配置重试次数（ip link命令失败时）
+    static constexpr int kConfigRetryDelayMs = 500; ///< 接口配置重试间隔（毫秒）
+    static constexpr int kRecoveryRetryDelayMs = 2000; ///< 恢复重试延迟（毫秒），重置失败后等待此时间再次尝试
+    static constexpr int kRecoveryRetryBufferMs = 100; ///< 恢复重试缓冲时间（毫秒），确保冷却时间完全结束
     static constexpr int kNobufsRetryThreshold = 50;  ///< 连续ENOBUFS次数阈值，超过才重启接口（约100ms）
     static constexpr int kNobufsLogInterval = 10;     ///< ENOBUFS日志输出间隔（避免刷屏）
     static constexpr int kIdleProbeIntervalMs = 5000;  ///< 空闲探测定时器间隔（毫秒）
@@ -196,6 +206,14 @@ private:
      * @return 重置成功返回true
      */
     bool tryResetInterface();
+
+    /**
+     * @brief 安排延迟重置CAN接口
+     * 
+     * 当tryResetInterface()失败时，安排一个延迟的重置尝试，
+     * 以便在短暂等待后再次尝试恢复通信。
+     */
+    void scheduleRecoveryRetry();
 };
 
 }  // namespace comm
