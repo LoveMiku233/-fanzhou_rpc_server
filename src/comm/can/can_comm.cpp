@@ -561,11 +561,15 @@ bool CanComm::configureInterface()
                         QStringLiteral("ip link set %1 down failed: %2")
                             .arg(config_.interface)
                             .arg(QString::fromUtf8(process.readAllStandardError())));
-            // 继续尝试，因为接口可能已经是down状态
+            // 继续执行后续步骤，因为接口可能已经处于down状态
+            // 这种情况下 ip link set down 会返回非零退出码，但实际上接口已经是down了
         } else {
             LOG_INFO(kLogSource, QStringLiteral("CAN interface %1 brought down").arg(config_.interface));
         }
-        break;  // 成功完成（无论exitCode是否为0），退出重试循环
+        // 命令已执行完毕（无论是否成功），退出重试循环
+        // 注意：对于 "set down" 操作，非零退出码可能意味着接口已经是down状态，
+        // 这不是致命错误，所以继续执行后续配置步骤
+        break;
     }
 
     // 2. 配置CAN波特率和restart-ms
@@ -625,12 +629,13 @@ bool CanComm::configureInterface()
                           .arg(kConfigRetryAttempts));
             return false;
         }
+        // exitCode == 0，配置成功
         LOG_INFO(kLogSource,
                  QStringLiteral("CAN interface %1 configured: bitrate=%2, restart-ms=%3")
                      .arg(config_.interface)
                      .arg(config_.bitrate)
                      .arg(config_.restartMs));
-        break;  // 配置成功，退出重试循环
+        break;  // 配置成功（exitCode == 0），退出重试循环
     }
 
     // 3. 将接口设为 up（带txqueuelen配置）
@@ -804,7 +809,9 @@ void CanComm::scheduleRecoveryRetry()
             LOG_INFO(kLogSource,
                      QStringLiteral("Executing scheduled CAN interface recovery for %1")
                          .arg(config_.interface));
-            // 冷却时间过后重置计数器
+            // 重置短期重试计数器（txResetAttemptCount_）如果冷却时间已过
+            // 这与 tryResetInterface() 中的逻辑一致，确保定时器触发后
+            // 可以立即进行新的一轮重试而不是被冷却时间阻止
             const qint64 now = QDateTime::currentMSecsSinceEpoch();
             if (lastResetTimeMs_ > 0 && (now - lastResetTimeMs_) >= kResetCooldownMs) {
                 txResetAttemptCount_ = 0;
