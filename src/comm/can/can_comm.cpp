@@ -278,11 +278,20 @@ bool CanComm::sendFrame(quint32 canId, const QByteArray &payload, bool extended,
     // 检查CAN是否已打开
     if (socket_ < 0) {
         // 使用ERROR级别日志，因为这是一个需要注意的错误状态
-        LOG_ERROR(kLogSource, QStringLiteral("Failed to send frame: CAN interface not opened"));
+        const bool recoveryScheduled = (recoveryRetryTimer_ && recoveryRetryTimer_->isActive());
+        const bool willAttemptRecovery = !resetInProgress_ && !recoveryScheduled;
+        
+        if (willAttemptRecovery) {
+            LOG_ERROR(kLogSource, QStringLiteral("Failed to send frame: CAN interface not opened. Attempting automatic recovery..."));
+        } else if (recoveryScheduled) {
+            LOG_ERROR(kLogSource, QStringLiteral("Failed to send frame: CAN interface not opened. Recovery already scheduled."));
+        } else {
+            LOG_ERROR(kLogSource, QStringLiteral("Failed to send frame: CAN interface not opened. Recovery in progress."));
+        }
+        
         emit errorOccurred(QStringLiteral("CAN not opened"));
         // 如果没有正在进行的重置且没有计划中的恢复，尝试恢复
-        if (!resetInProgress_ && (!recoveryRetryTimer_ || !recoveryRetryTimer_->isActive())) {
-            LOG_INFO(kLogSource, QStringLiteral("CAN not opened, attempting recovery"));
+        if (willAttemptRecovery) {
             // 使用QTimer::singleShot避免在调用栈中递归
             QTimer::singleShot(0, this, [this]() {
                 tryResetInterface();
@@ -526,7 +535,6 @@ bool CanComm::configureInterface()
 
     // 1. 将接口设为 down（接口必须在down状态下才能修改CAN参数）
     // 带重试逻辑，防止临时性故障导致失败
-    bool downSuccess = false;
     for (int attempt = 1; attempt <= kConfigRetryAttempts; ++attempt) {
         QProcess process;
         process.setProgram(QStringLiteral("ip"));
@@ -557,16 +565,11 @@ bool CanComm::configureInterface()
         } else {
             LOG_INFO(kLogSource, QStringLiteral("CAN interface %1 brought down").arg(config_.interface));
         }
-        downSuccess = true;
-        break;
-    }
-    if (!downSuccess) {
-        return false;
+        break;  // 成功完成（无论exitCode是否为0），退出重试循环
     }
 
     // 2. 配置CAN波特率和restart-ms
     // 带重试逻辑，这是最容易超时的步骤
-    bool configSuccess = false;
     for (int attempt = 1; attempt <= kConfigRetryAttempts; ++attempt) {
         QProcess process;
         process.setProgram(QStringLiteral("ip"));
@@ -621,18 +624,13 @@ bool CanComm::configureInterface()
                       QStringLiteral("CAN bitrate configuration failed after %1 attempts")
                           .arg(kConfigRetryAttempts));
             return false;
-        } else {
-            LOG_INFO(kLogSource,
-                     QStringLiteral("CAN interface %1 configured: bitrate=%2, restart-ms=%3")
-                         .arg(config_.interface)
-                         .arg(config_.bitrate)
-                         .arg(config_.restartMs));
         }
-        configSuccess = true;
-        break;
-    }
-    if (!configSuccess) {
-        return false;
+        LOG_INFO(kLogSource,
+                 QStringLiteral("CAN interface %1 configured: bitrate=%2, restart-ms=%3")
+                     .arg(config_.interface)
+                     .arg(config_.bitrate)
+                     .arg(config_.restartMs));
+        break;  // 配置成功，退出重试循环
     }
 
     // 3. 将接口设为 up（带txqueuelen配置）
@@ -821,8 +819,8 @@ void CanComm::scheduleRecoveryRetry()
     if (lastResetTimeMs_ > 0) {
         const qint64 elapsed = now - lastResetTimeMs_;
         if (elapsed < kResetCooldownMs) {
-            // 等待冷却时间结束后再试
-            delayMs = static_cast<int>(kResetCooldownMs - elapsed) + 100;
+            // 等待冷却时间结束后再试，加上缓冲时间确保冷却完全结束
+            delayMs = static_cast<int>(kResetCooldownMs - elapsed) + kRecoveryRetryBufferMs;
         }
     }
 
