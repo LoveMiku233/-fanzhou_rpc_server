@@ -26,6 +26,7 @@
 #include <QDebug>
 #include <QElapsedTimer>
 #include <QProcess>
+#include <QThread>
 
 #include <cerrno>
 #include <cstring>
@@ -53,6 +54,10 @@ CanComm::CanComm(CanConfig config, QObject *parent)
 
 CanComm::~CanComm()
 {
+    // 停止恢复重试定时器
+    if (recoveryRetryTimer_) {
+        recoveryRetryTimer_->stop();
+    }
     close();
 }
 
@@ -269,8 +274,17 @@ bool CanComm::sendFrame(quint32 canId, const QByteArray &payload, bool extended,
 {
     // 检查CAN是否已打开
     if (socket_ < 0) {
-        LOG_WARNING(kLogSource, QStringLiteral("sendFrame failed: CAN not opened"));
+        // 使用ERROR级别日志，因为这是一个需要注意的错误状态
+        LOG_ERROR(kLogSource, QStringLiteral("Error: CAN not opened"));
         emit errorOccurred(QStringLiteral("CAN not opened"));
+        // 如果没有正在进行的重置且没有计划中的恢复，尝试恢复
+        if (!resetInProgress_ && (!recoveryRetryTimer_ || !recoveryRetryTimer_->isActive())) {
+            LOG_INFO(kLogSource, QStringLiteral("CAN not opened, attempting recovery"));
+            // 使用QTimer::singleShot避免在调用栈中递归
+            QTimer::singleShot(0, this, [this]() {
+                tryResetInterface();
+            });
+        }
         return false;
     }
 
@@ -508,15 +522,27 @@ bool CanComm::configureInterface()
                  .arg(config_.restartMs > 0 ? QString::number(config_.restartMs) : QStringLiteral("disabled")));
 
     // 1. 将接口设为 down（接口必须在down状态下才能修改CAN参数）
-    {
+    // 带重试逻辑，防止临时性故障导致失败
+    bool downSuccess = false;
+    for (int attempt = 1; attempt <= kConfigRetryAttempts; ++attempt) {
         QProcess process;
         process.setProgram(QStringLiteral("ip"));
         process.setArguments({QStringLiteral("link"), QStringLiteral("set"),
                               config_.interface, QStringLiteral("down")});
         process.start();
         if (!process.waitForFinished(kProcessTimeoutMs)) {
-            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 down timed out")
-                          .arg(config_.interface));
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("ip link set %1 down timed out (attempt %2/%3)")
+                            .arg(config_.interface)
+                            .arg(attempt)
+                            .arg(kConfigRetryAttempts));
+            if (attempt < kConfigRetryAttempts) {
+                QThread::msleep(kConfigRetryDelayMs);
+                continue;
+            }
+            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 down failed after %2 attempts")
+                          .arg(config_.interface)
+                          .arg(kConfigRetryAttempts));
             return false;
         }
         if (process.exitCode() != 0) {
@@ -528,10 +554,17 @@ bool CanComm::configureInterface()
         } else {
             LOG_INFO(kLogSource, QStringLiteral("CAN interface %1 brought down").arg(config_.interface));
         }
+        downSuccess = true;
+        break;
+    }
+    if (!downSuccess) {
+        return false;
     }
 
     // 2. 配置CAN波特率和restart-ms
-    {
+    // 带重试逻辑，这是最容易超时的步骤
+    bool configSuccess = false;
+    for (int attempt = 1; attempt <= kConfigRetryAttempts; ++attempt) {
         QProcess process;
         process.setProgram(QStringLiteral("ip"));
         QStringList args{QStringLiteral("link"), QStringLiteral("set"),
@@ -550,18 +583,39 @@ bool CanComm::configureInterface()
         process.setArguments(args);
         process.start();
         if (!process.waitForFinished(kProcessTimeoutMs)) {
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("ip link set %1 type can bitrate %2 timed out (attempt %3/%4)")
+                            .arg(config_.interface)
+                            .arg(config_.bitrate)
+                            .arg(attempt)
+                            .arg(kConfigRetryAttempts));
+            if (attempt < kConfigRetryAttempts) {
+                QThread::msleep(kConfigRetryDelayMs);
+                continue;
+            }
             LOG_ERROR(kLogSource,
-                      QStringLiteral("ip link set %1 type can bitrate %2 timed out")
+                      QStringLiteral("ip link set %1 type can bitrate %2 failed after %3 attempts")
                           .arg(config_.interface)
-                          .arg(config_.bitrate));
+                          .arg(config_.bitrate)
+                          .arg(kConfigRetryAttempts));
             return false;
         }
         if (process.exitCode() != 0) {
+            const QString errorMsg = QString::fromUtf8(process.readAllStandardError());
             LOG_WARNING(kLogSource,
-                        QStringLiteral("ip link set %1 type can bitrate %2 failed: %3")
+                        QStringLiteral("ip link set %1 type can bitrate %2 failed (attempt %3/%4): %5")
                             .arg(config_.interface)
                             .arg(config_.bitrate)
-                            .arg(QString::fromUtf8(process.readAllStandardError())));
+                            .arg(attempt)
+                            .arg(kConfigRetryAttempts)
+                            .arg(errorMsg));
+            if (attempt < kConfigRetryAttempts) {
+                QThread::msleep(kConfigRetryDelayMs);
+                continue;
+            }
+            // 最后一次尝试仍然失败，但继续尝试启动接口
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("CAN bitrate configuration failed, trying to bring interface up anyway"));
         } else {
             LOG_INFO(kLogSource,
                      QStringLiteral("CAN interface %1 configured: bitrate=%2, restart-ms=%3")
@@ -569,10 +623,14 @@ bool CanComm::configureInterface()
                          .arg(config_.bitrate)
                          .arg(config_.restartMs));
         }
+        configSuccess = true;
+        break;
     }
+    // 即使配置失败也尝试启动接口，因为接口可能已经配置好了
 
     // 3. 将接口设为 up（带txqueuelen配置）
-    {
+    // 带重试逻辑
+    for (int attempt = 1; attempt <= kConfigRetryAttempts; ++attempt) {
         QProcess process;
         process.setProgram(QStringLiteral("ip"));
         process.setArguments({QStringLiteral("link"), QStringLiteral("set"),
@@ -581,18 +639,41 @@ bool CanComm::configureInterface()
                               QStringLiteral("up")});
         process.start();
         if (!process.waitForFinished(kProcessTimeoutMs)) {
-            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 up timed out")
-                          .arg(config_.interface));
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("ip link set %1 up timed out (attempt %2/%3)")
+                            .arg(config_.interface)
+                            .arg(attempt)
+                            .arg(kConfigRetryAttempts));
+            if (attempt < kConfigRetryAttempts) {
+                QThread::msleep(kConfigRetryDelayMs);
+                continue;
+            }
+            LOG_ERROR(kLogSource, QStringLiteral("ip link set %1 up failed after %2 attempts")
+                          .arg(config_.interface)
+                          .arg(kConfigRetryAttempts));
             return false;
         }
         if (process.exitCode() != 0) {
+            const QString errorMsg = QString::fromUtf8(process.readAllStandardError());
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("ip link set %1 up failed (attempt %2/%3): %4")
+                            .arg(config_.interface)
+                            .arg(attempt)
+                            .arg(kConfigRetryAttempts)
+                            .arg(errorMsg));
+            if (attempt < kConfigRetryAttempts) {
+                QThread::msleep(kConfigRetryDelayMs);
+                continue;
+            }
             LOG_ERROR(kLogSource,
-                      QStringLiteral("ip link set %1 up failed: %2")
+                      QStringLiteral("ip link set %1 up failed after %2 attempts: %3")
                           .arg(config_.interface)
-                          .arg(QString::fromUtf8(process.readAllStandardError())));
+                          .arg(kConfigRetryAttempts)
+                          .arg(errorMsg));
             return false;
         }
         LOG_INFO(kLogSource, QStringLiteral("CAN interface %1 brought up").arg(config_.interface));
+        break;
     }
 
     return true;
@@ -612,6 +693,10 @@ bool CanComm::tryResetInterface()
         LOG_WARNING(kLogSource,
                   QStringLiteral("CAN interface reset cooldown active, remaining %1ms")
                       .arg(kResetCooldownMs - (now - lastResetTimeMs_)));
+        // 如果冷却中但socket未打开，安排延迟恢复
+        if (socket_ < 0) {
+            scheduleRecoveryRetry();
+        }
         return false;
     }
 
@@ -624,8 +709,10 @@ bool CanComm::tryResetInterface()
     if (txResetAttemptCount_ >= kMaxResetAttempts) {
         LOG_ERROR(kLogSource,
                   QStringLiteral("Max CAN interface reset attempts reached (%1). "
-                                 "Please manually check CAN bus connection and configuration.")
+                                 "Scheduling delayed recovery attempt.")
                       .arg(kMaxResetAttempts));
+        // 即使达到最大重试次数，也安排延迟恢复
+        scheduleRecoveryRetry();
         return false;
     }
 
@@ -664,8 +751,51 @@ bool CanComm::tryResetInterface()
                   QStringLiteral("CAN interface %1 reset completed in %2ms but socket reopen failed")
                       .arg(config_.interface)
                       .arg(lastResetDurationMs_));
+        // 安排延迟恢复尝试
+        scheduleRecoveryRetry();
         return false;
     }
+}
+
+void CanComm::scheduleRecoveryRetry()
+{
+    // 如果定时器已经在运行，不重复安排
+    if (recoveryRetryTimer_ && recoveryRetryTimer_->isActive()) {
+        LOG_DEBUG(kLogSource, QStringLiteral("Recovery retry already scheduled"));
+        return;
+    }
+
+    if (!recoveryRetryTimer_) {
+        recoveryRetryTimer_ = new QTimer(this);
+        recoveryRetryTimer_->setSingleShot(true);
+        connect(recoveryRetryTimer_, &QTimer::timeout, this, [this]() {
+            LOG_INFO(kLogSource,
+                     QStringLiteral("Executing scheduled CAN interface recovery for %1")
+                         .arg(config_.interface));
+            // 冷却时间过后重置计数器
+            const qint64 now = QDateTime::currentMSecsSinceEpoch();
+            if (lastResetTimeMs_ > 0 && (now - lastResetTimeMs_) >= kResetCooldownMs) {
+                txResetAttemptCount_ = 0;
+            }
+            tryResetInterface();
+        });
+    }
+
+    // 安排在冷却时间后重试
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    int delayMs = kRecoveryRetryDelayMs;
+    if (lastResetTimeMs_ > 0) {
+        const qint64 elapsed = now - lastResetTimeMs_;
+        if (elapsed < kResetCooldownMs) {
+            // 等待冷却时间结束后再试
+            delayMs = static_cast<int>(kResetCooldownMs - elapsed) + 100;
+        }
+    }
+
+    LOG_INFO(kLogSource,
+             QStringLiteral("Scheduling CAN interface recovery in %1ms")
+                 .arg(delayMs));
+    recoveryRetryTimer_->start(delayMs);
 }
 
 }  // namespace comm
