@@ -151,6 +151,9 @@ bool CoreContext::initCan()
     canConfig.canFd = false;
     canConfig.restartMs = coreConfig.can.restartMs;
     canConfig.periodicRestartMin = coreConfig.can.periodicRestartMin;
+    canConfig.is_fake = coreConfig.can.is_fake;
+    canConfig.fake_can = coreConfig.can.fake_can;
+    canConfig.fake_can_baudrate = coreConfig.can.fake_can_baudrate;
 
     canBus = new comm::CanComm(canConfig, this);
     connect(canBus, &comm::CanComm::errorOccurred, this, [](const QString &error) {

@@ -24,7 +24,10 @@
     "tripleSampling": true,
     "canFd": false,
     "restartMs": 100,
-    "periodicRestartMin": 30
+    "periodicRestartMin": 30,
+    "is_fake": false,
+    "fake_can": "/dev/ttyUSB1",
+    "fake_can_baudrate": 115200
   },
   "screen": {
     "brightness": 100,

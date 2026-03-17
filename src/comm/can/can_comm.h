@@ -30,6 +30,10 @@ struct CanConfig {
     bool canFd = false;                          ///< 启用CAN FD模式
     int restartMs = 100;                         ///< CAN控制器bus-off自动重启延迟（毫秒），0表示禁用
     int periodicRestartMin = 0;                  ///< 定时重启CAN接口的间隔（分钟），0表示禁用
+
+    bool is_fake = false;                        ///< 使用fake CAN（串口模拟）
+    QString fake_can = QStringLiteral("/dev/ttyUSB1");  ///< fake can串口设备
+    int fake_can_baudrate = 115200;             ///< fake can串口波特率
 };
 
 /**
@@ -60,7 +64,7 @@ public:
      * @brief 检查CAN通道是否已打开
      * @return 已打开返回true
      */
-    bool isOpened() const { return socket_ >= 0; }
+    bool isOpened() const { return config_.is_fake ? (fakeFd_ >= 0) : (socket_ >= 0); }
 
     /**
      * @brief 获取发送队列大小
@@ -104,6 +108,11 @@ public:
      */
     qint64 lastResetDurationMs() const { return lastResetDurationMs_; }
 
+
+    void dumpCanInterfaceState();
+
+    void handleErrorFrame(const can_frame& frame);
+
     /**
      * @brief 发送CAN帧
      * @param canId CAN标识符
@@ -138,11 +147,17 @@ private slots:
     void onReadable();
     void onTxPump();
     void onIdleCheck();
+    void onFakeReadable();
 
 private:
     CanConfig config_;
     int socket_ = -1;
     QSocketNotifier *readNotifier_ = nullptr;
+
+    // Fake CAN (serial) support
+    int fakeFd_ = -1;
+    QSocketNotifier *fakeReadNotifier_ = nullptr;
+    QByteArray fakeRxBuf_;  // Receive buffer for assembling frames
 
     struct TxItem {
         struct can_frame frame;
@@ -170,7 +185,7 @@ private:
     QTimer *recoveryRetryTimer_ = nullptr;  ///< 恢复重试定时器（重置失败后延迟重试）
 
     static constexpr int kMaxTxQueueSize = 512;
-    static constexpr int kTxIntervalMs = 2;
+    static constexpr int kTxIntervalMs = 5;
     static constexpr int kMaxResetAttempts = 3;  ///< 最大接口重置尝试次数
     static constexpr int kMaxTotalRecoveryAttempts = 10; ///< 最大总恢复尝试次数（防止无限重试）
     static constexpr int kResetCooldownMs = 5000;  ///< 接口重置冷却时间（毫秒）
@@ -179,7 +194,7 @@ private:
     static constexpr int kConfigRetryDelayMs = 500; ///< 接口配置重试间隔（毫秒）
     static constexpr int kRecoveryRetryDelayMs = 2000; ///< 恢复重试延迟（毫秒），重置失败后等待此时间再次尝试
     static constexpr int kRecoveryRetryBufferMs = 100; ///< 恢复重试缓冲时间（毫秒），确保冷却时间完全结束
-    static constexpr int kNobufsRetryThreshold = 50;  ///< 连续ENOBUFS次数阈值，超过才重启接口（约100ms）
+    static constexpr int kNobufsRetryThreshold = 20;  ///< 连续ENOBUFS次数阈值，超过才重启接口（约100ms）
     static constexpr int kNobufsLogInterval = 10;     ///< ENOBUFS日志输出间隔（避免刷屏）
     static constexpr int kIdleProbeIntervalMs = 5000;  ///< 空闲探测定时器间隔（毫秒）
     static constexpr int kIdleThresholdMs = 10000;     ///< 判定总线空闲的阈值（毫秒）

@@ -29,6 +29,16 @@ bool CoreConfig::loadCan(const QJsonObject &root)
         if (canObj.contains(QStringLiteral("periodicRestartMin"))) {
             can.periodicRestartMin = canObj[QStringLiteral("periodicRestartMin")].toInt(can.periodicRestartMin);
         }
+        // Fake CAN 配置
+        if (canObj.contains(QStringLiteral("is_fake"))) {
+            can.is_fake = canObj[QStringLiteral("is_fake")].toBool(can.is_fake);
+        }
+        if (canObj.contains(QStringLiteral("fake_can"))) {
+            can.fake_can = canObj[QStringLiteral("fake_can")].toString(can.fake_can);
+        }
+        if (canObj.contains(QStringLiteral("fake_can_baudrate"))) {
+            can.fake_can_baudrate = canObj[QStringLiteral("fake_can_baudrate")].toInt(can.fake_can_baudrate);
+        }
     } else {
         return false;
     }
@@ -45,6 +55,10 @@ void CoreConfig::saveCan(QJsonObject &root) const
     canObj[QStringLiteral("canFd")] = can.canFd;
     canObj[QStringLiteral("restartMs")] = can.restartMs;
     canObj[QStringLiteral("periodicRestartMin")] = can.periodicRestartMin;
+    // Fake CAN 配置
+    canObj[QStringLiteral("is_fake")] = can.is_fake;
+    canObj[QStringLiteral("fake_can")] = can.fake_can;
+    canObj[QStringLiteral("fake_can_baudrate")] = can.fake_can_baudrate;
     root[QStringLiteral("can")] = canObj;
 }
 

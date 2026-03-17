@@ -38,12 +38,52 @@
 
 #include <linux/can.h>
 #include <linux/can/raw.h>
+#include <linux/can/error.h>
+#include <termios.h>
 
 namespace fanzhou {
 namespace comm {
 
 namespace {
 const char *const kLogSource = "CAN";
+}  // namespace
+
+namespace {
+
+/**
+ * @brief 将波特率转换为termios速度常量（用于fake CAN）
+ */
+speed_t fakeCanToBaudConstant(int baud)
+{
+    switch (baud) {
+    case 50: return B50;
+    case 75: return B75;
+    case 110: return B110;
+    case 134: return B134;
+    case 150: return B150;
+    case 200: return B200;
+    case 300: return B300;
+    case 600: return B600;
+    case 1200: return B1200;
+    case 1800: return B1800;
+    case 2400: return B2400;
+    case 4800: return B4800;
+    case 9600: return B9600;
+    case 19200: return B19200;
+    case 38400: return B38400;
+    case 57600: return B57600;
+    case 115200: return B115200;
+    case 230400: return B230400;
+#ifdef B460800
+    case 460800: return B460800;
+#endif
+#ifdef B921600
+    case 921600: return B921600;
+#endif
+    default: return B115200;
+    }
+}
+
 }  // namespace
 
 CanComm::CanComm(CanConfig config, QObject *parent)
@@ -72,8 +112,92 @@ CanComm::~CanComm()
  * 
  * @return 成功返回true，失败返回false
  */
+// 辅助函数：配置fake CAN串口
+static bool setupFakeCanTermios(int fd, int baudRate)
+{
+    struct termios tio {};
+    if (::tcgetattr(fd, &tio) != 0) {
+        return false;
+    }
+
+    // Raw mode
+    tio.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR |
+                     IGNCR | ICRNL | IXON | IXOFF | IXANY);
+    tio.c_oflag &= ~OPOST;
+    tio.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
+    tio.c_cflag |= (CLOCAL | CREAD);
+
+    // 8N1
+    tio.c_cflag &= ~CSIZE;
+    tio.c_cflag |= CS8;
+    tio.c_cflag &= ~CSTOPB;
+    tio.c_cflag &= ~PARENB;
+    tio.c_iflag &= ~INPCK;
+
+    // Read timeout
+    tio.c_cc[VMIN] = 0;
+    tio.c_cc[VTIME] = 1;
+
+    speed_t speed = fakeCanToBaudConstant(baudRate);
+    ::cfsetispeed(&tio, speed);
+    ::cfsetospeed(&tio, speed);
+
+    if (::tcsetattr(fd, TCSANOW, &tio) != 0) {
+        return false;
+    }
+
+    ::tcflush(fd, TCIOFLUSH);
+    return true;
+}
+
 bool CanComm::open()
 {
+    // Fake CAN mode: use serial port
+    if (config_.is_fake) {
+        if (fakeFd_ >= 0) {
+            return true;
+        }
+
+        LOG_INFO(kLogSource, QStringLiteral("Opening fake CAN on serial: %1").arg(config_.fake_can));
+
+        fakeFd_ = ::open(config_.fake_can.toLocal8Bit().constData(),
+                         O_RDWR | O_NOCTTY | O_NONBLOCK);
+        if (fakeFd_ < 0) {
+            LOG_ERROR(kLogSource, QStringLiteral("open() failed for fake CAN: %1")
+                          .arg(utils::sysErrorString("open() failed")));
+            emit errorOccurred(utils::sysErrorString("open() failed"));
+            return false;
+        }
+
+        if (!setupFakeCanTermios(fakeFd_, config_.fake_can_baudrate)) {
+            LOG_ERROR(kLogSource, QStringLiteral("setupFakeCanTermios() failed"));
+            emit errorOccurred(QStringLiteral("Failed to configure serial port"));
+            ::close(fakeFd_);
+            fakeFd_ = -1;
+            return false;
+        }
+
+        fakeRxBuf_.clear();
+
+        fakeReadNotifier_ = new QSocketNotifier(fakeFd_, QSocketNotifier::Read, this);
+        connect(fakeReadNotifier_, &QSocketNotifier::activated, this, &CanComm::onFakeReadable);
+
+        // Setup TX timer (same as real CAN)
+        if (!txTimer_) {
+            txTimer_ = new QTimer(this);
+            txTimer_->setSingleShot(false);
+            txTimer_->setInterval(kTxIntervalMs);
+            connect(txTimer_, &QTimer::timeout, this, &CanComm::onTxPump);
+        }
+        txTimer_->start();
+
+        LOG_INFO(kLogSource, QStringLiteral("Fake CAN opened successfully on %1 (baud=%2)")
+                     .arg(config_.fake_can).arg(config_.fake_can_baudrate));
+        emit opened();
+        return true;
+    }
+
+    // Real CAN mode
     if (socket_ >= 0) {
         return true;
     }
@@ -167,6 +291,19 @@ bool CanComm::open()
         return false;
     }
 
+    // 关闭本地loopback
+    int loopback = 0;
+    setsockopt(socket_, SOL_CAN_RAW, CAN_RAW_LOOPBACK, &loopback, sizeof(loopback));
+
+    int recv_own_msgs = 0;
+    setsockopt(socket_, SOL_CAN_RAW, CAN_RAW_RECV_OWN_MSGS, &recv_own_msgs, sizeof(recv_own_msgs));
+
+    // ERROR
+    int err_mask = CAN_ERR_MASK;
+    setsockopt(socket_, SOL_CAN_RAW, CAN_RAW_ERR_FILTER,
+               &err_mask, sizeof(err_mask));
+    LOG_INFO(kLogSource, "CAN error frame monitoring enabled");
+
     // Setup TX timer
     if (!txTimer_) {
         txTimer_ = new QTimer(this);
@@ -219,6 +356,35 @@ bool CanComm::open()
 
 void CanComm::close()
 {
+    // Fake CAN mode
+    if (config_.is_fake) {
+        if (fakeFd_ >= 0) {
+            LOG_INFO(kLogSource, QStringLiteral("Closing fake CAN %1").arg(config_.fake_can));
+        }
+
+        if (fakeReadNotifier_) {
+            fakeReadNotifier_->setEnabled(false);
+            fakeReadNotifier_->deleteLater();
+            fakeReadNotifier_ = nullptr;
+        }
+
+        if (fakeFd_ >= 0) {
+            ::close(fakeFd_);
+            fakeFd_ = -1;
+        }
+
+        fakeRxBuf_.clear();
+
+        if (txTimer_) {
+            txTimer_->stop();
+        }
+        txQueue_.clear();
+
+        emit closed();
+        return;
+    }
+
+    // Real CAN mode
     if (socket_ >= 0) {
         LOG_INFO(kLogSource, QStringLiteral("Closing CAN interface %1").arg(config_.interface));
     }
@@ -243,6 +409,7 @@ void CanComm::close()
     if (periodicRestartTimer_) {
         periodicRestartTimer_->stop();
     }
+    QThread::msleep(10);
     txQueue_.clear();
     txConsecutiveNobufs_ = 0;
     idleProbeErrors_ = 0;
@@ -275,12 +442,54 @@ void CanComm::close()
  */
 bool CanComm::sendFrame(quint32 canId, const QByteArray &payload, bool extended, bool rtr)
 {
-    // 检查CAN是否已打开
+    // Fake CAN mode
+    if (config_.is_fake) {
+        if (fakeFd_ < 0) {
+            LOG_ERROR(kLogSource, QStringLiteral("Failed to send frame: fake CAN not opened"));
+            emit errorOccurred(QStringLiteral("Fake CAN not opened"));
+            return false;
+        }
+
+        // 检查数据长度
+        if (payload.size() > 8) {
+            LOG_WARNING(kLogSource, QStringLiteral("sendFrame failed: payload size %1 > 8").arg(payload.size()));
+            emit errorOccurred(QStringLiteral("CAN payload must be <= 8 bytes"));
+            return false;
+        }
+
+        // 检查发送队列是否已满
+        if (txQueue_.size() >= kMaxTxQueueSize) {
+            LOG_WARNING(kLogSource, QStringLiteral("sendFrame failed: TX queue overflow (%1)").arg(txQueue_.size()));
+            emit errorOccurred(
+                QStringLiteral("CAN TX queue overflow (%1), dropping").arg(txQueue_.size()));
+            return false;
+        }
+
+        // 构建CAN帧
+        struct can_frame frame {};
+        frame.can_id = canId;
+        if (extended) {
+            frame.can_id |= CAN_EFF_FLAG;
+        }
+        if (rtr) {
+            frame.can_id |= CAN_RTR_FLAG;
+        }
+
+        frame.can_dlc = static_cast<__u8>(payload.size());
+        if (!payload.isEmpty()) {
+            std::memcpy(frame.data, payload.constData(), static_cast<size_t>(payload.size()));
+        }
+
+        txQueue_.enqueue(TxItem{frame});
+        return true;
+    }
+
+    // Real CAN mode: 检查CAN是否已打开
     if (socket_ < 0) {
         // 使用ERROR级别日志，因为这是一个需要注意的错误状态
         const bool recoveryScheduled = (recoveryRetryTimer_ && recoveryRetryTimer_->isActive());
         const bool willAttemptRecovery = !resetInProgress_ && !recoveryScheduled;
-        
+
         if (willAttemptRecovery) {
             LOG_ERROR(kLogSource, QStringLiteral("Failed to send frame: CAN interface not opened. Attempting automatic recovery..."));
         } else if (recoveryScheduled) {
@@ -288,7 +497,7 @@ bool CanComm::sendFrame(quint32 canId, const QByteArray &payload, bool extended,
         } else {
             LOG_ERROR(kLogSource, QStringLiteral("Failed to send frame: CAN interface not opened. Recovery in progress."));
         }
-        
+
         emit errorOccurred(QStringLiteral("CAN not opened"));
         // 如果没有正在进行的重置且没有计划中的恢复，尝试恢复
         if (willAttemptRecovery) {
@@ -337,6 +546,43 @@ bool CanComm::sendFrame(quint32 canId, const QByteArray &payload, bool extended,
 
 void CanComm::onTxPump()
 {
+    // Fake CAN mode
+    if (config_.is_fake) {
+        if (fakeFd_ < 0 || txQueue_.isEmpty()) {
+            return;
+        }
+
+        const TxItem item = txQueue_.head();
+
+        // 构建串口数据包: [ID_HIGH][ID_LOW][DATA...]
+        // CAN ID 是 32 位，我们只取低 16 位（兼容标准帧）
+        QByteArray serialPacket;
+        quint32 canId = item.frame.can_id & CAN_SFF_MASK;  // 只取标准ID部分
+        serialPacket.append(static_cast<char>((canId >> 8) & 0xFF));  // ID high byte
+        serialPacket.append(static_cast<char>(canId & 0xFF));         // ID low byte
+        serialPacket.append(reinterpret_cast<const char *>(item.frame.data), item.frame.can_dlc);
+
+        const ssize_t n = ::write(fakeFd_, serialPacket.constData(), static_cast<size_t>(serialPacket.size()));
+
+        if (n == serialPacket.size()) {
+            txQueue_.dequeue();
+            LOG_DEBUG(kLogSource, QStringLiteral("Fake CAN sent: ID=0x%1, data=%2")
+                         .arg(canId, 0, 16)
+                         .arg(QString::fromLatin1(serialPacket.mid(2).toHex(' '))));
+            return;
+        }
+
+        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            return;  // Try again later
+        }
+
+        LOG_ERROR(kLogSource, utils::sysErrorString("Fake CAN write failed"));
+        emit errorOccurred(utils::sysErrorString("Fake CAN write failed"));
+        txQueue_.dequeue();
+        return;
+    }
+
+    // Real CAN mode
     if (socket_ < 0 || txQueue_.isEmpty()) {
         return;
     }
@@ -380,6 +626,7 @@ void CanComm::onTxPump()
                         .arg(txConsecutiveNobufs_)
                         .arg(txConsecutiveNobufs_ * kTxIntervalMs)
                         .arg(config_.interface));
+        dumpCanInterfaceState();
         txConsecutiveNobufs_ = 0;
 
         if (!tryResetInterface()) {
@@ -426,6 +673,12 @@ void CanComm::onReadable()
         struct can_frame frame {};
         const ssize_t n = ::read(socket_, &frame, sizeof(frame));
 
+        if ((frame.can_id & CAN_ERR_FLAG) != 0) {
+            LOG_DEBUG(kLogSource, "CAN error frame received");
+            handleErrorFrame(frame);
+            continue;
+        }
+
         if (n < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 break;
@@ -454,6 +707,95 @@ void CanComm::onReadable()
 
     if (readNotifier_) {
         readNotifier_->setEnabled(true);
+    }
+}
+
+
+void CanComm::dumpCanInterfaceState()
+{
+    // ---------- 1. CAN interface state ----------
+    QProcess process;
+    process.start("ip", {"-details", "-statistics", "link", "show", config_.interface});
+
+    if (!process.waitForFinished(2000)) {
+        LOG_ERROR(kLogSource, "Failed to get CAN interface state (timeout)");
+    } else {
+        QString output = process.readAllStandardOutput();
+        QString error  = process.readAllStandardError();
+
+        if (!output.isEmpty()) {
+            LOG_ERROR(kLogSource,
+                      QStringLiteral("CAN interface state:\n%1").arg(output));
+        }
+
+        if (!error.isEmpty()) {
+            LOG_ERROR(kLogSource,
+                      QStringLiteral("CAN interface error:\n%1").arg(error));
+        }
+    }
+
+    // ---------- 2. Kernel CAN logs (mcp251x / can) ----------
+    QProcess dmesgProc;
+
+    QString cmd = "dmesg | tail -200 | grep -E 'mcp251x|can'";
+    dmesgProc.start("sh", QStringList() << "-c" << cmd);
+
+    if (!dmesgProc.waitForFinished(2000)) {
+        LOG_ERROR(kLogSource, "Failed to read dmesg (timeout)");
+        return;
+    }
+
+    QString dmesgOutput = dmesgProc.readAllStandardOutput();
+    QString dmesgError  = dmesgProc.readAllStandardError();
+
+    if (!dmesgOutput.isEmpty()) {
+        LOG_ERROR(kLogSource,
+                  QStringLiteral("Kernel CAN log (dmesg):\n%1").arg(dmesgOutput));
+    }
+
+    if (!dmesgError.isEmpty()) {
+        LOG_ERROR(kLogSource,
+                  QStringLiteral("dmesg error:\n%1").arg(dmesgError));
+    }
+}
+
+
+/**
+ * @brief error检查
+ * 错误类型	     说明
+ * ACK	      没有节点 ACK
+ * BUSOFF	  控制器关闭
+ * BUSERROR	  EMI干扰
+ * RESTARTED  自动恢复
+ * LOSTARB	  仲裁丢失
+ */
+void CanComm::handleErrorFrame(const can_frame& frame)
+{
+    if (frame.can_id & CAN_ERR_ACK) {
+        LOG_WARNING(kLogSource, "CAN ACK error (no other node on bus?)");
+    }
+
+    if (frame.can_id & CAN_ERR_BUSOFF) {
+        LOG_ERROR(kLogSource, "CAN BUS-OFF detected");
+        dumpCanInterfaceState();
+        tryResetInterface();
+    }
+
+    if (frame.can_id & CAN_ERR_BUSERROR) {
+        LOG_WARNING(kLogSource, "CAN BUS error (bit/stuff/form error)");
+    }
+
+    if (frame.can_id & CAN_ERR_RESTARTED) {
+        LOG_INFO(kLogSource, "CAN controller restarted after BUS-OFF");
+    }
+
+    if (frame.can_id & CAN_ERR_LOSTARB) {
+        LOG_DEBUG(kLogSource, "CAN arbitration lost");
+    }
+
+    if (frame.data[1] & CAN_ERR_CRTL_RX_PASSIVE ||
+        frame.data[1] & CAN_ERR_CRTL_TX_PASSIVE) {
+        LOG_WARNING(kLogSource, "CAN controller entered ERROR-PASSIVE");
     }
 }
 
@@ -521,6 +863,7 @@ void CanComm::onIdleCheck()
                         .arg(idleProbeErrors_)
                         .arg(config_.interface));
         idleProbeErrors_ = 0;
+        dumpCanInterfaceState();
         tryResetInterface();
     }
 }
@@ -645,7 +988,7 @@ bool CanComm::configureInterface()
         process.setProgram(QStringLiteral("ip"));
         process.setArguments({QStringLiteral("link"), QStringLiteral("set"),
                               config_.interface,
-                              QStringLiteral("txqueuelen"), QStringLiteral("128"),
+                              QStringLiteral("txqueuelen"), QStringLiteral("1024"),
                               QStringLiteral("up")});
         process.start();
         if (!process.waitForFinished(kProcessTimeoutMs)) {
@@ -837,6 +1180,68 @@ void CanComm::scheduleRecoveryRetry()
                  .arg(totalRecoveryAttempts_)
                  .arg(kMaxTotalRecoveryAttempts));
     recoveryRetryTimer_->start(delayMs);
+}
+
+void CanComm::onFakeReadable()
+{
+    if (fakeFd_ < 0) {
+        return;
+    }
+
+    if (fakeReadNotifier_) {
+        fakeReadNotifier_->setEnabled(false);
+    }
+
+    // 读取串口数据到缓冲区
+    char buf[256];
+    for (;;) {
+        ssize_t n = ::read(fakeFd_, buf, sizeof(buf));
+        if (n > 0) {
+            fakeRxBuf_.append(buf, static_cast<int>(n));
+            continue;
+        }
+        if (n == 0) {
+            break;
+        }
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            break;
+        }
+        LOG_ERROR(kLogSource, utils::sysErrorString("Fake CAN read failed"));
+        emit errorOccurred(utils::sysErrorString("Fake CAN read failed"));
+        break;
+    }
+
+    // 解析缓冲区中的帧
+    // 格式: [ID_HIGH][ID_LOW][DATA...], DATA 至少1字节，最多8字节
+    while (fakeRxBuf_.size() >= 3) {  // 至少需要ID(2) + DATA(1) = 3字节
+        // 从缓冲区中查找可能的帧
+        // 我们尝试每次解析一个帧: 2字节ID + 1-8字节数据
+
+        // 先检查是否有足够的字节（最小帧: 2+1=3）
+        // 这里我们采用简单的策略: 每次取前2字节作为ID，后面直到缓冲区结束或8字节作为数据
+        // 更复杂的协议可能需要帧头/帧尾来同步
+
+        quint32 canId = (static_cast<quint8>(fakeRxBuf_[0]) << 8) |
+                         static_cast<quint8>(fakeRxBuf_[1]);
+
+        // 数据长度: 剩余所有字节，但最多8字节
+        int dataLen = qMin(fakeRxBuf_.size() - 2, 8);
+        QByteArray payload = fakeRxBuf_.mid(2, dataLen);
+
+        LOG_DEBUG(kLogSource, QStringLiteral("Fake CAN received: ID=0x%1, data=%2")
+                     .arg(canId, 0, 16)
+                     .arg(QString::fromLatin1(payload.toHex(' '))));
+
+        // 发出CAN帧接收信号
+        emit canFrameReceived(canId, payload, false, false);
+
+        // 从缓冲区移除已处理的字节
+        fakeRxBuf_ = fakeRxBuf_.mid(2 + dataLen);
+    }
+
+    if (fakeReadNotifier_) {
+        fakeReadNotifier_->setEnabled(true);
+    }
 }
 
 }  // namespace comm
