@@ -547,7 +547,7 @@ bool CloudMessageHandler::handleControlCommand(const int channelId, const QJsonO
         const int channel = chIndex - 1;
 
         const int mode = it.value().toInt(-1);
-        if (mode < 0) {
+        if (mode < 0 || mode > static_cast<int>(device::RelayProtocol::Action::Reverse)) {
             LOG_WARNING(kLogSource,
                         QStringLiteral("invalid mode value for key=%1").arg(key));
             continue;

@@ -346,6 +346,13 @@ echo '{"jsonrpc":"2.0","id":1,"method":"rpc.ping","params":{}}' | nc localhost 1
 echo '{"jsonrpc":"2.0","id":2,"method":"relay.control","params":{"node":1,"ch":0,"action":"fwd"}}' | nc localhost 12345
 ```
 
+**使用一键回归脚本（TCP V1.3）**:
+```bash
+cd /home/yukino/fanzhou_rpc_server
+./scripts/rpc_smoke_tcp_v13.sh
+```
+详细说明见：`docs/RPC_SMOKE_TCP_V13.md`
+
 ### 5.2 调试CAN通信
 
 ```bash

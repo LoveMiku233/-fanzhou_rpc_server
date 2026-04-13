@@ -10,6 +10,7 @@
 
 #include <QJsonDocument>
 #include <QTcpSocket>
+#include <cctype>
 
 namespace fanzhou {
 namespace rpc {
@@ -66,7 +67,7 @@ void JsonRpcServer::onNewConnection()
 void JsonRpcServer::onReadyRead()
 {
     auto *socket = qobject_cast<QTcpSocket *>(sender());
-    if (!socket) {
+    if (!socket || !buffers_.contains(socket)) {
         return;
     }
 
@@ -141,24 +142,53 @@ bool JsonRpcServer::checkAuth(const QJsonObject &request, QTcpSocket *socket) co
 
 void JsonRpcServer::processLines(QTcpSocket *socket)
 {
+    if (!socket || !buffers_.contains(socket)) {
+        return;
+    }
     auto &buffer = buffers_[socket];
+    int processedCount = 0;
 
-    for (;;) {
-        const int nlIndex = buffer.indexOf('\n');
-        if (nlIndex < 0) {
+    while (processedCount < kMaxRequestsPerCycle) {
+        int start = 0;
+        while (start < buffer.size() && std::isspace(static_cast<unsigned char>(buffer[start])) != 0) {
+            ++start;
+        }
+        if (start >= buffer.size()) {
+            buffer.clear();
             break;
         }
 
-        const QByteArray line = buffer.left(nlIndex);
-        buffer.remove(0, nlIndex + 1);
-
-        const QByteArray trimmed = line.trimmed();
-        if (trimmed.isEmpty()) {
-            continue;
+        // 容忍流中的无效前缀，定位到下一个对象起点
+        if (buffer[start] != '{') {
+            const int nextObject = buffer.indexOf('{', start + 1);
+            if (nextObject < 0) {
+                LOG_WARNING(kLogSource,
+                            QStringLiteral("Dropping non-json buffer from RPC stream (%1 bytes)")
+                                .arg(buffer.size()));
+                buffer.clear();
+                break;
+            }
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("Dropping non-json prefix from RPC stream (%1 bytes)")
+                            .arg(nextObject - start));
+            buffer.remove(0, nextObject);
+            start = 0;
         }
 
+        const int end = findJsonObjectEnd(buffer, start);
+        if (end < 0) {
+            if (start > 0) {
+                buffer.remove(0, start);
+            }
+            break;  // 半包，等待更多数据
+        }
+
+        const QByteArray payload = buffer.mid(start, end - start + 1);
+        buffer.remove(0, end + 1);
+        ++processedCount;
+
         QJsonParseError parseError {};
-        const auto doc = QJsonDocument::fromJson(trimmed, &parseError);
+        const auto doc = QJsonDocument::fromJson(payload, &parseError);
 
         if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
             LOG_WARNING(kLogSource,
@@ -178,11 +208,11 @@ void JsonRpcServer::processLines(QTcpSocket *socket)
         const QJsonObject request = doc.object();
         const QString method = request.value(QStringLiteral("method")).toString();
         const QJsonValue reqId = request.value(QStringLiteral("id"));
+        const bool isNotification = !request.contains(QStringLiteral("id"));
 
         LOG_DEBUG(kLogSource,
                   QStringLiteral("RPC request [id=%1] method: %2")
-                      .arg(reqId.isNull() ? QStringLiteral("null")
-                                          : QString::number(reqId.toInt()))
+                      .arg(requestIdToString(reqId))
                       .arg(method));
 
         // 检查认证
@@ -191,16 +221,18 @@ void JsonRpcServer::processLines(QTcpSocket *socket)
                         QStringLiteral("Authentication failed for method: %1 from %2")
                             .arg(method)
                             .arg(socket->peerAddress().toString()));
-            
-            QJsonObject response{
-                {QStringLiteral("jsonrpc"), QStringLiteral("2.0")},
-                {QStringLiteral("id"), reqId.isUndefined() ? QJsonValue(QJsonValue::Null) : reqId},
-                {QStringLiteral("error"), QJsonObject{
-                    {QStringLiteral("code"), -32001},
-                    {QStringLiteral("message"), QStringLiteral("Authentication required")}
-                }}
-            };
-            socket->write(toLine(response));
+
+            if (!isNotification) {
+                QJsonObject response{
+                    {QStringLiteral("jsonrpc"), QStringLiteral("2.0")},
+                    {QStringLiteral("id"), reqId.isUndefined() ? QJsonValue(QJsonValue::Null) : reqId},
+                    {QStringLiteral("error"), QJsonObject{
+                        {QStringLiteral("code"), -32001},
+                        {QStringLiteral("message"), QStringLiteral("Authentication required")}
+                    }}
+                };
+                socket->write(toLine(response));
+            }
             continue;
         }
 
@@ -211,8 +243,7 @@ void JsonRpcServer::processLines(QTcpSocket *socket)
             if (response.contains(QStringLiteral("error"))) {
                 LOG_WARNING(kLogSource,
                           QStringLiteral("RPC error response [id=%1] method=%2: %3")
-                              .arg(reqId.isNull() ? QStringLiteral("null")
-                                                  : QString::number(reqId.toInt()))
+                              .arg(requestIdToString(reqId))
                               .arg(method)
                               .arg(response.value(QStringLiteral("error"))
                                        .toObject()
@@ -221,8 +252,7 @@ void JsonRpcServer::processLines(QTcpSocket *socket)
             } else {
                 LOG_DEBUG(kLogSource,
                           QStringLiteral("RPC success response [id=%1]")
-                              .arg(reqId.isNull() ? QStringLiteral("null")
-                                                  : QString::number(reqId.toInt())));
+                              .arg(requestIdToString(reqId)));
                 
                 // 如果是auth.login方法成功，保存token到会话
                 if (method == QStringLiteral("auth.login") && 
@@ -240,11 +270,83 @@ void JsonRpcServer::processLines(QTcpSocket *socket)
             }
         }
     }
+
+    if (processedCount >= kMaxRequestsPerCycle) {
+        LOG_WARNING(kLogSource,
+                    QStringLiteral("Processed %1 RPC requests in one cycle, yielding to event loop")
+                        .arg(kMaxRequestsPerCycle));
+    }
 }
 
 QByteArray JsonRpcServer::toLine(const QJsonObject &obj)
 {
     return QJsonDocument(obj).toJson(QJsonDocument::Compact) + "\n";
+}
+
+int JsonRpcServer::findJsonObjectEnd(const QByteArray &buffer, int startIndex)
+{
+    bool inString = false;
+    bool escaped = false;
+    int depth = 0;
+    bool seenObjectStart = false;
+
+    for (int i = startIndex; i < buffer.size(); ++i) {
+        const char ch = buffer[i];
+        if (!seenObjectStart) {
+            if (std::isspace(static_cast<unsigned char>(ch)) != 0) {
+                continue;
+            }
+            if (ch != '{') {
+                return -1;
+            }
+            seenObjectStart = true;
+            depth = 1;
+            continue;
+        }
+
+        if (inString) {
+            if (escaped) {
+                escaped = false;
+            } else if (ch == '\\') {
+                escaped = true;
+            } else if (ch == '"') {
+                inString = false;
+            }
+            continue;
+        }
+
+        if (ch == '"') {
+            inString = true;
+            continue;
+        }
+        if (ch == '{') {
+            ++depth;
+            continue;
+        }
+        if (ch == '}') {
+            --depth;
+            if (depth == 0) {
+                return i;
+            }
+            continue;
+        }
+    }
+
+    return -1;
+}
+
+QString JsonRpcServer::requestIdToString(const QJsonValue &id)
+{
+    if (id.isUndefined() || id.isNull()) {
+        return QStringLiteral("null");
+    }
+    if (id.isString()) {
+        return id.toString();
+    }
+    if (id.isDouble()) {
+        return QString::number(id.toDouble(), 'g', 16);
+    }
+    return QStringLiteral("<non-scalar-id>");
 }
 
 void JsonRpcServer::onDisconnected()

@@ -5,6 +5,8 @@ namespace core {
 
 bool CoreConfig::loadMain(const QJsonObject &root, QString *error)
 {
+    Q_UNUSED(error);
+
     // 主配置
     if (root.contains(QStringLiteral("main")) &&
         root[QStringLiteral("main")].isObject()) {

@@ -29,7 +29,20 @@ SOURCES += \
     src/core/core_config_main.cpp \
     src/core/core_config_strategy.cpp \
     src/core/core_context.cpp \
+    src/core/rpc_registry_auto.cpp \
+    src/core/rpc_registry_base.cpp \
+    src/core/rpc_registry_auth.cpp \
+    src/core/rpc_registry_can.cpp \
+    src/core/rpc_registry_config.cpp \
     src/core/rpc_registry.cpp \
+    src/core/rpc_registry_device.cpp \
+    src/core/rpc_registry_group.cpp \
+    src/core/rpc_registry_mqtt.cpp \
+    src/core/rpc_registry_monitor.cpp \
+    src/core/rpc_registry_relay.cpp \
+    src/core/rpc_registry_scene.cpp \
+    src/core/rpc_registry_screen.cpp \
+    src/core/rpc_registry_system.cpp \
     src/utils/utils.cpp \
     src/utils/logger.cpp \
     src/utils/system_settings.cpp \
@@ -47,11 +60,11 @@ SOURCES += \
     src/device/modbus/modbus_temp_sensor.cpp \
     src/device/uart/uart_sensor.cpp \
     src/rpc/rpc_helpers.cpp \
+    src/rpc/device_tcp_rpc.cpp \
+    src/rpc/device_tcp_server.cpp \
     src/rpc/json_rpc_dispatcher.cpp \
     src/rpc/json_rpc_server.cpp \
-    src/rpc/json_rpc_client.cpp \
-    src/rpc/handlers/relay_handlers.cpp \
-    src/rpc/handlers/group_handlers.cpp
+    src/rpc/json_rpc_client.cpp
 
 
 
@@ -93,6 +106,8 @@ HEADERS += \
     src/device/uart/uart_sensor.h \
     src/rpc/rpc_error_codes.h \
     src/rpc/rpc_helpers.h \
+    src/rpc/device_tcp_rpc.h \
+    src/rpc/device_tcp_server.h \
     src/rpc/json_rpc_dispatcher.h \
     src/rpc/json_rpc_server.h \
     src/rpc/json_rpc_client.h \
@@ -101,6 +116,8 @@ HEADERS += \
     src/rpc/handlers/group_handlers.h \
     src/core/core_config.h \
     src/core/core_context.h \
+    src/core/rpc_registry_common.h \
+    src/core/rpc_registry_keys.h \
     src/core/rpc_registry.h
 
 # Default rules for deployment

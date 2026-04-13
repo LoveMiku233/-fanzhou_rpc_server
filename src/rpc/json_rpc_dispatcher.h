@@ -9,6 +9,7 @@
 #define FANZHOU_JSON_RPC_DISPATCHER_H
 
 #include <QHash>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QObject>
@@ -51,21 +52,33 @@ public:
      * @return 排序后的方法名称列表
      */
     QStringList methods() const;
+    QJsonArray stats(int limit = 20) const;
+    void resetStats();
 
     /**
      * @brief 处理JSON-RPC请求
      * @param request 请求对象
      * @return 响应对象（通知请求返回空对象）
      */
-    QJsonObject handle(const QJsonObject &request) const;
+    QJsonObject handle(const QJsonObject &request);
 
 private:
+    struct MethodStats {
+        quint64 calls = 0;
+        quint64 errors = 0;
+        qint64 totalUs = 0;
+        qint64 maxUs = 0;
+        qint64 lastUs = 0;
+    };
+
     static QJsonObject makeError(const QJsonValue &id, int code,
                                   const QString &message);
     static QJsonObject makeResult(const QJsonValue &id,
                                    const QJsonValue &result);
+    void recordMethodCall(const QString &method, qint64 elapsedUs, bool isError);
 
     QHash<QString, Handler> handlers_;
+    QHash<QString, MethodStats> stats_;
 };
 
 }  // namespace rpc

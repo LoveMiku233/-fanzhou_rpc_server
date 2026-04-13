@@ -10,6 +10,7 @@
 #define FANZHOU_RELAY_GD427_H
 
 #include <QElapsedTimer>
+#include <QJsonObject>
 #include <QObject>
 
 #include "device/base/device_adapter.h"
@@ -20,6 +21,9 @@ namespace fanzhou {
 
 namespace comm {
 class CanComm;
+}
+namespace rpc {
+class DeviceTcpServer;
 }
 
 namespace device {
@@ -35,13 +39,24 @@ class RelayGd427 : public DeviceAdapter, public ICanDevice
     Q_OBJECT
 
 public:
+    enum class TransportType : quint8 {
+        Can = 0,
+        TcpClient = 1
+    };
+
     /**
      * @brief 构造继电器设备
      * @param nodeId CAN节点标识符
      * @param bus CAN通信总线
+     * @param transport 传输类型（CAN/TCP Client）
+     * @param tcpGateway TCP网关（transport=TcpClient时使用）
      * @param parent 父对象
      */
-    RelayGd427(quint8 nodeId, comm::CanComm *bus, QObject *parent = nullptr);
+    RelayGd427(quint8 nodeId,
+               comm::CanComm *bus,
+               TransportType transport = TransportType::Can,
+               rpc::DeviceTcpServer *tcpGateway = nullptr,
+               QObject *parent = nullptr);
 
     // DeviceAdapter接口
     bool init() override;
@@ -91,6 +106,14 @@ public:
     bool setOvercurrentFlag(quint8 channel, quint8 flag);
 
     /**
+     * @brief 设置控制板通信/网络模式
+     * @param commMode 通信模式（0:None, 1:CAN, 2:RS485, 3:Ethernet）
+     * @param networkMode 网络模式（0:DHCP, 1:Static）
+     * @return 命令发送成功返回true
+     */
+    bool setCommMode(RelayProtocol::CommMode commMode, RelayProtocol::NetworkMode networkMode);
+
+    /**
      * @brief 获取通道的最后状态
      * @param channel 通道号（0-3）
      * @return 通道状态
@@ -138,12 +161,16 @@ signals:
 
 private:
     void markSeen();
+    bool sendTcpCommand(const QJsonObject &command);
+    void onTcpBoardMessage(int devId, const QJsonObject &message);
     void onSingleStatusFrame(quint32 canId, const QByteArray &payload);
     void onAutoStatusFrame(quint32 canId, const QByteArray &payload);
     void onSettingsRespFrame(quint32 canId, const QByteArray &payload);
 
     quint8 nodeId_;
     comm::CanComm *bus_;
+    TransportType transport_ = TransportType::Can;
+    rpc::DeviceTcpServer *tcpGateway_ = nullptr;
     RelayProtocol::Status status_[4] {};
     RelayProtocol::AutoStatusReport autoStatus_ {};
     QElapsedTimer lastRxTimer_;

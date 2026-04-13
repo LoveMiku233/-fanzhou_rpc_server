@@ -1,41 +1,55 @@
 /**
  * @file main.cpp
- * @brief 泛舟RPC客户端入口
+ * @brief 泛舟RPC客户端主入口
  *
- * 温室控制柜GUI客户端主入口。
- * 目标平台：Qt 5.12, 1024x600 触屏
+ * Qt5.12 GUI客户端，用于连接和控制泛舟RPC服务器。
+ * 目标平台：Ubuntu Desktop，7寸触屏(1024x600)
  */
 
 #include <QApplication>
 #include <QFile>
-#include <QTextStream>
+#include <QFont>
+#include <QScreen>
+#include <QGuiApplication>
 
 #include "mainwindow.h"
-#include "rpc_client.h"
-#include "screen_manager.h"
+#include "style_constants.h"
 
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
-    app.setApplicationName(QStringLiteral("fanzhou-rpc-client"));
-    app.setApplicationVersion(QStringLiteral("2.0.0"));
+    app.setApplicationName(QStringLiteral("泛舟RPC客户端"));
+    app.setApplicationVersion(QStringLiteral("1.1.0"));
+    app.setOrganizationName(QStringLiteral("FanZhou"));
 
-    // 加载深色主题样式表
-    QFile styleFile(QStringLiteral(":/styles/dark_theme.qss"));
+    // 设置应用程序字体 - 针对7寸1024x600触屏优化
+    QFont defaultFont = app.font();
+    defaultFont.setFamily(QStringLiteral("Ubuntu,DejaVu Sans,Noto Sans CJK SC,Sans-serif"));
+    defaultFont.setPointSize(10);  // 优化字体大小，在小屏幕上获得完美显示
+    app.setFont(defaultFont);
+
+    // 加载浅色温和样式表
+    QFile styleFile(QStringLiteral(":/styles/style.qss"));
     if (styleFile.open(QFile::ReadOnly | QFile::Text)) {
-        QTextStream stream(&styleFile);
-        app.setStyleSheet(stream.readAll());
+        QString styleSheet = QString::fromUtf8(styleFile.readAll());
+        app.setStyleSheet(styleSheet);
         styleFile.close();
     }
 
-    // 创建RPC客户端
-    RpcClient rpcClient;
+    MainWindow mainWindow;
+    mainWindow.setWindowTitle(QStringLiteral("泛舟RPC客户端 - 温室控制系统"));
 
-    // 创建屏幕管理器
-    ScreenManager screenManager;
+    // 完美适配1024x600分辨率
+    mainWindow.setFixedSize(UIConstants::WINDOW_WIDTH, UIConstants::WINDOW_HEIGHT);
 
-    // 创建并显示主窗口
-    MainWindow mainWindow(&rpcClient, &screenManager);
+    // 居中显示
+    const QScreen *screen = QGuiApplication::primaryScreen();
+    if (screen) {
+        const QRect screenGeometry = screen->availableGeometry();
+        mainWindow.move((screenGeometry.width() - UIConstants::WINDOW_WIDTH) / 2,
+                        (screenGeometry.height() - UIConstants::WINDOW_HEIGHT) / 2);
+    }
+
     mainWindow.show();
 
     return app.exec();

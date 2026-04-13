@@ -12,7 +12,9 @@
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QObject>
+#include <QPointer>
 #include <QTcpSocket>
+#include <QTimer>
 
 #include <functional>
 
@@ -109,6 +111,11 @@ public:
                   const QJsonObject &params,
                   Callback callback,
                   int timeoutMs = 3000);
+    int callAsync(const QString &method,
+                  const QJsonObject &params,
+                  QObject *context,
+                  Callback callback,
+                  int timeoutMs = 3000);
 
 signals:
     void connected();
@@ -122,6 +129,7 @@ private slots:
     void onSocketError(QAbstractSocket::SocketError socketError);
     void onConnected();
     void onDisconnected();
+    void cleanupPendingRequests();
 
 private:
     QJsonObject makeError(int code, const QString &message) const;
@@ -131,6 +139,7 @@ private:
     void dispatchCallback(int id, const QJsonValue &result,
                           const QJsonObject &error);
     void log(const QString &message);
+    void clearAllCallbacks();
 
     QString host_;
     quint16 port_;
@@ -141,6 +150,8 @@ private:
     int nextId_;
     QHash<int, QString> pending_;
     QHash<int, Callback> callbacks_;
+    QHash<int, qint64> requestTimestamps_;  // 记录请求时间戳用于清理
+    QTimer *cleanupTimer_;  // 定期清理定时器
 };
 
 #endif // RPC_CLIENT_H

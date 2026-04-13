@@ -15,6 +15,8 @@
 #include "src/core/core_config.h"
 #include "src/core/core_context.h"
 #include "src/core/rpc_registry.h"
+#include "src/rpc/device_tcp_rpc.h"
+#include "src/rpc/device_tcp_server.h"
 #include "src/rpc/json_rpc_dispatcher.h"
 #include "src/rpc/json_rpc_server.h"
 #include "src/utils/logger.h"
@@ -25,6 +27,7 @@ namespace {
 const char *const kLogSource = "Main";
 const QString kDefaultLogPath = QStringLiteral("/var/log/fanzhou_core/core.log");
 const QString kDefaultConfigPath = QStringLiteral("/var/lib/fanzhou_core/core.json");
+constexpr quint16 kDeviceTcpPort = 9000;
 
 /**
  * @brief 获取配置文件路径
@@ -67,6 +70,7 @@ int main(int argc, char *argv[])
     QCoreApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("fanzhou-rpc-server"));
     app.setApplicationVersion(QStringLiteral("1.0.0"));
+    qputenv("QT_IM_MODULE", QByteArray("qtvirtualkeyboard"));
 
     // 1. 加载配置
     const QString configPath = getConfigPath(app);
@@ -106,6 +110,9 @@ int main(int argc, char *argv[])
 
     // 3. 初始化核心上下文
     fanzhou::core::CoreContext context;
+    fanzhou::rpc::DeviceTcpServer deviceServer;
+    context.setDeviceTcpServer(&deviceServer);
+    deviceServer.setCoreContext(&context);
     // 设置配置文件路径，使config.save RPC方法可以正确保存配置
     context.configFilePath = configPath;
     
@@ -121,6 +128,7 @@ int main(int argc, char *argv[])
     fanzhou::rpc::JsonRpcDispatcher dispatcher;
     fanzhou::core::RpcRegistry registry(&context, &dispatcher);
     registry.registerAll();
+    fanzhou::rpc::registerDeviceTcpMethods(&dispatcher, &deviceServer);
     LOG_INFO(kLogSource, QStringLiteral("RPC methods registered"));
 
     // 5. 启动JSON-RPC服务器
@@ -147,7 +155,15 @@ int main(int argc, char *argv[])
                  .arg(port)
                  .arg(configPath));
 
-    // 7. 启动U盘监控
+    // 7. 启动设备协议 TCP Server（控制板作为TCP Client接入）
+    LOG_INFO(kLogSource, QStringLiteral("Starting Device TCP server on port %1...").arg(kDeviceTcpPort));
+    if (!deviceServer.listen(QHostAddress::Any, kDeviceTcpPort)) {
+        LOG_CRITICAL(kLogSource, QStringLiteral("Device TCP listen failed: %1").arg(deviceServer.errorString()));
+        return 1;
+    }
+    LOG_INFO(kLogSource, QStringLiteral("Device TCP server started on port %1").arg(kDeviceTcpPort));
+
+    // 8. 启动U盘监控
 //    fanzhou::UsbMonitor usbMonitor;
 //    usbMonitor.setRpcLogPath(config.log.logToFile ? config.log.logFilePath : kDefaultLogPath);
 //    usbMonitor.start(5000);

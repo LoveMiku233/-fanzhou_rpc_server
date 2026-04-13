@@ -575,6 +575,52 @@ void registerRelayHandlers(core::CoreContext *context, JsonRpcDispatcher *dispat
         };
     });
 
+    // 设置通信模式（MB_REG_COMM_MODE）和网络模式（MB_REG_NETWORK_MODE）
+    dispatcher->registerMethod(QStringLiteral("relay.setCommMode"),
+                                 [context](const QJsonObject &params) {
+        quint8 node = 0;
+        qint32 commMode = -1;
+        qint32 networkMode = 0;  // 默认 DHCP
+
+        if (!RpcHelpers::getU8(params, "node", node))
+            return RpcHelpers::err(RpcError::MissingParameter, QStringLiteral("missing/invalid node"));
+
+        if (!RpcHelpers::getI32(params, "commMode", commMode))
+            return RpcHelpers::err(RpcError::MissingParameter, QStringLiteral("missing commMode"));
+
+        if (params.contains(QStringLiteral("networkMode")) &&
+            !RpcHelpers::getI32(params, "networkMode", networkMode)) {
+            return RpcHelpers::err(RpcError::BadParameterType, QStringLiteral("invalid networkMode"));
+        }
+
+        if (commMode < 0 || commMode > 3) {
+            return RpcHelpers::err(
+                RpcError::BadParameterValue,
+                QStringLiteral("invalid commMode (0=None, 1=CAN, 2=RS485, 3=Ethernet)"));
+        }
+
+        if (networkMode < 0 || networkMode > 1) {
+            return RpcHelpers::err(
+                RpcError::BadParameterValue,
+                QStringLiteral("invalid networkMode (0=DHCP, 1=Static)"));
+        }
+
+        auto *dev = context->relays.value(node, nullptr);
+        if (!dev)
+            return RpcHelpers::err(RpcError::BadParameterValue, QStringLiteral("unknown node"));
+
+        const bool ok = dev->setCommMode(
+            static_cast<device::RelayProtocol::CommMode>(commMode),
+            static_cast<device::RelayProtocol::NetworkMode>(networkMode));
+
+        return QJsonObject{
+            {keyOk(), ok},
+            {keyNode(), static_cast<int>(node)},
+            {QStringLiteral("commMode"), commMode},
+            {QStringLiteral("networkMode"), networkMode}
+        };
+    });
+
     // ===================== 传感器方法 =====================
 
     dispatcher->registerMethod(QStringLiteral("sensor.read"),

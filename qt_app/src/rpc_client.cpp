@@ -12,6 +12,8 @@
 
 namespace {
 constexpr int kMaxRequestId = 2000000000;  ///< nextId_回绕阈值
+constexpr int kRequestTimeoutSec = 30;       ///< 请求超时清理时间(秒)
+constexpr int kCleanupIntervalMs = 60000;    ///< 清理定时器间隔(1分钟)
 }
 
 RpcClient::RpcClient(QObject *parent)
@@ -20,6 +22,7 @@ RpcClient::RpcClient(QObject *parent)
     , port_(12345)
     , socket_(new QTcpSocket(this))
     , nextId_(1)
+    , cleanupTimer_(new QTimer(this))
 {
     connect(socket_, &QTcpSocket::readyRead, this, &RpcClient::onReadyRead);
     connect(socket_, &QTcpSocket::connected, this, &RpcClient::onConnected);
@@ -33,11 +36,26 @@ RpcClient::RpcClient(QObject *parent)
             QOverload<QAbstractSocket::SocketError>::of(&QTcpSocket::error),
             this, &RpcClient::onSocketError);
 #endif
+
+    // 设置清理定时器 - 防止长时间运行后内存泄漏
+    connect(cleanupTimer_, &QTimer::timeout, this, &RpcClient::cleanupPendingRequests);
+    cleanupTimer_->start(kCleanupIntervalMs);
 }
 
 RpcClient::~RpcClient()
 {
     disconnectFromServer();
+    clearAllCallbacks();
+    if (cleanupTimer_) {
+        cleanupTimer_->stop();
+    }
+}
+
+void RpcClient::clearAllCallbacks()
+{
+    pending_.clear();
+    callbacks_.clear();
+    requestTimestamps_.clear();
 }
 
 void RpcClient::setEndpoint(const QString &host, quint16 port)
@@ -86,6 +104,9 @@ void RpcClient::disconnectFromServer()
     if (socket_->state() != QAbstractSocket::UnconnectedState) {
         log(QStringLiteral("[RPC] 断开服务器连接"));
         socket_->disconnectFromHost();
+
+        // 断开时清理所有挂起的请求，防止内存泄漏
+        clearAllCallbacks();
     }
 }
 
@@ -124,6 +145,7 @@ int RpcClient::callAsync(const QString &method, const QJsonObject &params)
     const int id = nextId_++;
     if (nextId_ > kMaxRequestId) nextId_ = 1;  // 防止整数溢出
     pending_.insert(id, method);
+    requestTimestamps_.insert(id, QDateTime::currentMSecsSinceEpoch());
 
     const QByteArray payload = packRequest(id, method, params);
 
@@ -134,6 +156,7 @@ int RpcClient::callAsync(const QString &method, const QJsonObject &params)
         log(QStringLiteral("[RPC] 发送失败 [id=%1]: %2").arg(id).arg(socket_->errorString()));
         emit transportError(QStringLiteral("发送失败: %1").arg(socket_->errorString()));
         pending_.remove(id);
+        requestTimestamps_.remove(id);
         return -1;
     }
     socket_->flush();
@@ -161,6 +184,7 @@ int RpcClient::callAsync(const QString &method, const QJsonObject &params,
                 return;
             }
             pending_.remove(id);
+            requestTimestamps_.remove(id);
 
             log(QStringLiteral("[RPC] 请求超时 [id=%1] method: %2").arg(id).arg(method));
 
@@ -176,6 +200,65 @@ int RpcClient::callAsync(const QString &method, const QJsonObject &params,
     }
 
     return id;
+}
+
+int RpcClient::callAsync(const QString &method,
+                         const QJsonObject &params,
+                         QObject *context,
+                         Callback callback,
+                         int timeoutMs)
+{
+    if (!context) {
+        return callAsync(method, params, std::move(callback), timeoutMs);
+    }
+
+    const QPointer<QObject> aliveGuard(context);
+    Callback safeCallback = [aliveGuard, callback](const QJsonValue &result, const QJsonObject &error) {
+        if (!aliveGuard) {
+            return;
+        }
+        if (callback) {
+            callback(result, error);
+        }
+    };
+
+    return callAsync(method, params, std::move(safeCallback), timeoutMs);
+}
+
+void RpcClient::cleanupPendingRequests()
+{
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const qint64 timeoutMs = kRequestTimeoutSec * 1000;
+
+    QList<int> expiredIds;
+    for (auto it = requestTimestamps_.begin(); it != requestTimestamps_.end(); ++it) {
+        if (now - it.value() > timeoutMs) {
+            expiredIds.append(it.key());
+        }
+    }
+
+    for (int id : expiredIds) {
+        QString method = pending_.value(id, QStringLiteral("unknown"));
+        log(QStringLiteral("[RPC] 清理过期请求 [id=%1] method: %2").arg(id).arg(method));
+
+        pending_.remove(id);
+        requestTimestamps_.remove(id);
+
+        auto it = callbacks_.find(id);
+        if (it != callbacks_.end()) {
+            auto cb = it.value();
+            callbacks_.erase(it);
+            if (cb) {
+                cb(QJsonValue(), makeError(-32002, QStringLiteral("请求已过期")));
+            }
+        }
+    }
+
+    // 防止哈希表无限增长
+    if (pending_.size() > 1000) {
+        log(QStringLiteral("[RPC] 警告: 挂起请求过多, 清理所有请求"));
+        clearAllCallbacks();
+    }
 }
 
 void RpcClient::dispatchCallback(int id, const QJsonValue &result,
@@ -322,6 +405,7 @@ void RpcClient::handleLine(const QByteArray &line)
     emit callFinished(id, result, error);
     dispatchCallback(id, result, error);
     pending_.remove(id);
+    requestTimestamps_.remove(id);
 }
 
 void RpcClient::onSocketError(QAbstractSocket::SocketError)

@@ -6,6 +6,9 @@
 #include "json_rpc_dispatcher.h"
 #include "utils/logger.h"
 
+#include <QElapsedTimer>
+#include <QJsonArray>
+
 #include <algorithm>
 #include <stdexcept>
 
@@ -27,6 +30,65 @@ QStringList JsonRpcDispatcher::methods() const
     auto keys = handlers_.keys();
     std::sort(keys.begin(), keys.end());
     return keys;
+}
+
+QJsonArray JsonRpcDispatcher::stats(int limit) const
+{
+    struct Item {
+        QString method;
+        MethodStats stat;
+    };
+    QList<Item> items;
+    items.reserve(stats_.size());
+    for (auto it = stats_.cbegin(); it != stats_.cend(); ++it) {
+        items.append(Item{it.key(), it.value()});
+    }
+
+    std::sort(items.begin(), items.end(), [](const Item &a, const Item &b) {
+        return a.stat.totalUs > b.stat.totalUs;
+    });
+
+    if (limit <= 0) {
+        limit = 20;
+    }
+
+    QJsonArray arr;
+    const int n = std::min(limit, items.size());
+    for (int i = 0; i < n; ++i) {
+        const Item &item = items.at(i);
+        const double avgUs = item.stat.calls > 0
+            ? static_cast<double>(item.stat.totalUs) / static_cast<double>(item.stat.calls)
+            : 0.0;
+        arr.append(QJsonObject{
+            {QStringLiteral("method"), item.method},
+            {QStringLiteral("calls"), static_cast<double>(item.stat.calls)},
+            {QStringLiteral("errors"), static_cast<double>(item.stat.errors)},
+            {QStringLiteral("totalUs"), static_cast<double>(item.stat.totalUs)},
+            {QStringLiteral("avgUs"), avgUs},
+            {QStringLiteral("maxUs"), static_cast<double>(item.stat.maxUs)},
+            {QStringLiteral("lastUs"), static_cast<double>(item.stat.lastUs)}
+        });
+    }
+    return arr;
+}
+
+void JsonRpcDispatcher::resetStats()
+{
+    stats_.clear();
+}
+
+void JsonRpcDispatcher::recordMethodCall(const QString &method, qint64 elapsedUs, bool isError)
+{
+    MethodStats &st = stats_[method];
+    st.calls++;
+    if (isError) {
+        st.errors++;
+    }
+    st.lastUs = elapsedUs;
+    st.totalUs += elapsedUs;
+    if (elapsedUs > st.maxUs) {
+        st.maxUs = elapsedUs;
+    }
 }
 
 QJsonObject JsonRpcDispatcher::makeError(const QJsonValue &id, int code,
@@ -52,7 +114,7 @@ QJsonObject JsonRpcDispatcher::makeResult(const QJsonValue &id,
     };
 }
 
-QJsonObject JsonRpcDispatcher::handle(const QJsonObject &request) const
+QJsonObject JsonRpcDispatcher::handle(const QJsonObject &request)
 {
     // 验证JSON-RPC版本
     if (request.value(QStringLiteral("jsonrpc")).toString() != QStringLiteral("2.0")) {
@@ -95,16 +157,21 @@ QJsonObject JsonRpcDispatcher::handle(const QJsonObject &request) const
 
     // 执行处理器
     LOG_DEBUG(kLogSource, QStringLiteral("Executing method: %1").arg(method));
+    QElapsedTimer timer;
+    timer.start();
     try {
         const QJsonValue result = it.value()(params);
+        recordMethodCall(method, timer.nsecsElapsed() / 1000, false);
         return isNotification ? QJsonObject{} : makeResult(id, result);
     } catch (const std::exception &e) {
+        recordMethodCall(method, timer.nsecsElapsed() / 1000, true);
         LOG_ERROR(kLogSource,
                   QStringLiteral("Handler exception for method %1: %2")
                       .arg(method, QString::fromLocal8Bit(e.what())));
         return isNotification ? QJsonObject{}
                               : makeError(id, -32603, QStringLiteral("Internal error"));
     } catch (...) {
+        recordMethodCall(method, timer.nsecsElapsed() / 1000, true);
         LOG_ERROR(kLogSource,
                   QStringLiteral("Unknown handler exception for method %1").arg(method));
         return isNotification ? QJsonObject{}

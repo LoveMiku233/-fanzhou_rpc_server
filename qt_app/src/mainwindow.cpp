@@ -1,462 +1,635 @@
 /**
  * @file mainwindow.cpp
- * @brief 主窗口实现
+ * @brief 主窗口实现 - 大棚控制系统
  */
 
 #include "mainwindow.h"
-#include "style_constants.h"
 #include "rpc_client.h"
+#include "home_widget.h"
+#include "greenhouse_3d_widget.h"
+#include "device_widget.h"
+#include "group_widget.h"
+#include "strategy_widget.h"
+#include "sensor_widget.h"
+#include "log_widget.h"
+#include "settings_widget.h"
+#include "monitor_widget.h"
 #include "screen_manager.h"
+#include "style_constants.h"
 
-#include "views/dashboard_page.h"
-#include "views/device_control_page.h"
-#include "views/scene_page.h"
-#include "views/alarm_page.h"
-#include "views/sensor_page.h"
-#include "views/settings_page.h"
-
-#include <QHBoxLayout>
+#include <QStatusBar>
 #include <QVBoxLayout>
-#include <QLabel>
-#include <QPushButton>
-#include <QStackedWidget>
-#include <QTimer>
-#include <QDateTime>
-#include <QStyle>
+#include <QHBoxLayout>
+#include <QScrollArea>
+#include <QScroller>
+#include <QSettings>
+#include <QFrame>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QJsonValue>
+#include <QJsonDocument>
+#include <memory>
 
-namespace {
-const int kRefreshIntervalMs = 5000;
-const int kReconnectIntervalMs = 3000;
-}
+using namespace UIConstants;
 
-// ── Construction / Destruction ───────────────────────────
-
-MainWindow::MainWindow(RpcClient *rpc, ScreenManager *screen, QWidget *parent)
+MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
-    , rpcClient_(rpc)
-    , screenManager_(screen)
     , sidebar_(nullptr)
-    , logoLabel_(nullptr)
-    , alarmBadge_(nullptr)
-    , headerBar_(nullptr)
-    , headerTitle_(nullptr)
-    , headerStatus_(nullptr)
-    , connectionIndicator_(nullptr)
-    , headerTime_(nullptr)
+    , sidebarLayout_(nullptr)
+    , menuButtonGroup_(nullptr)
     , contentStack_(nullptr)
-    , dashboardPage_(nullptr)
-    , deviceControlPage_(nullptr)
-    , scenePage_(nullptr)
-    , alarmPage_(nullptr)
-    , sensorPage_(nullptr)
-    , settingsPage_(nullptr)
-    , clockTimer_(nullptr)
-    , refreshTimer_(nullptr)
-    , reconnectTimer_(nullptr)
-    , currentPage_(Style::PageDashboard)
-    , wasConnected_(false)
+    , connectionStatusLabel_(nullptr)
+    , timeLabel_(nullptr)
+    , alertLabel_(nullptr)
+    , homeWidget_(nullptr)
+    , greenhouse3dWidget_(nullptr)
+    , deviceWidget_(nullptr)
+    , groupWidget_(nullptr)
+    , strategyWidget_(nullptr)
+    , sensorWidget_(nullptr)
+    , logWidget_(nullptr)
+    , settingsWidget_(nullptr)
+    , monitorWidget_(nullptr)
+    , rpcClient_(new RpcClient(this))
+    , screenManager_(new ScreenManager(this))
+    , autoRefreshTimer_(new QTimer(this))
+    , statusBarTimer_(new QTimer(this))
+    , currentPageIndex_(0)
 {
-    for (int i = 0; i < 6; ++i)
-        navButtons_[i] = nullptr;
-
     setupUi();
-    setupConnections();
 
-    // Start clock
-    clockTimer_ = new QTimer(this);
-    clockTimer_->setInterval(1000);
-    connect(clockTimer_, &QTimer::timeout, this, &MainWindow::updateClock);
-    clockTimer_->start();
-    updateClock();
+    // 自动刷新定时器
+    connect(autoRefreshTimer_, &QTimer::timeout, this, &MainWindow::onAutoRefreshTimeout);
 
-    // Start periodic data refresh (every 5 seconds)
-    refreshTimer_ = new QTimer(this);
-    refreshTimer_->setInterval(kRefreshIntervalMs);
-    connect(refreshTimer_, &QTimer::timeout, this, &MainWindow::refreshCurrentPage);
-    refreshTimer_->start();
+    // 状态栏时间更新定时器
+    connect(statusBarTimer_, &QTimer::timeout, this, &MainWindow::updateStatusBarTime);
+    statusBarTimer_->start(1000);
+    updateStatusBarTime();
 
-    // Setup reconnect timer
-    reconnectTimer_ = new QTimer(this);
-    reconnectTimer_->setInterval(kReconnectIntervalMs);
-    connect(reconnectTimer_, &QTimer::timeout, this, &MainWindow::tryConnect);
+    // 延迟执行自动连接
+    QTimer::singleShot(800, this, [this]() {
+        QSettings settings;
+        bool autoConnect = settings.value(QStringLiteral("settings/autoConnect"), true).toBool();
 
-    // Auto-connect to RPC server on startup
-    startAutoConnect();
+        if (autoConnect) {
+            QString host = settings.value(QStringLiteral("connection/host"), QStringLiteral("127.0.0.1")).toString();
+            quint16 port = static_cast<quint16>(settings.value(QStringLiteral("connection/port"), 12345).toInt());
+
+            onLogMessage(QStringLiteral("正在自动连接到服务器 %1:%2...").arg(host).arg(port));
+            qDebug() << "[MAIN_WINDOW] 正在自动连接到服务器" << host << ":" << port;
+
+            rpcClient_->setEndpoint(host, port);
+
+            auto connOk = std::make_shared<QMetaObject::Connection>();
+            auto connErr = std::make_shared<QMetaObject::Connection>();
+            *connOk = connect(rpcClient_, &RpcClient::connected, this, [this, connOk, connErr]() {
+                disconnect(*connOk);
+                disconnect(*connErr);
+                onLogMessage(QStringLiteral("[OK] 自动连接成功"));
+                qDebug() << "[MAIN_WINDOW] 自动连接成功";
+                onConnectionStatusChanged(true);
+            });
+            *connErr = connect(rpcClient_, &RpcClient::transportError, this, [this, connOk, connErr](const QString &error) {
+                disconnect(*connOk);
+                disconnect(*connErr);
+                onLogMessage(QStringLiteral("[X] 自动连接失败: %1，请检查服务器是否运行").arg(error), QStringLiteral("WARN"));
+                qDebug() << "[MAIN_WINDOW] 自动连接失败:" << error;
+            });
+            rpcClient_->connectToServerAsync();
+        } else {
+            qDebug() << "[MAIN_WINDOW] 自动连接未启用";
+        }
+    });
+
+    qDebug() << "[MAIN_WINDOW] 主窗口初始化完成";
 }
 
-MainWindow::~MainWindow() = default;
-
-// ── UI Setup ─────────────────────────────────────────────
+MainWindow::~MainWindow()
+{
+    autoRefreshTimer_->stop();
+    statusBarTimer_->stop();
+    qDebug() << "[MAIN_WINDOW] 主窗口销毁";
+}
 
 void MainWindow::setupUi()
 {
-    setFixedSize(Style::kScreenWidth, Style::kScreenHeight);
-    setWindowTitle(QStringLiteral("泛舟智能科技控制柜系统"));
+    setupStatusBar();
+    setupCentralWidget();
+}
 
+void MainWindow::setupStatusBar()
+{
+    QStatusBar *statusBar = this->statusBar();
+    statusBar->setSizeGripEnabled(false);
+
+    // 连接状态
+    connectionStatusLabel_ = new QLabel(QStringLiteral("[X] 未连接"));
+    connectionStatusLabel_->setStyleSheet(QStringLiteral(
+        "color: #e53935; font-weight: bold; padding: 2px 8px;"));
+    statusBar->addWidget(connectionStatusLabel_);
+
+    // 分隔符
+    QFrame *sep1 = new QFrame();
+    sep1->setFrameShape(QFrame::VLine);
+    statusBar->addWidget(sep1);
+
+    // 云连接状态
+    cloudStatusLabel_ = new QLabel(QStringLiteral("[云] 未连接"));
+    cloudStatusLabel_->setToolTip(QStringLiteral("云/MQTT连接状态"));
+    cloudStatusLabel_->setStyleSheet(QStringLiteral(
+        "color: #78909c; padding: 2px 8px;"));
+    statusBar->addWidget(cloudStatusLabel_);
+
+    // 分隔符
+    QFrame *sep1a = new QFrame();
+    sep1a->setFrameShape(QFrame::VLine);
+    statusBar->addWidget(sep1a);
+
+    // 时间
+    timeLabel_ = new QLabel(QStringLiteral("--:--:--"));
+    timeLabel_->setStyleSheet(QStringLiteral(
+        "color: #546e7a; padding: 2px 8px;"));
+    statusBar->addWidget(timeLabel_);
+
+    // 分隔符
+    QFrame *sep2 = new QFrame();
+    sep2->setFrameShape(QFrame::VLine);
+    statusBar->addWidget(sep2);
+
+    // 报警/日志信息
+    alertLabel_ = new QLabel(QStringLiteral("[OK] 系统就绪"));
+    alertLabel_->setStyleSheet(QStringLiteral(
+        "color: #546e7a; padding: 2px 8px;"));
+    statusBar->addWidget(alertLabel_, 1);
+}
+
+void MainWindow::setupCentralWidget()
+{
     QWidget *centralWidget = new QWidget(this);
     setCentralWidget(centralWidget);
 
-    QHBoxLayout *rootLayout = new QHBoxLayout(centralWidget);
-    rootLayout->setContentsMargins(0, 0, 0, 0);
-    rootLayout->setSpacing(0);
+    QHBoxLayout *mainLayout = new QHBoxLayout(centralWidget);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
+    mainLayout->setSpacing(0);
 
-    // ── Left sidebar ─────────────────────────────────────
-    sidebar_ = new QWidget(centralWidget);
-    sidebar_->setObjectName(QStringLiteral("sidebar"));
-    sidebar_->setFixedWidth(Style::kSidebarWidth);
+    // 创建侧边栏
+    createSidebar();
+    mainLayout->addWidget(sidebar_);
 
-    QVBoxLayout *sidebarLayout = new QVBoxLayout(sidebar_);
-    sidebarLayout->setContentsMargins(0, 8, 0, 8);
-    sidebarLayout->setSpacing(4);
-
-    // Logo
-    logoLabel_ = new QLabel(QStringLiteral("⚡"), sidebar_);
-    logoLabel_->setObjectName(QStringLiteral("sidebarLogo"));
-    logoLabel_->setAlignment(Qt::AlignCenter);
-    logoLabel_->setFixedSize(48, 48);
-    logoLabel_->setStyleSheet(
-        QStringLiteral("QLabel#sidebarLogo {"
-                       "  background: qlineargradient(x1:0,y1:0,x2:1,y2:1,"
-                       "      stop:0 %1, stop:1 %2);"
-                       "  border-radius: 12px;"
-                       "  color: white;"
-                       "  font-size: 24px;"
-                       "}")
-            .arg(Style::kColorGradientStart, Style::kColorGradientEnd));
-
-    sidebarLayout->addWidget(logoLabel_, 0, Qt::AlignHCenter);
-    sidebarLayout->addSpacing(12);
-
-    // Navigation icons / labels per page
-    struct NavDef {
-        QString icon;
-        QString label;
-    };
-    const NavDef navDefs[6] = {
-        { QStringLiteral("⊞"), QStringLiteral("驾驶舱")   },
-        { QStringLiteral("⚙"), QStringLiteral("设备控制") },
-        { QStringLiteral("📋"), QStringLiteral("场景管理") },
-        { QStringLiteral("⚠"), QStringLiteral("报警看板") },
-        { QStringLiteral("📊"), QStringLiteral("传感器")   },
-        { QStringLiteral("⚙"), QStringLiteral("系统设置") },
-    };
-
-    for (int i = 0; i < 6; ++i) {
-        navButtons_[i] = createNavButton(navDefs[i].icon, navDefs[i].label, i);
-        sidebarLayout->addWidget(navButtons_[i], 0, Qt::AlignHCenter);
-    }
-
-    sidebarLayout->addStretch(1);
-
-    // Alarm badge on the alarm button (index 3)
-    alarmBadge_ = new QLabel(navButtons_[Style::PageAlarms]);
-    alarmBadge_->setObjectName(QStringLiteral("alarmBadge"));
-    alarmBadge_->setAlignment(Qt::AlignCenter);
-    alarmBadge_->setFixedSize(16, 16);
-    alarmBadge_->move(navButtons_[Style::PageAlarms]->width() - 18, 2);
-    alarmBadge_->setStyleSheet(
-        QStringLiteral("QLabel#alarmBadge {"
-                       "  background: %1;"
-                       "  color: white;"
-                       "  border-radius: 8px;"
-                       "  font-size: 8px;"
-                       "  font-weight: bold;"
-                       "}")
-            .arg(Style::kColorDanger));
-    alarmBadge_->setText(QStringLiteral("0"));
-    alarmBadge_->hide();
-
-    rootLayout->addWidget(sidebar_);
-
-    // ── Right area (header + content) ────────────────────
-    QWidget *rightArea = new QWidget(centralWidget);
-    QVBoxLayout *rightLayout = new QVBoxLayout(rightArea);
-    rightLayout->setContentsMargins(0, 0, 0, 0);
-    rightLayout->setSpacing(0);
-
-    // Header bar
-    headerBar_ = new QWidget(rightArea);
-    headerBar_->setObjectName(QStringLiteral("headerBar"));
-    headerBar_->setFixedHeight(Style::kHeaderHeight);
-
-    QHBoxLayout *headerLayout = new QHBoxLayout(headerBar_);
-    headerLayout->setContentsMargins(12, 0, 12, 0);
-
-    headerTitle_ = new QLabel(QStringLiteral("泛舟智能科技控制柜系统"), headerBar_);
-    headerTitle_->setObjectName(QStringLiteral("headerTitle"));
-
-    headerStatus_ = new QLabel(QStringLiteral("运行中"), headerBar_);
-    headerStatus_->setObjectName(QStringLiteral("headerStatus"));
-    headerStatus_->setStyleSheet(
-        QStringLiteral("QLabel#headerStatus {"
-                       "  background: rgba(16,185,129,0.2);"
-                       "  color: %1;"
-                       "  border: 1px solid rgba(16,185,129,0.3);"
-                       "  border-radius: 10px;"
-                       "  padding: 2px 8px;"
-                       "  font-size: %2px;"
-                       "}")
-            .arg(Style::kColorSuccess)
-            .arg(Style::kFontSmall));
-
-    headerLayout->addWidget(headerTitle_);
-    headerLayout->addSpacing(8);
-    headerLayout->addWidget(headerStatus_);
-    headerLayout->addStretch(1);
-
-    // Connection indicator
-    connectionIndicator_ = new QLabel(QStringLiteral("● 在线"), headerBar_);
-    connectionIndicator_->setObjectName(QStringLiteral("connectionIndicator"));
-    connectionIndicator_->setStyleSheet(
-        QStringLiteral("color: %1; font-size: %2px;")
-            .arg(Style::kColorSuccess)
-            .arg(Style::kFontSmall));
-    headerLayout->addWidget(connectionIndicator_);
-    headerLayout->addSpacing(16);
-
-    // Clock
-    headerTime_ = new QLabel(headerBar_);
-    headerTime_->setObjectName(QStringLiteral("headerTime"));
-    headerLayout->addWidget(headerTime_);
-
-    rightLayout->addWidget(headerBar_);
-
-    // Stacked content area
-    contentStack_ = new QStackedWidget(rightArea);
-    contentStack_->setObjectName(QStringLiteral("contentStack"));
-
-    dashboardPage_     = new DashboardPage(rpcClient_, contentStack_);
-    deviceControlPage_ = new DeviceControlPage(rpcClient_, contentStack_);
-    scenePage_         = new ScenePage(rpcClient_, contentStack_);
-    alarmPage_         = new AlarmPage(rpcClient_, contentStack_);
-    sensorPage_        = new SensorPage(rpcClient_, contentStack_);
-    settingsPage_      = new SettingsPage(rpcClient_, contentStack_);
-
-    contentStack_->addWidget(dashboardPage_);
-    contentStack_->addWidget(deviceControlPage_);
-    contentStack_->addWidget(scenePage_);
-    contentStack_->addWidget(alarmPage_);
-    contentStack_->addWidget(sensorPage_);
-    contentStack_->addWidget(settingsPage_);
-
-    rightLayout->addWidget(contentStack_, 1);
-    rootLayout->addWidget(rightArea, 1);
-
-    // Default to dashboard
-    switchToPage(Style::PageDashboard);
+    // 创建右侧内容区
+    createContentArea();
+    mainLayout->addWidget(contentStack_, 1);
 }
 
-QPushButton *MainWindow::createNavButton(const QString &icon,
-                                         const QString &label,
-                                         int pageIndex)
+void MainWindow::createSidebar()
 {
-    QPushButton *btn = new QPushButton(sidebar_);
-    btn->setFixedSize(Style::kSidebarWidth - 8, Style::kSidebarWidth - 8);
-    btn->setText(icon + QStringLiteral("\n") + label);
-    btn->setProperty("active", QStringLiteral("false"));
-    btn->setProperty("pageIndex", pageIndex);
-    btn->setObjectName(
-        QStringLiteral("navBtn_%1").arg(pageIndex));
+    sidebar_ = new QWidget(this);
+    sidebar_->setObjectName(QStringLiteral("sidebar"));
+    sidebar_->setFixedWidth(SIDEBAR_WIDTH);
 
-    connect(btn, &QPushButton::clicked, this, [this, pageIndex]() {
-        switchToPage(pageIndex);
+    sidebarLayout_ = new QVBoxLayout(sidebar_);
+    sidebarLayout_->setContentsMargins(5, 10, 5, 10);
+    sidebarLayout_->setSpacing(5);
+
+    menuButtonGroup_ = new QButtonGroup(this);
+
+    // 菜单项
+    QStringList menuNames = {
+        QStringLiteral("主页"),
+        QStringLiteral("大棚"),
+        QStringLiteral("设备"),
+        QStringLiteral("分组"),
+        QStringLiteral("策略"),
+        QStringLiteral("传感"),
+        QStringLiteral("日志"),
+        QStringLiteral("设置"),
+        QStringLiteral("监控")
+    };
+
+    QStringList menuIcons = {
+        QStringLiteral("🏠"),
+        QStringLiteral("🏗️"),
+        QStringLiteral("🔧"),
+        QStringLiteral("📦"),
+        QStringLiteral("⚙️"),
+        QStringLiteral("🌡️"),
+        QStringLiteral("📝"),
+        QStringLiteral("⚡"),
+        QStringLiteral("📊")
+    };
+
+    for (int i = 0; i < menuNames.size(); ++i) {
+        QPushButton *btn = new QPushButton(menuIcons[i] + "\n" + menuNames[i], sidebar_);
+        btn->setCheckable(true);
+        btn->setFixedHeight(MENU_BTN_HEIGHT);
+        btn->setCursor(Qt::PointingHandCursor);
+
+        menuButtonGroup_->addButton(btn, i);
+        menuButtons_.append(btn);
+        sidebarLayout_->addWidget(btn);
+    }
+
+    connect(menuButtonGroup_, QOverload<QAbstractButton*>::of(&QButtonGroup::buttonClicked),
+            this, [this](QAbstractButton *button) {
+        int index = menuButtonGroup_->id(button);
+        if (index >= 0) {
+            onMenuButtonClicked(index);
+        }
     });
 
-    return btn;
+    sidebarLayout_->addStretch();
+
+    // 版本信息
+    QLabel *versionLabel = new QLabel(QStringLiteral("v2.0"), sidebar_);
+    versionLabel->setAlignment(Qt::AlignCenter);
+    sidebarLayout_->addWidget(versionLabel);
+
+    // 默认选中第一个
+    if (!menuButtons_.isEmpty()) {
+        menuButtons_[0]->setChecked(true);
+    }
 }
 
-// ── Connections ──────────────────────────────────────────
-
-void MainWindow::setupConnections()
+void MainWindow::createContentArea()
 {
-    if (rpcClient_) {
-        connect(rpcClient_, &RpcClient::connected, this, [this]() {
-            onConnectionChanged(true);
-            wasConnected_ = true;
-            // Stop reconnect timer on successful connection
-            if (reconnectTimer_->isActive())
-                reconnectTimer_->stop();
-            // Refresh current page on reconnect
-            refreshCurrentPage();
-        });
-        connect(rpcClient_, &RpcClient::disconnected, this, [this]() {
-            onConnectionChanged(false);
-            // Start auto-reconnect timer when disconnected
-            if (!reconnectTimer_->isActive())
-                reconnectTimer_->start();
-        });
-        connect(rpcClient_, &RpcClient::transportError, this, [this](const QString &) {
-            // On transport error, ensure reconnect timer is running
-            if (!rpcClient_->isConnected() && !reconnectTimer_->isActive())
-                reconnectTimer_->start();
-        });
-    }
+    contentStack_ = new QStackedWidget(this);
 
-    // Connect alarm count changes to badge
-    if (alarmPage_) {
-        connect(alarmPage_, &AlarmPage::alarmCountChanged, this, &MainWindow::setAlarmCount);
-    }
+    // 创建主页
+    QScrollArea *homeScrollArea = new QScrollArea(this);
+    homeScrollArea->setWidgetResizable(true);
+    homeScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    homeScrollArea->setFrameShape(QFrame::NoFrame);
+    homeWidget_ = new HomeWidget(rpcClient_, this);
+    homeScrollArea->setWidget(homeWidget_);
+    QScroller::grabGesture(homeScrollArea->viewport(), QScroller::LeftMouseButtonGesture);
+    connect(homeWidget_, &HomeWidget::mqttStatusUpdated, this, &MainWindow::onMqttStatusFromDashboard);
+    contentStack_->addWidget(homeScrollArea);
 
-    // Connect emergency stop to RPC call
-    if (dashboardPage_ && rpcClient_) {
-        connect(dashboardPage_, &DashboardPage::emergencyStopClicked, this, [this]() {
-            if (rpcClient_->isConnected()) {
-                rpcClient_->callAsync(
-                    QStringLiteral("relay.emergencyStop"),
-                    QJsonObject());
-            }
-        });
+    // 创建设备管理页面
+    QScrollArea *greenhouseScrollArea = new QScrollArea(this);
+    greenhouseScrollArea->setWidgetResizable(true);
+    greenhouseScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    greenhouseScrollArea->setFrameShape(QFrame::NoFrame);
+    greenhouse3dWidget_ = new Greenhouse3DWidget(rpcClient_, this);
+    greenhouseScrollArea->setWidget(greenhouse3dWidget_);
+    QScroller::grabGesture(greenhouseScrollArea->viewport(), QScroller::LeftMouseButtonGesture);
+    connect(greenhouse3dWidget_, &Greenhouse3DWidget::logMessage, this, &MainWindow::onLogMessage);
+    contentStack_->addWidget(greenhouseScrollArea);
+
+    // 创建设备管理页面
+    QScrollArea *deviceScrollArea = new QScrollArea(this);
+    deviceScrollArea->setWidgetResizable(true);
+    deviceScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    deviceScrollArea->setFrameShape(QFrame::NoFrame);
+    deviceWidget_ = new DeviceWidget(rpcClient_, this);
+    deviceScrollArea->setWidget(deviceWidget_);
+    QScroller::grabGesture(deviceScrollArea->viewport(), QScroller::LeftMouseButtonGesture);
+    connect(deviceWidget_, &DeviceWidget::logMessage, this, &MainWindow::onLogMessage);
+    contentStack_->addWidget(deviceScrollArea);
+
+    // 创建分组管理页面
+    QScrollArea *groupScrollArea = new QScrollArea(this);
+    groupScrollArea->setWidgetResizable(true);
+    groupScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    groupScrollArea->setFrameShape(QFrame::NoFrame);
+    groupWidget_ = new GroupWidget(rpcClient_, this);
+    groupScrollArea->setWidget(groupWidget_);
+    QScroller::grabGesture(groupScrollArea->viewport(), QScroller::LeftMouseButtonGesture);
+    connect(groupWidget_, &GroupWidget::logMessage, this, &MainWindow::onLogMessage);
+    contentStack_->addWidget(groupScrollArea);
+
+    // 创建策略管理页面
+    QScrollArea *strategyScrollArea = new QScrollArea(this);
+    strategyScrollArea->setWidgetResizable(true);
+    strategyScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    strategyScrollArea->setFrameShape(QFrame::NoFrame);
+    strategyWidget_ = new StrategyWidget(rpcClient_, this);
+    strategyScrollArea->setWidget(strategyWidget_);
+    QScroller::grabGesture(strategyScrollArea->viewport(), QScroller::LeftMouseButtonGesture);
+    connect(strategyWidget_, &StrategyWidget::logMessage, this, &MainWindow::onLogMessage);
+    contentStack_->addWidget(strategyScrollArea);
+
+    // 创建传感器监控页面
+    QScrollArea *sensorScrollArea = new QScrollArea(this);
+    sensorScrollArea->setWidgetResizable(true);
+    sensorScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    sensorScrollArea->setFrameShape(QFrame::NoFrame);
+    sensorWidget_ = new SensorWidget(rpcClient_, this);
+    sensorScrollArea->setWidget(sensorWidget_);
+    QScroller::grabGesture(sensorScrollArea->viewport(), QScroller::LeftMouseButtonGesture);
+    connect(sensorWidget_, &SensorWidget::logMessage, this, &MainWindow::onLogMessage);
+    contentStack_->addWidget(sensorScrollArea);
+
+    // 创建日志页面
+    QScrollArea *logScrollArea = new QScrollArea(this);
+    logScrollArea->setWidgetResizable(true);
+    logScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    logScrollArea->setFrameShape(QFrame::NoFrame);
+    logWidget_ = new LogWidget(this);
+    logScrollArea->setWidget(logWidget_);
+    QScroller::grabGesture(logScrollArea->viewport(), QScroller::LeftMouseButtonGesture);
+    connect(logWidget_, &LogWidget::newAlertMessage, this, [this](const QString &message) {
+        lastAlertMessage_ = message;
+        alertLabel_->setText(QStringLiteral("[警] %1").arg(message));
+    });
+    contentStack_->addWidget(logScrollArea);
+
+    // 创建设置页面
+    QScrollArea *settingsScrollArea = new QScrollArea(this);
+    settingsScrollArea->setWidgetResizable(true);
+    settingsScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    settingsScrollArea->setFrameShape(QFrame::NoFrame);
+    settingsWidget_ = new SettingsWidget(rpcClient_, this);
+    settingsScrollArea->setWidget(settingsWidget_);
+    QScroller::grabGesture(settingsScrollArea->viewport(), QScroller::LeftMouseButtonGesture);
+    connect(settingsWidget_, &SettingsWidget::connectionStatusChanged,
+            this, &MainWindow::onConnectionStatusChanged);
+    connect(settingsWidget_, &SettingsWidget::logMessage, this, &MainWindow::onLogMessage);
+    connect(settingsWidget_, &SettingsWidget::autoScreenOffSettingsChanged,
+            this, &MainWindow::onAutoScreenOffSettingsChanged);
+    contentStack_->addWidget(settingsScrollArea);
+
+    // 创建监控页面
+    QScrollArea *monitorScrollArea = new QScrollArea(this);
+    monitorScrollArea->setWidgetResizable(true);
+    monitorScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    monitorScrollArea->setFrameShape(QFrame::NoFrame);
+    monitorWidget_ = new MonitorWidget(rpcClient_, this);
+    monitorScrollArea->setWidget(monitorWidget_);
+    QScroller::grabGesture(monitorScrollArea->viewport(), QScroller::LeftMouseButtonGesture);
+    contentStack_->addWidget(monitorScrollArea);
+
+    // 初始化自动息屏
+    QSettings settings;
+    bool autoScreenOff = settings.value(QStringLiteral("settings/autoScreenOff"), false).toBool();
+    int screenOffTimeout = settings.value(QStringLiteral("settings/screenOffTimeout"), 60).toInt();
+    if (autoScreenOff) {
+        screenManager_->enableAutoScreenOff(screenOffTimeout);
     }
 }
 
-// ── Page Switching ───────────────────────────────────────
+void MainWindow::onMenuButtonClicked(int index)
+{
+    qDebug() << "[MAIN_WINDOW] 菜单按钮点击 index=" << index;
+    switchToPage(index);
+}
 
 void MainWindow::switchToPage(int index)
 {
-    if (index < 0 || index >= Style::PageCount)
+    if (index < 0 || index >= contentStack_->count()) {
         return;
+    }
 
-    currentPage_ = index;
+    currentPageIndex_ = index;
     contentStack_->setCurrentIndex(index);
+    updateMenuSelection(index);
 
-    for (int i = 0; i < 6; ++i) {
-        bool active = (i == index);
-        navButtons_[i]->setProperty("active",
-                                    active ? QStringLiteral("true")
-                                           : QStringLiteral("false"));
-        // Force style refresh
-        navButtons_[i]->style()->unpolish(navButtons_[i]);
-        navButtons_[i]->style()->polish(navButtons_[i]);
+    if (index == 0 && homeWidget_ && rpcClient_->isConnected()) {
+        homeWidget_->refreshData();
     }
-
-    // Refresh page data on switch
-    refreshCurrentPage();
+    if (index == 1 && greenhouse3dWidget_ && rpcClient_->isConnected()) {
+        // 3D页面会自动刷新分组映射，这里不做阻塞调用
+    }
+    if (index == 2 && deviceWidget_ && rpcClient_->isConnected()) {
+        deviceWidget_->refreshDeviceList();
+    }
+    if (index == 3 && groupWidget_ && rpcClient_->isConnected()) {
+        groupWidget_->refreshGroupList();
+    }
+    if (index == 4 && strategyWidget_ && rpcClient_->isConnected()) {
+        strategyWidget_->refreshAllStrategies();
+    }
+    if (index == 5 && sensorWidget_ && rpcClient_->isConnected()) {
+        sensorWidget_->refreshSensorList();
+    }
+    if (index == 8 && monitorWidget_) {
+        monitorWidget_->refreshData();
+    }
 }
 
-// ── Alarm Badge ──────────────────────────────────────────
-
-void MainWindow::setAlarmCount(int count)
+void MainWindow::updateMenuSelection(int activeIndex)
 {
-    if (count > 0) {
-        alarmBadge_->setText(QString::number(count));
-        alarmBadge_->show();
+    if (activeIndex >= 0 && activeIndex < menuButtons_.size()) {
+        menuButtons_[activeIndex]->setChecked(true);
+    }
+}
+
+void MainWindow::onConnectionStatusChanged(bool connected)
+{
+    updateStatusBarConnection(connected);
+    if (connected) {
+        QSettings settings;
+        int interval = settings.value(QStringLiteral("settings/refreshInterval"), 5).toInt();
+        autoRefreshTimer_->start(interval * 1000);
+
+        if (homeWidget_) homeWidget_->refreshData();
+        if (deviceWidget_) deviceWidget_->refreshDeviceList();
+        if (groupWidget_) groupWidget_->refreshGroupList();
+        if (strategyWidget_) strategyWidget_->refreshAllStrategies();
+        if (sensorWidget_) sensorWidget_->refreshSensorList();
+
+        onLogMessage(QStringLiteral("[OK] 已连接到服务器 %1:%2")
+            .arg(rpcClient_->host()).arg(rpcClient_->port()));
+        qDebug() << "[MAIN_WINDOW] 已连接到服务器" << rpcClient_->host() << ":" << rpcClient_->port();
     } else {
-        alarmBadge_->hide();
+        autoRefreshTimer_->stop();
+        onLogMessage(QStringLiteral("[X] 服务器连接已断开"), QStringLiteral("WARN"));
+        qDebug() << "[MAIN_WINDOW] 服务器连接已断开";
     }
 }
 
-// ── Clock ────────────────────────────────────────────────
-
-void MainWindow::updateClock()
-{
-    headerTime_->setText(
-        QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss")));
-}
-
-// ── Connection State ─────────────────────────────────────
-
-void MainWindow::onConnectionChanged(bool connected)
+void MainWindow::updateStatusBarConnection(bool connected)
 {
     if (connected) {
-        connectionIndicator_->setText(QStringLiteral("● 在线"));
-        connectionIndicator_->setStyleSheet(
-            QStringLiteral("color: %1; font-size: %2px;")
-                .arg(Style::kColorSuccess)
-                .arg(Style::kFontSmall));
-        headerStatus_->setText(QStringLiteral("运行中"));
-        headerStatus_->setStyleSheet(
-            QStringLiteral("QLabel#headerStatus {"
-                           "  background: rgba(16,185,129,0.2);"
-                           "  color: %1;"
-                           "  border: 1px solid rgba(16,185,129,0.3);"
-                           "  border-radius: 10px;"
-                           "  padding: 2px 8px;"
-                           "  font-size: %2px;"
-                           "}")
-                .arg(Style::kColorSuccess)
-                .arg(Style::kFontSmall));
+        connectionStatusLabel_->setText(QStringLiteral("[OK] 已连接"));
+        connectionStatusLabel_->setStyleSheet(QStringLiteral(
+            "color: #43a047; font-weight: bold; padding: 2px 8px;"));
+        alertLabel_->setText(QStringLiteral("[OK] 系统运行正常"));
+        alertLabel_->setStyleSheet(QStringLiteral(
+            "color: #546e7a; padding: 2px 8px;"));
     } else {
-        bool isReconnecting = reconnectTimer_ && reconnectTimer_->isActive();
-        connectionIndicator_->setText(
-            isReconnecting ? QStringLiteral("● 重连中") : QStringLiteral("● 离线"));
-        connectionIndicator_->setStyleSheet(
-            QStringLiteral("color: %1; font-size: %2px;")
-                .arg(isReconnecting ? Style::kColorWarning : Style::kColorDanger)
-                .arg(Style::kFontSmall));
-        headerStatus_->setText(
-            isReconnecting ? QStringLiteral("连接中...") : QStringLiteral("离线"));
-        headerStatus_->setStyleSheet(
-            QStringLiteral("QLabel#headerStatus {"
-                           "  background: rgba(%1,0.2);"
-                           "  color: %2;"
-                           "  border: 1px solid rgba(%1,0.3);"
-                           "  border-radius: 10px;"
-                           "  padding: 2px 8px;"
-                           "  font-size: %3px;"
-                           "}")
-                .arg(isReconnecting ? QStringLiteral("245,158,11")
-                                    : QStringLiteral("239,68,68"))
-                .arg(isReconnecting ? Style::kColorWarning : Style::kColorDanger)
-                .arg(Style::kFontSmall));
+        connectionStatusLabel_->setText(QStringLiteral("[X] 未连接"));
+        connectionStatusLabel_->setStyleSheet(QStringLiteral(
+            "color: #e53935; font-weight: bold; padding: 2px 8px;"));
     }
 }
 
-// ── Auto Connect ─────────────────────────────────────────
-
-void MainWindow::startAutoConnect()
+void MainWindow::onAutoRefreshTimeout()
 {
-    if (!rpcClient_)
-        return;
-
-    // Initial connection attempt (async, non-blocking)
-    onConnectionChanged(false);
-    rpcClient_->connectToServerAsync();
-
-    // Start reconnect timer in case initial connection fails
-    if (!reconnectTimer_->isActive())
-        reconnectTimer_->start();
-}
-
-void MainWindow::tryConnect()
-{
-    if (!rpcClient_)
-        return;
-
     if (rpcClient_->isConnected()) {
-        reconnectTimer_->stop();
+        switch (currentPageIndex_) {
+        case 0:
+            if (homeWidget_) homeWidget_->refreshData();
+            break;
+        case 2:
+            if (deviceWidget_) deviceWidget_->refreshDeviceStatus();
+            updateCloudStatus();
+            break;
+        default:
+            updateCloudStatus();
+            break;
+        }
+    }
+}
+
+void MainWindow::onLogMessage(const QString &message, const QString &level)
+{
+    if (logWidget_) {
+        logWidget_->appendLog(message, level);
+    }
+
+    if (level == QStringLiteral("ERROR")) {
+        alertLabel_->setText(QStringLiteral("[X] %1").arg(message));
+        alertLabel_->setStyleSheet(QStringLiteral(
+            "color: #e53935; padding: 2px 8px; font-weight: bold;"));
+    } else if (level == QStringLiteral("WARN")) {
+        alertLabel_->setText(QStringLiteral("[警] %1").arg(message));
+        alertLabel_->setStyleSheet(QStringLiteral(
+            "color: #fb8c00; padding: 2px 8px; font-weight: bold;"));
+    } else if (level == QStringLiteral("INFO")) {
+        alertLabel_->setText(QStringLiteral("[OK] %1").arg(message));
+        alertLabel_->setStyleSheet(QStringLiteral(
+            "color: #43a047; padding: 2px 8px;"));
+    }
+}
+
+void MainWindow::updateStatusBarTime()
+{
+    timeLabel_->setText(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss")));
+}
+
+void MainWindow::attemptAutoConnect()
+{
+    QSettings settings;
+    bool autoConnect = settings.value(QStringLiteral("settings/autoConnect"), false).toBool();
+
+    if (!autoConnect) {
+        onLogMessage(QStringLiteral("自动连接未启用"));
         return;
     }
 
-    rpcClient_->connectToServerAsync();
+    QString host = settings.value(QStringLiteral("connection/host"), QStringLiteral("127.0.0.1")).toString();
+    quint16 port = static_cast<quint16>(settings.value(QStringLiteral("connection/port"), 12345).toInt());
+
+    onLogMessage(QStringLiteral("正在自动连接到 %1:%2...").arg(host).arg(port));
+
+    rpcClient_->setEndpoint(host, port);
+
+    if (rpcClient_->connectToServer(3000)) {
+        onLogMessage(QStringLiteral("自动连接成功"));
+
+        QJsonValue result = rpcClient_->call(QStringLiteral("rpc.ping"), QJsonObject(), 1000);
+        if (!result.isUndefined()) {
+            onLogMessage(QStringLiteral("服务器响应正常"));
+        }
+
+        onConnectionStatusChanged(true);
+    } else {
+        onLogMessage(QStringLiteral("自动连接失败，请检查服务器是否运行"), QStringLiteral("WARN"));
+    }
 }
 
-// ── Auto Refresh ─────────────────────────────────────────
-
-void MainWindow::refreshCurrentPage()
+void MainWindow::updateCloudStatus()
 {
-    if (!rpcClient_ || !rpcClient_->isConnected())
+    if (!rpcClient_->isConnected()) {
+        cloudStatusLabel_->setText(QStringLiteral("[云] 未连接"));
+        cloudStatusLabel_->setStyleSheet(QStringLiteral(
+            "color: #78909c; padding: 2px 8px;"));
         return;
+    }
 
-    switch (currentPage_) {
-    case Style::PageDashboard:
-        if (dashboardPage_) dashboardPage_->refreshData();
-        break;
-    case Style::PageDeviceControl:
-        if (deviceControlPage_) deviceControlPage_->refreshData();
-        break;
-    case Style::PageScenes:
-        if (scenePage_) scenePage_->refreshData();
-        break;
-    case Style::PageAlarms:
-        if (alarmPage_) alarmPage_->refreshData();
-        break;
-    case Style::PageSensors:
-        if (sensorPage_) sensorPage_->refreshData();
-        break;
-    case Style::PageSettings:
-        if (settingsPage_) settingsPage_->refreshSysInfo();
-        break;
-    default:
-        break;
+    static qint64 lastCallTime = 0;
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+
+    if (now - lastCallTime < 3000) {
+        return;
+    }
+    lastCallTime = now;
+
+    rpcClient_->callAsync(QStringLiteral("mqtt.channels.list"), QJsonObject(),
+        [this](const QJsonValue &result, const QJsonObject &error) {
+            QMetaObject::invokeMethod(this, [result, error, this]() {
+                if (!cloudStatusLabel_) return;
+
+                if (!error.isEmpty() || !result.isObject()) {
+                    cloudStatusLabel_->setText(QStringLiteral("[云] 未知"));
+                    cloudStatusLabel_->setStyleSheet(QStringLiteral(
+                        "color: #78909c; padding: 2px 8px;"));
+                    return;
+                }
+
+                QJsonObject resultObj = result.toObject();
+
+                if (!resultObj.value(QStringLiteral("ok")).toBool()) {
+                    cloudStatusLabel_->setText(QStringLiteral("[云] 未知"));
+                    cloudStatusLabel_->setStyleSheet(QStringLiteral(
+                        "color: #78909c; padding: 2px 8px;"));
+                    return;
+                }
+
+                QJsonArray channels = resultObj.value(QStringLiteral("channels")).toArray();
+
+                int totalChannels = channels.size();
+                int connectedChannels = 0;
+
+                for (const QJsonValue &channelVal : channels) {
+                    QJsonObject channel = channelVal.toObject();
+                    if (channel.value(QStringLiteral("connected")).toBool()) {
+                        connectedChannels++;
+                    }
+                }
+
+                QString text;
+                QString style;
+                if (totalChannels == 0) {
+                    text = QStringLiteral("[云] 未配置");
+                    style = QStringLiteral("color: #78909c; padding: 2px 8px;");
+                } else if (connectedChannels == 0) {
+                    text = QStringLiteral("[云] 断开 (0/%1)").arg(totalChannels);
+                    style = QStringLiteral("color: #e53935; padding: 2px 8px; font-weight: bold;");
+                } else if (connectedChannels == totalChannels) {
+                    text = QStringLiteral("[云] 已连接 (%1)").arg(totalChannels);
+                    style = QStringLiteral("color: #43a047; padding: 2px 8px; font-weight: bold;");
+                } else {
+                    text = QStringLiteral("[云] 部分连接 (%1/%2)").arg(connectedChannels).arg(totalChannels);
+                    style = QStringLiteral("color: #fb8c00; padding: 2px 8px; font-weight: bold;");
+                }
+
+                cloudStatusLabel_->setText(text);
+                cloudStatusLabel_->setStyleSheet(style);
+            }, Qt::QueuedConnection);
+        }, 2000);
+}
+
+void MainWindow::onMqttStatusFromDashboard(int connected, int total)
+{
+    QString text;
+    QString style;
+    if (total == 0) {
+        text = QStringLiteral("[云] 未配置");
+        style = QStringLiteral("color: #78909c; padding: 2px 8px;");
+    } else if (connected == 0) {
+        text = QStringLiteral("[云] 断开 (0/%1)").arg(total);
+        style = QStringLiteral("color: #e53935; padding: 2px 8px; font-weight: bold;");
+    } else if (connected == total) {
+        text = QStringLiteral("[云] 已连接 (%1)").arg(total);
+        style = QStringLiteral("color: #43a047; padding: 2px 8px; font-weight: bold;");
+    } else {
+        text = QStringLiteral("[云] 部分连接 (%1/%2)").arg(connected).arg(total);
+        style = QStringLiteral("color: #fb8c00; padding: 2px 8px; font-weight: bold;");
+    }
+    cloudStatusLabel_->setText(text);
+    cloudStatusLabel_->setStyleSheet(style);
+}
+
+void MainWindow::onAutoScreenOffSettingsChanged(bool enabled, int timeoutSeconds)
+{
+    if (enabled) {
+        screenManager_->setScreenOffTimeout(timeoutSeconds);
+        screenManager_->enableAutoScreenOff(timeoutSeconds);
+        qDebug() << "[MAIN_WINDOW] 自动息屏已启用，超时时间:" << timeoutSeconds << "秒";
+    } else {
+        screenManager_->disableAutoScreenOff();
+        qDebug() << "[MAIN_WINDOW] 自动息屏已禁用";
     }
 }

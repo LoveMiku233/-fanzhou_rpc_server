@@ -56,6 +56,8 @@ private slots:
 
 private:
     void processLines(QTcpSocket *socket);
+    static int findJsonObjectEnd(const QByteArray &buffer, int startIndex);
+    static QString requestIdToString(const QJsonValue &id);
     static QByteArray toLine(const QJsonObject &obj);
     
     /**
@@ -73,6 +75,7 @@ private:
 
     static constexpr int kMaxBufferSize = 1024 * 1024;  ///< 单个连接最大缓冲区1MB
     static constexpr int kMaxConnections = 64;          ///< 最大并发连接数
+    static constexpr int kMaxRequestsPerCycle = 64;     ///< 每次readyRead最多处理请求数，避免单连接饿死
 };
 
 }  // namespace rpc

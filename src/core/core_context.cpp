@@ -15,6 +15,7 @@
 #include "cloud/fanzhoucloud/parser.h"
 #include "device/can/can_device_manager.h"
 #include "device/can/relay_gd427.h"
+#include "rpc/device_tcp_server.h"
 #include "utils/logger.h"
 
 #include <QDateTime>
@@ -38,6 +39,876 @@ constexpr int kMaxChannelId = 3;  ///< 最大通道ID（0-3表示4个通道）
 constexpr double kFloatCompareEpsilon = 0.1;  ///< 浮点数比较精度
 constexpr int kChannelKeyMultiplier = 256;  ///< 通道键编码乘数：channelKey = nodeId * 256 + channel
 constexpr int kMinChannelsForMultiControl = 2;  ///< 触发controlMulti合并的最小通道数
+constexpr qint64 kStrategyTriggerMinIntervalMs = 10000;  ///< 同一策略最小触发间隔
+constexpr int kStrategyQueueBackpressureThreshold = 200; ///< 队列积压阈值（超过后暂停策略触发）
+constexpr qint64 kBackpressureLogIntervalMs = 10000;     ///< 积压告警最小间隔
+
+struct EffectiveTimeRange {
+    bool valid = false;
+    QTime begin;
+    QTime end;
+};
+
+int makeChannelKey(quint8 node, quint8 channel)
+{
+    return static_cast<int>(node) * kChannelKeyMultiplier + static_cast<int>(channel);
+}
+
+quint8 channelKeyToNode(int key)
+{
+    return static_cast<quint8>(key / kChannelKeyMultiplier);
+}
+
+quint8 channelKeyToChannel(int key)
+{
+    return static_cast<quint8>(key % kChannelKeyMultiplier);
+}
+
+bool isChannelKeyForNode(int key, quint8 nodeId)
+{
+    const int baseKey = static_cast<int>(nodeId) * kChannelKeyMultiplier;
+    return key >= baseKey && key < baseKey + kChannelKeyMultiplier;
+}
+
+bool isDebugLogEnabled()
+{
+    return Logger::instance().minLevel() <= LogLevel::Debug;
+}
+
+EffectiveTimeRange parseEffectiveTimeRangeCached(const QString &beginStr, const QString &endStr)
+{
+    static QHash<QString, EffectiveTimeRange> cache;
+    const QString key = beginStr + QLatin1Char('|') + endStr;
+    auto it = cache.find(key);
+    if (it != cache.end()) {
+        return it.value();
+    }
+
+    EffectiveTimeRange range;
+    range.begin = QTime::fromString(beginStr, "HH:mm");
+    range.end = QTime::fromString(endStr, "HH:mm");
+    range.valid = range.begin.isValid() && range.end.isValid();
+    cache.insert(key, range);
+    return range;
+}
+
+int findStrategyIndexById(const QList<AutoStrategy> &strategies, int strategyId)
+{
+    for (int i = 0; i < strategies.size(); ++i) {
+        if (strategies[i].strategyId == strategyId) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+AutoStrategy *findMutableStrategyById(QList<AutoStrategy> &strategies, int strategyId)
+{
+    const int index = findStrategyIndexById(strategies, strategyId);
+    if (index < 0) {
+        return nullptr;
+    }
+    return &strategies[index];
+}
+
+void syncStrategyUpsertToCloud(cloud::fanzhoucloud::CloudMessageHandler *handler,
+                               const AutoStrategy &strategy,
+                               bool isUpdate)
+{
+    if (!handler) {
+        return;
+    }
+    QJsonObject msg;
+    msg.insert(QStringLiteral("method"), QStringLiteral("set"));
+    if (handler->sendStrategyCommand(strategy, msg)) {
+        return;
+    }
+
+    if (isUpdate) {
+        LOG_WARNING(kLogSource,
+                    QStringLiteral("Failed to sync updated strategy %1 (v%2) to cloud")
+                        .arg(strategy.strategyId)
+                        .arg(strategy.version));
+        return;
+    }
+
+    LOG_WARNING(kLogSource,
+                QStringLiteral("Failed to sync created strategy %1 to cloud")
+                    .arg(strategy.strategyId));
+}
+
+void syncStrategyDeleteToCloud(cloud::fanzhoucloud::CloudMessageHandler *handler,
+                               int strategyId,
+                               const QString &strategyType,
+                               qint64 nowMs)
+{
+    if (!handler) {
+        return;
+    }
+
+    const int channelId = handler->getChannelId();
+    if (channelId < 0) {
+        return;
+    }
+
+    QJsonObject cloudMsg;
+    cloudMsg.insert(QStringLiteral("data"), strategyId);
+    cloudMsg.insert(QStringLiteral("type"), strategyType);
+    cloudMsg.insert(QStringLiteral("requestId"),
+                    QStringLiteral("local_del_%1_%2").arg(strategyId).arg(nowMs));
+    cloudMsg.insert(QStringLiteral("timestamp"), nowMs);
+
+    if (!handler->sendDeleteCommand(channelId, cloudMsg)) {
+        LOG_WARNING(kLogSource,
+                    QStringLiteral("Failed to sync delete to cloud for strategy %1")
+                        .arg(strategyId));
+        return;
+    }
+
+    LOG_DEBUG(kLogSource,
+              QStringLiteral("Synced delete to cloud: strategy=%1, channel=%2")
+                  .arg(strategyId)
+                  .arg(channelId));
+}
+
+qint32 allocateAutoStrategyGroupId(const QHash<int, QList<quint8>> &deviceGroups)
+{
+    if (deviceGroups.isEmpty()) {
+        return 1;
+    }
+    return static_cast<qint32>(deviceGroups.keys().last() + 1);
+}
+
+void setErrorIfPresent(QString *error, const QString &message)
+{
+    if (error) {
+        *error = message;
+    }
+}
+
+void setBoolIfPresent(bool *flag, bool value)
+{
+    if (flag) {
+        *flag = value;
+    }
+}
+
+bool resolveTargetConfigPath(const QString &inputPath,
+                             const QString &defaultPath,
+                             const QString &emptyPathError,
+                             QString *resolvedPath,
+                             QString *error)
+{
+    const QString targetPath = inputPath.isEmpty() ? defaultPath : inputPath;
+    if (targetPath.isEmpty()) {
+        setErrorIfPresent(error, emptyPathError);
+        return false;
+    }
+    if (resolvedPath) {
+        *resolvedPath = targetPath;
+    }
+    return true;
+}
+
+bool ensureGroupExists(const QHash<int, QList<quint8>> &deviceGroups, int groupId, QString *error)
+{
+    if (deviceGroups.contains(groupId)) {
+        return true;
+    }
+    setErrorIfPresent(error, QStringLiteral("group not found"));
+    return false;
+}
+
+bool ensureRelayExists(const QHash<quint8, device::RelayGd427 *> &relays, quint8 node, QString *error)
+{
+    if (relays.contains(node)) {
+        return true;
+    }
+    setErrorIfPresent(error, QStringLiteral("device not found"));
+    return false;
+}
+
+bool ensureChannelInRange(int channel, QString *error)
+{
+    if (channel >= 0 && channel <= kMaxChannelId) {
+        return true;
+    }
+    setErrorIfPresent(error, QStringLiteral("invalid channel (0-%1)").arg(kMaxChannelId));
+    return false;
+}
+
+bool ensureNodeIdInRange(int nodeId, QString *error)
+{
+    if (nodeId >= 1 && nodeId <= 255) {
+        return true;
+    }
+    setErrorIfPresent(error, QStringLiteral("invalid nodeId (1-255)"));
+    return false;
+}
+
+bool isNodeIdInRange(int nodeId)
+{
+    return nodeId >= 1 && nodeId <= 255;
+}
+
+bool isRelayGd427CommSupported(device::CommTypeId commType)
+{
+    return commType == device::CommTypeId::Can || commType == device::CommTypeId::TcpClient;
+}
+
+device::RelayGd427::TransportType relayTransportFromCommType(device::CommTypeId commType)
+{
+    return (commType == device::CommTypeId::TcpClient)
+               ? device::RelayGd427::TransportType::TcpClient
+               : device::RelayGd427::TransportType::Can;
+}
+
+device::RelayGd427 *createRelayGd427Device(quint8 node,
+                                           device::CommTypeId commType,
+                                           comm::CanComm *canBus,
+                                           device::CanDeviceManager *canManager,
+                                           rpc::DeviceTcpServer *deviceTcpServer,
+                                           QObject *parent)
+{
+    const auto transport = relayTransportFromCommType(commType);
+    auto *dev = new device::RelayGd427(node, canBus, transport, deviceTcpServer, parent);
+    dev->init();
+    if (transport == device::RelayGd427::TransportType::Can && canManager) {
+        canManager->addDevice(dev);
+    }
+    return dev;
+}
+
+void registerRelayDevice(QHash<quint8, device::RelayGd427 *> &relays,
+                         QHash<quint8, DeviceConfig> &deviceConfigs,
+                         quint8 node,
+                         device::RelayGd427 *dev,
+                         const DeviceConfig &config)
+{
+    relays.insert(node, dev);
+    deviceConfigs.insert(node, config);
+}
+
+void appendUniqueNodeToGroup(QHash<int, QList<quint8>> &deviceGroups, int groupId, quint8 node)
+{
+    QList<quint8> &devices = deviceGroups[groupId];
+    if (!devices.contains(node)) {
+        devices.append(node);
+    }
+}
+
+void appendUniqueChannelKey(QHash<int, QList<int>> &groupChannels, int groupId, int channelKey)
+{
+    if (!groupChannels.contains(groupId)) {
+        groupChannels.insert(groupId, {});
+    }
+    QList<int> &channels = groupChannels[groupId];
+    if (!channels.contains(channelKey)) {
+        channels.append(channelKey);
+    }
+}
+
+void removeNodeFromAllGroups(QHash<int, QList<quint8>> &deviceGroups, quint8 nodeId)
+{
+    for (auto it = deviceGroups.begin(); it != deviceGroups.end(); ++it) {
+        it.value().removeAll(nodeId);
+    }
+}
+
+void removeNodeChannelsFromAllGroups(QHash<int, QList<int>> &groupChannels, quint8 nodeId)
+{
+    for (auto it = groupChannels.begin(); it != groupChannels.end(); ++it) {
+        QList<int> &channels = it.value();
+        channels.erase(
+            std::remove_if(channels.begin(), channels.end(),
+                           [nodeId](int key) {
+                               return isChannelKeyForNode(key, nodeId);
+                           }),
+            channels.end());
+    }
+}
+
+void detachAndDeleteRelayIfPresent(QHash<quint8, device::RelayGd427 *> &relays,
+                                   const QHash<quint8, DeviceConfig> &deviceConfigs,
+                                   device::CanDeviceManager *canManager,
+                                   quint8 nodeId)
+{
+    if (!relays.contains(nodeId)) {
+        return;
+    }
+
+    auto *dev = relays.take(nodeId);
+    const auto cfg = deviceConfigs.value(nodeId);
+    if (cfg.commType == device::CommTypeId::Can && canManager) {
+        canManager->removeDevice(dev);
+    }
+    dev->deleteLater();
+}
+
+void loadSensorConfigsFromList(const QList<SensorNodeConfig> &sensors,
+                               QHash<QString, SensorNodeConfig> &sensorConfigs)
+{
+    sensorConfigs.clear();
+    for (const auto &cfg : sensors) {
+        if (cfg.sensorId.isEmpty()) {
+            LOG_WARNING(kLogSource, "skip sensor: empty sensorId");
+            continue;
+        }
+
+        if (cfg.source == SensorSource::Mqtt) {
+            if (cfg.mqttChannelId < 0 || cfg.jsonPath.isEmpty()) {
+                LOG_WARNING(kLogSource,
+                            QStringLiteral("skip mqtt sensor %1: invalid channel or jsonPath")
+                                .arg(cfg.sensorId));
+                continue;
+            }
+        }
+
+        sensorConfigs.insert(cfg.sensorId, cfg);
+        LOG_INFO(kLogSource,
+                 QStringLiteral("load sensor ok: id=%1 source=%2 ch=%3 path=%4")
+                     .arg(cfg.sensorId)
+                     .arg(int(cfg.source))
+                     .arg(cfg.mqttChannelId)
+                     .arg(cfg.jsonPath));
+    }
+}
+
+void loadRelayDevicesFromList(const QList<DeviceConfig> &deviceConfigsFromCoreConfig,
+                              QHash<quint8, device::RelayGd427 *> &relays,
+                              QHash<quint8, DeviceConfig> &deviceConfigs,
+                              comm::CanComm *canBus,
+                              device::CanDeviceManager *canManager,
+                              rpc::DeviceTcpServer *deviceTcpServer,
+                              QObject *parent)
+{
+    LOG_INFO(kLogSource,
+             QStringLiteral("Found %1 devices in config")
+                 .arg(deviceConfigsFromCoreConfig.size()));
+    int canRelayCount = 0;
+    int tcpRelayCount = 0;
+
+    for (const auto &devConfig : deviceConfigsFromCoreConfig) {
+        const bool enabled = devConfig.params.value(QStringLiteral("enabled")).toBool(true);
+        if (!enabled) {
+            LOG_DEBUG(kLogSource,
+                      QStringLiteral("Device '%1' disabled, skipping").arg(devConfig.name));
+            continue;
+        }
+
+        if (devConfig.deviceType != device::DeviceTypeId::RelayGd427 ||
+            !isRelayGd427CommSupported(devConfig.commType)) {
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("Unsupported device type/comm: %1/%2, name=%3")
+                            .arg(static_cast<int>(devConfig.deviceType))
+                            .arg(static_cast<int>(devConfig.commType))
+                            .arg(devConfig.name));
+            continue;
+        }
+
+        if (!isNodeIdInRange(devConfig.nodeId)) {
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("Invalid node ID in config: %1, name=%2")
+                            .arg(devConfig.nodeId)
+                            .arg(devConfig.name));
+            continue;
+        }
+
+        const quint8 node = static_cast<quint8>(devConfig.nodeId);
+        if (relays.contains(node)) {
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("Duplicate relay node in config: %1, skipping")
+                            .arg(static_cast<int>(node)));
+            continue;
+        }
+
+        auto *dev = createRelayGd427Device(node, devConfig.commType, canBus, canManager,
+                                           deviceTcpServer, parent);
+        registerRelayDevice(relays, deviceConfigs, node, dev, devConfig);
+        if (devConfig.commType == device::CommTypeId::Can) {
+            ++canRelayCount;
+        } else if (devConfig.commType == device::CommTypeId::TcpClient) {
+            ++tcpRelayCount;
+        }
+
+        LOG_INFO(kLogSource,
+                 QStringLiteral("RelayGd427 added: node=0x%1, name=%2, comm=%3")
+                     .arg(node, 2, 16, QChar('0'))
+                     .arg(devConfig.name)
+                     .arg(device::commTypeToString(devConfig.commType)));
+    }
+
+    LOG_INFO(kLogSource,
+             QStringLiteral("Relay topology loaded: CAN=%1, TCP=%2, total=%3")
+                 .arg(canRelayCount)
+                 .arg(tcpRelayCount)
+                 .arg(canRelayCount + tcpRelayCount));
+}
+
+void resetGroupMappings(QHash<int, QList<quint8>> &deviceGroups,
+                        QHash<int, QString> &groupNames,
+                        QHash<int, QList<int>> &groupChannels,
+                        int reserveSize)
+{
+    deviceGroups.clear();
+    groupNames.clear();
+    groupChannels.clear();
+    deviceGroups.reserve(reserveSize);
+    groupNames.reserve(reserveSize);
+    groupChannels.reserve(reserveSize);
+}
+
+void loadGroupConfigsFromList(const QList<DeviceGroupConfig> &groups,
+                              QHash<int, QList<quint8>> &deviceGroups,
+                              QHash<int, QString> &groupNames,
+                              QHash<int, QList<int>> &groupChannels)
+{
+    resetGroupMappings(deviceGroups, groupNames, groupChannels, groups.size());
+
+    LOG_INFO(kLogSource,
+             QStringLiteral("Loading %1 device groups...").arg(groups.size()));
+
+    for (const auto &grpConfig : groups) {
+        if (!grpConfig.enabled) {
+            LOG_DEBUG(kLogSource,
+                      QStringLiteral("Device group '%1' disabled, skipping")
+                          .arg(grpConfig.name));
+            continue;
+        }
+
+        QList<quint8> nodes;
+        nodes.reserve(grpConfig.deviceNodes.size());
+        for (int nodeId : grpConfig.deviceNodes) {
+            if (isNodeIdInRange(nodeId)) {
+                nodes.append(static_cast<quint8>(nodeId));
+            }
+        }
+
+        deviceGroups.insert(grpConfig.groupId, nodes);
+        groupNames.insert(grpConfig.groupId, grpConfig.name);
+        if (!grpConfig.channels.isEmpty()) {
+            groupChannels.insert(grpConfig.groupId, grpConfig.channels);
+        }
+
+        LOG_INFO(kLogSource,
+                 QStringLiteral("Device group added: id=%1, name=%2, devices=%3, channels=%4")
+                     .arg(grpConfig.groupId)
+                     .arg(grpConfig.name)
+                     .arg(nodes.size())
+                     .arg(grpConfig.channels.size()));
+    }
+}
+
+bool isPublicMethodPatternMatch(const QString &publicMethodPattern, const QString &method)
+{
+    if (publicMethodPattern == method) {
+        return true;
+    }
+    if (!publicMethodPattern.endsWith(QStringLiteral(".*"))) {
+        return false;
+    }
+
+    const QString prefix = publicMethodPattern.left(publicMethodPattern.length() - 1);
+    return method.startsWith(prefix);
+}
+
+bool isLoopbackWhitelistMatch(const QString &whitelistedIp, const QString &ip)
+{
+    return whitelistedIp == QStringLiteral("localhost") &&
+           (ip == QStringLiteral("127.0.0.1") || ip == QStringLiteral("::1"));
+}
+
+QList<DeviceGroupConfig> buildGroupConfigsFromRuntime(
+    const QHash<int, QList<quint8>> &deviceGroups,
+    const QHash<int, QString> &groupNames,
+    const QHash<int, QList<int>> &groupChannels)
+{
+    QList<DeviceGroupConfig> groups;
+    groups.reserve(deviceGroups.size());
+
+    QList<int> groupIds = deviceGroups.keys();
+    std::sort(groupIds.begin(), groupIds.end());
+    for (int groupId : groupIds) {
+        DeviceGroupConfig grp;
+        grp.groupId = groupId;
+        grp.name = groupNames.value(groupId, QString());
+        grp.enabled = true;
+        const QList<quint8> nodes = deviceGroups.value(groupId);
+        for (quint8 node : nodes) {
+            grp.deviceNodes.append(static_cast<int>(node));
+        }
+        grp.channels = groupChannels.value(groupId, {});
+        groups.append(grp);
+    }
+    return groups;
+}
+
+QJsonArray toJsonIntArray(const QList<int> &values)
+{
+    QJsonArray arr;
+    for (int value : values) {
+        arr.append(value);
+    }
+    return arr;
+}
+
+QJsonArray buildExportGroupArray(const QHash<int, QList<quint8>> &deviceGroups,
+                                 const QHash<int, QString> &groupNames,
+                                 const QHash<int, QList<int>> &groupChannels)
+{
+    QJsonArray groupArr;
+    QList<int> groupIds = deviceGroups.keys();
+    std::sort(groupIds.begin(), groupIds.end());
+    for (int groupId : groupIds) {
+        QJsonObject obj;
+        obj[QStringLiteral("groupId")] = groupId;
+        obj[QStringLiteral("name")] = groupNames.value(groupId, QString());
+
+        QJsonArray devNodes;
+        const QList<quint8> nodes = deviceGroups.value(groupId);
+        for (quint8 node : nodes) {
+            devNodes.append(static_cast<int>(node));
+        }
+        obj[QStringLiteral("devices")] = devNodes;
+        obj[QStringLiteral("deviceCount")] = nodes.size();
+
+        const QList<int> channels = groupChannels.value(groupId, {});
+        if (!channels.isEmpty()) {
+            obj[QStringLiteral("channels")] = toJsonIntArray(channels);
+        }
+
+        groupArr.append(obj);
+    }
+    return groupArr;
+}
+
+QJsonObject buildAuthExportObject(const AuthConfig &authConfig)
+{
+    QJsonObject authObj;
+    authObj[QStringLiteral("enabled")] = authConfig.enabled;
+    authObj[QStringLiteral("tokenExpireSec")] = authConfig.tokenExpireSec;
+    authObj[QStringLiteral("whitelistCount")] = authConfig.whitelist.size();
+    authObj[QStringLiteral("publicMethodsCount")] = authConfig.publicMethods.size();
+    authObj[QStringLiteral("allowedTokensCount")] = authConfig.allowedTokens.size();
+    return authObj;
+}
+
+QJsonObject buildMainExportObject(const MainConfig &mainConfig, const AuthConfig &authConfig)
+{
+    QJsonObject mainObj;
+    mainObj[QStringLiteral("rpcPort")] = static_cast<int>(mainConfig.rpcPort);
+    mainObj[QStringLiteral("auth")] = buildAuthExportObject(authConfig);
+    return mainObj;
+}
+
+QJsonObject buildCanExportObject(const CanConfig &canConfig, const comm::CanComm *canBus)
+{
+    QJsonObject canObj;
+    canObj[QStringLiteral("interface")] = canConfig.interface;
+    canObj[QStringLiteral("bitrate")] = canConfig.bitrate;
+    canObj[QStringLiteral("tripleSampling")] = canConfig.tripleSampling;
+    canObj[QStringLiteral("restartMs")] = canConfig.restartMs;
+    if (canBus) {
+        canObj[QStringLiteral("opened")] = canBus->isOpened();
+        canObj[QStringLiteral("txQueueSize")] = canBus->txQueueSize();
+    }
+    return canObj;
+}
+
+QJsonArray buildDeviceExportArray(const QHash<quint8, DeviceConfig> &deviceConfigs)
+{
+    QJsonArray devArr;
+    QList<quint8> nodeIds = deviceConfigs.keys();
+    std::sort(nodeIds.begin(), nodeIds.end());
+    for (quint8 nodeId : nodeIds) {
+        const DeviceConfig &dev = deviceConfigs.value(nodeId);
+        QJsonObject obj;
+        obj[QStringLiteral("nodeId")] = dev.nodeId;
+        obj[QStringLiteral("name")] = dev.name;
+        obj[QStringLiteral("type")] = static_cast<int>(dev.deviceType);
+        obj[QStringLiteral("commType")] = static_cast<int>(dev.commType);
+        obj[QStringLiteral("bus")] = dev.bus;
+        if (!dev.params.isEmpty()) {
+            obj[QStringLiteral("params")] = dev.params;
+        }
+        devArr.append(obj);
+    }
+    return devArr;
+}
+
+QJsonObject buildScreenExportObject(const ScreenConfig &screenConfig)
+{
+    QJsonObject screenObj;
+    screenObj[QStringLiteral("brightness")] = screenConfig.brightness;
+    screenObj[QStringLiteral("contrast")] = screenConfig.contrast;
+    screenObj[QStringLiteral("enabled")] = screenConfig.enabled;
+    screenObj[QStringLiteral("sleepTimeoutSec")] = screenConfig.sleepTimeoutSec;
+    screenObj[QStringLiteral("orientation")] = screenConfig.orientation;
+    return screenObj;
+}
+
+QList<SensorNodeConfig> buildSensorConfigListFromRuntime(
+    const QHash<QString, SensorNodeConfig> &sensorConfigs)
+{
+    QList<QString> sensorIds = sensorConfigs.keys();
+    std::sort(sensorIds.begin(), sensorIds.end());
+
+    QList<SensorNodeConfig> sensors;
+    sensors.reserve(sensorIds.size());
+    for (const QString &sensorId : sensorIds) {
+        sensors.append(sensorConfigs.value(sensorId));
+    }
+    return sensors;
+}
+
+QList<DeviceConfig> buildDeviceConfigListFromRuntime(const QHash<quint8, DeviceConfig> &deviceConfigs)
+{
+    QList<quint8> nodeIds = deviceConfigs.keys();
+    std::sort(nodeIds.begin(), nodeIds.end());
+
+    QList<DeviceConfig> devices;
+    devices.reserve(nodeIds.size());
+    for (quint8 nodeId : nodeIds) {
+        devices.append(deviceConfigs.value(nodeId));
+    }
+    return devices;
+}
+
+QJsonObject mergeDeviceParams(const QJsonObject &baseParams, const QJsonObject &patchParams)
+{
+    QJsonObject merged = baseParams;
+    for (auto it = patchParams.begin(); it != patchParams.end(); ++it) {
+        if (it.value().isNull()) {
+            merged.remove(it.key());
+        } else {
+            merged.insert(it.key(), it.value());
+        }
+    }
+    return merged;
+}
+
+QList<MqttChannelConfig> getMqttChannelsForSave(
+    cloud::MqttChannelManager *mqttManager,
+    const QList<MqttChannelConfig> &fallbackChannels)
+{
+    if (mqttManager) {
+        return mqttManager->allChannelConfigs();
+    }
+    LOG_WARNING(kLogSource,
+                QStringLiteral("saveConfig: mqttManager is null, keep existing mqttChannels"));
+    return fallbackChannels;
+}
+
+bool syncMqttChannelsToManager(cloud::MqttChannelManager *mqttManager,
+                               const QList<MqttChannelConfig> &targetChannels)
+{
+    if (!mqttManager) {
+        LOG_WARNING(kLogSource,
+                    QStringLiteral("reloadConfig: mqttManager is null, skip runtime MQTT sync"));
+        return false;
+    }
+
+    bool allOk = true;
+    QSet<int> targetIds;
+    for (const auto &cfg : targetChannels) {
+        targetIds.insert(cfg.channelId);
+    }
+
+    const QList<MqttChannelConfig> currentChannels = mqttManager->allChannelConfigs();
+    for (const auto &current : currentChannels) {
+        if (targetIds.contains(current.channelId)) {
+            continue;
+        }
+        QString error;
+        if (!mqttManager->removeChannel(current.channelId, &error)) {
+            allOk = false;
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("Failed to remove MQTT channel %1 on reload: %2")
+                            .arg(current.channelId)
+                            .arg(error));
+        }
+    }
+
+    for (const auto &cfg : targetChannels) {
+        QString error;
+        bool ok = false;
+        if (mqttManager->hasChannel(cfg.channelId)) {
+            ok = mqttManager->updateChannel(cfg, &error);
+        } else {
+            ok = mqttManager->addChannel(cfg, &error);
+        }
+        if (!ok) {
+            allOk = false;
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("Failed to upsert MQTT channel %1 on reload: %2")
+                            .arg(cfg.channelId)
+                            .arg(error));
+        }
+    }
+
+    mqttManager->connectAll();
+    return allOk;
+}
+
+void accumulateGroupControlEnqueueStats(GroupControlStats &stats, const EnqueueResult &result)
+{
+    if (!result.accepted) {
+        stats.missing++;
+        return;
+    }
+    stats.accepted++;
+    stats.jobIds.append(result.jobId);
+}
+
+QHash<quint8, QSet<quint8>> buildNodeChannelsForGroupControl(
+    const QHash<int, QList<quint8>> &deviceGroups,
+    const QHash<int, QList<int>> &groupChannels,
+    const QHash<quint8, device::RelayGd427 *> &relays,
+    int groupId,
+    int channel)
+{
+    QHash<quint8, QSet<quint8>> nodeChannels;
+
+    if (channel >= 0 && channel <= kMaxChannelId) {
+        const QList<quint8> nodes = deviceGroups.value(groupId);
+        for (quint8 node : nodes) {
+            if (!relays.contains(node)) {
+                continue;
+            }
+            nodeChannels[node].insert(static_cast<quint8>(channel));
+        }
+        return nodeChannels;
+    }
+
+    const QList<int> channelKeys = groupChannels.value(groupId, {});
+    if (channelKeys.isEmpty()) {
+        const QList<quint8> nodes = deviceGroups.value(groupId);
+        for (quint8 node : nodes) {
+            if (!relays.contains(node)) {
+                continue;
+            }
+            for (quint8 ch = 0; ch <= kMaxChannelId; ++ch) {
+                nodeChannels[node].insert(ch);
+            }
+        }
+        return nodeChannels;
+    }
+
+    for (int key : channelKeys) {
+        const quint8 node = channelKeyToNode(key);
+        const quint8 ch = channelKeyToChannel(key);
+        if (!relays.contains(node)) {
+            continue;
+        }
+        nodeChannels[node].insert(ch);
+    }
+    return nodeChannels;
+}
+
+int countTotalTargetChannels(const QHash<quint8, QSet<quint8>> &nodeChannels)
+{
+    int total = 0;
+    for (auto it = nodeChannels.begin(); it != nodeChannels.end(); ++it) {
+        total += it.value().size();
+    }
+    return total;
+}
+
+QHash<quint8, QHash<quint8, device::RelayProtocol::Action>>
+buildNodeChannelActions(const QList<BatchControlItem> &items)
+{
+    QHash<quint8, QHash<quint8, device::RelayProtocol::Action>> nodeChannelActions;
+    for (const auto &item : items) {
+        if (item.channel > kMaxChannelId) {
+            continue;
+        }
+        nodeChannelActions[item.node][item.channel] = item.action;
+    }
+    return nodeChannelActions;
+}
+
+void accumulateBatchEnqueueResult(BatchControlResult &result, const EnqueueResult &enqueueResult)
+{
+    if (enqueueResult.accepted) {
+        result.accepted++;
+        result.jobIds.append(enqueueResult.jobId);
+        return;
+    }
+    result.failed++;
+}
+
+device::RelayProtocol::Action actionFromStatusByte(quint8 statusByte)
+{
+    const quint8 mode = device::RelayProtocol::modeBits(statusByte);
+    if (mode == 1) {
+        return device::RelayProtocol::Action::Forward;
+    }
+    if (mode == 2) {
+        return device::RelayProtocol::Action::Reverse;
+    }
+    return device::RelayProtocol::Action::Stop;
+}
+
+void fillActionsFromDeviceState(device::RelayGd427 *device,
+                                device::RelayProtocol::Action actions[4])
+{
+    for (quint8 ch = 0; ch <= kMaxChannelId; ++ch) {
+        const auto status = device->lastStatus(ch);
+        actions[ch] = actionFromStatusByte(status.statusByte);
+    }
+}
+
+bool controlMultiMergedByChannels(device::RelayGd427 *device,
+                                  const QSet<quint8> &channels,
+                                  device::RelayProtocol::Action action)
+{
+    device::RelayProtocol::Action actions[4];
+    fillActionsFromDeviceState(device, actions);
+    for (quint8 ch : channels) {
+        actions[ch] = action;
+    }
+    return device->controlMulti(actions);
+}
+
+bool controlMultiMergedByActions(
+    device::RelayGd427 *device,
+    const QHash<quint8, device::RelayProtocol::Action> &channelActions)
+{
+    device::RelayProtocol::Action actions[4];
+    fillActionsFromDeviceState(device, actions);
+    for (auto it = channelActions.begin(); it != channelActions.end(); ++it) {
+        actions[it.key()] = it.value();
+    }
+    return device->controlMulti(actions);
+}
+
+void recordMultiControlResult(GroupControlStats &stats,
+                              bool ok,
+                              int affectedChannels,
+                              quint64 &nextJobId)
+{
+    stats.optimizedFrameCount++;
+    if (ok) {
+        stats.accepted += affectedChannels;
+        stats.jobIds.append(nextJobId++);
+        return;
+    }
+    stats.missing += affectedChannels;
+}
+
+void recordMultiControlResult(BatchControlResult &result,
+                              bool ok,
+                              int affectedChannels,
+                              quint64 &nextJobId)
+{
+    result.optimizedFrames++;
+    if (ok) {
+        result.accepted += affectedChannels;
+        result.jobIds.append(nextJobId++);
+        return;
+    }
+    result.failed += affectedChannels;
+}
 }  // namespace
 
 CoreContext::CoreContext(QObject *parent)
@@ -186,128 +1057,14 @@ bool CoreContext::initDevices()
 {
     LOG_DEBUG(kLogSource, QStringLiteral("Initializing devices from config..."));
     relays.clear();
-
-    sensorConfigs.clear();
-    for (const auto &cfg : coreConfig.sensors) {
-
-        // 防御性校验（非常重要）
-        if (cfg.sensorId.isEmpty()) {
-            LOG_WARNING(kLogSource, "skip sensor: empty sensorId");
-            continue;
-        }
-
-        if (cfg.source == SensorSource::Mqtt) {
-            if (cfg.mqttChannelId < 0 || cfg.jsonPath.isEmpty()) {
-                LOG_WARNING(kLogSource,
-                         QStringLiteral("skip mqtt sensor %1: invalid channel or jsonPath")
-                         .arg(cfg.sensorId));
-                continue;
-            }
-        }
-
-        sensorConfigs.insert(cfg.sensorId, cfg);
-
-        LOG_INFO(kLogSource,
-                 QStringLiteral("load sensor ok: id=%1 source=%2 ch=%3 path=%4")
-                 .arg(cfg.sensorId)
-                 .arg(int(cfg.source))
-                 .arg(cfg.mqttChannelId)
-                 .arg(cfg.jsonPath));
-    }
+    deviceConfigs.clear();
+    resetGroupMappings(deviceGroups, groupNames, groupChannels, 0);
+    loadSensorConfigsFromList(coreConfig.sensors, sensorConfigs);
 
     if (!coreConfig.devices.isEmpty()) {
-        LOG_INFO(kLogSource,
-                 QStringLiteral("Found %1 devices in config").arg(coreConfig.devices.size()));
-
-        for (const auto &devConfig : coreConfig.devices) {
-            const bool enabled = devConfig.params.value(QStringLiteral("enabled")).toBool(true);
-            if (!enabled) {
-                LOG_DEBUG(kLogSource,
-                          QStringLiteral("Device '%1' disabled, skipping").arg(devConfig.name));
-                continue;
-            }
-
-            if (devConfig.deviceType == device::DeviceTypeId::RelayGd427 &&
-                devConfig.commType == device::CommTypeId::Can) {
-
-                if (devConfig.nodeId < 1 || devConfig.nodeId > 255) {
-                    LOG_WARNING(kLogSource,
-                                QStringLiteral("Invalid node ID in config: %1, name=%2")
-                                    .arg(devConfig.nodeId)
-                                    .arg(devConfig.name));
-                    continue;
-                }
-
-                const quint8 node = static_cast<quint8>(devConfig.nodeId);
-
-                if (relays.contains(node)) {
-                    LOG_WARNING(kLogSource,
-                                QStringLiteral("Duplicate relay node in config: %1, skipping")
-                                    .arg(static_cast<int>(node)));
-                    continue;
-                }
-
-                auto *dev = new device::RelayGd427(node, canBus, this);
-                dev->init();
-                canManager->addDevice(dev);
-                relays.insert(node, dev);
-                deviceConfigs.insert(node, devConfig);
-
-                LOG_INFO(kLogSource,
-                         QStringLiteral("RelayGd427 added: node=0x%1, name=%2")
-                             .arg(node, 2, 16, QChar('0'))
-                             .arg(devConfig.name));
-            } else {
-                LOG_WARNING(kLogSource,
-                            QStringLiteral("Unsupported device type/comm: %1/%2, name=%3")
-                                .arg(static_cast<int>(devConfig.deviceType))
-                                .arg(static_cast<int>(devConfig.commType))
-                                .arg(devConfig.name));
-            }
-        }
-
-        // Load device groups
-        deviceGroups.clear();
-        groupNames.clear();
-        groupChannels.clear();
-        deviceGroups.reserve(coreConfig.groups.size());
-        groupNames.reserve(coreConfig.groups.size());
-        groupChannels.reserve(coreConfig.groups.size());
-
-        LOG_INFO(kLogSource,
-                 QStringLiteral("Loading %1 device groups...").arg(coreConfig.groups.size()));
-
-        for (const auto &grpConfig : coreConfig.groups) {
-            if (!grpConfig.enabled) {
-                LOG_DEBUG(kLogSource,
-                          QStringLiteral("Device group '%1' disabled, skipping")
-                              .arg(grpConfig.name));
-                continue;
-            }
-
-            QList<quint8> nodes;
-            nodes.reserve(grpConfig.deviceNodes.size());
-            for (int nodeId : grpConfig.deviceNodes) {
-                if (nodeId >= 1 && nodeId <= 255) {
-                    nodes.append(static_cast<quint8>(nodeId));
-                }
-            }
-
-            deviceGroups.insert(grpConfig.groupId, nodes);
-            groupNames.insert(grpConfig.groupId, grpConfig.name);
-            
-            // Load group channels
-            if (!grpConfig.channels.isEmpty()) {
-                groupChannels.insert(grpConfig.groupId, grpConfig.channels);
-            }
-
-            LOG_INFO(kLogSource,
-                     QStringLiteral("Device group added: id=%1, name=%2, devices=%3, channels=%4")
-                         .arg(grpConfig.groupId)
-                         .arg(grpConfig.name)
-                         .arg(nodes.size())
-                         .arg(grpConfig.channels.size()));
-        }
+        loadRelayDevicesFromList(coreConfig.devices, relays, deviceConfigs, canBus, canManager,
+                                 deviceTcpServer_, this);
+        loadGroupConfigsFromList(coreConfig.groups, deviceGroups, groupNames, groupChannels);
 
         return true;
     }
@@ -319,7 +1076,7 @@ bool CoreContext::initDevices()
 
 bool CoreContext::initStrategy()
 {
-    strategys_ = coreConfig.strategies;
+    strategies_ = coreConfig.strategies;
     deletedStrategies_.clear();
 
     autoStrategyScheduler_ = new QTimer(this);
@@ -329,7 +1086,7 @@ bool CoreContext::initStrategy()
     autoStrategyScheduler_->start();
 
     LOG_INFO(kLogSource, QStringLiteral("Strategy scheduler initialized with %1 strategies")
-                 .arg(strategys_.size()));
+                 .arg(strategies_.size()));
     return true;
 }
 
@@ -439,16 +1196,12 @@ void CoreContext::initQueue()
 bool CoreContext::isInEffectiveTime(const AutoStrategy &s, const QTime &now) const
 {
     if (s.effectiveBeginTime.isEmpty() || s.effectiveEndTime.isEmpty()) {
-        LOG_DEBUG(kLogSource,
-                  QStringLiteral("strategy[%1] no effective time limit")
-                      .arg(s.strategyId));
         return true;
     }
 
-    QTime begin = QTime::fromString(s.effectiveBeginTime, "HH:mm");
-    QTime end   = QTime::fromString(s.effectiveEndTime,   "HH:mm");
-
-    if (!begin.isValid() || !end.isValid()) {
+    const EffectiveTimeRange range =
+        parseEffectiveTimeRangeCached(s.effectiveBeginTime, s.effectiveEndTime);
+    if (!range.valid) {
         LOG_WARNING(kLogSource,
                     QStringLiteral("strategy[%1] invalid effective time: %2 ~ %3")
                         .arg(s.strategyId)
@@ -457,6 +1210,8 @@ bool CoreContext::isInEffectiveTime(const AutoStrategy &s, const QTime &now) con
         return true;
     }
 
+    const QTime &begin = range.begin;
+    const QTime &end = range.end;
     bool inRange = false;
     if (begin <= end) {
         inRange = (now >= begin && now <= end);
@@ -464,13 +1219,15 @@ bool CoreContext::isInEffectiveTime(const AutoStrategy &s, const QTime &now) con
         inRange = (now >= begin || now <= end);
     }
 
-    LOG_DEBUG(kLogSource,
-              QStringLiteral("strategy[%1] time check: now=%2 range=%3~%4 result=%5")
-                  .arg(s.strategyId)
-                  .arg(now.toString("HH:mm"))
-                  .arg(begin.toString("HH:mm"))
-                  .arg(end.toString("HH:mm"))
-                  .arg(inRange));
+    if (isDebugLogEnabled()) {
+        LOG_DEBUG(kLogSource,
+                  QStringLiteral("strategy[%1] time check: now=%2 range=%3~%4 result=%5")
+                      .arg(s.strategyId)
+                      .arg(now.toString("HH:mm"))
+                      .arg(begin.toString("HH:mm"))
+                      .arg(end.toString("HH:mm"))
+                      .arg(inRange));
+    }
 
     return inRange;
 }
@@ -489,19 +1246,13 @@ void CoreContext::executeActions(const QList<StrategyAction> &actions)
 }
 
 bool CoreContext::evaluateConditions(const QList<StrategyCondition> &conditions,
-                                     qint8 matchType)
+                                     qint8 matchType) const
 {
     if (conditions.isEmpty()) {
-        LOG_DEBUG(kLogSource, "evaluateConditions: no conditions, auto pass");
         return true;
     }
 
     bool hasValidCondition = false;
-
-    LOG_DEBUG(kLogSource,
-              QStringLiteral("evaluateConditions: matchType=%1, condCount=%2")
-                  .arg(matchType)
-                  .arg(conditions.size()));
 
     for (const auto &c : conditions) {
 
@@ -528,12 +1279,10 @@ bool CoreContext::evaluateConditions(const QList<StrategyCondition> &conditions,
 
         if (matchType == 0) { // AND
             if (!ok) {
-                LOG_DEBUG(kLogSource, "AND mode -> one condition failed");
                 return false;
             }
         } else { // OR
             if (ok) {
-                LOG_DEBUG(kLogSource, "OR mode -> one condition matched");
                 return true;
             }
         }
@@ -554,40 +1303,70 @@ bool CoreContext::evaluateConditions(const QList<StrategyCondition> &conditions,
 
 void CoreContext::evaluateAllStrategies()
 {
+    const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+    if (shouldPauseStrategyEvaluation(nowMs)) {
+        return;
+    }
+
     const QDateTime now = QDateTime::currentDateTime();
 
-    for (AutoStrategy &s : strategys_) {
-        if (deletedStrategies_.contains(s.strategyId)) continue;
-        if (s.enabled == false) continue;                  // not enabled, skip
-        if (s.strategyType == QStringLiteral("manual")) continue; // manual策略仅通过手动触发
-
-        if (!isInEffectiveTime(s, now.time()))   // not within the effective time
+    for (AutoStrategy &strategy : strategies_) {
+        if (!shouldEvaluateStrategyNow(strategy, now)) {
             continue;
-        if (s.lastTriggered.isValid()) {
-            if (s.lastTriggered.msecsTo(now) < 10000)
-                continue;
         }
-
-        if (!evaluateConditions(s.conditions, s.matchType))
-            continue;
-
-        s.lastTriggered = now;
-        LOG_INFO(kLogSource, QStringLiteral("Strategy %1 [%2] triggered, executing %3 actions sequentially")
-                     .arg(s.strategyId)
-                     .arg(s.strategyName)
-                     .arg(s.actions.size()));
-        executeActions(s.actions);
-
-
-//          ;2
-//          queueGroupControlOptimized(
-//                    s.groupId,
-//                    -1,
-//                    static_cast<device::RelayProtocol::Action>(a.identifierValue),
-//                    reason
-//                    );
-
+        triggerStrategyActions(strategy, now);
     }
+}
+
+bool CoreContext::shouldPauseStrategyEvaluation(qint64 nowMs)
+{
+    if (controlQueue_.size() < kStrategyQueueBackpressureThreshold) {
+        return false;
+    }
+    if (nowMs - lastStrategyOverloadLogMs_ >= kBackpressureLogIntervalMs) {
+        lastStrategyOverloadLogMs_ = nowMs;
+        LOG_WARNING(kLogSource,
+                    QStringLiteral("strategy scheduler paused: control queue backlog=%1")
+                        .arg(controlQueue_.size()));
+    }
+    return true;
+}
+
+bool CoreContext::shouldEvaluateStrategyNow(const AutoStrategy &strategy, const QDateTime &now) const
+{
+    if (deletedStrategies_.contains(strategy.strategyId)) {
+        return false;
+    }
+    if (!strategy.enabled) {
+        return false;
+    }
+    if (strategy.strategyType == QStringLiteral("manual")) {
+        return false;
+    }
+    if (strategy.actions.isEmpty()) {
+        return false;
+    }
+    if (!isInEffectiveTime(strategy, now.time())) {
+        return false;
+    }
+    if (strategy.lastTriggered.isValid() &&
+        strategy.lastTriggered.msecsTo(now) < kStrategyTriggerMinIntervalMs) {
+        return false;
+    }
+    if (!evaluateConditions(strategy.conditions, strategy.matchType)) {
+        return false;
+    }
+    return true;
+}
+
+void CoreContext::triggerStrategyActions(AutoStrategy &strategy, const QDateTime &now)
+{
+    strategy.lastTriggered = now;
+    LOG_INFO(kLogSource, QStringLiteral("Strategy %1 [%2] triggered, executing %3 actions sequentially")
+                 .arg(strategy.strategyId)
+                 .arg(strategy.strategyName)
+                 .arg(strategy.actions.size()));
+    executeActions(strategy.actions);
 }
 
 int CoreContext::strategyIntervalMs(const AutoStrategy &config) const
@@ -600,7 +1379,7 @@ int CoreContext::strategyIntervalMs(const AutoStrategy &config) const
 QList<AutoStrategyState> CoreContext::strategyStates() const
 {
     QList<AutoStrategyState> states;
-    for (const auto &s: strategys_) {
+    for (const auto &s: strategies_) {
         if (deletedStrategies_.contains(s.strategyId)) continue;
         AutoStrategyState st;
         st.config = s;
@@ -613,131 +1392,117 @@ QList<AutoStrategyState> CoreContext::strategyStates() const
 
 bool CoreContext::setStrategyEnabled(int strategyId, bool enabled)
 {
-    for (auto &s : strategys_) {
-        if (s.strategyId == strategyId) {
-            s.enabled = enabled;
-            LOG_INFO(kLogSource, QStringLiteral("Strategy %1 set enabled=%2")
-                     .arg(strategyId)
-                     .arg(enabled));
-
-            if (!enabled && !s.actions.isEmpty()) {
-                // 策略关闭时，逐个执行Stop动作，避免冲击电网
-                LOG_INFO(kLogSource, QStringLiteral("Strategy %1 disabled, stopping %2 actions sequentially")
-                         .arg(strategyId)
-                         .arg(s.actions.size()));
-                int cnt = 0;
-                for (const auto &a : s.actions) {
-                    cnt++;
-                    const QString source = QStringLiteral("strategy_disable:%1 action:%2")
-                                               .arg(s.strategyName).arg(cnt);
-                    enqueueControl(a.node, a.channel,
-                                   device::RelayProtocol::Action::Stop,
-                                   source, true);
-                }
-            }
-
-            return true;
-        }
+    AutoStrategy *strategy = findMutableStrategyById(strategies_, strategyId);
+    if (!strategy) {
+        LOG_WARNING(kLogSource, QStringLiteral("Strategy %1 not found").arg(strategyId));
+        return false;
     }
-    LOG_WARNING(kLogSource, QStringLiteral("Strategy %1 not found").arg(strategyId));
-    return false;
+
+    strategy->enabled = enabled;
+    LOG_INFO(kLogSource, QStringLiteral("Strategy %1 set enabled=%2")
+                 .arg(strategyId)
+                 .arg(enabled));
+
+    if (!enabled && !strategy->actions.isEmpty()) {
+        stopStrategyActionsSequentially(*strategy);
+    }
+    return true;
+}
+
+void CoreContext::stopStrategyActionsSequentially(const AutoStrategy &strategy)
+{
+    LOG_INFO(kLogSource, QStringLiteral("Strategy %1 disabled, stopping %2 actions sequentially")
+                 .arg(strategy.strategyId)
+                 .arg(strategy.actions.size()));
+    int actionIndex = 0;
+    for (const auto &action : strategy.actions) {
+        actionIndex++;
+        const QString source = QStringLiteral("strategy_disable:%1 action:%2")
+                                   .arg(strategy.strategyName)
+                                   .arg(actionIndex);
+        enqueueControl(action.node,
+                       action.channel,
+                       device::RelayProtocol::Action::Stop,
+                       source,
+                       true);
+    }
 }
 
 bool CoreContext::triggerStrategy(int strategyId)
 {
-    for (auto &s : strategys_) {
-        if (s.strategyId == strategyId) {
-            if (!s.enabled) {
-                LOG_WARNING(kLogSource, QStringLiteral("Strategy %1 is disabled").arg(strategyId));
-                return false;
-            }
-
-            LOG_INFO(kLogSource, QStringLiteral("Triggering strategy %1, executing %2 actions sequentially")
-                         .arg(strategyId)
-                         .arg(s.actions.size()));
-            executeActions(s.actions);
-            return true;
-        }
+    AutoStrategy *strategy = findMutableStrategyById(strategies_, strategyId);
+    if (!strategy) {
+        LOG_WARNING(kLogSource, QStringLiteral("Strategy %1 not found").arg(strategyId));
+        return false;
     }
-    LOG_WARNING(kLogSource, QStringLiteral("Strategy %1 not found").arg(strategyId));
-    return false;
+    if (!strategy->enabled) {
+        LOG_WARNING(kLogSource, QStringLiteral("Strategy %1 is disabled").arg(strategyId));
+        return false;
+    }
+
+    LOG_INFO(kLogSource, QStringLiteral("Triggering strategy %1, executing %2 actions sequentially")
+                 .arg(strategyId)
+                 .arg(strategy->actions.size()));
+    executeActions(strategy->actions);
+    return true;
 }
 
-// @
 bool CoreContext::createStrategy(const AutoStrategy &config, bool *isUpdate, QString *error, bool syncToCloud)
 {
-    // 查找现有策略（无视版本号，找到就更新）
-    for (int i = 0; i < strategys_.size(); ++i) {
-        auto &s = strategys_[i];
-        if (s.strategyId != config.strategyId) continue;
+    Q_UNUSED(error);
 
-        // 找到相同 ID，执行更新
-        AutoStrategy old = s;
+    const int existingIndex = findStrategyIndexById(strategies_, config.strategyId);
+    if (existingIndex >= 0) {
+        return updateExistingStrategy(config, existingIndex, isUpdate, syncToCloud);
+    }
+    return appendNewStrategy(config, isUpdate, syncToCloud);
+}
 
-        // 先复制新配置
-        s = config;
+bool CoreContext::updateExistingStrategy(const AutoStrategy &config,
+                                         int existingIndex,
+                                         bool *isUpdate,
+                                         bool syncToCloud)
+{
+    AutoStrategy &strategy = strategies_[existingIndex];
+    const AutoStrategy previous = strategy;
 
-        // ===== 无视传入的 config.version =====
-        s.version = old.version + 1;
-        // =====================================================================
+    strategy = config;
+    strategy.version = previous.version + 1;
+    strategy.lastTriggered = previous.lastTriggered;
+    strategy.cloudChannelId = previous.cloudChannelId;
 
-        // 保留运行时状态（不覆盖）
-        s.lastTriggered = old.lastTriggered;
-        s.cloudChannelId = old.cloudChannelId;
-        // s.enabled = old.enabled;  // 如需接受云端的 enabled 状态，删除这行
-
-        if (isUpdate) *isUpdate = true;
-
-        LOG_INFO(kLogSource,
-                 QStringLiteral("Updated strategy %1: version %2 -> %3 (auto increment)")
+    if (isUpdate) {
+        *isUpdate = true;
+    }
+    LOG_INFO(kLogSource,
+             QStringLiteral("Updated strategy %1: version %2 -> %3 (auto increment)")
                  .arg(config.strategyId)
-                 .arg(old.version)
-                 .arg(s.version));
+                 .arg(previous.version)
+                 .arg(strategy.version));
 
-        // ========== 同步到云端（携带 +1 后的版本号）==========
-
-        if (syncToCloud && cloudMessageHandler) {
-            QJsonObject msg;
-            msg.insert("method", QStringLiteral("set"));
-            if (!cloudMessageHandler->sendStrategyCommand(s, msg)) {
-                LOG_WARNING(kLogSource,
-                            QStringLiteral("Failed to sync updated strategy %1 (v%2) to cloud")
-                            .arg(config.strategyId)
-                            .arg(s.version));
-            }
-        }
-        // ==================================================
-
-        return true;
+    if (syncToCloud) {
+        syncStrategyUpsertToCloud(cloudMessageHandler, strategy, true);
     }
+    return true;
+}
 
-    // 不存在：新建
-    strategys_.append(config);
-
-    // 如果是新建且版本号无效，可设为 1
-    if (strategys_.last().version <= 0) {
-        strategys_.last().version = 1;
+bool CoreContext::appendNewStrategy(const AutoStrategy &config, bool *isUpdate, bool syncToCloud)
+{
+    strategies_.append(config);
+    AutoStrategy &created = strategies_.last();
+    if (created.version <= 0) {
+        created.version = 1;
     }
-
-    if (isUpdate) *isUpdate = false;
-
+    if (isUpdate) {
+        *isUpdate = false;
+    }
     LOG_INFO(kLogSource, QStringLiteral("Created strategy %1, version=%2")
-             .arg(config.strategyId)
-             .arg(strategys_.last().version));
+                 .arg(config.strategyId)
+                 .arg(created.version));
 
-    // ========== 同步新建到云端 ==========
-    // 删除sceneId
-    if (syncToCloud && cloudMessageHandler) {
-        QJsonObject msg;
-        msg.insert("method", QStringLiteral("set"));
-        if (!cloudMessageHandler->sendStrategyCommand(strategys_.last(), msg)) {
-            LOG_WARNING(kLogSource,
-                       QStringLiteral("Failed to sync created strategy %1 to cloud")
-                       .arg(config.strategyId));
-        }
+    if (syncToCloud) {
+        syncStrategyUpsertToCloud(cloudMessageHandler, created, false);
     }
-    // ====================================
-
     return true;
 }
 
@@ -745,121 +1510,133 @@ bool CoreContext::createStrategy(const AutoStrategy &config, bool *isUpdate, QSt
 bool CoreContext::deleteStrategy(int strategyId, QString *error, bool *alreadyDeleted, bool syncToCloud)
 {
     const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
-    if (alreadyDeleted) *alreadyDeleted = false;
-
-    for (int i = 0; i < strategys_.size(); ++i) {
-        if (strategys_[i].strategyId == strategyId) {
-            // 保存策略信息用于云端同步（在移除前获取）
-            const int deletedVersion = strategys_[i].version;
-            const QString strategyType = strategys_[i].type.isEmpty()
-                ? QStringLiteral("scene")
-                : strategys_[i].type;
-
-            // 本地删除逻辑
-            deletedStrategies_.insert(strategyId,
-                                      { deletedVersion, nowMs });
-            strategys_.removeAt(i);
-
-            LOG_INFO(kLogSource, QStringLiteral("Deleted strategy %1").arg(strategyId));
-
-            // ========== 同步删除到云端 ==========
-            if (syncToCloud && cloudMessageHandler) {
-                int channelId = cloudMessageHandler->getChannelId();
-                if (channelId >= 0) {
-                    QJsonObject cloudMsg;
-                    cloudMsg.insert("data", strategyId);  // 单个ID直接传整数
-                    cloudMsg.insert("type", strategyType);
-                    cloudMsg.insert("requestId", QStringLiteral("local_del_%1_%2")
-                        .arg(strategyId)
-                        .arg(nowMs));
-                    cloudMsg.insert("timestamp", nowMs);
-
-                    if (!cloudMessageHandler->sendDeleteCommand(channelId, cloudMsg)) {
-                        LOG_WARNING(kLogSource,
-                            QStringLiteral("Failed to sync delete to cloud for strategy %1")
-                            .arg(strategyId));
-                        // 继续返回 true，本地删除已成功，云端同步失败可重试或记录
-                    } else {
-                        LOG_DEBUG(kLogSource,
-                            QStringLiteral("Synced delete to cloud: strategy=%1, channel=%2")
-                            .arg(strategyId)
-                            .arg(channelId));
-                    }
-                }
-            }
-            // ====================================
-
-            return true;
-        }
+    if (alreadyDeleted) {
+        *alreadyDeleted = false;
     }
 
-    // 已删除的情况（更新标记但不重复通知云端）
+    const int index = findStrategyIndexById(strategies_, strategyId);
+    if (index >= 0) {
+        return deleteExistingStrategyByIndex(index, strategyId, nowMs, syncToCloud);
+    }
+
+    if (deletedStrategies_.contains(strategyId)) {
+        return markAlreadyDeletedStrategy(strategyId, nowMs, error, alreadyDeleted);
+    }
+
+    return markMissingStrategyDelete(strategyId, nowMs, error);
+}
+
+bool CoreContext::deleteExistingStrategyByIndex(int index,
+                                                int strategyId,
+                                                qint64 nowMs,
+                                                bool syncToCloud)
+{
+    const AutoStrategy removed = strategies_[index];
+    const QString strategyType =
+        removed.type.isEmpty() ? QStringLiteral("scene") : removed.type;
+
+    deletedStrategies_.insert(strategyId, {removed.version, nowMs});
+    strategies_.removeAt(index);
+
+    LOG_INFO(kLogSource, QStringLiteral("Deleted strategy %1").arg(strategyId));
+
+    if (syncToCloud) {
+        // 本地删除成功时不阻断返回，云端同步失败仅告警
+        syncStrategyDeleteToCloud(cloudMessageHandler, strategyId, strategyType, nowMs);
+    }
+    return true;
+}
+
+bool CoreContext::markAlreadyDeletedStrategy(int strategyId,
+                                             qint64 nowMs,
+                                             QString *error,
+                                             bool *alreadyDeleted)
+{
     auto it = deletedStrategies_.find(strategyId);
-    if (it != deletedStrategies_.end()) {
-        it->deleteMs = nowMs;
-        if (alreadyDeleted) *alreadyDeleted = true;
-        if (error) *error = QStringLiteral("Strategy %1 already deleted").arg(strategyId);
+    if (it == deletedStrategies_.end()) {
         return false;
     }
 
-    // 不存在的情况
-    deletedStrategies_.insert(strategyId, { 0, nowMs });
-    if (error) *error = QStringLiteral("StrategyId %1 not found").arg(strategyId);
+    it->deleteMs = nowMs;
+    if (alreadyDeleted) {
+        *alreadyDeleted = true;
+    }
+    setErrorIfPresent(error, QStringLiteral("Strategy %1 already deleted").arg(strategyId));
     return false;
 }
 
-bool CoreContext::setStrategyId(int old_id, int new_id)
+bool CoreContext::markMissingStrategyDelete(int strategyId, qint64 nowMs, QString *error)
 {
-    if (old_id == -1 || new_id <= 0 || old_id == new_id) {
+    deletedStrategies_.insert(strategyId, {0, nowMs});
+    setErrorIfPresent(error, QStringLiteral("StrategyId %1 not found").arg(strategyId));
+    return false;
+}
+
+bool CoreContext::setStrategyId(int oldId, int newId)
+{
+    if (!validateStrategyIdMapping(oldId, newId)) {
+        return false;
+    }
+    if (hasStrategyIdConflict(oldId, newId)) {
+        return false;
+    }
+    return applyStrategyIdRemap(oldId, newId);
+}
+
+bool CoreContext::validateStrategyIdMapping(int oldId, int newId) const
+{
+    if (oldId == -1 || newId <= 0 || oldId == newId) {
         LOG_ERROR(kLogSource,
                   QStringLiteral("invalid strategy id mapping: old=%1 new=%2")
-                  .arg(old_id)
-                  .arg(new_id));
+                      .arg(oldId)
+                      .arg(newId));
+        return false;
+    }
+    return true;
+}
+
+bool CoreContext::hasStrategyIdConflict(int oldId, int newId) const
+{
+    for (const auto &strategy : strategies_) {
+        if (strategy.strategyId != newId) {
+            continue;
+        }
+        LOG_ERROR(kLogSource,
+                  QStringLiteral("strategyId %1 already exists, cannot replace old %2")
+                      .arg(newId)
+                      .arg(oldId));
+        return true;
+    }
+    return false;
+}
+
+bool CoreContext::applyStrategyIdRemap(int oldId, int newId)
+{
+    AutoStrategy *strategy = findMutableStrategyById(strategies_, oldId);
+    if (!strategy) {
+        LOG_ERROR(kLogSource,
+                  QStringLiteral("old strategyId %1 not found when setting newId %2")
+                      .arg(oldId)
+                      .arg(newId));
         return false;
     }
 
-    // new_id 是否已经存在
-    for (const auto &s : strategys_) {
-        if (s.strategyId == new_id) {
-            LOG_ERROR(kLogSource,
-                      QStringLiteral("strategyId %1 already exists, cannot replace old %2")
-                      .arg(new_id)
-                      .arg(old_id));
-            return false;
-        }
+    strategy->strategyId = newId;
+
+    // 云端刚创建时，版本默认至少为 1
+    if (strategy->version <= 0) {
+        strategy->version = 1;
     }
+    strategy->updateTime = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
 
-    for (AutoStrategy &strategy : strategys_) {
-        if (strategy.strategyId == old_id) {
+    LOG_INFO(kLogSource,
+             QStringLiteral("strategyId updated: %1 -> %2")
+                 .arg(oldId)
+                 .arg(newId));
 
-            strategy.strategyId = new_id;
-
-            // 云端刚创建，版本一般以云端为准（默认 1）
-            if (strategy.version <= 0) {
-                strategy.version = 1;
-            }
-
-            strategy.updateTime = QDateTime::currentDateTime()
-                    .toString("yyyy-MM-dd HH:mm:ss");
-
-            LOG_INFO(kLogSource,
-                     QStringLiteral("strategyId updated: %1 -> %2")
-                     .arg(old_id)
-                     .arg(new_id));
-
-            deletedStrategies_.remove(old_id);
-            deletedStrategies_.remove(new_id);
-
-            return true;
-        }
-    }
-
-    LOG_ERROR(kLogSource,
-              QStringLiteral("old strategyId %1 not found when setting newId %2")
-              .arg(old_id)
-              .arg(new_id));
-
-    return false;
+    deletedStrategies_.remove(oldId);
+    deletedStrategies_.remove(newId);
+    return true;
 }
 
 
@@ -884,58 +1661,80 @@ bool CoreContext::evaluateSensorCondition(const QString &op,
 
 bool CoreContext::ensureGroupForStrategy(AutoStrategy &s, QString *error)
 {
-    auto fail = [&](const QString &msg) {
-        if (error) *error = msg;
+    if (!ensureStrategyGroupExists(s, error)) {
         return false;
-    };
-
-    // new
-    if (s.groupId <= 0) {
-        qint32 newGroupId = 1;
-        if (!deviceGroups.isEmpty()) {
-            newGroupId = deviceGroups.keys().last() + 1;
-        }
-
-        QString name = QStringLiteral("auto_strategy_%1").arg(s.strategyId);
-
-        if (!createGroup(newGroupId, name, error)) {
-            return false;
-        }
-
-        s.groupId = newGroupId;
-
-        LOG_INFO(kLogSource, QStringLiteral("Auto create group for Strategy: strategyId=%1, groupId=%2")
-                 .arg(s.strategyId)
-                 .arg(s.groupId));
-
     }
 
-     // updata
     const qint32 groupId = s.groupId;
-    for (const auto &a : s.actions) {
-        const quint8 node = a.node;
-        const quint32 ch = a.channel;
-
-        if (!deviceGroups.contains(groupId) ||
-                !deviceGroups[groupId].contains(node)) {
-
-            if (!addDeviceToGroup(groupId, node, error)) {
-                return fail(QStringLiteral("addDeviceToGroup failed: group=%1 node=%2")
-                            .arg(groupId).arg(node));
-            }
+    for (const auto &action : s.actions) {
+        if (!ensureStrategyActionDeviceInGroup(groupId, action.node, error)) {
+            return false;
         }
-
-        if (ch >= 0) {
-            // groupChannels: groupId -> QList<int>
-            const QList<int> &chs = groupChannels.value(groupId);
-
-            if (!chs.contains(ch)) {
-                if (!addChannelToGroup(groupId, node, ch, error)) {
-                    return fail(QStringLiteral("addChannelToGroup failed: group=%1 node=%2 ch=%3")
-                                .arg(groupId).arg(node).arg(ch));
-                }
-            }
+        if (!ensureStrategyActionChannelInGroup(groupId, action.node, action.channel, error)) {
+            return false;
         }
+    }
+    return true;
+}
+
+bool CoreContext::ensureStrategyGroupExists(AutoStrategy &strategy, QString *error)
+{
+    if (strategy.groupId > 0) {
+        return true;
+    }
+
+    const qint32 newGroupId = allocateAutoStrategyGroupId(deviceGroups);
+    const QString name = QStringLiteral("auto_strategy_%1").arg(strategy.strategyId);
+    if (!createGroup(newGroupId, name, error)) {
+        return false;
+    }
+    strategy.groupId = newGroupId;
+
+    LOG_INFO(kLogSource, QStringLiteral("Auto create group for Strategy: strategyId=%1, groupId=%2")
+                 .arg(strategy.strategyId)
+                 .arg(strategy.groupId));
+    return true;
+}
+
+bool CoreContext::ensureStrategyActionDeviceInGroup(qint32 groupId, quint8 node, QString *error)
+{
+    const bool nodeMissing =
+        !deviceGroups.contains(groupId) || !deviceGroups[groupId].contains(node);
+    if (!nodeMissing) {
+        return true;
+    }
+
+    if (!addDeviceToGroup(groupId, node, error)) {
+        if (error && error->isEmpty()) {
+            setErrorIfPresent(error,
+                              QStringLiteral("addDeviceToGroup failed: group=%1 node=%2")
+                                  .arg(groupId)
+                                  .arg(node));
+        }
+        return false;
+    }
+    return true;
+}
+
+bool CoreContext::ensureStrategyActionChannelInGroup(qint32 groupId,
+                                                     quint8 node,
+                                                     quint32 channel,
+                                                     QString *error)
+{
+    const QList<int> &channels = groupChannels.value(groupId);
+    if (channels.contains(static_cast<int>(channel))) {
+        return true;
+    }
+
+    if (!addChannelToGroup(groupId, node, channel, error)) {
+        if (error && error->isEmpty()) {
+            setErrorIfPresent(error,
+                              QStringLiteral("addChannelToGroup failed: group=%1 node=%2 ch=%3")
+                                  .arg(groupId)
+                                  .arg(node)
+                                  .arg(channel));
+        }
+        return false;
     }
     return true;
 }
@@ -1049,12 +1848,7 @@ GroupControlStats CoreContext::queueGroupControl(int groupId, quint8 channel,
 
     for (quint8 node : nodes) {
         const auto result = enqueueControl(node, channel, action, source, true);
-        if (!result.accepted) {
-            stats.missing++;
-            continue;
-        }
-        stats.accepted++;
-        stats.jobIds.append(result.jobId);
+        accumulateGroupControlEnqueueStats(stats, result);
     }
     return stats;
 }
@@ -1077,12 +1871,7 @@ GroupControlStats CoreContext::queueGroupBoundChannelsControl(int groupId,
         for (quint8 node : nodes) {
             for (quint8 ch = 0; ch <= kMaxChannelId; ++ch) {
                 const auto result = enqueueControl(node, ch, action, source, true);
-                if (!result.accepted) {
-                    stats.missing++;
-                    continue;
-                }
-                stats.accepted++;
-                stats.jobIds.append(result.jobId);
+                accumulateGroupControlEnqueueStats(stats, result);
             }
         }
     } else {
@@ -1090,15 +1879,10 @@ GroupControlStats CoreContext::queueGroupBoundChannelsControl(int groupId,
         // channelKey = nodeId * kChannelKeyMultiplier + channel
         stats.total = channelKeys.size();
         for (int key : channelKeys) {
-            const quint8 node = static_cast<quint8>(key / kChannelKeyMultiplier);
-            const quint8 ch = static_cast<quint8>(key % kChannelKeyMultiplier);
+            const quint8 node = channelKeyToNode(key);
+            const quint8 ch = channelKeyToChannel(key);
             const auto result = enqueueControl(node, ch, action, source, true);
-            if (!result.accepted) {
-                stats.missing++;
-                continue;
-            }
-            stats.accepted++;
-            stats.jobIds.append(result.jobId);
+            accumulateGroupControlEnqueueStats(stats, result);
         }
     }
     
@@ -1121,47 +1905,11 @@ GroupControlStats CoreContext::queueGroupControlOptimized(int groupId, int chann
                                                            const QString &source)
 {
     GroupControlStats stats;
-    
-    // 收集需要控制的(节点, 通道)对
-    // 使用 QHash<节点ID, QSet<通道ID>> 结构
-    QHash<quint8, QSet<quint8>> nodeChannels;
-    
-    if (channel >= 0 && channel <= kMaxChannelId) {
-        // 指定通道：对分组中所有设备的指定通道发送控制
-        const QList<quint8> nodes = deviceGroups.value(groupId);
-        for (quint8 node : nodes) {
-            if (!relays.contains(node)) continue;
-            nodeChannels[node].insert(static_cast<quint8>(channel));
-        }
-    } else {
-        // channel=-1：使用分组绑定的通道
-        const QList<int> channelKeys = groupChannels.value(groupId, {});
-        
-        if (channelKeys.isEmpty()) {
-            // 没有绑定通道，控制所有设备的所有通道
-            const QList<quint8> nodes = deviceGroups.value(groupId);
-            for (quint8 node : nodes) {
-                if (!relays.contains(node)) continue;
-                for (quint8 ch = 0; ch <= kMaxChannelId; ++ch) {
-                    nodeChannels[node].insert(ch);
-                }
-            }
-        } else {
-            // 只控制绑定的通道
-            for (int key : channelKeys) {
-                const quint8 node = static_cast<quint8>(key / kChannelKeyMultiplier);
-                const quint8 ch = static_cast<quint8>(key % kChannelKeyMultiplier);
-                if (!relays.contains(node)) continue;
-                nodeChannels[node].insert(ch);
-            }
-        }
-    }
-    
-    // 统计原始帧数
-    stats.originalFrameCount = 0;
-    for (auto it = nodeChannels.begin(); it != nodeChannels.end(); ++it) {
-        stats.originalFrameCount += it.value().size();
-    }
+
+    const QHash<quint8, QSet<quint8>> nodeChannels =
+        buildNodeChannelsForGroupControl(deviceGroups, groupChannels, relays, groupId, channel);
+
+    stats.originalFrameCount = countTotalTargetChannels(nodeChannels);
     stats.total = stats.originalFrameCount;
     
     // 优化发送：对每个节点使用最优方式发送
@@ -1178,44 +1926,8 @@ GroupControlStats CoreContext::queueGroupControlOptimized(int groupId, int chann
         
         // 判断是否需要合并：控制多个通道时使用controlMulti以节省CAN帧
         if (channels.size() >= kMinChannelsForMultiControl) {
-            // 使用controlMulti合并发送
-            device::RelayProtocol::Action actions[4] = {
-                device::RelayProtocol::Action::Stop,
-                device::RelayProtocol::Action::Stop,
-                device::RelayProtocol::Action::Stop,
-                device::RelayProtocol::Action::Stop
-            };
-            
-            // controlMulti会同时设置所有4个通道的状态
-            // 对于需要控制的通道，设置为请求的动作
-            // 对于未指定的通道，保留其当前状态（从设备缓存读取）
-            for (quint8 ch = 0; ch <= kMaxChannelId; ++ch) {
-                if (channels.contains(ch)) {
-                    actions[ch] = action;
-                } else {
-                    // 保留当前状态：从设备读取最后状态
-                    const auto status = dev->lastStatus(ch);
-                    quint8 mode = device::RelayProtocol::modeBits(status.statusByte);
-                    if (mode == 1) {
-                        actions[ch] = device::RelayProtocol::Action::Forward;
-                    } else if (mode == 2) {
-                        actions[ch] = device::RelayProtocol::Action::Reverse;
-                    } else {
-                        actions[ch] = device::RelayProtocol::Action::Stop;
-                    }
-                }
-            }
-            
-            const bool ok = dev->controlMulti(actions);
-            stats.optimizedFrameCount++;
-            
-            if (ok) {
-                stats.accepted += channels.size();
-                // 记录一个任务ID表示这批操作
-                stats.jobIds.append(nextJobId_++);
-            } else {
-                stats.missing += channels.size();
-            }
+            const bool ok = controlMultiMergedByChannels(dev, channels, action);
+            recordMultiControlResult(stats, ok, channels.size(), nextJobId_);
             
             LOG_DEBUG(kLogSource, QStringLiteral("[优化] 节点0x%1: 合并%2通道为1帧CAN (来源: %3)")
                 .arg(node, 2, 16, QChar('0'))
@@ -1226,12 +1938,7 @@ GroupControlStats CoreContext::queueGroupControlOptimized(int groupId, int chann
             for (quint8 ch : channels) {
                 const auto result = enqueueControl(node, ch, action, source, true);
                 stats.optimizedFrameCount++;
-                if (result.accepted) {
-                    stats.accepted++;
-                    stats.jobIds.append(result.jobId);
-                } else {
-                    stats.missing++;
-                }
+                accumulateGroupControlEnqueueStats(stats, result);
             }
         }
     }
@@ -1264,13 +1971,8 @@ BatchControlResult CoreContext::batchControl(const QList<BatchControlItem> &item
         return result;
     }
     
-    // 按节点分组：QHash<节点ID, QHash<通道ID, Action>>
-    QHash<quint8, QHash<quint8, device::RelayProtocol::Action>> nodeChannelActions;
-    
-    for (const auto &item : items) {
-        if (item.channel > kMaxChannelId) continue;
-        nodeChannelActions[item.node][item.channel] = item.action;
-    }
+    const QHash<quint8, QHash<quint8, device::RelayProtocol::Action>> nodeChannelActions =
+        buildNodeChannelActions(items);
     
     // 优化发送
     for (auto nodeIt = nodeChannelActions.begin(); nodeIt != nodeChannelActions.end(); ++nodeIt) {
@@ -1284,36 +1986,8 @@ BatchControlResult CoreContext::batchControl(const QList<BatchControlItem> &item
         }
         
         if (channelActions.size() >= kMinChannelsForMultiControl) {
-            // 合并为controlMulti
-            device::RelayProtocol::Action actions[4];
-            
-            // 首先获取所有通道的当前状态
-            for (quint8 ch = 0; ch <= kMaxChannelId; ++ch) {
-                const auto status = dev->lastStatus(ch);
-                quint8 mode = device::RelayProtocol::modeBits(status.statusByte);
-                if (mode == 1) {
-                    actions[ch] = device::RelayProtocol::Action::Forward;
-                } else if (mode == 2) {
-                    actions[ch] = device::RelayProtocol::Action::Reverse;
-                } else {
-                    actions[ch] = device::RelayProtocol::Action::Stop;
-                }
-            }
-            
-            // 应用请求的动作
-            for (auto chIt = channelActions.begin(); chIt != channelActions.end(); ++chIt) {
-                actions[chIt.key()] = chIt.value();
-            }
-            
-            const bool ok = dev->controlMulti(actions);
-            result.optimizedFrames++;
-            
-            if (ok) {
-                result.accepted += channelActions.size();
-                result.jobIds.append(nextJobId_++);
-            } else {
-                result.failed += channelActions.size();
-            }
+            const bool ok = controlMultiMergedByActions(dev, channelActions);
+            recordMultiControlResult(result, ok, channelActions.size(), nextJobId_);
             
             LOG_DEBUG(kLogSource, QStringLiteral("[批量] 节点0x%1: 合并%2通道为1帧")
                 .arg(node, 2, 16, QChar('0'))
@@ -1323,12 +1997,7 @@ BatchControlResult CoreContext::batchControl(const QList<BatchControlItem> &item
             for (auto chIt = channelActions.begin(); chIt != channelActions.end(); ++chIt) {
                 const auto enqResult = enqueueControl(node, chIt.key(), chIt.value(), source, true);
                 result.optimizedFrames++;
-                if (enqResult.accepted) {
-                    result.accepted++;
-                    result.jobIds.append(enqResult.jobId);
-                } else {
-                    result.failed++;
-                }
+                accumulateBatchEnqueueResult(result, enqResult);
             }
         }
     }
@@ -1362,11 +2031,11 @@ ControlJobResult CoreContext::jobResult(quint64 jobId) const
 bool CoreContext::createGroup(int groupId, const QString &name, QString *error)
 {
     if (groupId < 1) {
-        if (error) *error = QStringLiteral("groupId must be positive");
+        setErrorIfPresent(error, QStringLiteral("groupId must be positive"));
         return false;
     }
     if (deviceGroups.contains(groupId)) {
-        if (error) *error = QStringLiteral("group exists");
+        setErrorIfPresent(error, QStringLiteral("group exists"));
         return false;
     }
     deviceGroups.insert(groupId, {});
@@ -1376,8 +2045,7 @@ bool CoreContext::createGroup(int groupId, const QString &name, QString *error)
 
 bool CoreContext::deleteGroup(int groupId, QString *error)
 {
-    if (!deviceGroups.contains(groupId)) {
-        if (error) *error = QStringLiteral("group not found");
+    if (!ensureGroupExists(deviceGroups, groupId, error)) {
         return false;
     }
     deviceGroups.remove(groupId);
@@ -1387,25 +2055,19 @@ bool CoreContext::deleteGroup(int groupId, QString *error)
 
 bool CoreContext::addDeviceToGroup(int groupId, quint8 node, QString *error)
 {
-    if (!deviceGroups.contains(groupId)) {
-        if (error) *error = QStringLiteral("group not found");
+    if (!ensureGroupExists(deviceGroups, groupId, error)) {
         return false;
     }
-    if (!relays.contains(node)) {
-        if (error) *error = QStringLiteral("device not found");
+    if (!ensureRelayExists(relays, node, error)) {
         return false;
     }
-    QList<quint8> &devices = deviceGroups[groupId];
-    if (!devices.contains(node)) {
-        devices.append(node);
-    }
+    appendUniqueNodeToGroup(deviceGroups, groupId, node);
     return true;
 }
 
 bool CoreContext::removeDeviceFromGroup(int groupId, quint8 node, QString *error)
 {
-    if (!deviceGroups.contains(groupId)) {
-        if (error) *error = QStringLiteral("group not found");
+    if (!ensureGroupExists(deviceGroups, groupId, error)) {
         return false;
     }
     deviceGroups[groupId].removeAll(node);
@@ -1415,7 +2077,7 @@ bool CoreContext::removeDeviceFromGroup(int groupId, quint8 node, QString *error
 device::RelayProtocol::Action CoreContext::parseAction(const QString &str, bool *ok) const
 {
     const QString a = str.trimmed().toLower();
-    if (ok) *ok = true;
+    setBoolIfPresent(ok, true);
 
     if (a == QStringLiteral("stop") || a == QStringLiteral("0"))
         return device::RelayProtocol::Action::Stop;
@@ -1424,7 +2086,7 @@ device::RelayProtocol::Action CoreContext::parseAction(const QString &str, bool 
     if (a == QStringLiteral("rev") || a == QStringLiteral("reverse") || a == QStringLiteral("2"))
         return device::RelayProtocol::Action::Reverse;
 
-    if (ok) *ok = false;
+    setBoolIfPresent(ok, false);
     return device::RelayProtocol::Action::Stop;
 }
 
@@ -1440,49 +2102,33 @@ QStringList CoreContext::methodGroups() const
 
 bool CoreContext::addChannelToGroup(int groupId, quint8 node, int channel, QString *error)
 {
-    if (!deviceGroups.contains(groupId)) {
-        if (error) *error = QStringLiteral("group not found");
+    if (!ensureGroupExists(deviceGroups, groupId, error)) {
         return false;
     }
-    if (!relays.contains(node)) {
-        if (error) *error = QStringLiteral("device not found");
+    if (!ensureRelayExists(relays, node, error)) {
         return false;
     }
     // 注意：此函数用于添加特定通道到分组，channel=-1 不适用于此场景
     // 如需添加所有通道，请多次调用此函数或使用 addDeviceToGroup
-    if (channel < 0 || channel > kMaxChannelId) {
-        if (error) *error = QStringLiteral("invalid channel (0-%1)").arg(kMaxChannelId);
+    if (!ensureChannelInRange(channel, error)) {
         return false;
     }
 
-    // Add device to group if not already present
-    QList<quint8> &devices = deviceGroups[groupId];
-    if (!devices.contains(node)) {
-        devices.append(node);
-    }
-
-    // Add channel to group channels list
-    if (!groupChannels.contains(groupId)) {
-        groupChannels.insert(groupId, {});
-    }
+    appendUniqueNodeToGroup(deviceGroups, groupId, node);
 
     // Encode node+channel as unique key: node * kChannelKeyMultiplier + channel
-    const int channelKey = static_cast<int>(node) * kChannelKeyMultiplier + channel;
-    QList<int> &channels = groupChannels[groupId];
-    if (!channels.contains(channelKey)) {
-        channels.append(channelKey);
-    }
+    const int channelKey = makeChannelKey(node, static_cast<quint8>(channel));
+    appendUniqueChannelKey(groupChannels, groupId, channelKey);
     return true;
 }
 
 bool CoreContext::removeChannelFromGroup(int groupId, quint8 node, int channel, QString *error)
 {
-    if (!deviceGroups.contains(groupId)) {
-        if (error) *error = QStringLiteral("group not found");
+    if (!ensureGroupExists(deviceGroups, groupId, error)) {
         return false;
     }
 
-    const int channelKey = static_cast<int>(node) * kChannelKeyMultiplier + channel;
+    const int channelKey = makeChannelKey(node, static_cast<quint8>(channel));
     if (groupChannels.contains(groupId)) {
         groupChannels[groupId].removeAll(channelKey);
     }
@@ -1496,28 +2142,22 @@ QList<int> CoreContext::getGroupChannels(int groupId) const
 
 bool CoreContext::addDevice(const DeviceConfig &config, QString *error)
 {
-    if (config.nodeId < 1 || config.nodeId > 255) {
-        if (error) *error = QStringLiteral("invalid nodeId (1-255)");
+    if (!ensureNodeIdInRange(config.nodeId, error)) {
         return false;
     }
 
     const quint8 node = static_cast<quint8>(config.nodeId);
     if (relays.contains(node)) {
-        if (error) *error = QStringLiteral("device already exists");
+        setErrorIfPresent(error, QStringLiteral("device already exists"));
         return false;
     }
 
     // Currently only support RelayGd427 device type
     if (config.deviceType == device::DeviceTypeId::RelayGd427 &&
-        config.commType == device::CommTypeId::Can) {
-
-        auto *dev = new device::RelayGd427(node, canBus, this);
-        dev->init();
-        if (canManager) {
-            canManager->addDevice(dev);
-        }
-        relays.insert(node, dev);
-        deviceConfigs.insert(node, config);
+        isRelayGd427CommSupported(config.commType)) {
+        auto *dev = createRelayGd427Device(node, config.commType, canBus, canManager,
+                                           deviceTcpServer_, this);
+        registerRelayDevice(relays, deviceConfigs, node, dev, config);
 
         LOG_INFO(kLogSource,
                  QStringLiteral("Device dynamically added: node=0x%1, name=%2")
@@ -1537,42 +2177,20 @@ bool CoreContext::addDevice(const DeviceConfig &config, QString *error)
         return true;
     }
 
-    if (error) *error = QStringLiteral("unsupported device type");
+    setErrorIfPresent(error, QStringLiteral("unsupported device type"));
     return false;
 }
 
 bool CoreContext::removeDevice(quint8 nodeId, QString *error)
 {
     if (!relays.contains(nodeId) && !deviceConfigs.contains(nodeId)) {
-        if (error) *error = QStringLiteral("device not found");
+        setErrorIfPresent(error, QStringLiteral("device not found"));
         return false;
     }
 
-    // Remove from all groups
-    for (auto it = deviceGroups.begin(); it != deviceGroups.end(); ++it) {
-        it.value().removeAll(nodeId);
-    }
-
-    // Remove channel references
-    for (auto it = groupChannels.begin(); it != groupChannels.end(); ++it) {
-        QList<int> &channels = it.value();
-        const int baseKey = static_cast<int>(nodeId) * kChannelKeyMultiplier;
-        channels.erase(
-            std::remove_if(channels.begin(), channels.end(),
-                           [baseKey](int key) {
-                               return key >= baseKey && key < baseKey + kChannelKeyMultiplier;
-                           }),
-            channels.end());
-    }
-
-    // Remove relay device if present
-    if (relays.contains(nodeId)) {
-        auto *dev = relays.take(nodeId);
-        if (canManager) {
-            canManager->removeDevice(dev);
-        }
-        dev->deleteLater();
-    }
+    removeNodeFromAllGroups(deviceGroups, nodeId);
+    removeNodeChannelsFromAllGroups(groupChannels, nodeId);
+    detachAndDeleteRelayIfPresent(relays, deviceConfigs, canManager, nodeId);
 
     deviceConfigs.remove(nodeId);
 
@@ -1592,6 +2210,27 @@ DeviceConfig CoreContext::getDeviceConfig(quint8 nodeId) const
     return deviceConfigs.value(nodeId, DeviceConfig{});
 }
 
+QJsonObject CoreContext::getDeviceParams(quint8 nodeId) const
+{
+    return getDeviceConfig(nodeId).params;
+}
+
+bool CoreContext::setDeviceParams(quint8 nodeId, const QJsonObject &params, bool merge, QString *error)
+{
+    auto it = deviceConfigs.find(nodeId);
+    if (it == deviceConfigs.end()) {
+        setErrorIfPresent(error, QStringLiteral("device not found"));
+        return false;
+    }
+
+    if (merge) {
+        it->params = mergeDeviceParams(it->params, params);
+    } else {
+        it->params = params;
+    }
+    return true;
+}
+
 bool CoreContext::checkActionValid(const AutoStrategy &arr, QString *errMsg)
 {
 
@@ -1600,14 +2239,14 @@ bool CoreContext::checkActionValid(const AutoStrategy &arr, QString *errMsg)
         int channel = 0;
 
         if (!cloud::fanzhoucloud::parseNodeChannelKey(a.identifier, nodeId, channel)) {
-            if (errMsg) *errMsg = QString("invalid identifier format: %1").arg(a.identifier);
+            setErrorIfPresent(errMsg, QString("invalid identifier format: %1").arg(a.identifier));
             return false;
         }
 
         // 1. 校验 node 是否存在
         auto devIt = relays.find(nodeId);
         if (devIt == relays.end()) {
-            if (errMsg) *errMsg = QString("device node not exist: %1").arg(nodeId);
+            setErrorIfPresent(errMsg, QString("device node not exist: %1").arg(nodeId));
             return false;
         }
 
@@ -1624,7 +2263,7 @@ bool CoreContext::checkActionValid(const AutoStrategy &arr, QString *errMsg)
 
         // 3. 校验值范围（继电器一般只能 0/1）
         if (a.identifierValue > 2) {
-            if (errMsg) *errMsg = QString("invalid value for %1").arg(a.identifier);
+            setErrorIfPresent(errMsg, QString("invalid value for %1").arg(a.identifier));
             return false;
         }
     }
@@ -1778,15 +2417,15 @@ ScreenConfig CoreContext::getScreenConfig() const
 bool CoreContext::setScreenConfig(const ScreenConfig &config, QString *error)
 {
     if (config.brightness < 0 || config.brightness > 100) {
-        if (error) *error = QStringLiteral("brightness must be 0-100");
+        setErrorIfPresent(error, QStringLiteral("brightness must be 0-100"));
         return false;
     }
     if (config.contrast < 0 || config.contrast > 100) {
-        if (error) *error = QStringLiteral("contrast must be 0-100");
+        setErrorIfPresent(error, QStringLiteral("contrast must be 0-100"));
         return false;
     }
     if (config.sleepTimeoutSec < 0) {
-        if (error) *error = QStringLiteral("sleepTimeoutSec must be >= 0");
+        setErrorIfPresent(error, QStringLiteral("sleepTimeoutSec must be >= 0"));
         return false;
     }
 
@@ -1809,12 +2448,10 @@ bool CoreContext::setScreenConfig(const ScreenConfig &config, QString *error)
  */
 bool CoreContext::saveConfig(const QString &path, QString *error)
 {
-    const QString targetPath = path.isEmpty() ? configFilePath : path;
-    
-    if (targetPath.isEmpty()) {
-        if (error) {
-            *error = QStringLiteral("配置文件路径未设置，请先指定configFilePath或提供path参数");
-        }
+    QString targetPath;
+    if (!resolveTargetConfigPath(path, configFilePath,
+                                 QStringLiteral("配置文件路径未设置，请先指定configFilePath或提供path参数"),
+                                 &targetPath, error)) {
         LOG_WARNING(kLogSource, QStringLiteral("saveConfig failed: config file path not set"));
         return false;
     }
@@ -1824,49 +2461,22 @@ bool CoreContext::saveConfig(const QString &path, QString *error)
     coreConfig.screen = screenConfig;
     
     // 设备列表
-    coreConfig.devices = deviceConfigs.values();
+    coreConfig.devices = buildDeviceConfigListFromRuntime(deviceConfigs);
     
     // 设备分组
-    coreConfig.groups.clear();
-    for (auto it = deviceGroups.begin(); it != deviceGroups.end(); ++it) {
-        DeviceGroupConfig grp;
-        grp.groupId = it.key();
-        grp.name = groupNames.value(it.key(), QString());
-//        int sId = -1;
-//        if (grp.name.startsWith(QStringLiteral("auto_strategy_"))) {
-//
-//            sId = grp.name.section('_', -1).toInt();
-//        }
-
-//        if (sId != -1) {
-//            qDebug() << "Found Strategy ID:" << sId << " for Group:" << grp.groupId;
-//        }
-        grp.enabled = true;
-        // 转换设备节点ID列表
-        for (quint8 node : it.value()) {
-            grp.deviceNodes.append(static_cast<int>(node));
-        }
-        // 保存分组通道
-        grp.channels = groupChannels.value(it.key(), {});
-        coreConfig.groups.append(grp);
-    }
+    coreConfig.groups = buildGroupConfigsFromRuntime(deviceGroups, groupNames, groupChannels);
     
     // 定时策略
-    coreConfig.strategies = strategys_;
+    coreConfig.strategies = strategies_;
 
     // ===== 传感器配置 =====
-    coreConfig.sensors.clear();
-    for (auto it = sensorConfigs.begin(); it != sensorConfigs.end(); ++it) {
-        coreConfig.sensors.append(it.value());
-    }
+    coreConfig.sensors = buildSensorConfigListFromRuntime(sensorConfigs);
 
-    coreConfig.mqttChannels = mqttManager->allChannelConfigs();
+    coreConfig.mqttChannels = getMqttChannelsForSave(mqttManager, coreConfig.mqttChannels);
     // 保存到文件
     QString saveError;
     if (!coreConfig.saveToFile(targetPath, &saveError)) {
-        if (error) {
-            *error = QStringLiteral("保存配置失败: %1").arg(saveError);
-        }
+        setErrorIfPresent(error, QStringLiteral("保存配置失败: %1").arg(saveError));
         LOG_ERROR(kLogSource, QStringLiteral("saveConfig failed: %1").arg(saveError));
         return false;
     }
@@ -1886,20 +2496,16 @@ bool CoreContext::saveConfig(const QString &path, QString *error)
  */
 bool CoreContext::reloadConfig(const QString &path, QString *error)
 {
-    const QString targetPath = path.isEmpty() ? configFilePath : path;
-    
-    if (targetPath.isEmpty()) {
-        if (error) {
-            *error = QStringLiteral("配置文件路径未设置");
-        }
+    QString targetPath;
+    if (!resolveTargetConfigPath(path, configFilePath,
+                                 QStringLiteral("配置文件路径未设置"),
+                                 &targetPath, error)) {
         return false;
     }
 
     QString loadError;
     if (!coreConfig.loadFromFile(targetPath, &loadError)) {
-        if (error) {
-            *error = QStringLiteral("加载配置失败: %1").arg(loadError);
-        }
+        setErrorIfPresent(error, QStringLiteral("加载配置失败: %1").arg(loadError));
         LOG_ERROR(kLogSource, QStringLiteral("reloadConfig failed: %1").arg(loadError));
         return false;
     }
@@ -1907,33 +2513,21 @@ bool CoreContext::reloadConfig(const QString &path, QString *error)
     // 注意：这里只更新部分配置，不重新初始化整个系统
     // 完整的重新初始化需要重启服务
     
-    // 更新分组配置
-    deviceGroups.clear();
-    groupNames.clear();
-    groupChannels.clear();
+    // 更新分组配置（复用与启动时一致的加载逻辑）
+    loadGroupConfigsFromList(coreConfig.groups, deviceGroups, groupNames, groupChannels);
     
-    for (const auto &grpConfig : coreConfig.groups) {
-        if (!grpConfig.enabled) continue;
-        
-        QList<quint8> nodes;
-        for (int nodeId : grpConfig.deviceNodes) {
-            if (nodeId >= 1 && nodeId <= 255) {
-                nodes.append(static_cast<quint8>(nodeId));
-            }
-        }
-        deviceGroups.insert(grpConfig.groupId, nodes);
-        groupNames.insert(grpConfig.groupId, grpConfig.name);
-        groupChannels.insert(grpConfig.groupId, grpConfig.channels);
-    }
-    
-    // 更新策略配置
-    // @TODO
+    // 策略运行态（如 lastTriggered）保持不变，避免 reload 时丢失节流状态。
     
     // 更新屏幕配置
     screenConfig = coreConfig.screen;
     
     // 更新云数据上传配置
     cloudUploadConfig = coreConfig.cloudUpload;
+
+    if (!syncMqttChannelsToManager(mqttManager, coreConfig.mqttChannels)) {
+        LOG_WARNING(kLogSource,
+                    QStringLiteral("reloadConfig: some MQTT channels failed to sync"));
+    }
     
     LOG_INFO(kLogSource, QStringLiteral("配置已重新加载: %1").arg(targetPath));
     return true;
@@ -1949,91 +2543,19 @@ bool CoreContext::reloadConfig(const QString &path, QString *error)
 QJsonObject CoreContext::exportConfig() const
 {
     QJsonObject root;
-    
-    // 主配置
-    QJsonObject mainObj;
-    mainObj[QStringLiteral("rpcPort")] = static_cast<int>(coreConfig.main.rpcPort);
-    
-    // 认证状态（不包含敏感信息）
-    QJsonObject authObj;
-    authObj[QStringLiteral("enabled")] = authConfig.enabled;
-    authObj[QStringLiteral("tokenExpireSec")] = authConfig.tokenExpireSec;
-    authObj[QStringLiteral("whitelistCount")] = authConfig.whitelist.size();
-    authObj[QStringLiteral("publicMethodsCount")] = authConfig.publicMethods.size();
-    authObj[QStringLiteral("allowedTokensCount")] = authConfig.allowedTokens.size();
-    mainObj[QStringLiteral("auth")] = authObj;
-    
-    root[QStringLiteral("main")] = mainObj;
-    
-    // CAN配置
-    QJsonObject canObj;
-    canObj[QStringLiteral("interface")] = coreConfig.can.interface;
-    canObj[QStringLiteral("bitrate")] = coreConfig.can.bitrate;
-    canObj[QStringLiteral("tripleSampling")] = coreConfig.can.tripleSampling;
-    canObj[QStringLiteral("restartMs")] = coreConfig.can.restartMs;
-    
-    // CAN状态诊断信息（帮助诊断"CAN无法发送"的问题）
-    if (canBus) {
-        canObj[QStringLiteral("opened")] = canBus->isOpened();
-        canObj[QStringLiteral("txQueueSize")] = canBus->txQueueSize();
-    }
-    root[QStringLiteral("can")] = canObj;
-    
-    // 设备列表
-    QJsonArray devArr;
-    for (const auto &dev : deviceConfigs) {
-        QJsonObject obj;
-        obj[QStringLiteral("nodeId")] = dev.nodeId;
-        obj[QStringLiteral("name")] = dev.name;
-        obj[QStringLiteral("type")] = static_cast<int>(dev.deviceType);
-        obj[QStringLiteral("commType")] = static_cast<int>(dev.commType);
-        obj[QStringLiteral("bus")] = dev.bus;
-        if (!dev.params.isEmpty()) {
-            obj[QStringLiteral("params")] = dev.params;
-        }
-        devArr.append(obj);
-    }
-    root[QStringLiteral("devices")] = devArr;
+    root[QStringLiteral("main")] = buildMainExportObject(coreConfig.main, authConfig);
+    root[QStringLiteral("can")] = buildCanExportObject(coreConfig.can, canBus);
+    root[QStringLiteral("devices")] = buildDeviceExportArray(deviceConfigs);
     
     // 设备分组
-    QJsonArray groupArr;
-    for (auto it = deviceGroups.begin(); it != deviceGroups.end(); ++it) {
-        QJsonObject obj;
-        obj[QStringLiteral("groupId")] = it.key();
-        obj[QStringLiteral("name")] = groupNames.value(it.key(), QString());
-        
-        QJsonArray devNodes;
-        for (quint8 node : it.value()) {
-            devNodes.append(static_cast<int>(node));
-        }
-        obj[QStringLiteral("devices")] = devNodes;
-        obj[QStringLiteral("deviceCount")] = it.value().size();
-        
-        // 导出分组通道
-        const auto channels = groupChannels.value(it.key(), {});
-        if (!channels.isEmpty()) {
-            QJsonArray chArr;
-            for (int ch : channels) {
-                chArr.append(ch);
-            }
-            obj[QStringLiteral("channels")] = chArr;
-        }
-        
-        groupArr.append(obj);
-    }
-    root[QStringLiteral("groups")] = groupArr;
+    root[QStringLiteral("groups")] =
+        buildExportGroupArray(deviceGroups, groupNames, groupChannels);
     
     // 策略数量统计
-    root[QStringLiteral("strategyCount")] = strategys_.size();
+    root[QStringLiteral("strategyCount")] = strategies_.size();
     
     // 屏幕配置
-    QJsonObject screenObj;
-    screenObj[QStringLiteral("brightness")] = screenConfig.brightness;
-    screenObj[QStringLiteral("contrast")] = screenConfig.contrast;
-    screenObj[QStringLiteral("enabled")] = screenConfig.enabled;
-    screenObj[QStringLiteral("sleepTimeoutSec")] = screenConfig.sleepTimeoutSec;
-    screenObj[QStringLiteral("orientation")] = screenConfig.orientation;
-    root[QStringLiteral("screen")] = screenObj;
+    root[QStringLiteral("screen")] = buildScreenExportObject(screenConfig);
     
     // 配置文件路径
     root[QStringLiteral("configFilePath")] = configFilePath;
@@ -2080,7 +2602,7 @@ bool CoreContext::generateToken(const QString &username, const QString &password
 {
     // 如果认证未启用，不需要生成token
     if (!authConfig.enabled) {
-        if (error) *error = QStringLiteral("authentication not enabled");
+        setErrorIfPresent(error, QStringLiteral("authentication not enabled"));
         return false;
     }
     
@@ -2089,7 +2611,7 @@ bool CoreContext::generateToken(const QString &username, const QString &password
     if (password != authConfig.secret) {
         LOG_WARNING(kLogSource,
                     QStringLiteral("Authentication failed for user: %1").arg(username));
-        if (error) *error = QStringLiteral("invalid credentials");
+        setErrorIfPresent(error, QStringLiteral("invalid credentials"));
         return false;
     }
     
@@ -2129,15 +2651,8 @@ bool CoreContext::methodRequiresAuth(const QString &method) const
     
     // 检查是否是公共方法
     for (const auto &publicMethod : authConfig.publicMethods) {
-        if (publicMethod == method) {
+        if (isPublicMethodPatternMatch(publicMethod, method)) {
             return false;
-        }
-        // 支持通配符匹配，如 "rpc.*"
-        if (publicMethod.endsWith(QStringLiteral(".*"))) {
-            const QString prefix = publicMethod.left(publicMethod.length() - 1);
-            if (method.startsWith(prefix)) {
-                return false;
-            }
         }
     }
     
@@ -2153,13 +2668,7 @@ bool CoreContext::isIpWhitelisted(const QString &ip) const
     
     // 检查是否在白名单中
     for (const auto &whitelistedIp : authConfig.whitelist) {
-        if (whitelistedIp == ip) {
-            return true;
-        }
-        // 支持CIDR格式，如 "192.168.1.0/24"（简单实现）
-        // 这里只实现了精确匹配和"127.0.0.1"、"localhost"等常见情况
-        if (whitelistedIp == QStringLiteral("localhost") &&
-            (ip == QStringLiteral("127.0.0.1") || ip == QStringLiteral("::1"))) {
+        if (whitelistedIp == ip || isLoopbackWhitelistMatch(whitelistedIp, ip)) {
             return true;
         }
     }

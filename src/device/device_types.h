@@ -74,6 +74,7 @@ enum class CommTypeId : int {
     Can = 2,        ///< CAN总线通信
     Modbus = 3,     ///< Modbus通信（基于串口RS485，已整合到Serial）
     Uart = 4,       ///< UART通信（异步串口，已整合到Serial）
+    TcpClient = 5,  ///< TCP Client通信（设备主动连接服务器）
 };
 
 /**
@@ -139,6 +140,7 @@ inline const char* commTypeToString(CommTypeId type)
     case CommTypeId::Can: return "CAN";
     case CommTypeId::Modbus: return "Modbus";
     case CommTypeId::Uart: return "UART";
+    case CommTypeId::TcpClient: return "TCP_CLIENT";
     default: return "Unknown";
     }
 }
@@ -309,8 +311,8 @@ inline const DeviceTypeInfo* allDeviceTypes(int &count)
 inline const SensorSourceInfo* allSensorSources(int& count)
 {
     static const SensorSourceInfo sources[] = {
-        {SensorSourceType::LocalDevice, "LocalDevice", "本地设备采集"},
-        {SensorSourceType::Mqtt, "Mqtt", "MQTT 虚拟传感器"},
+        {SensorSourceType::LocalDevice, "LocalDevice", "本地设备采集", nullptr},
+        {SensorSourceType::Mqtt, "Mqtt", "MQTT 虚拟传感器", nullptr},
     };
     count = sizeof(sources) / sizeof(sources[0]);
     return sources;
@@ -328,6 +330,7 @@ inline const CommTypeInfo* allCommTypes(int &count)
         {CommTypeId::Can, "CAN", "CAN总线通信"},
         {CommTypeId::Modbus, "Modbus", "Modbus RTU/TCP通信"},
         {CommTypeId::Uart, "UART", "UART异步串口通信"},
+        {CommTypeId::TcpClient, "TCP_CLIENT", "设备作为TCP Client连接服务端"},
     };
     count = sizeof(types) / sizeof(types[0]);
     return types;

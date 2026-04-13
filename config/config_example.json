@@ -40,9 +40,9 @@
     {
       "name": "relay01",
       "type": 1,
-      "commType": 2,
+      "commType": 5,
       "nodeId": 1,
-      "bus": "can0",
+      "bus": "tcp-client",
       "params": {
         "channels": 4,
         "enabled": true
@@ -51,9 +51,9 @@
     {
       "name": "relay02",
       "type": 1,
-      "commType": 2,
+      "commType": 5,
       "nodeId": 2,
-      "bus": "can0",
+      "bus": "tcp-client",
       "params": {
         "channels": 4,
         "enabled": true
@@ -62,9 +62,20 @@
     {
       "name": "relay03",
       "type": 1,
-      "commType": 2,
+      "commType": 5,
       "nodeId": 3,
-      "bus": "can0",
+      "bus": "tcp-client",
+      "params": {
+        "channels": 4,
+        "enabled": true
+      }
+    },
+    {
+      "name": "relay04",
+      "type": 1,
+      "commType": 5,
+      "nodeId": 4,
+      "bus": "tcp-client",
       "params": {
         "channels": 4,
         "enabled": true
@@ -155,16 +166,30 @@
   "groups": [
     {
       "groupId": 1,
-      "name": "main-group",
+      "name": "zone-1",
       "enabled": true,
-      "devices": [1, 2],
+      "devices": [1],
       "channels": []
     },
     {
       "groupId": 2,
-      "name": "backup-group",
+      "name": "zone-2",
+      "enabled": true,
+      "devices": [2],
+      "channels": []
+    },
+    {
+      "groupId": 3,
+      "name": "zone-3",
       "enabled": true,
       "devices": [3],
+      "channels": []
+    },
+    {
+      "groupId": 4,
+      "name": "zone-4",
+      "enabled": true,
+      "devices": [4],
       "channels": []
     }
   ],

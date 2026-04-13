@@ -24,9 +24,11 @@
 
 #include "relay_gd427.h"
 #include "comm/can/can_comm.h"
+#include "rpc/device_tcp_server.h"
 #include "utils/logger.h"
 
 #include <QDateTime>
+#include <QJsonArray>
 #include <QtGlobal>
 
 namespace fanzhou {
@@ -44,14 +46,47 @@ const char *actionToString(RelayProtocol::Action action)
     }
     return "unknown";
 }
+
+int toTcpChannel(quint8 channelZeroBased)
+{
+    return static_cast<int>(channelZeroBased) + 1;
+}
+
+int toTcpState(RelayProtocol::Action action)
+{
+    // V1.3 TCP JSON接口 state 仅定义 0/1：0=停, 1=开
+    return (action == RelayProtocol::Action::Stop) ? 0 : 1;
+}
+
+RelayProtocol::Action currentActionFromStatusByte(quint8 statusByte)
+{
+    switch (statusByte & 0x03) {
+    case 1:
+        return RelayProtocol::Action::Forward;
+    case 2:
+        return RelayProtocol::Action::Reverse;
+    default:
+        return RelayProtocol::Action::Stop;
+    }
+}
 }  // namespace
 
-RelayGd427::RelayGd427(quint8 nodeId, comm::CanComm *bus, QObject *parent)
+RelayGd427::RelayGd427(quint8 nodeId,
+                       comm::CanComm *bus,
+                       TransportType transport,
+                       rpc::DeviceTcpServer *tcpGateway,
+                       QObject *parent)
     : DeviceAdapter(parent)
     , nodeId_(nodeId)
     , bus_(bus)
+    , transport_(transport)
+    , tcpGateway_(tcpGateway)
 {
     lastRxTimer_.start();
+    if (transport_ == TransportType::TcpClient && tcpGateway_) {
+        connect(tcpGateway_, &rpc::DeviceTcpServer::boardMessageReceived,
+                this, &RelayGd427::onTcpBoardMessage);
+    }
 }
 
 bool RelayGd427::init()
@@ -94,11 +129,37 @@ qint64 RelayGd427::lastSeenMs() const
  */
 bool RelayGd427::control(quint8 channel, RelayProtocol::Action action)
 {
-    if (!bus_ || channel > kMaxChannel) {
+    if (channel > kMaxChannel) {
         LOG_WARNING(kLogSource, QStringLiteral("control failed: node=0x%1, ch=%2, bus=%3")
                         .arg(nodeId_, 2, 16, QLatin1Char('0'))
                         .arg(channel)
                         .arg(bus_ ? "ok" : "null"));
+        return false;
+    }
+
+    if (transport_ == TransportType::TcpClient) {
+        if (action == RelayProtocol::Action::Reverse) {
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("control failed: TCP JSON protocol does not support reverse action, node=%1 ch=%2")
+                            .arg(nodeId_)
+                            .arg(channel));
+            return false;
+        }
+        QJsonObject args{
+            {QStringLiteral("ch"), toTcpChannel(channel)},
+            {QStringLiteral("state"), toTcpState(action)}
+        };
+        return sendTcpCommand(QJsonObject{
+            {QStringLiteral("id"), static_cast<double>(QDateTime::currentMSecsSinceEpoch())},
+            {QStringLiteral("cmd"), QStringLiteral("relay.set")},
+            {QStringLiteral("args"), args}
+        });
+    }
+
+    if (!bus_) {
+        LOG_WARNING(kLogSource, QStringLiteral("control failed: node=0x%1, ch=%2, bus=null")
+                        .arg(nodeId_, 2, 16, QLatin1Char('0'))
+                        .arg(channel));
         return false;
     }
 
@@ -135,6 +196,55 @@ bool RelayGd427::control(quint8 channel, RelayProtocol::Action action)
  */
 bool RelayGd427::controlMulti(const RelayProtocol::Action actions[4])
 {
+    if (transport_ == TransportType::TcpClient) {
+        for (int i = 0; i < 4; ++i) {
+            if (actions[i] == RelayProtocol::Action::Reverse) {
+                LOG_WARNING(kLogSource,
+                            QStringLiteral("controlMulti failed: TCP JSON protocol does not support reverse action, node=%1")
+                                .arg(nodeId_));
+                return false;
+            }
+        }
+        bool allStop = true;
+        for (int i = 0; i < 4; ++i) {
+            if (actions[i] != RelayProtocol::Action::Stop) {
+                allStop = false;
+                break;
+            }
+        }
+
+        if (allStop) {
+            return sendTcpCommand(QJsonObject{
+                {QStringLiteral("id"), static_cast<double>(QDateTime::currentMSecsSinceEpoch())},
+                {QStringLiteral("cmd"), QStringLiteral("relay.stopall")}
+            });
+        }
+
+        bool ok = true;
+        bool hasChange = false;
+        for (int ch = 0; ch < 4; ++ch) {
+            const RelayProtocol::Action current =
+                currentActionFromStatusByte(status_[ch].statusByte);
+            if (actions[ch] == current) {
+                continue;
+            }
+            hasChange = true;
+            QJsonObject args{
+                {QStringLiteral("ch"), toTcpChannel(static_cast<quint8>(ch))},
+                {QStringLiteral("state"), toTcpState(actions[ch])}
+            };
+            ok = sendTcpCommand(QJsonObject{
+                {QStringLiteral("id"), static_cast<double>(QDateTime::currentMSecsSinceEpoch() + ch)},
+                {QStringLiteral("cmd"), QStringLiteral("relay.set")},
+                {QStringLiteral("args"), args}
+            }) && ok;
+        }
+        if (!hasChange) {
+            return true;
+        }
+        return ok;
+    }
+
     if (!bus_) {
         LOG_WARNING(kLogSource, QStringLiteral("controlMulti failed: node=0x%1, bus=null")
                         .arg(nodeId_, 2, 16, QLatin1Char('0')));
@@ -178,11 +288,23 @@ bool RelayGd427::controlMulti(const RelayProtocol::Action actions[4])
  */
 bool RelayGd427::query(quint8 channel)
 {
-    if (!bus_ || channel > kMaxChannel) {
+    if (channel > kMaxChannel) {
         LOG_WARNING(kLogSource, QStringLiteral("query failed: node=0x%1, ch=%2, bus=%3")
                         .arg(nodeId_, 2, 16, QLatin1Char('0'))
                         .arg(channel)
                         .arg(bus_ ? "ok" : "null"));
+        return false;
+    }
+
+    if (transport_ == TransportType::TcpClient) {
+        Q_UNUSED(channel);
+        return sendTcpCommand(QJsonObject{
+            {QStringLiteral("id"), static_cast<double>(QDateTime::currentMSecsSinceEpoch())},
+            {QStringLiteral("cmd"), QStringLiteral("status")}
+        });
+    }
+
+    if (!bus_) {
         return false;
     }
 
@@ -207,6 +329,13 @@ bool RelayGd427::query(quint8 channel)
  */
 bool RelayGd427::queryAll()
 {
+    if (transport_ == TransportType::TcpClient) {
+        return sendTcpCommand(QJsonObject{
+            {QStringLiteral("id"), static_cast<double>(QDateTime::currentMSecsSinceEpoch())},
+            {QStringLiteral("cmd"), QStringLiteral("status")}
+        });
+    }
+
     if (!bus_) {
         LOG_WARNING(kLogSource, QStringLiteral("queryAll failed: node=0x%1, bus=null")
                         .arg(nodeId_, 2, 16, QLatin1Char('0')));
@@ -234,6 +363,13 @@ bool RelayGd427::queryAll()
  */
 bool RelayGd427::setOvercurrentFlag(quint8 channel, quint8 flag)
 {
+    if (transport_ == TransportType::TcpClient) {
+        Q_UNUSED(channel);
+        Q_UNUSED(flag);
+        LOG_WARNING(kLogSource, QStringLiteral("setOvercurrentFlag not supported in TCP client transport"));
+        return false;
+    }
+
     if (!bus_) {
         LOG_WARNING(kLogSource, QStringLiteral("setOvercurrentFlag failed: node=0x%1, bus=null")
                         .arg(nodeId_, 2, 16, QLatin1Char('0')));
@@ -253,6 +389,37 @@ bool RelayGd427::setOvercurrentFlag(quint8 channel, quint8 flag)
                      .arg(nodeId_, 2, 16, QLatin1Char('0'))
                      .arg(channel)
                      .arg(flag));
+    }
+    return ok;
+}
+
+bool RelayGd427::setCommMode(RelayProtocol::CommMode commMode, RelayProtocol::NetworkMode networkMode)
+{
+    if (transport_ == TransportType::TcpClient) {
+        Q_UNUSED(commMode);
+        Q_UNUSED(networkMode);
+        LOG_WARNING(kLogSource, QStringLiteral("setCommMode not supported in TCP client transport"));
+        return false;
+    }
+
+    if (!bus_) {
+        LOG_WARNING(kLogSource, QStringLiteral("setCommMode failed: node=0x%1, bus=null")
+                        .arg(nodeId_, 2, 16, QLatin1Char('0')));
+        return false;
+    }
+
+    const quint32 canId = RelayProtocol::kSettingsCmdBaseId + nodeId_;
+    const bool ok = bus_->sendFrame(canId, RelayProtocol::encodeSetCommMode(commMode, networkMode), false, false);
+    if (!ok) {
+        LOG_ERROR(kLogSource, QStringLiteral("setCommMode sendFrame failed: node=0x%1, commMode=%2, networkMode=%3")
+                      .arg(nodeId_, 2, 16, QLatin1Char('0'))
+                      .arg(static_cast<int>(commMode))
+                      .arg(static_cast<int>(networkMode)));
+    } else {
+        LOG_INFO(kLogSource, QStringLiteral("setCommMode: node=0x%1, commMode=%2, networkMode=%3")
+                     .arg(nodeId_, 2, 16, QLatin1Char('0'))
+                     .arg(static_cast<int>(commMode))
+                     .arg(static_cast<int>(networkMode)));
     }
     return ok;
 }
@@ -316,6 +483,7 @@ void RelayGd427::onAutoStatusFrame(quint32 canId, const QByteArray &payload)
         status_[i].phaseLostFlag = report.phaseLost[i] ? 1 : 0;
         status_[i].currentA = report.currentA[i];
         status_[i].overcurrent = report.overcurrent[i];
+        status_[i].noCurrent = false;
     }
 
     emit autoStatusReceived(report);
@@ -347,6 +515,77 @@ void RelayGd427::onSettingsRespFrame(quint32 canId, const QByteArray &payload)
     emit settingsResponseReceived(static_cast<quint8>(resp.cmdType), static_cast<quint8>(resp.status));
 }
 
+bool RelayGd427::sendTcpCommand(const QJsonObject &command)
+{
+    if (!tcpGateway_) {
+        LOG_WARNING(kLogSource, QStringLiteral("sendTcpCommand failed: node=%1, tcpGateway=null").arg(nodeId_));
+        return false;
+    }
+    QString error;
+    const bool ok = tcpGateway_->sendCommand(command, nodeId_, &error);
+    if (!ok) {
+        LOG_WARNING(kLogSource, QStringLiteral("sendTcpCommand failed: node=%1, error=%2")
+                        .arg(nodeId_)
+                        .arg(error));
+    }
+    return ok;
+}
+
+void RelayGd427::onTcpBoardMessage(int devId, const QJsonObject &message)
+{
+    if (transport_ != TransportType::TcpClient || static_cast<quint8>(devId) != nodeId_) {
+        return;
+    }
+
+    markSeen();
+
+    const QString event = message.value(QStringLiteral("event")).toString();
+    if (event == QStringLiteral("hello") || event == QStringLiteral("heartbeat")) {
+        return;
+    }
+
+    if (message.contains(QStringLiteral("ok")) && !message.value(QStringLiteral("ok")).toBool()) {
+        const QString err = message.value(QStringLiteral("error")).toString();
+        if (!err.isEmpty()) {
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("TCP board command failed: node=%1 error=%2")
+                            .arg(nodeId_)
+                            .arg(err));
+        }
+        return;
+    }
+
+    const QJsonObject data = message.value(QStringLiteral("data")).toObject();
+    const QJsonArray relayArr = data.value(QStringLiteral("relay")).toArray();
+    const QJsonArray currentArr = data.value(QStringLiteral("current_mA")).toArray();
+    const QJsonArray faultPhaseArr = data.value(QStringLiteral("fault_phase")).toArray();
+    const QJsonArray faultOverArr = data.value(QStringLiteral("fault_over")).toArray();
+    const QJsonArray faultNoCurArr = data.value(QStringLiteral("fault_nocur")).toArray();
+
+    if (relayArr.isEmpty() && currentArr.isEmpty() &&
+        faultPhaseArr.isEmpty() && faultOverArr.isEmpty() && faultNoCurArr.isEmpty()) {
+        return;
+    }
+
+    lastRxTimer_.restart();
+
+    for (int ch = 0; ch < 4; ++ch) {
+        const int mode = (ch < relayArr.size()) ? relayArr[ch].toInt(0) : 0;
+        const double currentmA = (ch < currentArr.size()) ? currentArr[ch].toDouble(0.0) : 0.0;
+        status_[ch].channel = static_cast<quint8>(ch);
+        status_[ch].statusByte = static_cast<quint8>(mode & 0x03);
+        status_[ch].currentA = static_cast<float>(currentmA / 1000.0);
+        status_[ch].phaseLostFlag =
+            static_cast<quint8>((ch < faultPhaseArr.size()) ? faultPhaseArr[ch].toInt(0) : 0);
+        status_[ch].overcurrent =
+            (ch < faultOverArr.size()) ? (faultOverArr[ch].toInt(0) != 0) : false;
+        status_[ch].noCurrent =
+            (ch < faultNoCurArr.size()) ? (faultNoCurArr[ch].toInt(0) != 0) : false;
+        emit statusUpdated(static_cast<quint8>(ch), status_[ch]);
+    }
+    emit updated();
+}
+
 RelayProtocol::Status RelayGd427::lastStatus(quint8 channel) const
 {
     if (channel > kMaxChannel) {
@@ -357,6 +596,13 @@ RelayProtocol::Status RelayGd427::lastStatus(quint8 channel) const
 
 bool RelayGd427::canAccept(quint32 canId, bool extended, bool rtr) const
 {
+    if (transport_ == TransportType::TcpClient) {
+        Q_UNUSED(canId);
+        Q_UNUSED(extended);
+        Q_UNUSED(rtr);
+        return false;
+    }
+
     if (extended || rtr) {
         return false;
     }
@@ -373,6 +619,14 @@ bool RelayGd427::canAccept(quint32 canId, bool extended, bool rtr) const
 void RelayGd427::canOnFrame(quint32 canId, const QByteArray &payload,
                              bool extended, bool rtr)
 {
+    if (transport_ == TransportType::TcpClient) {
+        Q_UNUSED(canId);
+        Q_UNUSED(payload);
+        Q_UNUSED(extended);
+        Q_UNUSED(rtr);
+        return;
+    }
+
     Q_UNUSED(extended);
     Q_UNUSED(rtr);
 

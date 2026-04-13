@@ -67,6 +67,10 @@ bool getDouble(const QJsonObject &params, const char *key, double &out);
  * @return 成功返回true，失败（缺少键或类型不支持）返回false
  */
 bool getI32(const QJsonObject &params, const char *key, qint32 &out);
+bool getI32InRange(const QJsonObject &params, const char *key, qint32 &out,
+                   qint32 minValue, qint32 maxValue);
+bool getU8InRange(const QJsonObject &params, const char *key, quint8 &out,
+                  quint8 minValue, quint8 maxValue);
 
 /**
  * @brief 从JSON对象提取字符串

@@ -140,6 +140,24 @@ bool getI32(const QJsonObject &params, const char *key, qint32 &out)
     return false;
 }
 
+bool getI32InRange(const QJsonObject &params, const char *key, qint32 &out,
+                   qint32 minValue, qint32 maxValue)
+{
+    if (!getI32(params, key, out)) {
+        return false;
+    }
+    return out >= minValue && out <= maxValue;
+}
+
+bool getU8InRange(const QJsonObject &params, const char *key, quint8 &out,
+                  quint8 minValue, quint8 maxValue)
+{
+    if (!getU8(params, key, out)) {
+        return false;
+    }
+    return out >= minValue && out <= maxValue;
+}
+
 /**
  * @brief 从JSON对象提取字符串
  *
@@ -204,7 +222,8 @@ QJsonObject err(int code, const QString &message)
     return QJsonObject{
         {QStringLiteral("ok"), false},
         {QStringLiteral("code"), code},
-        {QStringLiteral("message"), message}
+        {QStringLiteral("message"), message},
+        {QStringLiteral("error"), message}
     };
 }
 

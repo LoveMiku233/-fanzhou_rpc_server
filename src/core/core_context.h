@@ -38,6 +38,9 @@ class SettingService;
 namespace comm {
 class CanComm;
 }
+namespace rpc {
+class DeviceTcpServer;
+}
 
 namespace device {
 class CanDeviceManager;
@@ -147,6 +150,7 @@ class CoreContext : public QObject
 
 public:
     explicit CoreContext(QObject *parent = nullptr);
+    void setDeviceTcpServer(rpc::DeviceTcpServer *server) { deviceTcpServer_ = server; }
 
     /**
      * @brief 使用默认配置初始化
@@ -255,6 +259,8 @@ public:
     bool removeDevice(quint8 nodeId, QString *error = nullptr);
     QList<DeviceConfig> listDevices() const;
     DeviceConfig getDeviceConfig(quint8 nodeId) const;
+    QJsonObject getDeviceParams(quint8 nodeId) const;
+    bool setDeviceParams(quint8 nodeId, const QJsonObject &params, bool merge, QString *error = nullptr);
     bool checkActionValid(const AutoStrategy &arr, QString *errMsg);
 
     void checkCloudSync();
@@ -334,11 +340,11 @@ public:
     bool triggerStrategy(int strategyId);
     bool createStrategy(const AutoStrategy &config, bool *isUpdate, QString *error = nullptr, bool syncToCloud = true);
     bool deleteStrategy(int strategyId, QString *error = nullptr, bool *alreadyDeleted = nullptr, bool syncToCloud = true);
-    bool setStrategyId(int old_id, int new_id);
+    bool setStrategyId(int oldId, int newId);
     //
     bool isInEffectiveTime(const AutoStrategy &s, const QTime &now) const;
     void executeActions(const QList<StrategyAction> &actions);
-    bool evaluateConditions(const QList<StrategyCondition> &conditions, qint8 matchType);
+    bool evaluateConditions(const QList<StrategyCondition> &conditions, qint8 matchType) const;
 
     // 分组
     bool ensureGroupForStrategy(AutoStrategy &s, QString *error);
@@ -379,6 +385,7 @@ public:
     bool isIpWhitelisted(const QString &ip) const;
 
 private:
+    rpc::DeviceTcpServer *deviceTcpServer_ = nullptr;
     struct DeletedStrategyInfo {
         int version = 0;
         qint64 deleteMs = 0;
@@ -393,13 +400,28 @@ private:
     void startQueueProcessor();
     void processNextJob();
     void evaluateAllStrategies();
+    bool shouldPauseStrategyEvaluation(qint64 nowMs);
+    bool shouldEvaluateStrategyNow(const AutoStrategy &strategy, const QDateTime &now) const;
+    void triggerStrategyActions(AutoStrategy &strategy, const QDateTime &now);
+    bool deleteExistingStrategyByIndex(int index, int strategyId, qint64 nowMs, bool syncToCloud);
+    bool markAlreadyDeletedStrategy(int strategyId, qint64 nowMs, QString *error, bool *alreadyDeleted);
+    bool markMissingStrategyDelete(int strategyId, qint64 nowMs, QString *error);
+    bool validateStrategyIdMapping(int oldId, int newId) const;
+    bool hasStrategyIdConflict(int oldId, int newId) const;
+    bool applyStrategyIdRemap(int oldId, int newId);
+    bool ensureStrategyGroupExists(AutoStrategy &strategy, QString *error);
+    bool ensureStrategyActionDeviceInGroup(qint32 groupId, quint8 node, QString *error);
+    bool ensureStrategyActionChannelInGroup(qint32 groupId, quint8 node, quint32 channel, QString *error);
+    bool updateExistingStrategy(const AutoStrategy &config, int existingIndex, bool *isUpdate, bool syncToCloud);
+    bool appendNewStrategy(const AutoStrategy &config, bool *isUpdate, bool syncToCloud);
+    void stopStrategyActionsSequentially(const AutoStrategy &strategy);
 
     ControlJobResult executeJob(const ControlJob &job);
 
     int strategyIntervalMs(const AutoStrategy &config) const;
     bool evaluateSensorCondition(const QString &condition, double value, double threshold) const;
 
-    QList<AutoStrategy> strategys_;
+    QList<AutoStrategy> strategies_;
     QHash<int, DeletedStrategyInfo> deletedStrategies_;
     QTimer *autoStrategyScheduler_;
 
@@ -409,6 +431,7 @@ private:
     bool processingQueue_ = false;
     quint64 nextJobId_ = 1;
     quint64 lastJobId_ = 0;
+    qint64 lastStrategyOverloadLogMs_ = 0;
 
     void trimJobResults();
     void trimDeletedStrategies();

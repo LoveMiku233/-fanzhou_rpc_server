@@ -92,6 +92,24 @@ enum class Action : quint8 {
 };
 
 /**
+ * @brief 通信模式（对应 MB_REG_COMM_MODE）
+ */
+enum class CommMode : quint8 {
+    None = 0x00,     ///< 无通信模式
+    Can = 0x01,      ///< CAN 通信
+    Rs485 = 0x02,    ///< RS485 通信
+    Ethernet = 0x03  ///< 以太网通信
+};
+
+/**
+ * @brief 网络模式（对应 MB_REG_NETWORK_MODE）
+ */
+enum class NetworkMode : quint8 {
+    Dhcp = 0x00,   ///< DHCP
+    Static = 0x01  ///< 静态IP
+};
+
+/**
  * @brief 控制命令结构
  */
 struct CtrlCmd {
@@ -109,6 +127,7 @@ struct Status {
     quint8 phaseLostFlag = 0; ///< 缺相标志：0=正常, 1=缺相
     float currentA = 0.0f;    ///< 电流（安培）
     bool overcurrent = false; ///< 过流标志
+    bool noCurrent = false;   ///< 无电流故障标志（TCP JSON扩展字段）
 };
 
 /**
@@ -389,6 +408,21 @@ inline QByteArray encodeSetOvercurrentFlag(quint8 channel, quint8 flags)
     cmd.type = SettingsCmdType::SetOvercurrentFlag;
     cmd.param1 = channel;
     cmd.param2 = flags;
+    return encodeSettingsCmd(cmd);
+}
+
+/**
+ * @brief 编码设置通信模式命令
+ * @param commMode 通信模式（MB_REG_COMM_MODE）
+ * @param networkMode 网络模式（MB_REG_NETWORK_MODE）
+ * @return 8字节CAN载荷
+ */
+inline QByteArray encodeSetCommMode(CommMode commMode, NetworkMode networkMode)
+{
+    SettingsCmd cmd;
+    cmd.type = SettingsCmdType::SetCommMode;
+    cmd.param1 = static_cast<quint8>(commMode);
+    cmd.param2 = static_cast<quint8>(networkMode);
     return encodeSettingsCmd(cmd);
 }
 
