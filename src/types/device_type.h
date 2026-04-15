@@ -11,8 +11,8 @@ namespace core {
 
 struct DeviceConfig {
     QString name;
-    device::DeviceTypeId deviceType;
-    device::CommTypeId commType;
+    device::DeviceTypeId deviceType = device::DeviceTypeId::RelayGd427;
+    device::CommTypeId commType = device::CommTypeId::Can;
     int nodeId = -1;
     QString bus = "can0";
     QJsonObject params;

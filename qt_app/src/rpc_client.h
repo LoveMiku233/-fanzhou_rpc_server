@@ -9,6 +9,7 @@
 #define RPC_CLIENT_H
 
 #include <QHash>
+#include <QQueue>
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QObject>
@@ -132,9 +133,20 @@ private slots:
     void cleanupPendingRequests();
 
 private:
+    struct OutgoingRequest {
+        int id = -1;
+        QString method;
+        QJsonObject params;
+        int timeoutMs = 0;
+    };
+
     QJsonObject makeError(int code, const QString &message) const;
     QByteArray packRequest(int id, const QString &method,
                            const QJsonObject &params) const;
+    int sendRequestNow(int id, const QString &method, const QJsonObject &params, int timeoutMs);
+    void startRequestTimeout(int id, const QString &method, int timeoutMs);
+    void tryPumpQueue();
+    int allocateRequestId();
     void handleLine(const QByteArray &line);
     void dispatchCallback(int id, const QJsonValue &result,
                           const QJsonObject &error);
@@ -151,6 +163,7 @@ private:
     QHash<int, QString> pending_;
     QHash<int, Callback> callbacks_;
     QHash<int, qint64> requestTimestamps_;  // 记录请求时间戳用于清理
+    QQueue<OutgoingRequest> sendQueue_;
     QTimer *cleanupTimer_;  // 定期清理定时器
 };
 

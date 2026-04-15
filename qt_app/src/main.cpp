@@ -39,8 +39,9 @@ int main(int argc, char *argv[])
     MainWindow mainWindow;
     mainWindow.setWindowTitle(QStringLiteral("泛舟RPC客户端 - 温室控制系统"));
 
-    // 完美适配1024x600分辨率
-    mainWindow.setFixedSize(UIConstants::WINDOW_WIDTH, UIConstants::WINDOW_HEIGHT);
+    // 默认尺寸 + 最小尺寸，避免固定窗口导致卡片在高DPI/窗口管理器下被压缩
+    mainWindow.resize(UIConstants::WINDOW_WIDTH, UIConstants::WINDOW_HEIGHT);
+    mainWindow.setMinimumSize(900, 560);
 
     // 居中显示
     const QScreen *screen = QGuiApplication::primaryScreen();

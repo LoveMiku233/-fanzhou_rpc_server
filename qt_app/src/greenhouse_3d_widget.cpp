@@ -19,6 +19,7 @@
 #include <QResizeEvent>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QMessageBox>
 
 Greenhouse3DWidget::Greenhouse3DWidget(RpcClient *rpcClient, QWidget *parent)
     : QWidget(parent)
@@ -235,12 +236,30 @@ void Greenhouse3DWidget::onDeviceHotspotClicked()
     if (!btn || !buttonIndexMap_.contains(btn)) {
         return;
     }
-    triggerGroupStart(buttonIndexMap_.value(btn));
-}
+    const int index = buttonIndexMap_.value(btn);
+    if (index < 0 || index >= hotspots_.size()) {
+        return;
+    }
+    const Hotspot &spot = hotspots_[index];
+    if (spot.groupId <= 0) {
+        statusLabel_->setText(QStringLiteral("%1 未绑定分组，请先在分组页面创建。").arg(spot.name));
+        emit logMessage(QStringLiteral("3D大棚点击失败：未绑定分组"), QStringLiteral("WARN"));
+        return;
+    }
 
-void Greenhouse3DWidget::triggerGroupStart(int hotspotIndex)
-{
-    triggerGroupControl(hotspotIndex, QStringLiteral("fwd"));
+    QMessageBox box(this);
+    box.setWindowTitle(QStringLiteral("分组控制"));
+    box.setText(QStringLiteral("%1 (Group %2)\n请选择操作：").arg(spot.name).arg(spot.groupId));
+    QPushButton *openBtn = box.addButton(QStringLiteral("开启"), QMessageBox::AcceptRole);
+    QPushButton *closeBtn = box.addButton(QStringLiteral("关闭"), QMessageBox::DestructiveRole);
+    box.addButton(QStringLiteral("取消"), QMessageBox::RejectRole);
+    box.exec();
+
+    if (box.clickedButton() == openBtn) {
+        triggerGroupControl(index, QStringLiteral("fwd"));
+    } else if (box.clickedButton() == closeBtn) {
+        triggerGroupControl(index, QStringLiteral("stop"));
+    }
 }
 
 void Greenhouse3DWidget::triggerGroupControl(int hotspotIndex, const QString &action)

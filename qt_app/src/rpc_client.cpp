@@ -14,6 +14,8 @@ namespace {
 constexpr int kMaxRequestId = 2000000000;  ///< nextId_回绕阈值
 constexpr int kRequestTimeoutSec = 30;       ///< 请求超时清理时间(秒)
 constexpr int kCleanupIntervalMs = 60000;    ///< 清理定时器间隔(1分钟)
+constexpr int kMaxInflightRequests = 12;     ///< 并发在途请求上限
+constexpr int kMaxQueuedRequests = 300;      ///< 本地排队上限
 }
 
 RpcClient::RpcClient(QObject *parent)
@@ -56,6 +58,7 @@ void RpcClient::clearAllCallbacks()
     pending_.clear();
     callbacks_.clear();
     requestTimestamps_.clear();
+    sendQueue_.clear();
 }
 
 void RpcClient::setEndpoint(const QString &host, quint16 port)
@@ -135,22 +138,59 @@ QByteArray RpcClient::packRequest(int id, const QString &method,
     return QJsonDocument(request).toJson(QJsonDocument::Compact) + "\n";
 }
 
-int RpcClient::callAsync(const QString &method, const QJsonObject &params)
+int RpcClient::allocateRequestId()
+{
+    int candidate = nextId_++;
+    if (nextId_ > kMaxRequestId) {
+        nextId_ = 1;
+    }
+    for (int guard = 0; guard < 1000; ++guard) {
+        if (!pending_.contains(candidate) && !callbacks_.contains(candidate)) {
+            return candidate;
+        }
+        candidate = nextId_++;
+        if (nextId_ > kMaxRequestId) {
+            nextId_ = 1;
+        }
+    }
+    return -1;
+}
+
+void RpcClient::startRequestTimeout(int id, const QString &method, int timeoutMs)
+{
+    if (timeoutMs <= 0) {
+        return;
+    }
+    QTimer::singleShot(timeoutMs, this, [this, id, method]() {
+        if (!pending_.contains(id)) {
+            return;
+        }
+        pending_.remove(id);
+        requestTimestamps_.remove(id);
+        log(QStringLiteral("[RPC] 请求超时 [id=%1] method: %2").arg(id).arg(method));
+
+        auto it = callbacks_.find(id);
+        if (it != callbacks_.end()) {
+            auto cb = it.value();
+            callbacks_.erase(it);
+            if (cb) {
+                cb(QJsonValue(), makeError(-32001, QStringLiteral("超时")));
+            }
+        }
+        tryPumpQueue();
+    });
+}
+
+int RpcClient::sendRequestNow(int id, const QString &method, const QJsonObject &params, int timeoutMs)
 {
     if (!isConnected()) {
-        log(QStringLiteral("[RPC] 异步调用失败：未连接服务器, method: %1").arg(method));
         return -1;
     }
 
-    const int id = nextId_++;
-    if (nextId_ > kMaxRequestId) nextId_ = 1;  // 防止整数溢出
     pending_.insert(id, method);
     requestTimestamps_.insert(id, QDateTime::currentMSecsSinceEpoch());
-
     const QByteArray payload = packRequest(id, method, params);
-
     log(QStringLiteral("[RPC] 发送请求 [id=%1] method: %2").arg(id).arg(method));
-
     const qint64 n = socket_->write(payload);
     if (n != payload.size()) {
         log(QStringLiteral("[RPC] 发送失败 [id=%1]: %2").arg(id).arg(socket_->errorString()));
@@ -160,16 +200,76 @@ int RpcClient::callAsync(const QString &method, const QJsonObject &params)
         return -1;
     }
     socket_->flush();
+    startRequestTimeout(id, method, timeoutMs);
     return id;
+}
+
+void RpcClient::tryPumpQueue()
+{
+    if (!isConnected()) {
+        return;
+    }
+    while (!sendQueue_.isEmpty() && pending_.size() < kMaxInflightRequests) {
+        const OutgoingRequest req = sendQueue_.dequeue();
+        if (sendRequestNow(req.id, req.method, req.params, req.timeoutMs) < 0) {
+            auto it = callbacks_.find(req.id);
+            if (it != callbacks_.end()) {
+                auto cb = it.value();
+                callbacks_.erase(it);
+                if (cb) {
+                    cb(QJsonValue(), makeError(-32000, QStringLiteral("传输连接/写入失败")));
+                }
+            }
+        }
+    }
+}
+
+int RpcClient::callAsync(const QString &method, const QJsonObject &params)
+{
+    if (!isConnected()) {
+        log(QStringLiteral("[RPC] 异步调用失败：未连接服务器, method: %1").arg(method));
+        return -1;
+    }
+
+    const int id = allocateRequestId();
+    if (id < 0) {
+        log(QStringLiteral("[RPC] 请求ID耗尽，拒绝请求 method: %1").arg(method));
+        return -1;
+    }
+
+    if (pending_.size() >= kMaxInflightRequests) {
+        if (sendQueue_.size() >= kMaxQueuedRequests) {
+            log(QStringLiteral("[RPC] 请求队列已满，拒绝请求 method: %1").arg(method));
+            return -1;
+        }
+        OutgoingRequest req;
+        req.id = id;
+        req.method = method;
+        req.params = params;
+        req.timeoutMs = 0;
+        sendQueue_.enqueue(req);
+        log(QStringLiteral("[RPC] 请求进入队列 [id=%1] method: %2 queue=%3")
+            .arg(id).arg(method).arg(sendQueue_.size()));
+        return id;
+    }
+    return sendRequestNow(id, method, params, 0);
 }
 
 int RpcClient::callAsync(const QString &method, const QJsonObject &params,
                           Callback callback, int timeoutMs)
 {
-    const int id = callAsync(method, params);
-    if (id < 0) {
+    if (!isConnected()) {
+        log(QStringLiteral("[RPC] 异步调用失败：未连接服务器, method: %1").arg(method));
         if (callback) {
             callback(QJsonValue(), makeError(-32000, QStringLiteral("传输连接/写入失败")));
+        }
+        return -1;
+    }
+
+    const int id = allocateRequestId();
+    if (id < 0) {
+        if (callback) {
+            callback(QJsonValue(), makeError(-32003, QStringLiteral("请求ID耗尽")));
         }
         return -1;
     }
@@ -178,27 +278,40 @@ int RpcClient::callAsync(const QString &method, const QJsonObject &params,
         callbacks_.insert(id, std::move(callback));
     }
 
-    if (timeoutMs > 0) {
-        QTimer::singleShot(timeoutMs, this, [this, id, method]() {
-            if (!pending_.contains(id)) {
-                return;
-            }
-            pending_.remove(id);
-            requestTimestamps_.remove(id);
-
-            log(QStringLiteral("[RPC] 请求超时 [id=%1] method: %2").arg(id).arg(method));
-
+    if (pending_.size() >= kMaxInflightRequests) {
+        if (sendQueue_.size() >= kMaxQueuedRequests) {
             auto it = callbacks_.find(id);
             if (it != callbacks_.end()) {
                 auto cb = it.value();
                 callbacks_.erase(it);
                 if (cb) {
-                    cb(QJsonValue(), makeError(-32001, QStringLiteral("超时")));
+                    cb(QJsonValue(), makeError(-32004, QStringLiteral("请求队列已满")));
                 }
             }
-        });
+            return -1;
+        }
+        OutgoingRequest req;
+        req.id = id;
+        req.method = method;
+        req.params = params;
+        req.timeoutMs = timeoutMs;
+        sendQueue_.enqueue(req);
+        log(QStringLiteral("[RPC] 请求进入队列 [id=%1] method: %2 queue=%3")
+            .arg(id).arg(method).arg(sendQueue_.size()));
+        return id;
     }
 
+    if (sendRequestNow(id, method, params, timeoutMs) < 0) {
+        auto it = callbacks_.find(id);
+        if (it != callbacks_.end()) {
+            auto cb = it.value();
+            callbacks_.erase(it);
+            if (cb) {
+                cb(QJsonValue(), makeError(-32000, QStringLiteral("传输连接/写入失败")));
+            }
+        }
+        return -1;
+    }
     return id;
 }
 
@@ -252,6 +365,7 @@ void RpcClient::cleanupPendingRequests()
                 cb(QJsonValue(), makeError(-32002, QStringLiteral("请求已过期")));
             }
         }
+        tryPumpQueue();
     }
 
     // 防止哈希表无限增长
@@ -406,6 +520,7 @@ void RpcClient::handleLine(const QByteArray &line)
     dispatchCallback(id, result, error);
     pending_.remove(id);
     requestTimestamps_.remove(id);
+    tryPumpQueue();
 }
 
 void RpcClient::onSocketError(QAbstractSocket::SocketError)
@@ -423,6 +538,13 @@ void RpcClient::onConnected()
 void RpcClient::onDisconnected()
 {
     log(QStringLiteral("[RPC] 服务器连接已断开"));
+    for (auto it = callbacks_.begin(); it != callbacks_.end(); ++it) {
+        auto cb = it.value();
+        if (cb) {
+            cb(QJsonValue(), makeError(-32005, QStringLiteral("连接已断开")));
+        }
+    }
+    clearAllCallbacks();
     emit disconnected();
 }
 

@@ -14,6 +14,7 @@
 #include "log_widget.h"
 #include "settings_widget.h"
 #include "monitor_widget.h"
+#include "debug_widget.h"
 #include "screen_manager.h"
 #include "style_constants.h"
 
@@ -34,6 +35,8 @@ using namespace UIConstants;
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
+    , topStatusBar_(nullptr)
+    , topStatusLayout_(nullptr)
     , sidebar_(nullptr)
     , sidebarLayout_(nullptr)
     , menuButtonGroup_(nullptr)
@@ -50,6 +53,7 @@ MainWindow::MainWindow(QWidget *parent)
     , logWidget_(nullptr)
     , settingsWidget_(nullptr)
     , monitorWidget_(nullptr)
+    , debugWidget_(nullptr)
     , rpcClient_(new RpcClient(this))
     , screenManager_(new ScreenManager(this))
     , autoRefreshTimer_(new QTimer(this))
@@ -113,54 +117,34 @@ MainWindow::~MainWindow()
 
 void MainWindow::setupUi()
 {
-    setupStatusBar();
+    statusBar()->hide();
+    setupTopStatusBar();
     setupCentralWidget();
 }
 
-void MainWindow::setupStatusBar()
+void MainWindow::setupTopStatusBar()
 {
-    QStatusBar *statusBar = this->statusBar();
-    statusBar->setSizeGripEnabled(false);
-
-    // 连接状态
     connectionStatusLabel_ = new QLabel(QStringLiteral("[X] 未连接"));
     connectionStatusLabel_->setStyleSheet(QStringLiteral(
-        "color: #e53935; font-weight: bold; padding: 2px 8px;"));
-    statusBar->addWidget(connectionStatusLabel_);
+        "color: #fbe9e7; font-weight: 700; padding: 6px 12px; "
+        "background: #b6423a; border-radius: 14px;"));
 
-    // 分隔符
-    QFrame *sep1 = new QFrame();
-    sep1->setFrameShape(QFrame::VLine);
-    statusBar->addWidget(sep1);
-
-    // 云连接状态
     cloudStatusLabel_ = new QLabel(QStringLiteral("[云] 未连接"));
     cloudStatusLabel_->setToolTip(QStringLiteral("云/MQTT连接状态"));
     cloudStatusLabel_->setStyleSheet(QStringLiteral(
-        "color: #78909c; padding: 2px 8px;"));
-    statusBar->addWidget(cloudStatusLabel_);
+        "color: #e8edf0; padding: 6px 12px; "
+        "background: #566872; border-radius: 14px;"));
 
-    // 分隔符
-    QFrame *sep1a = new QFrame();
-    sep1a->setFrameShape(QFrame::VLine);
-    statusBar->addWidget(sep1a);
-
-    // 时间
     timeLabel_ = new QLabel(QStringLiteral("--:--:--"));
     timeLabel_->setStyleSheet(QStringLiteral(
-        "color: #546e7a; padding: 2px 8px;"));
-    statusBar->addWidget(timeLabel_);
+        "color: #2f3a40; padding: 6px 12px; font-weight: 700; "
+        "background: #f0c75e; border-radius: 14px;"));
 
-    // 分隔符
-    QFrame *sep2 = new QFrame();
-    sep2->setFrameShape(QFrame::VLine);
-    statusBar->addWidget(sep2);
-
-    // 报警/日志信息
     alertLabel_ = new QLabel(QStringLiteral("[OK] 系统就绪"));
+    alertLabel_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     alertLabel_->setStyleSheet(QStringLiteral(
-        "color: #546e7a; padding: 2px 8px;"));
-    statusBar->addWidget(alertLabel_, 1);
+        "color: #e8edf0; padding: 6px 12px; "
+        "background: #3f4f58; border-radius: 14px;"));
 }
 
 void MainWindow::setupCentralWidget()
@@ -168,27 +152,39 @@ void MainWindow::setupCentralWidget()
     QWidget *centralWidget = new QWidget(this);
     setCentralWidget(centralWidget);
 
-    QHBoxLayout *mainLayout = new QHBoxLayout(centralWidget);
-    mainLayout->setContentsMargins(0, 0, 0, 0);
-    mainLayout->setSpacing(0);
+    QVBoxLayout *mainLayout = new QVBoxLayout(centralWidget);
+    mainLayout->setContentsMargins(6, 6, 6, 6);
+    mainLayout->setSpacing(6);
 
-    // 创建侧边栏
-    createSidebar();
-    mainLayout->addWidget(sidebar_);
+    topStatusBar_ = new QWidget(centralWidget);
+    topStatusBar_->setObjectName(QStringLiteral("topStatusBar"));
+    topStatusBar_->setMinimumHeight(44);
+    topStatusBar_->setMaximumHeight(50);
+    topStatusLayout_ = new QHBoxLayout(topStatusBar_);
+    topStatusLayout_->setContentsMargins(6, 4, 6, 4);
+    topStatusLayout_->setSpacing(6);
+    topStatusLayout_->addWidget(connectionStatusLabel_);
+    topStatusLayout_->addWidget(cloudStatusLabel_);
+    topStatusLayout_->addWidget(timeLabel_);
+    topStatusLayout_->addWidget(alertLabel_, 1);
+    mainLayout->addWidget(topStatusBar_);
 
-    // 创建右侧内容区
     createContentArea();
     mainLayout->addWidget(contentStack_, 1);
+
+    createBottomNavBar();
+    mainLayout->addWidget(sidebar_);
 }
 
-void MainWindow::createSidebar()
+void MainWindow::createBottomNavBar()
 {
     sidebar_ = new QWidget(this);
     sidebar_->setObjectName(QStringLiteral("sidebar"));
-    sidebar_->setFixedWidth(SIDEBAR_WIDTH);
+    sidebar_->setMinimumHeight(62);
+    sidebar_->setMaximumHeight(68);
 
-    sidebarLayout_ = new QVBoxLayout(sidebar_);
-    sidebarLayout_->setContentsMargins(5, 10, 5, 10);
+    sidebarLayout_ = new QHBoxLayout(sidebar_);
+    sidebarLayout_->setContentsMargins(6, 6, 6, 6);
     sidebarLayout_->setSpacing(5);
 
     menuButtonGroup_ = new QButtonGroup(this);
@@ -203,30 +199,21 @@ void MainWindow::createSidebar()
         QStringLiteral("传感"),
         QStringLiteral("日志"),
         QStringLiteral("设置"),
-        QStringLiteral("监控")
-    };
-
-    QStringList menuIcons = {
-        QStringLiteral("🏠"),
-        QStringLiteral("🏗️"),
-        QStringLiteral("🔧"),
-        QStringLiteral("📦"),
-        QStringLiteral("⚙️"),
-        QStringLiteral("🌡️"),
-        QStringLiteral("📝"),
-        QStringLiteral("⚡"),
-        QStringLiteral("📊")
+        QStringLiteral("监控"),
+        QStringLiteral("调试")
     };
 
     for (int i = 0; i < menuNames.size(); ++i) {
-        QPushButton *btn = new QPushButton(menuIcons[i] + "\n" + menuNames[i], sidebar_);
+        QPushButton *btn = new QPushButton(menuNames[i], sidebar_);
         btn->setCheckable(true);
-        btn->setFixedHeight(MENU_BTN_HEIGHT);
+        btn->setFixedHeight(48);
+        btn->setMinimumWidth(70);
+        btn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         btn->setCursor(Qt::PointingHandCursor);
 
         menuButtonGroup_->addButton(btn, i);
         menuButtons_.append(btn);
-        sidebarLayout_->addWidget(btn);
+        sidebarLayout_->addWidget(btn, 1);
     }
 
     connect(menuButtonGroup_, QOverload<QAbstractButton*>::of(&QButtonGroup::buttonClicked),
@@ -236,13 +223,6 @@ void MainWindow::createSidebar()
             onMenuButtonClicked(index);
         }
     });
-
-    sidebarLayout_->addStretch();
-
-    // 版本信息
-    QLabel *versionLabel = new QLabel(QStringLiteral("v2.0"), sidebar_);
-    versionLabel->setAlignment(Qt::AlignCenter);
-    sidebarLayout_->addWidget(versionLabel);
 
     // 默认选中第一个
     if (!menuButtons_.isEmpty()) {
@@ -359,6 +339,17 @@ void MainWindow::createContentArea()
     QScroller::grabGesture(monitorScrollArea->viewport(), QScroller::LeftMouseButtonGesture);
     contentStack_->addWidget(monitorScrollArea);
 
+    // 创建调试页面
+    QScrollArea *debugScrollArea = new QScrollArea(this);
+    debugScrollArea->setWidgetResizable(true);
+    debugScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    debugScrollArea->setFrameShape(QFrame::NoFrame);
+    debugWidget_ = new DebugWidget(rpcClient_, this);
+    debugScrollArea->setWidget(debugWidget_);
+    QScroller::grabGesture(debugScrollArea->viewport(), QScroller::LeftMouseButtonGesture);
+    connect(debugWidget_, &DebugWidget::logMessage, this, &MainWindow::onLogMessage);
+    contentStack_->addWidget(debugScrollArea);
+
     // 初始化自动息屏
     QSettings settings;
     bool autoScreenOff = settings.value(QStringLiteral("settings/autoScreenOff"), false).toBool();
@@ -405,6 +396,9 @@ void MainWindow::switchToPage(int index)
     if (index == 8 && monitorWidget_) {
         monitorWidget_->refreshData();
     }
+    if (index == 9 && debugWidget_ && rpcClient_->isConnected()) {
+        debugWidget_->refreshAll();
+    }
 }
 
 void MainWindow::updateMenuSelection(int activeIndex)
@@ -443,14 +437,17 @@ void MainWindow::updateStatusBarConnection(bool connected)
     if (connected) {
         connectionStatusLabel_->setText(QStringLiteral("[OK] 已连接"));
         connectionStatusLabel_->setStyleSheet(QStringLiteral(
-            "color: #43a047; font-weight: bold; padding: 2px 8px;"));
+            "color: #ecf8ef; font-weight: 700; padding: 6px 12px; "
+            "background: #2e7d32; border-radius: 14px;"));
         alertLabel_->setText(QStringLiteral("[OK] 系统运行正常"));
         alertLabel_->setStyleSheet(QStringLiteral(
-            "color: #546e7a; padding: 2px 8px;"));
+            "color: #e8edf0; padding: 6px 12px; "
+            "background: #3f4f58; border-radius: 14px;"));
     } else {
         connectionStatusLabel_->setText(QStringLiteral("[X] 未连接"));
         connectionStatusLabel_->setStyleSheet(QStringLiteral(
-            "color: #e53935; font-weight: bold; padding: 2px 8px;"));
+            "color: #fbe9e7; font-weight: 700; padding: 6px 12px; "
+            "background: #b6423a; border-radius: 14px;"));
     }
 }
 
@@ -462,7 +459,7 @@ void MainWindow::onAutoRefreshTimeout()
             if (homeWidget_) homeWidget_->refreshData();
             break;
         case 2:
-            if (deviceWidget_) deviceWidget_->refreshDeviceStatus();
+            if (deviceWidget_) deviceWidget_->refreshDevicePresence();
             updateCloudStatus();
             break;
         default:
@@ -481,15 +478,18 @@ void MainWindow::onLogMessage(const QString &message, const QString &level)
     if (level == QStringLiteral("ERROR")) {
         alertLabel_->setText(QStringLiteral("[X] %1").arg(message));
         alertLabel_->setStyleSheet(QStringLiteral(
-            "color: #e53935; padding: 2px 8px; font-weight: bold;"));
+            "color: #fbe9e7; padding: 6px 12px; font-weight: 700; "
+            "background: #b6423a; border-radius: 14px;"));
     } else if (level == QStringLiteral("WARN")) {
         alertLabel_->setText(QStringLiteral("[警] %1").arg(message));
         alertLabel_->setStyleSheet(QStringLiteral(
-            "color: #fb8c00; padding: 2px 8px; font-weight: bold;"));
+            "color: #2f3a40; padding: 6px 12px; font-weight: 700; "
+            "background: #f0c75e; border-radius: 14px;"));
     } else if (level == QStringLiteral("INFO")) {
         alertLabel_->setText(QStringLiteral("[OK] %1").arg(message));
         alertLabel_->setStyleSheet(QStringLiteral(
-            "color: #43a047; padding: 2px 8px;"));
+            "color: #e8edf0; padding: 6px 12px; "
+            "background: #3f4f58; border-radius: 14px;"));
     }
 }
 
@@ -534,7 +534,8 @@ void MainWindow::updateCloudStatus()
     if (!rpcClient_->isConnected()) {
         cloudStatusLabel_->setText(QStringLiteral("[云] 未连接"));
         cloudStatusLabel_->setStyleSheet(QStringLiteral(
-            "color: #78909c; padding: 2px 8px;"));
+            "color: #e8edf0; padding: 6px 12px; "
+            "background: #566872; border-radius: 14px;"));
         return;
     }
 
@@ -554,7 +555,8 @@ void MainWindow::updateCloudStatus()
                 if (!error.isEmpty() || !result.isObject()) {
                     cloudStatusLabel_->setText(QStringLiteral("[云] 未知"));
                     cloudStatusLabel_->setStyleSheet(QStringLiteral(
-                        "color: #78909c; padding: 2px 8px;"));
+                        "color: #e8edf0; padding: 6px 12px; "
+                        "background: #566872; border-radius: 14px;"));
                     return;
                 }
 
@@ -563,7 +565,8 @@ void MainWindow::updateCloudStatus()
                 if (!resultObj.value(QStringLiteral("ok")).toBool()) {
                     cloudStatusLabel_->setText(QStringLiteral("[云] 未知"));
                     cloudStatusLabel_->setStyleSheet(QStringLiteral(
-                        "color: #78909c; padding: 2px 8px;"));
+                        "color: #e8edf0; padding: 6px 12px; "
+                        "background: #566872; border-radius: 14px;"));
                     return;
                 }
 
@@ -583,16 +586,16 @@ void MainWindow::updateCloudStatus()
                 QString style;
                 if (totalChannels == 0) {
                     text = QStringLiteral("[云] 未配置");
-                    style = QStringLiteral("color: #78909c; padding: 2px 8px;");
+                    style = QStringLiteral("color: #e8edf0; padding: 6px 12px; background: #566872; border-radius: 14px;");
                 } else if (connectedChannels == 0) {
                     text = QStringLiteral("[云] 断开 (0/%1)").arg(totalChannels);
-                    style = QStringLiteral("color: #e53935; padding: 2px 8px; font-weight: bold;");
+                    style = QStringLiteral("color: #fbe9e7; padding: 6px 12px; font-weight: 700; background: #b6423a; border-radius: 14px;");
                 } else if (connectedChannels == totalChannels) {
                     text = QStringLiteral("[云] 已连接 (%1)").arg(totalChannels);
-                    style = QStringLiteral("color: #43a047; padding: 2px 8px; font-weight: bold;");
+                    style = QStringLiteral("color: #ecf8ef; padding: 6px 12px; font-weight: 700; background: #2e7d32; border-radius: 14px;");
                 } else {
                     text = QStringLiteral("[云] 部分连接 (%1/%2)").arg(connectedChannels).arg(totalChannels);
-                    style = QStringLiteral("color: #fb8c00; padding: 2px 8px; font-weight: bold;");
+                    style = QStringLiteral("color: #2f3a40; padding: 6px 12px; font-weight: 700; background: #f0c75e; border-radius: 14px;");
                 }
 
                 cloudStatusLabel_->setText(text);
@@ -607,16 +610,16 @@ void MainWindow::onMqttStatusFromDashboard(int connected, int total)
     QString style;
     if (total == 0) {
         text = QStringLiteral("[云] 未配置");
-        style = QStringLiteral("color: #78909c; padding: 2px 8px;");
+        style = QStringLiteral("color: #e8edf0; padding: 6px 12px; background: #566872; border-radius: 14px;");
     } else if (connected == 0) {
         text = QStringLiteral("[云] 断开 (0/%1)").arg(total);
-        style = QStringLiteral("color: #e53935; padding: 2px 8px; font-weight: bold;");
+        style = QStringLiteral("color: #fbe9e7; padding: 6px 12px; font-weight: 700; background: #b6423a; border-radius: 14px;");
     } else if (connected == total) {
         text = QStringLiteral("[云] 已连接 (%1)").arg(total);
-        style = QStringLiteral("color: #43a047; padding: 2px 8px; font-weight: bold;");
+        style = QStringLiteral("color: #ecf8ef; padding: 6px 12px; font-weight: 700; background: #2e7d32; border-radius: 14px;");
     } else {
         text = QStringLiteral("[云] 部分连接 (%1/%2)").arg(connected).arg(total);
-        style = QStringLiteral("color: #fb8c00; padding: 2px 8px; font-weight: bold;");
+        style = QStringLiteral("color: #2f3a40; padding: 6px 12px; font-weight: 700; background: #f0c75e; border-radius: 14px;");
     }
     cloudStatusLabel_->setText(text);
     cloudStatusLabel_->setStyleSheet(style);

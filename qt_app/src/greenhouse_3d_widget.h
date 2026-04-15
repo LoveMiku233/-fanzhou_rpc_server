@@ -44,7 +44,6 @@ private:
     void setupUi();
     void layoutHotspots();
     void updateHotspotLabels();
-    void triggerGroupStart(int hotspotIndex);
     void triggerGroupControl(int hotspotIndex, const QString &action);
 
     RpcClient *rpcClient_;

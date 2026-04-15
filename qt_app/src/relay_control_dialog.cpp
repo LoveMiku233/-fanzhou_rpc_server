@@ -30,7 +30,7 @@ constexpr int kStatusRefreshDelayMs = 500;
 
 // Delay before refreshing status after a control operation (ms)
 // Prevents rapid consecutive RPC calls
-constexpr int kControlRefreshDelayMs = 800;
+constexpr int kControlRefreshDelayMs = 1200;
 }
 
 RelayControlDialog::RelayControlDialog(RpcClient *rpcClient, int nodeId,

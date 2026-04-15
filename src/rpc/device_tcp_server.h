@@ -10,6 +10,7 @@
 #include <QJsonObject>
 #include <QObject>
 #include <QTcpServer>
+#include <QByteArray>
 
 class QTcpSocket;
 
@@ -51,18 +52,28 @@ private slots:
     void onDisconnected();
 
 private:
+    struct RecentControlCommand {
+        QByteArray signature;
+        qint64 timestampMs = 0;
+    };
+
     void processLines(QTcpSocket *socket);
     static int findJsonObjectEnd(const QByteArray &buffer, int startIndex);
     static QByteArray toLine(const QJsonObject &obj);
+    static bool isControlCommand(const QJsonObject &obj);
+    static QByteArray controlCommandSignature(const QJsonObject &obj);
     void bindDeviceSocket(QTcpSocket *socket, int devId);
 
     core::CoreContext *context_ = nullptr;
     QHash<QTcpSocket *, QByteArray> buffers_;
     QHash<QTcpSocket *, int> socketDevId_;
     QHash<int, QTcpSocket *> devSocket_;
+    QHash<int, RecentControlCommand> recentControlByDev_;
 
     static constexpr int kMaxBufferSize = 1024 * 1024;
+    static constexpr int kMaxIncompleteObjectSize = 4096;
     static constexpr int kMaxConnections = 64;
+    static constexpr qint64 kControlDedupWindowMs = 1500;
 };
 
 }  // namespace rpc

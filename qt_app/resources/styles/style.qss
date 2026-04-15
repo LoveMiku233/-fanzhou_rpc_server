@@ -1,49 +1,50 @@
-/* FanZhou RPC Client Stylesheet - Light Theme */
-/* 浅色温和配色方案 - 不刺眼 */
+/* FanZhou RPC Client Stylesheet - Industrial Theme */
+/* 工业控制台风格配色 */
 /* 针对7寸1024x600触屏优化 */
 
 /* ==================== 主窗口 - 柔和浅灰背景 ==================== */
 QMainWindow {
-    background: #f0f4f8;
+    background: #d8dde1;
 }
 
 /* ==================== 侧边栏菜单面板 ==================== */
 #sidebar {
-    background: #e8ecef;
-    border-right: 1px solid #d1d9e0;
+    background: #2f3a40;
+    border: 1px solid #1f272c;
+    border-radius: 14px;
 }
 
 #sidebar QLabel {
-    color: #5a6c7d;
+    color: #b9c4ca;
 }
 
 /* ==================== 菜单按钮 ==================== */
 QPushButton {
-    background: #ffffff;
-    color: #4a5568;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    padding: 8px 16px;
-    min-width: 70px;
-    min-height: 40px;
-    font-size: 13px;
+    background: #f2f4f6;
+    color: #2f3a40;
+    border: 1px solid #b6c0c7;
+    border-radius: 9px;
+    padding: 6px 12px;
+    min-width: 66px;
+    min-height: 34px;
+    font-size: 12px;
 }
 
 QPushButton:hover {
-    background: #f7fafc;
-    border-color: #cbd5e0;
-    color: #2d3748;
+    background: #ffffff;
+    border-color: #7f919d;
+    color: #1f2a30;
 }
 
 QPushButton:pressed {
-    background: #edf2f7;
-    border-color: #a0aec0;
+    background: #d9e0e5;
+    border-color: #6e828f;
 }
 
 QPushButton:checked {
-    background: #e6f7ff;
-    border-color: #91d5ff;
-    color: #1890ff;
+    background: #ffd166;
+    border-color: #c79218;
+    color: #2b2f33;
 }
 
 QPushButton:disabled {
@@ -54,22 +55,32 @@ QPushButton:disabled {
 
 /* 侧边栏菜单按钮 */
 #sidebar QPushButton {
-    background: transparent;
-    border: none;
-    border-radius: 8px;
-    color: #5a6c7d;
-    font-weight: normal;
+    background: #3b4a52;
+    border: 1px solid #4a5d67;
+    border-radius: 9px;
+    color: #d7e0e5;
+    font-weight: 600;
+    font-size: 12px;
+    min-height: 42px;
+    min-width: 60px;
+    padding: 2px 4px;
 }
 
 #sidebar QPushButton:hover {
-    background: #dfe6ed;
-    color: #2c3e50;
+    background: #4a5d67;
+    color: #ffffff;
 }
 
 #sidebar QPushButton:checked {
-    background: #c8e6c9;
-    color: #2e7d32;
-    border: 1px solid #a5d6a7;
+    background: #ffd166;
+    color: #2b2f33;
+    border: 1px solid #d6a237;
+}
+
+#topStatusBar {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2d3a41, stop:1 #41535d);
+    border: 1px solid #202a30;
+    border-radius: 12px;
 }
 
 /* ==================== 成功类型按钮 ==================== */

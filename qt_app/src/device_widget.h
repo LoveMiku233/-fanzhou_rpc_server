@@ -27,7 +27,11 @@ class DeviceCard : public QFrame
     Q_OBJECT
 
 public:
-    explicit DeviceCard(int nodeId, const QString &name, QWidget *parent = nullptr);
+    explicit DeviceCard(int nodeId,
+                        const QString &name,
+                        const QString &typeName,
+                        const QString &commTypeName,
+                        QWidget *parent = nullptr);
     
     int nodeId() const { return nodeId_; }
     QString deviceName() const { return name_; }
@@ -47,6 +51,8 @@ private:
     
     QLabel *nameLabel_;
     QLabel *nodeIdLabel_;
+    QLabel *typeLabel_;
+    QLabel *commTypeLabel_;
     QLabel *statusLabel_;
     QLabel *currentLabel_;
     QLabel *ch0Label_;
@@ -72,6 +78,7 @@ signals:
 public slots:
     void refreshDeviceList();
     void refreshDeviceStatus();
+    void refreshDevicePresence();
 
 private slots:
     void onQueryAllClicked();
@@ -84,6 +91,7 @@ private:
     void updateDeviceCardStatus(int nodeId, const QJsonObject &status);
     void clearDeviceCards();
     void tryRelayNodesAsFallback();
+    void applyNodePresence(const QJsonArray &nodes);
     void setToolbarBusy(bool busy);
     void finishStatusRefreshOne();
 

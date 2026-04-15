@@ -30,12 +30,12 @@ constexpr int CONTENT_WIDTH = WINDOW_WIDTH - SIDEBAR_WIDTH;
 
 // ==================== 边距和间距 ====================
 // 页面边距
-constexpr int PAGE_MARGIN = 12;
-constexpr int PAGE_SPACING = 12;
+constexpr int PAGE_MARGIN = 8;
+constexpr int PAGE_SPACING = 8;
 
 // 卡片边距
-constexpr int CARD_MARGIN = 10;
-constexpr int CARD_SPACING = 8;
+constexpr int CARD_MARGIN = 8;
+constexpr int CARD_SPACING = 6;
 
 // 对话框边距
 constexpr int DIALOG_MARGIN = 16;
@@ -43,10 +43,10 @@ constexpr int DIALOG_SPACING = 10;
 
 // ==================== 控件高度（统一, 触屏友好） ====================
 // 小按钮高度（图标按钮等）
-constexpr int BTN_HEIGHT_SMALL = 38;
+constexpr int BTN_HEIGHT_SMALL = 34;
 
 // 标准按钮高度
-constexpr int BTN_HEIGHT = 44;
+constexpr int BTN_HEIGHT = 40;
 
 // 大按钮高度（主要操作）
 constexpr int BTN_HEIGHT_LARGE = 50;
@@ -55,10 +55,10 @@ constexpr int BTN_HEIGHT_LARGE = 50;
 constexpr int BTN_HEIGHT_EMERGENCY = 56;
 
 // 侧边栏菜单按钮高度（包含图标和文字两行）
-constexpr int MENU_BTN_HEIGHT = 60;
+constexpr int MENU_BTN_HEIGHT = 52;
 
 // 输入框高度
-constexpr int INPUT_HEIGHT = 42;
+constexpr int INPUT_HEIGHT = 38;
 
 // ==================== 控件最小宽度 ====================
 // 小按钮最小宽度
@@ -88,23 +88,23 @@ constexpr int DIALOG_HEIGHT_LARGE = 500;
 
 // ==================== 卡片尺寸 ====================
 // 卡片最小高度
-constexpr int CARD_MIN_HEIGHT = 110;
+constexpr int CARD_MIN_HEIGHT = 96;
 
 // 卡片最大宽度（两列布局时）
 constexpr int CARD_MAX_WIDTH = (CONTENT_WIDTH - PAGE_MARGIN * 2 - PAGE_SPACING) / 2;
 
 // ==================== 字体大小（触屏友好） ====================
 // 页面标题
-constexpr int FONT_SIZE_TITLE = 20;
+constexpr int FONT_SIZE_TITLE = 18;
 
 // 卡片标题
-constexpr int FONT_SIZE_CARD_TITLE = 15;
+constexpr int FONT_SIZE_CARD_TITLE = 14;
 
 // 正文
-constexpr int FONT_SIZE_BODY = 14;
+constexpr int FONT_SIZE_BODY = 13;
 
 // 小字（提示、状态）
-constexpr int FONT_SIZE_SMALL = 12;
+constexpr int FONT_SIZE_SMALL = 11;
 
 // 大数值显示（如传感器数值）
 constexpr int FONT_SIZE_VALUE = 32;

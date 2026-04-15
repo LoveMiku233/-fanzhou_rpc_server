@@ -14,6 +14,7 @@
 #include <QEventLoop>
 #include <QTcpSocket>
 #include <QTimer>
+#include <QDateTime>
 #include <cctype>
 
 namespace fanzhou {
@@ -126,6 +127,22 @@ bool DeviceTcpServer::sendCommandAndWait(const QJsonObject &command,
     const QJsonValue expectedId = waitMode ? command.value(QStringLiteral("id")) : QJsonValue();
     const int expectedDev = waitMode ? ((targetDev >= 0) ? targetDev : socketDevId_.value(target, -1)) : -1;
 
+    // 控制命令去重：防止上层超时重复触发导致继电器被重复打开。
+    if (expectedDev >= 0 && isControlCommand(command)) {
+        const QByteArray signature = controlCommandSignature(command);
+        const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+        const RecentControlCommand last = recentControlByDev_.value(expectedDev);
+        if (!last.signature.isEmpty() && signature == last.signature &&
+            (nowMs - last.timestampMs) >= 0 && (nowMs - last.timestampMs) <= kControlDedupWindowMs) {
+            LOG_WARNING(kLogSource,
+                        QStringLiteral("dedup duplicate control command for dev=%1 within %2ms, suppressed")
+                            .arg(expectedDev)
+                            .arg(kControlDedupWindowMs));
+            return true;
+        }
+        recentControlByDev_[expectedDev] = RecentControlCommand{signature, nowMs};
+    }
+
     QEventLoop loop;
     QTimer timer;
     timer.setSingleShot(true);
@@ -223,7 +240,10 @@ void DeviceTcpServer::onReadyRead()
         QString chunkText = QString::fromUtf8(chunk);
         chunkText.replace(QStringLiteral("\r"), QStringLiteral("\\r"));
         chunkText.replace(QStringLiteral("\n"), QStringLiteral("\\n"));
-        LOG_INFO(kLogSource,
+        if (chunkText.size() > 256) {
+            chunkText = chunkText.left(256) + QStringLiteral("...(truncated)");
+        }
+        LOG_DEBUG(kLogSource,
                  QStringLiteral("rx chunk from %1:%2 => %3")
                      .arg(socket->peerAddress().toString())
                      .arg(socket->peerPort())
@@ -302,6 +322,14 @@ void DeviceTcpServer::processLines(QTcpSocket *socket)
         if (end < 0) {
             if (start > 0) {
                 buffer.remove(0, start);
+            }
+            if (buffer.size() > kMaxIncompleteObjectSize) {
+                LOG_WARNING(kLogSource,
+                            QStringLiteral("dropping oversized incomplete json object (%1 bytes) from %2:%3")
+                                .arg(buffer.size())
+                                .arg(socket->peerAddress().toString())
+                                .arg(socket->peerPort()));
+                buffer.clear();
             }
             break;  // Wait for more bytes (half packet)
         }
@@ -407,6 +435,20 @@ QByteArray DeviceTcpServer::toLine(const QJsonObject &obj)
     return QJsonDocument(obj).toJson(QJsonDocument::Compact) + '\n';
 }
 
+bool DeviceTcpServer::isControlCommand(const QJsonObject &obj)
+{
+    const QString cmd = obj.value(QStringLiteral("cmd")).toString();
+    return cmd == QStringLiteral("relay.set") ||
+           cmd == QStringLiteral("relay.stopall");
+}
+
+QByteArray DeviceTcpServer::controlCommandSignature(const QJsonObject &obj)
+{
+    QJsonObject normalized = obj;
+    normalized.remove(QStringLiteral("id"));
+    return QJsonDocument(normalized).toJson(QJsonDocument::Compact);
+}
+
 void DeviceTcpServer::bindDeviceSocket(QTcpSocket *socket, int devId)
 {
     QTcpSocket *old = devSocket_.value(devId, nullptr);
@@ -423,6 +465,7 @@ void DeviceTcpServer::bindDeviceSocket(QTcpSocket *socket, int devId)
     }
     socketDevId_[socket] = devId;
     devSocket_[devId] = socket;
+    recentControlByDev_.remove(devId);
 }
 
 }  // namespace rpc

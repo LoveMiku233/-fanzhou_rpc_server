@@ -51,16 +51,16 @@ void GroupCard::setupUi()
     setFrameShape(QFrame::NoFrame);
     setStyleSheet(QStringLiteral(
         "#groupCard {"
-        "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);"
-        "  border: 2px solid #e0e0e0;"
+        "  background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f6f9fb, stop:1 #e7eef3);"
+        "  border: 1px solid #8ea0ab;"
         "  border-radius: %1px;"
         "}"
         "#groupCard:hover {"
-        "  border-color: #9b59b6;"
-        "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f5eef8);"
+        "  border-color: #2f5f73;"
+        "  background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #ffffff, stop:1 #eef4f8);"
         "}").arg(BORDER_RADIUS_CARD));
     setCursor(Qt::PointingHandCursor);
-    setMinimumHeight(CARD_MIN_HEIGHT);
+    setMinimumHeight(138);
     setMinimumWidth(200);  // 确保卡片最小宽度
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
@@ -70,17 +70,17 @@ void GroupCard::setupUi()
     // 顶部行：名称和ID
     QHBoxLayout *topRow = new QHBoxLayout();
     
-    nameLabel_ = new QLabel(QStringLiteral("[组] %1").arg(name_), this);
+    nameLabel_ = new QLabel(name_, this);
     nameLabel_->setStyleSheet(QStringLiteral(
         "font-size: %1px; font-weight: bold; color: #2c3e50;").arg(FONT_SIZE_CARD_TITLE));
     topRow->addWidget(nameLabel_);
     
     topRow->addStretch();
     
-    idLabel_ = new QLabel(QStringLiteral("ID:%1").arg(groupId_), this);
+    idLabel_ = new QLabel(QStringLiteral("组ID %1").arg(groupId_), this);
     idLabel_->setStyleSheet(QStringLiteral(
-        "font-size: %1px; color: #7f8c8d; background-color: #ecf0f1; "
-        "padding: 2px 6px; border-radius: 4px;").arg(FONT_SIZE_SMALL));
+        "font-size: %1px; color: #325160; background-color: #dbe7ee; "
+        "padding: 2px 8px; border-radius: 8px;").arg(FONT_SIZE_SMALL));
     topRow->addWidget(idLabel_);
     
     mainLayout->addLayout(topRow);
@@ -90,12 +90,14 @@ void GroupCard::setupUi()
     
     deviceCountLabel_ = new QLabel(QStringLiteral("0设备"), this);
     deviceCountLabel_->setStyleSheet(QStringLiteral(
-        "font-size: %1px; color: #3498db;").arg(FONT_SIZE_BODY));
+        "font-size: %1px; color: #1f5d80; background: #dbeefe; padding: 1px 8px; border-radius: 7px;")
+        .arg(FONT_SIZE_BODY));
     middleRow->addWidget(deviceCountLabel_);
     
     channelCountLabel_ = new QLabel(QStringLiteral("0通道"), this);
     channelCountLabel_->setStyleSheet(QStringLiteral(
-        "font-size: %1px; color: #9b59b6;").arg(FONT_SIZE_BODY));
+        "font-size: %1px; color: #705a2f; background: #f8edd6; padding: 1px 8px; border-radius: 7px;")
+        .arg(FONT_SIZE_BODY));
     middleRow->addWidget(channelCountLabel_);
     
     middleRow->addStretch();
@@ -122,7 +124,7 @@ void GroupCard::setupUi()
     QHBoxLayout *buttonRow = new QHBoxLayout();
     buttonRow->setSpacing(6);
     
-    QPushButton *stopBtn = new QPushButton(QStringLiteral("停"), this);
+    QPushButton *stopBtn = new QPushButton(QStringLiteral("关闭"), this);
     stopBtn->setFixedHeight(BTN_HEIGHT_SMALL);
     stopBtn->setMinimumWidth(BTN_MIN_WIDTH_SMALL);
     stopBtn->setStyleSheet(QStringLiteral(
@@ -134,7 +136,7 @@ void GroupCard::setupUi()
     });
     buttonRow->addWidget(stopBtn);
     
-    QPushButton *fwdBtn = new QPushButton(QStringLiteral("正"), this);
+    QPushButton *fwdBtn = new QPushButton(QStringLiteral("开启"), this);
     fwdBtn->setFixedHeight(BTN_HEIGHT_SMALL);
     fwdBtn->setMinimumWidth(BTN_MIN_WIDTH_SMALL);
     fwdBtn->setStyleSheet(QStringLiteral(
@@ -146,7 +148,7 @@ void GroupCard::setupUi()
     });
     buttonRow->addWidget(fwdBtn);
     
-    QPushButton *revBtn = new QPushButton(QStringLiteral("反"), this);
+    QPushButton *revBtn = new QPushButton(QStringLiteral("反转"), this);
     revBtn->setFixedHeight(BTN_HEIGHT_SMALL);
     revBtn->setMinimumWidth(BTN_MIN_WIDTH_SMALL);
     revBtn->setStyleSheet(QStringLiteral(
@@ -158,7 +160,7 @@ void GroupCard::setupUi()
     });
     buttonRow->addWidget(revBtn);
     
-    QPushButton *deleteBtn = new QPushButton(QStringLiteral("删"), this);
+    QPushButton *deleteBtn = new QPushButton(QStringLiteral("删除"), this);
     deleteBtn->setFixedHeight(BTN_HEIGHT_SMALL);
     deleteBtn->setMinimumWidth(BTN_MIN_WIDTH_SMALL);
     deleteBtn->setStyleSheet(QStringLiteral(
@@ -177,7 +179,7 @@ void GroupCard::updateInfo(const QString &name, int deviceCount, int channelCoun
                           const QJsonArray &channels)
 {
     name_ = name;
-    nameLabel_->setText(QStringLiteral("[组] %1").arg(name));
+    nameLabel_->setText(name);
     deviceCountLabel_->setText(QStringLiteral("%1设备").arg(deviceCount));
     channelCountLabel_->setText(QStringLiteral("%1通道").arg(channelCount));
     
@@ -197,7 +199,7 @@ void GroupCard::updateInfo(const QString &name, int deviceCount, int channelCoun
         channelsLabel_->setText(channelTexts.join(QStringLiteral(",")));
         channelsLabel_->setStyleSheet(QStringLiteral(
             "font-size: %1px; color: #2c3e50; padding: 4px 6px; "
-            "background-color: #e8f5e9; border-radius: 4px;").arg(FONT_SIZE_SMALL));
+            "background-color: #e3edf2; border-radius: 4px;").arg(FONT_SIZE_SMALL));
     }
 }
 
@@ -215,9 +217,13 @@ GroupWidget::GroupWidget(RpcClient *rpcClient, QWidget *parent)
     : QWidget(parent)
     , rpcClient_(rpcClient)
     , statusLabel_(nullptr)
+    , refreshButton_(nullptr)
+    , createButton_(nullptr)
+    , manageChannelsButton_(nullptr)
     , cardsContainer_(nullptr)
     , cardsLayout_(nullptr)
     , selectedGroupId_(1)
+    , isRefreshing_(false)
 {
     setupUi();
     qDebug() << "[GROUP_WIDGET] 分组页面初始化完成";
@@ -239,35 +245,35 @@ void GroupWidget::setupUi()
     QHBoxLayout *toolbarLayout = new QHBoxLayout();
     toolbarLayout->setSpacing(CARD_SPACING);
 
-    QPushButton *refreshButton = new QPushButton(QStringLiteral("[刷]刷新"), this);
-    refreshButton->setFixedHeight(BTN_HEIGHT);
-    refreshButton->setMinimumWidth(BTN_MIN_WIDTH);
-    refreshButton->setStyleSheet(QStringLiteral(
-        "QPushButton { background-color: #3498db; color: white; border: none; "
+    refreshButton_ = new QPushButton(QStringLiteral("[刷]刷新"), this);
+    refreshButton_->setFixedHeight(BTN_HEIGHT);
+    refreshButton_->setMinimumWidth(BTN_MIN_WIDTH);
+    refreshButton_->setStyleSheet(QStringLiteral(
+        "QPushButton { background-color: #2d5f73; color: #ecf0f1; border: 1px solid #3c7186; "
         "border-radius: %1px; padding: 0 12px; font-weight: bold; font-size: %2px; }"
-        "QPushButton:hover { background-color: #2980b9; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
-    connect(refreshButton, &QPushButton::clicked, this, &GroupWidget::refreshGroupList);
-    toolbarLayout->addWidget(refreshButton);
+        "QPushButton:hover { background-color: #376f85; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
+    connect(refreshButton_, &QPushButton::clicked, this, &GroupWidget::refreshGroupList);
+    toolbarLayout->addWidget(refreshButton_);
 
-    QPushButton *createButton = new QPushButton(QStringLiteral("[+]创建"), this);
-    createButton->setFixedHeight(BTN_HEIGHT);
-    createButton->setMinimumWidth(BTN_MIN_WIDTH);
-    createButton->setStyleSheet(QStringLiteral(
-        "QPushButton { background-color: #27ae60; color: white; border: none; "
+    createButton_ = new QPushButton(QStringLiteral("[+]创建"), this);
+    createButton_->setFixedHeight(BTN_HEIGHT);
+    createButton_->setMinimumWidth(BTN_MIN_WIDTH);
+    createButton_->setStyleSheet(QStringLiteral(
+        "QPushButton { background-color: #3a6b3f; color: #ecf0f1; border: 1px solid #4a7f50; "
         "border-radius: %1px; padding: 0 12px; font-weight: bold; font-size: %2px; }"
-        "QPushButton:hover { background-color: #229954; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
-    connect(createButton, &QPushButton::clicked, this, &GroupWidget::onCreateGroupClicked);
-    toolbarLayout->addWidget(createButton);
+        "QPushButton:hover { background-color: #467f4d; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
+    connect(createButton_, &QPushButton::clicked, this, &GroupWidget::onCreateGroupClicked);
+    toolbarLayout->addWidget(createButton_);
 
-    QPushButton *manageChannelsBtn = new QPushButton(QStringLiteral("[置]管理"), this);
-    manageChannelsBtn->setFixedHeight(BTN_HEIGHT);
-    manageChannelsBtn->setMinimumWidth(BTN_MIN_WIDTH);
-    manageChannelsBtn->setStyleSheet(QStringLiteral(
-        "QPushButton { background-color: #f39c12; color: white; border: none; "
+    manageChannelsButton_ = new QPushButton(QStringLiteral("[置]管理"), this);
+    manageChannelsButton_->setFixedHeight(BTN_HEIGHT);
+    manageChannelsButton_->setMinimumWidth(BTN_MIN_WIDTH);
+    manageChannelsButton_->setStyleSheet(QStringLiteral(
+        "QPushButton { background-color: #6b5a3a; color: #ecf0f1; border: 1px solid #7a6845; "
         "border-radius: %1px; padding: 0 12px; font-weight: bold; font-size: %2px; }"
-        "QPushButton:hover { background-color: #d68910; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
-    connect(manageChannelsBtn, &QPushButton::clicked, this, &GroupWidget::onManageChannelsClicked);
-    toolbarLayout->addWidget(manageChannelsBtn);
+        "QPushButton:hover { background-color: #806f4a; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
+    connect(manageChannelsButton_, &QPushButton::clicked, this, &GroupWidget::onManageChannelsClicked);
+    toolbarLayout->addWidget(manageChannelsButton_);
 
     toolbarLayout->addStretch();
 
@@ -323,6 +329,13 @@ void GroupWidget::clearGroupCards()
     groupCards_.clear();
 }
 
+void GroupWidget::setToolbarBusy(bool busy)
+{
+    if (refreshButton_) refreshButton_->setEnabled(!busy);
+    if (createButton_) createButton_->setEnabled(!busy);
+    if (manageChannelsButton_) manageChannelsButton_->setEnabled(!busy);
+}
+
 void GroupWidget::refreshGroupList()
 {
     if (!rpcClient_ || !rpcClient_->isConnected()) {
@@ -331,65 +344,82 @@ void GroupWidget::refreshGroupList()
         }
         return;
     }
+    if (isRefreshing_) {
+        return;
+    }
+    isRefreshing_ = true;
+    setToolbarBusy(true);
 
     if (statusLabel_) {
         statusLabel_->setText(QStringLiteral("[刷] 刷新中..."));
     }
 
     qDebug() << "[GROUP_WIDGET] 刷新分组列表";
-    
-    QJsonValue result = rpcClient_->call(QStringLiteral("group.list"));
-    
-    qDebug() << "[GROUP_WIDGET] group.list 响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
-    
-    if (result.isObject()) {
-        QJsonObject obj = result.toObject();
-        if (obj.contains(QStringLiteral("groups"))) {
-            QJsonArray groups = obj.value(QStringLiteral("groups")).toArray();
+
+    const int reqId = rpcClient_->callAsync(QStringLiteral("group.list"), QJsonObject(), this,
+        [this](const QJsonValue &result, const QJsonObject &error) {
+            isRefreshing_ = false;
+            setToolbarBusy(false);
+            if (!error.isEmpty() || !result.isObject()) {
+                if (statusLabel_) {
+                    statusLabel_->setText(QStringLiteral("[X] 获取失败"));
+                }
+                return;
+            }
+
+            const QJsonObject obj = result.toObject();
+            qDebug() << "[GROUP_WIDGET] group.list 响应:" << QJsonDocument(obj).toJson(QJsonDocument::Compact);
+            if (!obj.contains(QStringLiteral("groups"))) {
+                if (statusLabel_) {
+                    statusLabel_->setText(QStringLiteral("[X] 获取失败"));
+                }
+                return;
+            }
+
+            const QJsonArray groups = obj.value(QStringLiteral("groups")).toArray();
             groupsCache_ = groups;
             updateGroupCards(groups);
             if (statusLabel_) {
                 statusLabel_->setText(QStringLiteral("[OK] 共 %1 个分组").arg(groups.size()));
             }
-            
-            // 获取每个分组的通道信息
             for (const QJsonValue &v : groups) {
-                int groupId = v.toObject().value(QStringLiteral("groupId")).toInt();
-                fetchGroupChannels(groupId);
+                const int groupId = v.toObject().value(QStringLiteral("groupId")).toInt();
+                fetchGroupChannelsAsync(groupId);
             }
-            return;
+        }, 2500);
+
+    if (reqId < 0) {
+        isRefreshing_ = false;
+        setToolbarBusy(false);
+        if (statusLabel_) {
+            statusLabel_->setText(QStringLiteral("[X] 获取失败"));
         }
-    }
-    
-    if (statusLabel_) {
-        statusLabel_->setText(QStringLiteral("[X] 获取失败"));
     }
 }
 
-void GroupWidget::fetchGroupChannels(int groupId)
+void GroupWidget::fetchGroupChannelsAsync(int groupId)
 {
     QJsonObject params;
     params[QStringLiteral("groupId")] = groupId;
-    
-    // 使用 group.get 方法获取分组详情
-    QJsonValue result = rpcClient_->call(QStringLiteral("group.get"), params);
-    
-    if (result.isObject()) {
-        QJsonObject obj = result.toObject();
-        if (obj.value(QStringLiteral("ok")).toBool()) {
-            QJsonArray channels = obj.value(QStringLiteral("channels")).toArray();
-            QString name = obj.value(QStringLiteral("name")).toString();
-            int deviceCount = obj.value(QStringLiteral("deviceCount")).toInt();
-            
-            // 更新对应卡片的通道信息
+    rpcClient_->callAsync(QStringLiteral("group.get"), params, this,
+        [this, groupId](const QJsonValue &result, const QJsonObject &error) {
+            if (!error.isEmpty() || !result.isObject()) {
+                return;
+            }
+            const QJsonObject obj = result.toObject();
+            if (!obj.value(QStringLiteral("ok")).toBool()) {
+                return;
+            }
+            const QJsonArray channels = obj.value(QStringLiteral("channels")).toArray();
+            const QString name = obj.value(QStringLiteral("name")).toString();
+            const int deviceCount = obj.value(QStringLiteral("deviceCount")).toInt();
             for (GroupCard *card : groupCards_) {
                 if (card->groupId() == groupId) {
                     card->updateInfo(name, deviceCount, channels.size(), channels);
                     break;
                 }
             }
-        }
-    }
+        }, 2000);
 }
 
 void GroupWidget::updateGroupCards(const QJsonArray &groups)
@@ -503,21 +533,28 @@ void GroupWidget::onCreateGroupClicked()
 
     qDebug() << "[GROUP_WIDGET] 创建分组:" << name << "groupId=" << groupId;
     
-    QJsonValue result = rpcClient_->call(QStringLiteral("group.create"), params);
-    
-    qDebug() << "[GROUP_WIDGET] group.create 响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
-    
-    if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        if (statusLabel_) {
-            statusLabel_->setText(QStringLiteral("[OK] 分组 %1 创建成功").arg(groupId));
-        }
-        emit logMessage(QStringLiteral("创建分组成功: %1").arg(name));
-        refreshGroupList();
-    } else {
-        QString error = result.toObject().value(QStringLiteral("error")).toString();
-        QMessageBox::warning(this, QStringLiteral("错误"), 
-            QStringLiteral("[X] 创建分组失败: %1").arg(error));
-    }
+    setToolbarBusy(true);
+    rpcClient_->callAsync(QStringLiteral("group.create"), params, this,
+        [this, groupId, name](const QJsonValue &result, const QJsonObject &error) {
+            setToolbarBusy(false);
+            if (!error.isEmpty()) {
+                QMessageBox::warning(this, QStringLiteral("错误"),
+                    QStringLiteral("[X] 创建分组失败: %1").arg(error.value(QStringLiteral("message")).toString()));
+                return;
+            }
+            qDebug() << "[GROUP_WIDGET] group.create 响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
+            if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
+                if (statusLabel_) {
+                    statusLabel_->setText(QStringLiteral("[OK] 分组 %1 创建成功").arg(groupId));
+                }
+                emit logMessage(QStringLiteral("创建分组成功: %1").arg(name));
+                refreshGroupList();
+                return;
+            }
+            const QString errorMsg = result.toObject().value(QStringLiteral("error")).toString();
+            QMessageBox::warning(this, QStringLiteral("错误"),
+                QStringLiteral("[X] 创建分组失败: %1").arg(errorMsg));
+        }, 2500);
 }
 
 void GroupWidget::onDeleteGroupClicked()
@@ -547,21 +584,30 @@ void GroupWidget::onDeleteGroupFromCard(int groupId)
 
     qDebug() << "[GROUP_WIDGET] 删除分组 groupId=" << groupId;
     
-    QJsonValue result = rpcClient_->call(QStringLiteral("group.delete"), params);
-    
-    qDebug() << "[GROUP_WIDGET] group.delete 响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
-    
-    if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        if (statusLabel_) {
-            statusLabel_->setText(QStringLiteral("[OK] 分组 %1 删除成功").arg(groupId));
-        }
-        emit logMessage(QStringLiteral("删除分组成功: %1").arg(groupId));
-        refreshGroupList();
-    } else {
-        QString error = result.toObject().value(QStringLiteral("error")).toString();
-        QMessageBox::warning(this, QStringLiteral("错误"), 
-            QStringLiteral("[X] 删除分组失败: %1").arg(error));
-    }
+    setToolbarBusy(true);
+    rpcClient_->callAsync(QStringLiteral("group.delete"), params, this,
+        [this, groupId](const QJsonValue &result, const QJsonObject &error) {
+            setToolbarBusy(false);
+            if (!error.isEmpty()) {
+                QMessageBox::warning(this, QStringLiteral("错误"),
+                    QStringLiteral("[X] 删除分组失败: %1").arg(error.value(QStringLiteral("message")).toString()));
+                return;
+            }
+
+            qDebug() << "[GROUP_WIDGET] group.delete 响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
+
+            if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
+                if (statusLabel_) {
+                    statusLabel_->setText(QStringLiteral("[OK] 分组 %1 删除成功").arg(groupId));
+                }
+                emit logMessage(QStringLiteral("删除分组成功: %1").arg(groupId));
+                refreshGroupList();
+                return;
+            }
+            const QString errorMsg = result.toObject().value(QStringLiteral("error")).toString();
+            QMessageBox::warning(this, QStringLiteral("错误"),
+                QStringLiteral("[X] 删除分组失败: %1").arg(errorMsg));
+        }, 2500);
 }
 
 void GroupWidget::onManageChannelsClicked()
@@ -661,20 +707,32 @@ void GroupWidget::onManageChannelsClicked()
         
         qDebug() << "[GROUP_WIDGET] 添加通道 groupId=" << groupId << "node=" << nodeId << "channel=" << channel;
         
-        QJsonValue result = rpcClient_->call(QStringLiteral("group.addChannel"), params);
-        
-        if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-            resultLabel->setText(QStringLiteral("[OK] 节点%1:通道%2 已添加到分组 %3")
-                .arg(nodeId).arg(channel).arg(groupId));
-            resultLabel->setStyleSheet(QStringLiteral(
-                "color: #155724; background-color: #d4edda; font-weight: bold;"));
-            emit logMessage(QStringLiteral("添加通道成功"));
-        } else {
-            QString error = result.toObject().value(QStringLiteral("error")).toString();
-            resultLabel->setText(QStringLiteral("[X] 添加失败: %1").arg(error));
-            resultLabel->setStyleSheet(QStringLiteral(
-                "color: #721c24; background-color: #f8d7da; font-weight: bold;"));
-        }
+        addBtn->setEnabled(false);
+        removeBtn->setEnabled(false);
+        rpcClient_->callAsync(QStringLiteral("group.addChannel"), params, &dialog,
+            [=](const QJsonValue &result, const QJsonObject &error) {
+                addBtn->setEnabled(true);
+                removeBtn->setEnabled(true);
+                if (!error.isEmpty()) {
+                    resultLabel->setText(QStringLiteral("[X] 添加失败: %1")
+                        .arg(error.value(QStringLiteral("message")).toString()));
+                    resultLabel->setStyleSheet(QStringLiteral(
+                        "color: #721c24; background-color: #f8d7da; font-weight: bold;"));
+                    return;
+                }
+                if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
+                    resultLabel->setText(QStringLiteral("[OK] 节点%1:通道%2 已添加到分组 %3")
+                        .arg(nodeId).arg(channel).arg(groupId));
+                    resultLabel->setStyleSheet(QStringLiteral(
+                        "color: #155724; background-color: #d4edda; font-weight: bold;"));
+                    emit logMessage(QStringLiteral("添加通道成功"));
+                    return;
+                }
+                const QString errorMsg = result.toObject().value(QStringLiteral("error")).toString();
+                resultLabel->setText(QStringLiteral("[X] 添加失败: %1").arg(errorMsg));
+                resultLabel->setStyleSheet(QStringLiteral(
+                    "color: #721c24; background-color: #f8d7da; font-weight: bold;"));
+            }, 2500);
     });
     
     // 移除通道
@@ -690,20 +748,32 @@ void GroupWidget::onManageChannelsClicked()
         
         qDebug() << "[GROUP_WIDGET] 移除通道 groupId=" << groupId << "node=" << nodeId << "channel=" << channel;
         
-        QJsonValue result = rpcClient_->call(QStringLiteral("group.removeChannel"), params);
-        
-        if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-            resultLabel->setText(QStringLiteral("[OK] 节点%1:通道%2 已从分组 %3 移除")
-                .arg(nodeId).arg(channel).arg(groupId));
-            resultLabel->setStyleSheet(QStringLiteral(
-                "color: #155724; background-color: #d4edda; font-weight: bold;"));
-            emit logMessage(QStringLiteral("移除通道成功"));
-        } else {
-            QString error = result.toObject().value(QStringLiteral("error")).toString();
-            resultLabel->setText(QStringLiteral("[X] 移除失败: %1").arg(error));
-            resultLabel->setStyleSheet(QStringLiteral(
-                "color: #721c24; background-color: #f8d7da; font-weight: bold;"));
-        }
+        addBtn->setEnabled(false);
+        removeBtn->setEnabled(false);
+        rpcClient_->callAsync(QStringLiteral("group.removeChannel"), params, &dialog,
+            [=](const QJsonValue &result, const QJsonObject &error) {
+                addBtn->setEnabled(true);
+                removeBtn->setEnabled(true);
+                if (!error.isEmpty()) {
+                    resultLabel->setText(QStringLiteral("[X] 移除失败: %1")
+                        .arg(error.value(QStringLiteral("message")).toString()));
+                    resultLabel->setStyleSheet(QStringLiteral(
+                        "color: #721c24; background-color: #f8d7da; font-weight: bold;"));
+                    return;
+                }
+                if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
+                    resultLabel->setText(QStringLiteral("[OK] 节点%1:通道%2 已从分组 %3 移除")
+                        .arg(nodeId).arg(channel).arg(groupId));
+                    resultLabel->setStyleSheet(QStringLiteral(
+                        "color: #155724; background-color: #d4edda; font-weight: bold;"));
+                    emit logMessage(QStringLiteral("移除通道成功"));
+                    return;
+                }
+                const QString errorMsg = result.toObject().value(QStringLiteral("error")).toString();
+                resultLabel->setText(QStringLiteral("[X] 移除失败: %1").arg(errorMsg));
+                resultLabel->setStyleSheet(QStringLiteral(
+                    "color: #721c24; background-color: #f8d7da; font-weight: bold;"));
+            }, 2500);
     });
     
     dialog.exec();
@@ -725,20 +795,27 @@ void GroupWidget::onGroupControlClicked(int groupId, const QString &action)
 
     qDebug() << "[GROUP_WIDGET] 分组控制 groupId=" << groupId << "action=" << action;
     
-    QJsonValue result = rpcClient_->call(QStringLiteral("group.control"), params);
-    
-    qDebug() << "[GROUP_WIDGET] group.control 响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
-    
-    if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
-        if (statusLabel_) {
-            statusLabel_->setText(QStringLiteral("[OK] 分组 %1 执行 %2 成功").arg(groupId).arg(action));
-        }
-        emit logMessage(QStringLiteral("分组控制: %1 -> %2").arg(groupId).arg(action));
-    } else {
-        QString error = result.toObject().value(QStringLiteral("error")).toString();
-        QMessageBox::warning(this, QStringLiteral("错误"), 
-            QStringLiteral("[X] 控制失败: %1").arg(error));
-    }
+    setToolbarBusy(true);
+    rpcClient_->callAsync(QStringLiteral("group.control"), params, this,
+        [this, groupId, action](const QJsonValue &result, const QJsonObject &error) {
+            setToolbarBusy(false);
+            if (!error.isEmpty()) {
+                QMessageBox::warning(this, QStringLiteral("错误"),
+                    QStringLiteral("[X] 控制失败: %1").arg(error.value(QStringLiteral("message")).toString()));
+                return;
+            }
+            qDebug() << "[GROUP_WIDGET] group.control 响应:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
+            if (result.isObject() && result.toObject().value(QStringLiteral("ok")).toBool()) {
+                if (statusLabel_) {
+                    statusLabel_->setText(QStringLiteral("[OK] 分组 %1 执行 %2 成功").arg(groupId).arg(action));
+                }
+                emit logMessage(QStringLiteral("分组控制: %1 -> %2").arg(groupId).arg(action));
+                return;
+            }
+            const QString errorMsg = result.toObject().value(QStringLiteral("error")).toString();
+            QMessageBox::warning(this, QStringLiteral("错误"),
+                QStringLiteral("[X] 控制失败: %1").arg(errorMsg));
+        }, 2500);
 }
 
 void GroupWidget::onManageGroupClicked(int groupId)

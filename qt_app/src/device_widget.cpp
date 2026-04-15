@@ -43,16 +43,25 @@ constexpr double kMinDisplayCurrentMa = 0.1;
 // Delay (ms) before fallback status refresh when device.list doesn't return channel data
 // This ensures the UI layout is complete before initiating additional RPC calls
 constexpr int kFallbackRefreshDelayMs = 50;
+constexpr int kAutoStatusRefreshMinIntervalMs = 3000;
+constexpr int kStatusBatchSize = 3;
+constexpr int kStatusBatchIntervalMs = 120;
 }
 
 // ==================== DeviceCard Implementation ====================
 
-DeviceCard::DeviceCard(int nodeId, const QString &name, QWidget *parent)
+DeviceCard::DeviceCard(int nodeId,
+                       const QString &name,
+                       const QString &typeName,
+                       const QString &commTypeName,
+                       QWidget *parent)
     : QFrame(parent)
     , nodeId_(nodeId)
     , name_(name)
     , nameLabel_(nullptr)
     , nodeIdLabel_(nullptr)
+    , typeLabel_(nullptr)
+    , commTypeLabel_(nullptr)
     , statusLabel_(nullptr)
     , currentLabel_(nullptr)
     , ch0Label_(nullptr)
@@ -61,6 +70,8 @@ DeviceCard::DeviceCard(int nodeId, const QString &name, QWidget *parent)
     , ch3Label_(nullptr)
 {
     setupUi();
+    typeLabel_->setText(typeName);
+    commTypeLabel_->setText(commTypeName);
 }
 
 void DeviceCard::setupUi()
@@ -69,16 +80,16 @@ void DeviceCard::setupUi()
     setFrameShape(QFrame::NoFrame);
     setStyleSheet(QStringLiteral(
         "#deviceCard {"
-        "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);"
-        "  border: 2px solid #e0e0e0;"
+        "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f4f6f7, stop:1 #e7ecef);"
+        "  border: 1px solid #9aa7af;"
         "  border-radius: %1px;"
         "}"
         "#deviceCard:hover {"
-        "  border-color: #27ae60;"
-        "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #eafaf1);"
+        "  border-color: #3e6b7d;"
+        "  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f8fafb, stop:1 #edf2f4);"
         "}").arg(BORDER_RADIUS_CARD));
     setCursor(Qt::PointingHandCursor);
-    setMinimumHeight(CARD_MIN_HEIGHT);
+    setMinimumHeight(164);
     setMinimumWidth(200);  // 确保卡片最小宽度
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
@@ -104,6 +115,22 @@ void DeviceCard::setupUi()
     
     mainLayout->addLayout(topRow);
 
+    // 类型标签行
+    QHBoxLayout *tagRow = new QHBoxLayout();
+    tagRow->setSpacing(6);
+    typeLabel_ = new QLabel(QStringLiteral("Unknown"), this);
+    typeLabel_->setStyleSheet(QStringLiteral(
+        "font-size: %1px; color: #2f3e46; background-color: #d6dee3; "
+        "padding: 2px 8px; border-radius: 6px;").arg(FONT_SIZE_SMALL));
+    tagRow->addWidget(typeLabel_);
+    commTypeLabel_ = new QLabel(QStringLiteral("Unknown"), this);
+    commTypeLabel_->setStyleSheet(QStringLiteral(
+        "font-size: %1px; color: #ecf0f1; background-color: #4d5d63; "
+        "padding: 2px 8px; border-radius: 6px;").arg(FONT_SIZE_SMALL));
+    tagRow->addWidget(commTypeLabel_);
+    tagRow->addStretch();
+    mainLayout->addLayout(tagRow);
+
     // 中间行：状态和电流
     QHBoxLayout *middleRow = new QHBoxLayout();
     middleRow->setSpacing(8);
@@ -128,39 +155,40 @@ void DeviceCard::setupUi()
     line->setMaximumHeight(1);
     mainLayout->addWidget(line);
 
-    // 底部行：通道状态
-    QHBoxLayout *bottomRow = new QHBoxLayout();
-    bottomRow->setSpacing(6);
+    // 底部区域：通道状态（2x2，避免窄屏横向挤压）
+    QGridLayout *bottomGrid = new QGridLayout();
+    bottomGrid->setHorizontalSpacing(6);
+    bottomGrid->setVerticalSpacing(6);
     
     auto createChLabel = [this](const QString &text) -> QLabel* {
         QLabel *label = new QLabel(text, this);
+        label->setMinimumHeight(24);
         label->setStyleSheet(QStringLiteral(
             "font-size: %1px; padding: 3px 8px; background-color: #f5f5f5; color: #95a5a6; border-radius: 6px;").arg(FONT_SIZE_SMALL));
         return label;
     };
     
     ch0Label_ = createChLabel(QStringLiteral("0:--"));
-    bottomRow->addWidget(ch0Label_);
+    bottomGrid->addWidget(ch0Label_, 0, 0);
     
     ch1Label_ = createChLabel(QStringLiteral("1:--"));
-    bottomRow->addWidget(ch1Label_);
+    bottomGrid->addWidget(ch1Label_, 0, 1);
     
     ch2Label_ = createChLabel(QStringLiteral("2:--"));
-    bottomRow->addWidget(ch2Label_);
+    bottomGrid->addWidget(ch2Label_, 1, 0);
     
     ch3Label_ = createChLabel(QStringLiteral("3:--"));
-    bottomRow->addWidget(ch3Label_);
-    
-    bottomRow->addStretch();
-    
-    mainLayout->addLayout(bottomRow);
+    bottomGrid->addWidget(ch3Label_, 1, 1);
+
+    mainLayout->addLayout(bottomGrid);
 }
 
 void DeviceCard::updateStatus(bool online, qint64 ageMs, double totalCurrent, const QJsonObject &channels)
 {
     // 更新在线状态
     if (online) {
-        statusLabel_->setText(QStringLiteral("[OK]在线(%1ms)").arg(ageMs));
+        const qint64 ageSec = ageMs >= 0 ? (ageMs / 1000) : 0;
+        statusLabel_->setText(QStringLiteral("[OK]在线(%1s)").arg(ageSec));
         statusLabel_->setStyleSheet(QStringLiteral(
             "font-size: %1px; font-weight: bold; color: #27ae60;").arg(FONT_SIZE_BODY));
     } else if (ageMs < 0) {
@@ -342,9 +370,6 @@ void DeviceWidget::setupUi()
     cardsLayout_ = new QGridLayout(cardsContainer_);
     cardsLayout_->setContentsMargins(0, 0, 0, 0);
     cardsLayout_->setSpacing(PAGE_SPACING);
-    cardsLayout_->setColumnStretch(0, 1);
-    cardsLayout_->setColumnStretch(1, 1);
-    
     scrollArea->setWidget(cardsContainer_);
     mainLayout->addWidget(scrollArea, 1);
 
@@ -503,9 +528,9 @@ void DeviceWidget::refreshDeviceStatus()
         return;
     }
 
-    // 防抖动：防止过于频繁的刷新（至少间隔1.5秒）
+    // 防抖动：防止过于频繁的刷新（至少间隔3秒）
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
-    if (now - lastStatusRefreshTime_ < 1500) {
+    if (now - lastStatusRefreshTime_ < kAutoStatusRefreshMinIntervalMs) {
         qDebug() << "[DEVICE_WIDGET] 状态刷新过于频繁，跳过";
         return;
     }
@@ -527,33 +552,75 @@ void DeviceWidget::refreshDeviceStatus()
         return;
     }
 
-    // 使用异步调用避免阻塞UI线程
+    int index = 0;
     for (DeviceCard *card : deviceCards_) {
-        int nodeId = card->nodeId();
+        const int nodeId = card->nodeId();
+        const int slot = index / kStatusBatchSize;
+        const int delayMs = slot * kStatusBatchIntervalMs;
+        ++index;
 
-        QJsonObject params;
-        params[QStringLiteral("node")] = nodeId;
+        QTimer::singleShot(delayMs, this, [this, nodeId]() {
+            if (!isRefreshingStatus_) {
+                return;
+            }
+            if (!rpcClient_ || !rpcClient_->isConnected()) {
+                finishStatusRefreshOne();
+                return;
+            }
 
-        // 使用异步调用，通过lambda回调更新UI
-        const int reqId = rpcClient_->callAsync(QStringLiteral("relay.statusAll"), params, this,
-            [this, nodeId](const QJsonValue &result, const QJsonObject &error) {
-                if (error.isEmpty() && result.isObject()) {
-                    QJsonObject resultObj = result.toObject();
-                    qDebug() << "[DEVICE_WIDGET] relay.statusAll node=" << nodeId
-                             << "online=" << resultObj.value(QStringLiteral("online")).toBool()
-                             << "totalCurrent=" << resultObj.value(QStringLiteral("totalCurrent")).toDouble();
-                    updateDeviceCardStatus(nodeId, result.toObject());
+            QJsonObject params;
+            params[QStringLiteral("node")] = nodeId;
+            const int reqId = rpcClient_->callAsync(QStringLiteral("relay.statusAll"), params, this,
+                [this, nodeId](const QJsonValue &result, const QJsonObject &error) {
+                    if (error.isEmpty() && result.isObject()) {
+                        QJsonObject resultObj = result.toObject();
+                        qDebug() << "[DEVICE_WIDGET] relay.statusAll node=" << nodeId
+                                 << "online=" << resultObj.value(QStringLiteral("online")).toBool()
+                                 << "totalCurrent=" << resultObj.value(QStringLiteral("totalCurrent")).toDouble();
+                        updateDeviceCardStatus(nodeId, result.toObject());
+                    } else if (!error.isEmpty()) {
+                        qDebug() << "[DEVICE_WIDGET] relay.statusAll node=" << nodeId << "错误:"
+                                 << error.value(QStringLiteral("message")).toString();
+                    }
                     finishStatusRefreshOne();
-                } else if (!error.isEmpty()) {
-                    qDebug() << "[DEVICE_WIDGET] relay.statusAll node=" << nodeId << "错误:"
-                             << error.value(QStringLiteral("message")).toString();
-                    finishStatusRefreshOne();
-                }
-            }, 3000);  // 3秒超时
+                }, 3000);
 
-        if (reqId < 0) {
-            finishStatusRefreshOne();
-        }
+            if (reqId < 0) {
+                finishStatusRefreshOne();
+            }
+        });
+    }
+}
+
+void DeviceWidget::refreshDevicePresence()
+{
+    if (!rpcClient_ || !rpcClient_->isConnected()) {
+        return;
+    }
+    if (isRefreshingStatus_) {
+        return;
+    }
+
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (now - lastStatusRefreshTime_ < kAutoStatusRefreshMinIntervalMs) {
+        return;
+    }
+
+    isRefreshingStatus_ = true;
+    lastStatusRefreshTime_ = now;
+
+    const int reqId = rpcClient_->callAsync(QStringLiteral("relay.nodes"), QJsonObject(), this,
+        [this](const QJsonValue &result, const QJsonObject &error) {
+            isRefreshingStatus_ = false;
+            if (!error.isEmpty() || !result.isObject()) {
+                return;
+            }
+            const QJsonArray nodes = result.toObject().value(QStringLiteral("nodes")).toArray();
+            applyNodePresence(nodes);
+        }, 2000);
+
+    if (reqId < 0) {
+        isRefreshingStatus_ = false;
     }
 }
 
@@ -760,6 +827,16 @@ void DeviceWidget::updateDeviceCards(const QJsonArray &devices)
         return a.value(QStringLiteral("nodeId")).toInt() < b.value(QStringLiteral("nodeId")).toInt();
     });
 
+    int availableWidth = cardsContainer_ ? cardsContainer_->width() : width();
+    if (availableWidth <= 0) {
+        availableWidth = width();
+    }
+    const int minCardWidth = 240;
+    const int columns = std::max(1, std::min(2, (availableWidth + PAGE_SPACING) / (minCardWidth + PAGE_SPACING)));
+    for (int i = 0; i < columns; ++i) {
+        cardsLayout_->setColumnStretch(i, 1);
+    }
+
     int row = 0;
     int col = 0;
     bool hasChannelData = false;
@@ -771,7 +848,9 @@ void DeviceWidget::updateDeviceCards(const QJsonArray &devices)
             name = QStringLiteral("继电器-%1").arg(nodeId);
         }
 
-        DeviceCard *card = new DeviceCard(nodeId, name, this);
+        const QString typeName = device.value(QStringLiteral("typeName")).toString(QStringLiteral("Unknown"));
+        const QString commTypeName = device.value(QStringLiteral("commTypeName")).toString(QStringLiteral("Unknown"));
+        DeviceCard *card = new DeviceCard(nodeId, name, typeName, commTypeName, this);
         connect(card, &DeviceCard::clicked, this, &DeviceWidget::onDeviceCardClicked);
 
         // 网格布局：一行两个
@@ -779,7 +858,7 @@ void DeviceWidget::updateDeviceCards(const QJsonArray &devices)
         deviceCards_.append(card);
 
         col++;
-        if (col >= 2) {
+        if (col >= columns) {
             col = 0;
             row++;
         }
@@ -810,6 +889,24 @@ void DeviceWidget::updateDeviceCards(const QJsonArray &devices)
     if (!hasChannelData) {
         qDebug() << "[DEVICE_WIDGET] device.list未返回通道数据，执行额外的状态刷新";
         QTimer::singleShot(kFallbackRefreshDelayMs, this, &DeviceWidget::refreshDeviceStatus);
+    }
+}
+
+void DeviceWidget::applyNodePresence(const QJsonArray &nodes)
+{
+    for (const QJsonValue &val : nodes) {
+        const QJsonObject node = val.toObject();
+        const int nodeId = node.value(QStringLiteral("node")).toInt();
+        const bool online = node.value(QStringLiteral("online")).toBool(false);
+        const qint64 ageMs = node.value(QStringLiteral("ageMs")).toVariant().toLongLong();
+        const double totalCurrent = node.value(QStringLiteral("totalCurrent")).toDouble(0.0);
+
+        for (DeviceCard *card : deviceCards_) {
+            if (card->nodeId() == nodeId) {
+                card->updateStatus(online, ageMs, totalCurrent, QJsonObject());
+                break;
+            }
+        }
     }
 }
 

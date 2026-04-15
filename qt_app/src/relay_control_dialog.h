@@ -92,7 +92,7 @@ private:
     
     // 状态同步定时器
     QTimer *syncTimer_;
-    static constexpr int kSyncIntervalMs = 3000;  // 3秒同步一次（降低频率）
+    static constexpr int kSyncIntervalMs = 5000;  // 5秒同步一次，降低对TCP设备的压力
 
     // 控制按钮列表，便于批量启用/禁用
     QList<QPushButton*> controlButtons_;

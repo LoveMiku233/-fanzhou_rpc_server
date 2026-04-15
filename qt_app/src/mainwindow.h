@@ -13,6 +13,7 @@
 #include <QPushButton>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QList>
 #include <QDateTime>
 #include <QButtonGroup>
@@ -26,13 +27,14 @@ class SensorWidget;
 class LogWidget;
 class SettingsWidget;
 class MonitorWidget;
+class DebugWidget;
 class Greenhouse3DWidget;
 class ScreenManager;
 
 /**
  * @brief 主窗口类 - 大棚控制系统
  *
- * 采用左侧菜单栏 + 右侧内容区的布局设计
+ * 采用顶部状态栏 + 中部内容区 + 底部菜单栏布局
  * 页面：主页、设备管理、分组管理、策略管理、日志、设置
  */
 class MainWindow : public QMainWindow
@@ -56,17 +58,20 @@ private slots:
 
 private:
     void setupUi();
-    void setupStatusBar();
+    void setupTopStatusBar();
     void setupCentralWidget();
-    void createSidebar();
+    void createBottomNavBar();
     void createContentArea();
     void switchToPage(int index);
     void updateMenuSelection(int activeIndex);
     void updateStatusBarConnection(bool connected);
 
+    QWidget *topStatusBar_;
+    QHBoxLayout *topStatusLayout_;
+
     // UI组件
     QWidget *sidebar_;
-    QVBoxLayout *sidebarLayout_;
+    QHBoxLayout *sidebarLayout_;
     QButtonGroup *menuButtonGroup_;
     QList<QPushButton*> menuButtons_;
     QStackedWidget *contentStack_;
@@ -87,6 +92,7 @@ private:
     LogWidget *logWidget_;
     SettingsWidget *settingsWidget_;
     MonitorWidget *monitorWidget_;
+    DebugWidget *debugWidget_;
 
     // RPC客户端
     RpcClient *rpcClient_;

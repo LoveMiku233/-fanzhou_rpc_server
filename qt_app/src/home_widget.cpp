@@ -92,26 +92,28 @@ void HomeWidget::setupUi()
 
     auto createStatCard = [this](const QString &title, const QString &bgColor) -> QPair<QFrame*, QLabel*> {
         QFrame *card = new QFrame(this);
-        QString darkerBg = bgColor;
-        darkerBg.replace(1, 1, QStringLiteral("d"));
         // 使用简洁样式,提升渲染性能
         card->setStyleSheet(QStringLiteral(
             "QFrame { background-color: %1; "
             "border-radius: %2px; padding: 6px; }").arg(bgColor).arg(BORDER_RADIUS_CARD));
-        card->setMinimumHeight(70);
+        card->setMinimumHeight(86);
         card->setAttribute(Qt::WA_OpaquePaintEvent, true);  // 优化绘制性能
 
         QVBoxLayout *layout = new QVBoxLayout(card);
-        layout->setContentsMargins(CARD_MARGIN + 2, CARD_MARGIN, CARD_MARGIN + 2, CARD_MARGIN);
-        layout->setSpacing(4);
+        layout->setContentsMargins(CARD_MARGIN + 2, CARD_MARGIN, CARD_MARGIN + 2, CARD_MARGIN - 1);
+        layout->setSpacing(2);
 
         QLabel *titleLabel = new QLabel(title, card);
-        titleLabel->setStyleSheet(QStringLiteral("color: rgba(255,255,255,0.9); font-size: %1px; font-weight: 500;").arg(FONT_SIZE_SMALL));
+        titleLabel->setWordWrap(true);
+        titleLabel->setStyleSheet(QStringLiteral(
+            "color: rgba(255,255,255,0.95); font-size: %1px; font-weight: 600;")
+            .arg(FONT_SIZE_SMALL));
         layout->addWidget(titleLabel);
 
         QLabel *valueLabel = new QLabel(QStringLiteral("--"), card);
+        valueLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         valueLabel->setStyleSheet(QStringLiteral(
-            "color: white; font-size: %1px; font-weight: bold;").arg(FONT_SIZE_VALUE));
+            "color: white; font-size: 24px; font-weight: 800; line-height: 1.0;"));
         layout->addWidget(valueLabel);
 
         return qMakePair(card, valueLabel);
@@ -228,11 +230,23 @@ void HomeWidget::onStopAllClicked()
         QStringLiteral("确定要停止所有设备吗？"),
         QMessageBox::Yes | QMessageBox::No);
 
-    if (reply == QMessageBox::Yes) {
-        qDebug() << "[HOME_WIDGET] 执行全部停止";
-        QJsonValue result = rpcClient_->call(QStringLiteral("relay.emergencyStop"));
-        qDebug() << "[HOME_WIDGET] 全部停止结果:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
+    if (reply != QMessageBox::Yes) {
+        return;
     }
+
+    qDebug() << "[HOME_WIDGET] 执行全部停止";
+    stopAllButton_->setEnabled(false);
+    rpcClient_->callAsync(QStringLiteral("relay.emergencyStop"), QJsonObject(), this,
+        [this](const QJsonValue &result, const QJsonObject &error) {
+            stopAllButton_->setEnabled(true);
+            if (!error.isEmpty()) {
+                QMessageBox::warning(this, QStringLiteral("全停失败"),
+                    QStringLiteral("请求失败: %1").arg(error.value(QStringLiteral("message")).toString()));
+                return;
+            }
+            qDebug() << "[HOME_WIDGET] 全部停止结果:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
+            QMessageBox::information(this, QStringLiteral("全停完成"), QStringLiteral("已发送全停命令"));
+        }, 3000);
 }
 
 void HomeWidget::onEmergencyStopClicked()
@@ -243,23 +257,31 @@ void HomeWidget::onEmergencyStopClicked()
     }
 
     qDebug() << "[HOME_WIDGET] 执行紧急停止";
+    emergencyStopButton_->setEnabled(false);
+    rpcClient_->callAsync(QStringLiteral("relay.emergencyStop"), QJsonObject(), this,
+        [this](const QJsonValue &result, const QJsonObject &error) {
+            emergencyStopButton_->setEnabled(true);
+            if (!error.isEmpty()) {
+                QMessageBox::warning(this, QStringLiteral("急停执行失败"),
+                    QStringLiteral("请求失败: %1").arg(error.value(QStringLiteral("message")).toString()));
+                return;
+            }
 
-    QJsonValue result = rpcClient_->call(QStringLiteral("relay.emergencyStop"));
+            qDebug() << "[HOME_WIDGET] 紧急停止结果:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
 
-    qDebug() << "[HOME_WIDGET] 紧急停止结果:" << QJsonDocument(result.toObject()).toJson(QJsonDocument::Compact);
-
-    if (result.isObject()) {
-        QJsonObject obj = result.toObject();
-        if (obj.value(QStringLiteral("ok")).toBool()) {
-            int stopped = obj.value(QStringLiteral("stoppedChannels")).toInt();
-            int devices = obj.value(QStringLiteral("deviceCount")).toInt();
-            QMessageBox::information(this, QStringLiteral("急停执行完成"),
-                QStringLiteral("已停止 %1 个设备的 %2 个通道").arg(devices).arg(stopped));
-        } else {
-            QMessageBox::warning(this, QStringLiteral("急停执行失败"),
-                QStringLiteral("执行急停命令时发生错误"));
-        }
-    }
+            if (result.isObject()) {
+                const QJsonObject obj = result.toObject();
+                if (obj.value(QStringLiteral("ok")).toBool()) {
+                    const int stopped = obj.value(QStringLiteral("stoppedChannels")).toInt();
+                    const int devices = obj.value(QStringLiteral("deviceCount")).toInt();
+                    QMessageBox::information(this, QStringLiteral("急停执行完成"),
+                        QStringLiteral("已停止 %1 个设备的 %2 个通道").arg(devices).arg(stopped));
+                } else {
+                    QMessageBox::warning(this, QStringLiteral("急停执行失败"),
+                        QStringLiteral("执行急停命令时发生错误"));
+                }
+            }
+        }, 3000);
 }
 
 void HomeWidget::refreshData()

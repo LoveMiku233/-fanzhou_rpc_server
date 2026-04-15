@@ -86,13 +86,17 @@ private:
     void setupUi();
     void updateGroupCards(const QJsonArray &groups);
     void clearGroupCards();
-    void fetchGroupChannels(int groupId);
+    void fetchGroupChannelsAsync(int groupId);
+    void setToolbarBusy(bool busy);
     int getSelectedGroupId();
 
     RpcClient *rpcClient_;
     
     // UI组件
     QLabel *statusLabel_;
+    QPushButton *refreshButton_;
+    QPushButton *createButton_;
+    QPushButton *manageChannelsButton_;
     QWidget *cardsContainer_;
     QGridLayout *cardsLayout_;
     QList<GroupCard*> groupCards_;
@@ -100,6 +104,7 @@ private:
     // 缓存
     QJsonArray groupsCache_;
     int selectedGroupId_;
+    bool isRefreshing_;
 };
 
 #endif // GROUP_WIDGET_H

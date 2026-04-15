@@ -436,7 +436,9 @@ private:
     void trimJobResults();
     void trimDeletedStrategies();
 
-    static constexpr int kQueueTickMs = 500;   ///< 队列处理间隔（ms），避免同时操作冲击电网
+    static constexpr int kQueueTickMs = 80;    ///< 队列处理间隔（ms），降低多设备控制延迟
+    static constexpr int kMaxJobsPerQueueTick = 6; ///< 每个tick最多处理任务数，提升吞吐避免积压
+    static constexpr qint64 kMaxQueuedJobAgeMs = 2000; ///< 超过该年龄的排队控制命令直接丢弃，避免“晚到随机执行”
     static constexpr int kMsPerSec = 1000;
     static constexpr int kMaxJobResults = 500;           ///< jobResults最大保留条数
     static constexpr qint64 kDeletedStrategyTtlMs = 3600000; ///< deletedStrategies保留1小时

@@ -24,6 +24,7 @@
 #include <QJsonArray>
 #include <QRandomGenerator>
 #include <QDir>
+#include <QSet>
 
 #include <algorithm>
 
@@ -249,6 +250,61 @@ bool ensureNodeIdInRange(int nodeId, QString *error)
 bool isNodeIdInRange(int nodeId)
 {
     return nodeId >= 1 && nodeId <= 255;
+}
+
+bool isValidCommType(device::CommTypeId commType)
+{
+    const int raw = static_cast<int>(commType);
+    return raw >= static_cast<int>(device::CommTypeId::Serial) &&
+           raw <= static_cast<int>(device::CommTypeId::TcpClient);
+}
+
+bool validateDeviceSchemaForSave(const QList<DeviceConfig> &devices,
+                                 const QString &defaultCanBus,
+                                 QString *error)
+{
+    QSet<int> nodeIds;
+    for (const auto &dev : devices) {
+        if (!isNodeIdInRange(dev.nodeId)) {
+            setErrorIfPresent(
+                error,
+                QStringLiteral("invalid nodeId=%1 in devices (expected 1..255)").arg(dev.nodeId));
+            return false;
+        }
+        if (nodeIds.contains(dev.nodeId)) {
+            setErrorIfPresent(error,
+                              QStringLiteral("duplicate nodeId=%1 in devices").arg(dev.nodeId));
+            return false;
+        }
+        nodeIds.insert(dev.nodeId);
+
+        if (!isValidCommType(dev.commType)) {
+            setErrorIfPresent(
+                error,
+                QStringLiteral("invalid commType=%1 for nodeId=%2")
+                    .arg(static_cast<int>(dev.commType))
+                    .arg(dev.nodeId));
+            return false;
+        }
+
+        const QString normalizedBus = dev.bus.trimmed();
+        if (normalizedBus.isEmpty()) {
+            setErrorIfPresent(error,
+                              QStringLiteral("invalid bus for nodeId=%1: bus is empty")
+                                  .arg(dev.nodeId));
+            return false;
+        }
+
+        if (dev.commType == device::CommTypeId::Can &&
+            defaultCanBus.trimmed().isEmpty()) {
+            setErrorIfPresent(
+                error,
+                QStringLiteral("CAN device nodeId=%1 requires non-empty can.interface")
+                    .arg(dev.nodeId));
+            return false;
+        }
+    }
+    return true;
 }
 
 bool isRelayGd427CommSupported(device::CommTypeId commType)
@@ -864,8 +920,18 @@ bool controlMultiMergedByChannels(device::RelayGd427 *device,
 {
     device::RelayProtocol::Action actions[4];
     fillActionsFromDeviceState(device, actions);
+    bool hasChange = false;
     for (quint8 ch : channels) {
+        if (ch > kMaxChannelId) {
+            continue;
+        }
+        if (actions[ch] != action) {
+            hasChange = true;
+        }
         actions[ch] = action;
+    }
+    if (!hasChange) {
+        return true;
     }
     return device->controlMulti(actions);
 }
@@ -876,8 +942,18 @@ bool controlMultiMergedByActions(
 {
     device::RelayProtocol::Action actions[4];
     fillActionsFromDeviceState(device, actions);
+    bool hasChange = false;
     for (auto it = channelActions.begin(); it != channelActions.end(); ++it) {
+        if (it.key() > kMaxChannelId) {
+            continue;
+        }
+        if (actions[it.key()] != it.value()) {
+            hasChange = true;
+        }
         actions[it.key()] = it.value();
+    }
+    if (!hasChange) {
+        return true;
     }
     return device->controlMulti(actions);
 }
@@ -1763,6 +1839,37 @@ ControlJobResult CoreContext::executeJob(const ControlJob &job)
         return result;
     }
 
+    const qint64 jobAgeMs = result.finishedMs - job.enqueuedMs;
+    if (jobAgeMs >= 0 && jobAgeMs > kMaxQueuedJobAgeMs) {
+        result.ok = false;
+        result.message = QStringLiteral("stale_dropped");
+        jobResults_.insert(job.id, result);
+        lastJobId_ = job.id;
+        LOG_WARNING(kLogSource, QStringLiteral("executeJob: stale control dropped, node=0x%1, ch=%2, action=%3, ageMs=%4, source=%5")
+                        .arg(job.node, 2, 16, QChar('0'))
+                        .arg(job.channel)
+                        .arg(static_cast<int>(job.action))
+                        .arg(jobAgeMs)
+                        .arg(job.source));
+        return result;
+    }
+
+    // 仅在目标状态发生变化时才真正下发控制命令，避免重复控制导致误动作。
+    const auto current = dev->lastStatus(job.channel);
+    const auto currentAction = actionFromStatusByte(current.statusByte);
+    if (currentAction == job.action) {
+        result.ok = true;
+        result.message = QStringLiteral("no_change");
+        jobResults_.insert(job.id, result);
+        lastJobId_ = job.id;
+        LOG_DEBUG(kLogSource, QStringLiteral("executeJob: skip no-change, node=0x%1, ch=%2, action=%3, source=%4")
+                              .arg(job.node, 2, 16, QChar('0'))
+                              .arg(job.channel)
+                              .arg(static_cast<int>(job.action))
+                              .arg(job.source));
+        return result;
+    }
+
     const bool ok = dev->control(job.channel, job.action);
     result.ok = ok;
     result.message = ok ? QStringLiteral("ok") : kErrDeviceRejected;
@@ -1790,8 +1897,12 @@ void CoreContext::processNextJob()
     }
 
     processingQueue_ = true;
-    const auto job = controlQueue_.dequeue();
-    executeJob(job);
+    int processed = 0;
+    while (!controlQueue_.isEmpty() && processed < kMaxJobsPerQueueTick) {
+        const auto job = controlQueue_.dequeue();
+        executeJob(job);
+        ++processed;
+    }
     processingQueue_ = false;
 
     if (controlQueue_.isEmpty() && controlTimer_) {
@@ -1831,6 +1942,21 @@ EnqueueResult CoreContext::enqueueControl(quint8 node, quint8 channel,
         result.executedImmediately = true;
         result.success = jobResult.ok;
         return result;
+    }
+
+    int mergedCount = 0;
+    for (int i = controlQueue_.size() - 1; i >= 0; --i) {
+        const auto &queued = controlQueue_.at(i);
+        if (queued.node == node && queued.channel == channel) {
+            controlQueue_.removeAt(i);
+            ++mergedCount;
+        }
+    }
+    if (mergedCount > 0) {
+        LOG_DEBUG(kLogSource, QStringLiteral("enqueueControl: merged %1 pending jobs for node=0x%2 ch=%3")
+                              .arg(mergedCount)
+                              .arg(node, 2, 16, QChar('0'))
+                              .arg(channel));
     }
 
     controlQueue_.enqueue(job);
@@ -2462,6 +2588,15 @@ bool CoreContext::saveConfig(const QString &path, QString *error)
     
     // 设备列表
     coreConfig.devices = buildDeviceConfigListFromRuntime(deviceConfigs);
+
+    // 配置结构校验（防止写入无效配置）
+    QString schemaError;
+    if (!validateDeviceSchemaForSave(coreConfig.devices, coreConfig.can.interface, &schemaError)) {
+        setErrorIfPresent(error, QStringLiteral("保存配置失败: %1").arg(schemaError));
+        LOG_WARNING(kLogSource,
+                    QStringLiteral("saveConfig rejected by schema validation: %1").arg(schemaError));
+        return false;
+    }
     
     // 设备分组
     coreConfig.groups = buildGroupConfigsFromRuntime(deviceGroups, groupNames, groupChannels);
