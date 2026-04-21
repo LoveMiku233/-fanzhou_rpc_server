@@ -72,6 +72,10 @@ private:
     void updateStats();
     void updateStatsLegacy();  // 兼容旧版本服务器的多RPC调用方式
     void checkAndUpdateStats(std::shared_ptr<StatsData> statsData);
+    void updateDutyOverview(int totalDevices, int onlineDevices, int offlineDevices,
+                            int totalGroups, int totalStrategies, int totalSensors,
+                            bool canOpened, bool canValid, int mqttConnected,
+                            int mqttTotal, bool mqttValid, const QString &uptime);
 
     RpcClient *rpcClient_;
     // 注意：自动刷新由MainWindow统一管理，不再需要独立的定时器
@@ -88,6 +92,20 @@ private:
     QLabel *connectionStatusLabel_;
     QLabel *systemUptimeLabel_;
     QLabel *lastUpdateLabel_;
+    QLabel *modeLabel_;
+    QLabel *alertSummaryLabel_;
+    QLabel *sensorTrustLabel_;
+    QLabel *workflowSummaryLabel_;
+    QLabel *deviceSummaryLabel_;
+    QLabel *tempValueLabel_;
+    QLabel *humidityValueLabel_;
+    QLabel *co2ValueLabel_;
+    QLabel *lightValueLabel_;
+    QLabel *soilValueLabel_;
+    QLabel *coolingFlowLabel_;
+    QLabel *ventFlowLabel_;
+    QLabel *irrigationFlowLabel_;
+    QLabel *protectFlowLabel_;
 
     // 快捷操作按钮
     QPushButton *refreshButton_;

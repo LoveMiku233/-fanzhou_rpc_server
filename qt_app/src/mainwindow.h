@@ -12,9 +12,11 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QTimer>
+#include <QRect>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QList>
+#include <QElapsedTimer>
 #include <QDateTime>
 #include <QButtonGroup>
 
@@ -30,6 +32,10 @@ class MonitorWidget;
 class DebugWidget;
 class Greenhouse3DWidget;
 class ScreenManager;
+class QResizeEvent;
+class QWidget;
+class QPropertyAnimation;
+class QGraphicsOpacityEffect;
 
 /**
  * @brief 主窗口类 - 大棚控制系统
@@ -45,6 +51,10 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+protected:
+    void resizeEvent(QResizeEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
 private slots:
     void onConnectionStatusChanged(bool connected);
     void onAutoRefreshTimeout();
@@ -57,6 +67,9 @@ private slots:
     void onMenuButtonClicked(int index);
 
 private:
+    struct ToastRequest;
+    struct ToastItem;
+
     void setupUi();
     void setupTopStatusBar();
     void setupCentralWidget();
@@ -65,6 +78,24 @@ private:
     void switchToPage(int index);
     void updateMenuSelection(int activeIndex);
     void updateStatusBarConnection(bool connected);
+    void updateAlertLabel(const QString &text, const QString &style,
+                          const QString &level, bool syncToast = true);
+    void setupToast();
+    void showToast(const QString &message, const QString &level = QStringLiteral("INFO"));
+    void layoutToast();
+    QString toastBackgroundForLevel(const QString &level) const;
+    QString toastProgressForLevel(const QString &level) const;
+    QString toastDisplayText(const QString &message, int repeatCount) const;
+    void displayToast(const ToastRequest &request);
+    bool mergeDuplicateToast(const QString &message, const QString &level);
+    void updateToastLabel(ToastItem *item);
+    void startToastTimers(ToastItem *item);
+    void updateToastProgress(ToastItem *item);
+    void updateAllToastProgress();
+    void closeToast(ToastItem *item, bool animated = true);
+    void drainToastQueue();
+    void relayoutToasts(bool animated = true);
+    QRect toastRectForIndex(int index) const;
 
     QWidget *topStatusBar_;
     QHBoxLayout *topStatusLayout_;
@@ -81,6 +112,37 @@ private:
     QLabel *cloudStatusLabel_;
     QLabel *timeLabel_;
     QLabel *alertLabel_;
+
+    struct ToastRequest {
+        QString message;
+        QString level;
+        int repeatCount = 1;
+        qint64 lastSeenMs = 0;
+    };
+
+    struct ToastItem {
+        QWidget *container = nullptr;
+        QLabel *label = nullptr;
+        QWidget *progressTrack = nullptr;
+        QWidget *progressFill = nullptr;
+        QTimer *lifeTimer = nullptr;
+        QPropertyAnimation *slideInAnim = nullptr;
+        QPropertyAnimation *slideOutAnim = nullptr;
+        QPropertyAnimation *fadeInAnim = nullptr;
+        QPropertyAnimation *fadeOutAnim = nullptr;
+        QGraphicsOpacityEffect *opacityEffect = nullptr;
+        QString message;
+        QString level;
+        int repeatCount = 1;
+        qint64 lastSeenMs = 0;
+        qint64 durationMs = 2600;
+        QElapsedTimer elapsed;
+        bool closing = false;
+    };
+    QList<ToastItem*> activeToasts_;
+    QList<ToastRequest> pendingToasts_;
+    QTimer *toastProgressTimer_;
+    int toastSequence_;
 
     // 子页面
     HomeWidget *homeWidget_;

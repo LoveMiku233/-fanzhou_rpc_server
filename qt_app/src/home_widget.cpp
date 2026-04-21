@@ -39,6 +39,20 @@ HomeWidget::HomeWidget(RpcClient *rpcClient, QWidget *parent)
     , connectionStatusLabel_(nullptr)
     , systemUptimeLabel_(nullptr)
     , lastUpdateLabel_(nullptr)
+    , modeLabel_(nullptr)
+    , alertSummaryLabel_(nullptr)
+    , sensorTrustLabel_(nullptr)
+    , workflowSummaryLabel_(nullptr)
+    , deviceSummaryLabel_(nullptr)
+    , tempValueLabel_(nullptr)
+    , humidityValueLabel_(nullptr)
+    , co2ValueLabel_(nullptr)
+    , lightValueLabel_(nullptr)
+    , soilValueLabel_(nullptr)
+    , coolingFlowLabel_(nullptr)
+    , ventFlowLabel_(nullptr)
+    , irrigationFlowLabel_(nullptr)
+    , protectFlowLabel_(nullptr)
     , refreshButton_(nullptr)
     , stopAllButton_(nullptr)
     , emergencyStopButton_(nullptr)
@@ -54,117 +68,180 @@ HomeWidget::HomeWidget(RpcClient *rpcClient, QWidget *parent)
 void HomeWidget::setupUi()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(PAGE_MARGIN, PAGE_MARGIN, PAGE_MARGIN, PAGE_MARGIN);
-    mainLayout->setSpacing(PAGE_SPACING);
+    mainLayout->setContentsMargins(10, 8, 10, 8);
+    mainLayout->setSpacing(8);
 
-    // 页面标题
-    QLabel *titleLabel = new QLabel(QStringLiteral("大棚控制系统"), this);
+    QLabel *titleLabel = new QLabel(QStringLiteral("大棚值班总览"), this);
     titleLabel->setStyleSheet(QStringLiteral(
-        "font-size: %1px; font-weight: bold; color: #263238; padding: 4px 0;").arg(FONT_SIZE_TITLE));
+        "font-size: 20px; font-weight: 900; color: #17364a; padding: 0 2px;"));
     mainLayout->addWidget(titleLabel);
 
-    // 连接状态卡片 - 使用CSS边框阴影模拟，避免GPU消耗
-    QFrame *statusCard = new QFrame(this);
-    statusCard->setObjectName(QStringLiteral("statusCard"));
-    statusCard->setStyleSheet(QStringLiteral(
-        "#statusCard { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #eceff1, stop:1 #cfd8dc); "
-        "border-radius: %1px; padding: 8px; border: 2px solid #b0bec5; }").arg(BORDER_RADIUS_CARD));
+    auto addShadow = [](QWidget *widget, const QColor &color = QColor(30, 50, 65, 32)) {
+        auto *shadow = new QGraphicsDropShadowEffect(widget);
+        shadow->setBlurRadius(18);
+        shadow->setOffset(0, 5);
+        shadow->setColor(color);
+        widget->setGraphicsEffect(shadow);
+    };
 
-    QHBoxLayout *statusLayout = new QHBoxLayout(statusCard);
-    statusLayout->setContentsMargins(CARD_MARGIN + 2, CARD_MARGIN, CARD_MARGIN + 2, CARD_MARGIN);
+    auto createStatusPill = [this](const QString &title, const QString &value, const QString &bg, const QString &fg) -> QLabel* {
+        QLabel *label = new QLabel(QStringLiteral("%1  %2").arg(title, value), this);
+        label->setAlignment(Qt::AlignCenter);
+        label->setMinimumHeight(34);
+        label->setStyleSheet(QStringLiteral(
+            "QLabel { background: %1; color: %2; border-radius: 8px; "
+            "padding: 6px 10px; font-size: 13px; font-weight: 800; }").arg(bg, fg));
+        return label;
+    };
 
-    connectionStatusLabel_ = new QLabel(QStringLiteral("未连接"), this);
-    connectionStatusLabel_->setStyleSheet(QStringLiteral(
-        "font-size: %1px; font-weight: bold; color: #e53935;").arg(FONT_SIZE_CARD_TITLE));
-    statusLayout->addWidget(connectionStatusLabel_);
-    statusLayout->addStretch();
+    QHBoxLayout *topLayout = new QHBoxLayout();
+    topLayout->setSpacing(8);
 
-    systemUptimeLabel_ = new QLabel(QStringLiteral("运行: --"), this);
-    systemUptimeLabel_->setStyleSheet(QStringLiteral(
-        "font-size: %1px; color: #37474f; padding: 4px 10px; background-color: white; border-radius: 6px;").arg(FONT_SIZE_SMALL));
-    statusLayout->addWidget(systemUptimeLabel_);
+    connectionStatusLabel_ = createStatusPill(QStringLiteral("服务器"), QStringLiteral("未连接"), QStringLiteral("#fbe9e7"), QStringLiteral("#b6423a"));
+    modeLabel_ = createStatusPill(QStringLiteral("模式"), QStringLiteral("自动监控"), QStringLiteral("#e3f2fd"), QStringLiteral("#1565c0"));
+    alertSummaryLabel_ = createStatusPill(QStringLiteral("告警"), QStringLiteral("待同步"), QStringLiteral("#fff4d6"), QStringLiteral("#8a5a00"));
+    systemUptimeLabel_ = createStatusPill(QStringLiteral("运行"), QStringLiteral("--"), QStringLiteral("#edf7ed"), QStringLiteral("#2e7d32"));
 
-    mainLayout->addWidget(statusCard);
+    topLayout->addWidget(connectionStatusLabel_, 2);
+    topLayout->addWidget(modeLabel_, 1);
+    topLayout->addWidget(alertSummaryLabel_, 1);
+    topLayout->addWidget(systemUptimeLabel_, 1);
+    mainLayout->addLayout(topLayout);
 
-    // 统计信息卡片网格 - 2行4列
-    QGridLayout *statsGrid = new QGridLayout();
-    statsGrid->setSpacing(CARD_SPACING + 2);
-
-    auto createStatCard = [this](const QString &title, const QString &bgColor) -> QPair<QFrame*, QLabel*> {
+    auto createCard = [this, addShadow](const QString &objectName, const QString &style) -> QFrame* {
         QFrame *card = new QFrame(this);
-        // 使用简洁样式,提升渲染性能
+        card->setObjectName(objectName);
         card->setStyleSheet(QStringLiteral(
-            "QFrame { background-color: %1; "
-            "border-radius: %2px; padding: 6px; }").arg(bgColor).arg(BORDER_RADIUS_CARD));
-        card->setMinimumHeight(86);
-        card->setAttribute(Qt::WA_OpaquePaintEvent, true);  // 优化绘制性能
+            "#%1 { %2 border-radius: 12px; border: 1px solid rgba(54, 82, 98, 0.18); }")
+            .arg(objectName, style));
+        addShadow(card);
+        return card;
+    };
+
+    auto createEnvCard = [this](const QString &title, const QString &unit, const QString &bgColor) -> QPair<QFrame*, QLabel*> {
+        QFrame *card = new QFrame(this);
+        card->setMinimumHeight(74);
+        card->setStyleSheet(QStringLiteral(
+            "QFrame { background: %1; border-radius: 10px; border: none; }")
+            .arg(bgColor));
 
         QVBoxLayout *layout = new QVBoxLayout(card);
-        layout->setContentsMargins(CARD_MARGIN + 2, CARD_MARGIN, CARD_MARGIN + 2, CARD_MARGIN - 1);
+        layout->setContentsMargins(10, 8, 10, 8);
         layout->setSpacing(2);
 
         QLabel *titleLabel = new QLabel(title, card);
-        titleLabel->setWordWrap(true);
         titleLabel->setStyleSheet(QStringLiteral(
-            "color: rgba(255,255,255,0.95); font-size: %1px; font-weight: 600;")
-            .arg(FONT_SIZE_SMALL));
+            "color: rgba(255,255,255,0.88); font-size: 12px; font-weight: 700;"));
         layout->addWidget(titleLabel);
 
         QLabel *valueLabel = new QLabel(QStringLiteral("--"), card);
         valueLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         valueLabel->setStyleSheet(QStringLiteral(
-            "color: white; font-size: 24px; font-weight: 800; line-height: 1.0;"));
+            "color: white; font-size: 24px; font-weight: 900;"));
         layout->addWidget(valueLabel);
+
+        QLabel *unitLabel = new QLabel(unit, card);
+        unitLabel->setStyleSheet(QStringLiteral("color: rgba(255,255,255,0.74); font-size: 11px;"));
+        layout->addWidget(unitLabel);
 
         return qMakePair(card, valueLabel);
     };
 
-    // 第1行: 设备统计
-    auto deviceCard = createStatCard(QStringLiteral("设备总数"), QStringLiteral("#1e88e5"));
-    totalDevicesLabel_ = deviceCard.second;
-    statsGrid->addWidget(deviceCard.first, 0, 0);
+    QHBoxLayout *middleLayout = new QHBoxLayout();
+    middleLayout->setSpacing(10);
 
-    auto onlineCard = createStatCard(QStringLiteral("在线设备"), QStringLiteral("#43a047"));
-    onlineDevicesLabel_ = onlineCard.second;
-    statsGrid->addWidget(onlineCard.first, 0, 1);
+    QFrame *envPanel = createCard(QStringLiteral("envPanel"),
+        QStringLiteral("background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #f9fcff,stop:1 #edf6f1);"));
+    QVBoxLayout *envLayout = new QVBoxLayout(envPanel);
+    envLayout->setContentsMargins(10, 10, 10, 10);
+    envLayout->setSpacing(8);
+    QLabel *envTitle = new QLabel(QStringLiteral("环境关键值"), envPanel);
+    envTitle->setStyleSheet(QStringLiteral("font-size: 14px; font-weight: 900; color: #17364a;"));
+    envLayout->addWidget(envTitle);
 
-    auto offlineCard = createStatCard(QStringLiteral("离线设备"), QStringLiteral("#e53935"));
-    offlineDevicesLabel_ = offlineCard.second;
-    statsGrid->addWidget(offlineCard.first, 0, 2);
+    QGridLayout *envGrid = new QGridLayout();
+    envGrid->setSpacing(8);
+    auto tempCard = createEnvCard(QStringLiteral("温度"), QStringLiteral("缺少传感器实时值"), QStringLiteral("#e85d4f"));
+    tempValueLabel_ = tempCard.second;
+    envGrid->addWidget(tempCard.first, 0, 0);
+    auto humCard = createEnvCard(QStringLiteral("空气湿度"), QStringLiteral("缺少传感器实时值"), QStringLiteral("#248bd2"));
+    humidityValueLabel_ = humCard.second;
+    envGrid->addWidget(humCard.first, 0, 1);
+    auto co2Card = createEnvCard(QStringLiteral("CO2"), QStringLiteral("缺少传感器实时值"), QStringLiteral("#28a36a"));
+    co2ValueLabel_ = co2Card.second;
+    envGrid->addWidget(co2Card.first, 1, 0);
+    auto lightCard = createEnvCard(QStringLiteral("光照"), QStringLiteral("缺少传感器实时值"), QStringLiteral("#f2a51f"));
+    lightValueLabel_ = lightCard.second;
+    envGrid->addWidget(lightCard.first, 1, 1);
+    auto soilCard = createEnvCard(QStringLiteral("基质水分"), QStringLiteral("缺少传感器实时值"), QStringLiteral("#7d5f43"));
+    soilValueLabel_ = soilCard.second;
+    envGrid->addWidget(soilCard.first, 2, 0, 1, 2);
+    envLayout->addLayout(envGrid);
+    middleLayout->addWidget(envPanel, 3);
 
-    auto groupCard = createStatCard(QStringLiteral("分组数量"), QStringLiteral("#8e24aa"));
-    totalGroupsLabel_ = groupCard.second;
-    statsGrid->addWidget(groupCard.first, 0, 3);
+    QFrame *flowPanel = createCard(QStringLiteral("flowPanel"),
+        QStringLiteral("background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #ffffff,stop:1 #eef8ff);"));
+    QVBoxLayout *flowLayout = new QVBoxLayout(flowPanel);
+    flowLayout->setContentsMargins(10, 10, 10, 10);
+    flowLayout->setSpacing(7);
+    QLabel *flowTitle = new QLabel(QStringLiteral("当前流程判断"), flowPanel);
+    flowTitle->setStyleSheet(QStringLiteral("font-size: 14px; font-weight: 900; color: #17364a;"));
+    flowLayout->addWidget(flowTitle);
 
-    // 第2行: 策略和系统状态
-    auto strategyCard = createStatCard(QStringLiteral("策略数量"), QStringLiteral("#fb8c00"));
-    totalStrategiesLabel_ = strategyCard.second;
-    statsGrid->addWidget(strategyCard.first, 1, 0);
+    auto createFlowLabel = [](const QString &title, const QString &color) -> QLabel* {
+        QLabel *label = new QLabel(QStringLiteral("%1：等待传感器和策略数据").arg(title));
+        label->setWordWrap(true);
+        label->setMinimumHeight(44);
+        label->setStyleSheet(QStringLiteral(
+            "QLabel { background: %1; color: #20343d; border-radius: 8px; "
+            "padding: 7px 9px; font-size: 12px; font-weight: 700; }").arg(color));
+        return label;
+    };
+    coolingFlowLabel_ = createFlowLabel(QStringLiteral("降温"), QStringLiteral("#dff4ff"));
+    ventFlowLabel_ = createFlowLabel(QStringLiteral("通风"), QStringLiteral("#e2f7e8"));
+    irrigationFlowLabel_ = createFlowLabel(QStringLiteral("灌溉"), QStringLiteral("#fff0cf"));
+    protectFlowLabel_ = createFlowLabel(QStringLiteral("保护"), QStringLiteral("#ffe4e0"));
+    flowLayout->addWidget(coolingFlowLabel_);
+    flowLayout->addWidget(ventFlowLabel_);
+    flowLayout->addWidget(irrigationFlowLabel_);
+    flowLayout->addWidget(protectFlowLabel_);
+    middleLayout->addWidget(flowPanel, 3);
 
-    auto sensorCard = createStatCard(QStringLiteral("传感器数量"), QStringLiteral("#00897b"));
-    totalSensorsLabel_ = sensorCard.second;
-    statsGrid->addWidget(sensorCard.first, 1, 1);
+    QFrame *opsPanel = createCard(QStringLiteral("opsPanel"),
+        QStringLiteral("background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #ffffff,stop:1 #f5f7fb);"));
+    QVBoxLayout *opsLayout = new QVBoxLayout(opsPanel);
+    opsLayout->setContentsMargins(10, 10, 10, 10);
+    opsLayout->setSpacing(8);
+    QLabel *opsTitle = new QLabel(QStringLiteral("设备与可靠性"), opsPanel);
+    opsTitle->setStyleSheet(QStringLiteral("font-size: 14px; font-weight: 900; color: #17364a;"));
+    opsLayout->addWidget(opsTitle);
 
-    auto canCard = createStatCard(QStringLiteral("CAN状态"), QStringLiteral("#546e7a"));
-    canStatusLabel_ = canCard.second;
-    statsGrid->addWidget(canCard.first, 1, 2);
+    deviceSummaryLabel_ = new QLabel(QStringLiteral("设备：--"), opsPanel);
+    workflowSummaryLabel_ = new QLabel(QStringLiteral("策略：--"), opsPanel);
+    sensorTrustLabel_ = new QLabel(QStringLiteral("传感器可信度：待同步"), opsPanel);
+    for (QLabel *label : {deviceSummaryLabel_, workflowSummaryLabel_, sensorTrustLabel_}) {
+        label->setWordWrap(true);
+        label->setStyleSheet(QStringLiteral(
+            "QLabel { background: #f2f7fb; color: #2b414d; border: 1px solid #d7e6ee; "
+            "border-radius: 8px; padding: 8px 9px; font-size: 12px; font-weight: 700; }"));
+        opsLayout->addWidget(label);
+    }
 
-    auto mqttCard = createStatCard(QStringLiteral("MQTT"), QStringLiteral("#3949ab"));
-    mqttStatusLabel_ = mqttCard.second;
-    statsGrid->addWidget(mqttCard.first, 1, 3);
+    totalDevicesLabel_ = new QLabel(QStringLiteral("--"), opsPanel);
+    onlineDevicesLabel_ = new QLabel(QStringLiteral("--"), opsPanel);
+    offlineDevicesLabel_ = new QLabel(QStringLiteral("--"), opsPanel);
+    totalGroupsLabel_ = new QLabel(QStringLiteral("--"), opsPanel);
+    totalStrategiesLabel_ = new QLabel(QStringLiteral("--"), opsPanel);
+    totalSensorsLabel_ = new QLabel(QStringLiteral("--"), opsPanel);
+    canStatusLabel_ = new QLabel(QStringLiteral("--"), opsPanel);
+    mqttStatusLabel_ = new QLabel(QStringLiteral("--"), opsPanel);
 
-    mainLayout->addLayout(statsGrid);
+    opsLayout->addStretch();
+    middleLayout->addWidget(opsPanel, 2);
+    mainLayout->addLayout(middleLayout, 1);
 
-    // 快捷操作区
-    QGroupBox *actionsBox = new QGroupBox(QStringLiteral("快捷操作"), this);
-    actionsBox->setStyleSheet(QStringLiteral(
-        "QGroupBox { font-weight: bold; font-size: %1px; border: 2px solid #cfd8dc; border-radius: %2px; margin-top: 10px; padding-top: 12px; }"
-        "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 8px; color: #0288d1; }").arg(FONT_SIZE_BODY).arg(BORDER_RADIUS_CARD));
-
-    QHBoxLayout *actionsLayout = new QHBoxLayout(actionsBox);
-    actionsLayout->setSpacing(CARD_SPACING + 2);
-    actionsLayout->setContentsMargins(CARD_MARGIN, CARD_MARGIN, CARD_MARGIN, CARD_MARGIN);
-
+    QHBoxLayout *actionsLayout = new QHBoxLayout();
+    actionsLayout->setSpacing(8);
     refreshButton_ = new QPushButton(QStringLiteral("刷新"), this);
     refreshButton_->setMinimumHeight(BTN_HEIGHT);
     refreshButton_->setMinimumWidth(BTN_MIN_WIDTH);
@@ -173,7 +250,7 @@ void HomeWidget::setupUi()
         "border-radius: %1px; padding: 0 16px; font-weight: bold; font-size: %2px; }"
         "QPushButton:hover { background-color: #1565c0; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
     connect(refreshButton_, &QPushButton::clicked, this, &HomeWidget::refreshData);
-    actionsLayout->addWidget(refreshButton_);
+    actionsLayout->addWidget(refreshButton_, 1);
 
     stopAllButton_ = new QPushButton(QStringLiteral("全停"), this);
     stopAllButton_->setMinimumHeight(BTN_HEIGHT);
@@ -183,13 +260,8 @@ void HomeWidget::setupUi()
         "border-radius: %1px; padding: 0 16px; font-weight: bold; font-size: %2px; }"
         "QPushButton:hover { background-color: #ef6c00; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
     connect(stopAllButton_, &QPushButton::clicked, this, &HomeWidget::onStopAllClicked);
-    actionsLayout->addWidget(stopAllButton_);
+    actionsLayout->addWidget(stopAllButton_, 1);
 
-    actionsLayout->addStretch();
-
-    mainLayout->addWidget(actionsBox);
-
-    // 急停按钮 - 固定高度和宽度
     emergencyStopButton_ = new QPushButton(QStringLiteral("紧急停止"), this);
     emergencyStopButton_->setFixedHeight(BTN_HEIGHT_EMERGENCY);
     emergencyStopButton_->setStyleSheet(QStringLiteral(
@@ -206,16 +278,14 @@ void HomeWidget::setupUi()
         "}"
     ).arg(FONT_SIZE_TITLE).arg(BORDER_RADIUS_BTN));
     connect(emergencyStopButton_, &QPushButton::clicked, this, &HomeWidget::onEmergencyStopClicked);
-    mainLayout->addWidget(emergencyStopButton_);
+    actionsLayout->addWidget(emergencyStopButton_, 2);
+    mainLayout->addLayout(actionsLayout);
 
-    // 最后更新时间
     lastUpdateLabel_ = new QLabel(QStringLiteral("更新: --"), this);
     lastUpdateLabel_->setStyleSheet(QStringLiteral(
         "color: #78909c; font-size: %1px; padding: 4px;").arg(FONT_SIZE_SMALL));
     lastUpdateLabel_->setAlignment(Qt::AlignCenter);
     mainLayout->addWidget(lastUpdateLabel_);
-
-    mainLayout->addStretch();
 }
 
 void HomeWidget::onStopAllClicked()
@@ -284,6 +354,76 @@ void HomeWidget::onEmergencyStopClicked()
         }, 3000);
 }
 
+void HomeWidget::updateDutyOverview(int totalDevices, int onlineDevices, int offlineDevices,
+                                    int totalGroups, int totalStrategies, int totalSensors,
+                                    bool canOpened, bool canValid, int mqttConnected,
+                                    int mqttTotal, bool mqttValid, const QString &uptime)
+{
+    if (modeLabel_) {
+        modeLabel_->setText(totalStrategies > 0
+            ? QStringLiteral("模式  自动监控")
+            : QStringLiteral("模式  手动值守"));
+    }
+
+    if (systemUptimeLabel_) {
+        systemUptimeLabel_->setText(uptime.isEmpty()
+            ? QStringLiteral("运行  --")
+            : QStringLiteral("运行  %1").arg(uptime));
+    }
+
+    const bool mqttBad = mqttValid && mqttTotal > 0 && mqttConnected < mqttTotal;
+    const bool canBad = canValid && !canOpened;
+    if (alertSummaryLabel_) {
+        if (offlineDevices > 0 || mqttBad || canBad) {
+            alertSummaryLabel_->setText(QStringLiteral("告警  %1项待处理")
+                .arg((offlineDevices > 0 ? 1 : 0) + (mqttBad ? 1 : 0) + (canBad ? 1 : 0)));
+            alertSummaryLabel_->setStyleSheet(QStringLiteral(
+                "QLabel { background: #fff4d6; color: #8a5a00; border-radius: 8px; "
+                "padding: 6px 10px; font-size: 13px; font-weight: 800; }"));
+        } else {
+            alertSummaryLabel_->setText(QStringLiteral("告警  正常"));
+            alertSummaryLabel_->setStyleSheet(QStringLiteral(
+                "QLabel { background: #edf7ed; color: #2e7d32; border-radius: 8px; "
+                "padding: 6px 10px; font-size: 13px; font-weight: 800; }"));
+        }
+    }
+
+    if (deviceSummaryLabel_) {
+        deviceSummaryLabel_->setText(QStringLiteral("设备：在线 %1/%2，离线 %3；分组 %4 个。关键动作请优先从流程页确认绑定。")
+            .arg(onlineDevices).arg(totalDevices).arg(offlineDevices).arg(totalGroups));
+    }
+    if (workflowSummaryLabel_) {
+        workflowSummaryLabel_->setText(QStringLiteral("策略：已配置 %1 个；常用流程页负责手动启动和分组联动。")
+            .arg(totalStrategies));
+    }
+    if (sensorTrustLabel_) {
+        sensorTrustLabel_->setText(totalSensors > 0
+            ? QStringLiteral("传感器可信度：%1 个传感器已登记，需查看更新时间和异常值后再让策略长期自动运行。").arg(totalSensors)
+            : QStringLiteral("传感器可信度：未发现传感器，自动流程只能作为手动流程使用。"));
+    }
+
+    if (tempValueLabel_) tempValueLabel_->setText(QStringLiteral("--"));
+    if (humidityValueLabel_) humidityValueLabel_->setText(QStringLiteral("--"));
+    if (co2ValueLabel_) co2ValueLabel_->setText(QStringLiteral("--"));
+    if (lightValueLabel_) lightValueLabel_->setText(QStringLiteral("--"));
+    if (soilValueLabel_) soilValueLabel_->setText(QStringLiteral("--"));
+
+    if (coolingFlowLabel_) {
+        coolingFlowLabel_->setText(QStringLiteral("降温：等待温度值；触发建议 温度高于上限 -> 顶卷/端卷/风机/湿帘联动。"));
+    }
+    if (ventFlowLabel_) {
+        ventFlowLabel_->setText(QStringLiteral("通风：等待湿度/CO2值；触发建议 湿度或CO2偏高 -> 卷膜+风机换气。"));
+    }
+    if (irrigationFlowLabel_) {
+        irrigationFlowLabel_->setText(QStringLiteral("灌溉：等待基质水分值；触发建议 水分低于下限 -> 水泵/阀组启动。"));
+    }
+    if (protectFlowLabel_) {
+        protectFlowLabel_->setText(canBad
+            ? QStringLiteral("保护：CAN 未打开，禁止依赖自动动作，请先检查通讯。")
+            : QStringLiteral("保护：大风/雨天/缺水等联锁需要接入后显示，当前仅显示通讯保护。"));
+    }
+}
+
 void HomeWidget::refreshData()
 {
     qDebug() << "[HOME_WIDGET] 刷新数据";
@@ -295,7 +435,8 @@ void HomeWidget::updateStats()
     if (!rpcClient_ || !rpcClient_->isConnected()) {
         connectionStatusLabel_->setText(QStringLiteral("未连接"));
         connectionStatusLabel_->setStyleSheet(QStringLiteral(
-            "font-size: 18px; font-weight: bold; color: #e53935;"));
+            "QLabel { background: #fbe9e7; color: #b6423a; border-radius: 8px; "
+            "padding: 6px 10px; font-size: 13px; font-weight: 800; }"));
         totalDevicesLabel_->setText(QStringLiteral("--"));
         onlineDevicesLabel_->setText(QStringLiteral("--"));
         offlineDevicesLabel_->setText(QStringLiteral("--"));
@@ -305,13 +446,15 @@ void HomeWidget::updateStats()
         canStatusLabel_->setText(QStringLiteral("--"));
         mqttStatusLabel_->setText(QStringLiteral("--"));
         systemUptimeLabel_->setText(QStringLiteral("运行时间: --"));
+        updateDutyOverview(0, 0, 0, 0, 0, 0, false, false, 0, 0, false, QString());
         return;
     }
 
     connectionStatusLabel_->setText(QStringLiteral("已连接 %1:%2")
         .arg(rpcClient_->host()).arg(rpcClient_->port()));
     connectionStatusLabel_->setStyleSheet(QStringLiteral(
-        "font-size: 18px; font-weight: bold; color: #43a047;"));
+        "QLabel { background: #edf7ed; color: #2e7d32; border-radius: 8px; "
+        "padding: 6px 10px; font-size: 13px; font-weight: 800; }"));
 
     // 使用异步调用避免阻塞UI线程
     rpcClient_->callAsync(QStringLiteral("sys.dashboard"), QJsonObject(),
@@ -380,6 +523,10 @@ void HomeWidget::updateStats()
                 if (!uptime.isEmpty()) {
                     systemUptimeLabel_->setText(QStringLiteral("运行时间: %1").arg(uptime));
                 }
+
+                updateDutyOverview(totalDevices, onlineDevices, offlineDevices,
+                                   totalGroups, totalStrategies, totalSensors,
+                                   canOpened, true, mqttConnected, mqttTotal, true, uptime);
 
                 qDebug() << "[HOME_WIDGET] Dashboard数据更新成功（异步RPC）";
             }, Qt::QueuedConnection);
@@ -561,6 +708,12 @@ void HomeWidget::checkAndUpdateStats(std::shared_ptr<StatsData> statsData)
         if (!statsData->uptime.isEmpty()) {
             systemUptimeLabel_->setText(QStringLiteral("运行时间: %1").arg(statsData->uptime));
         }
+
+        updateDutyOverview(statsData->totalDevices, statsData->onlineDevices, statsData->offlineDevices,
+                           statsData->totalGroups, statsData->totalStrategies, statsData->totalSensors,
+                           statsData->canOpened, statsData->canValid,
+                           statsData->mqttConnected, statsData->mqttTotal, statsData->mqttValid,
+                           statsData->uptime);
 
         qDebug() << "[HOME_WIDGET] 兼容模式统计数据更新完成";
     }, Qt::QueuedConnection);

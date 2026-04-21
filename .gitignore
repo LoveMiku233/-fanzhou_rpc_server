@@ -71,6 +71,10 @@ Thumbs.db
 *.dll
 *.exe
 
+# claude
+AGENTS.md
+CLAUDE.md
+
 _codeql_detected_source_root
 build/
 fanzhou_rpc_server

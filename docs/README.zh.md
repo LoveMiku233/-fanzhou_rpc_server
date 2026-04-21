@@ -1,630 +1,100 @@
-# 泛舟RPC服务器
+# 泛舟 RPC Server 文档
 
-## 项目简介
+本文档目录记录 `fanzhou_rpc_server` 当前可维护资料。旧的阶段性总结和过期优化计划已清理，保留长期有用的架构、开发、API、云协议和冒烟测试说明。
 
-泛舟RPC服务器是一个基于Qt的温室控制系统核心服务，运行在全志A133平台上。它提供JSON-RPC 2.0接口用于控制和监控CAN总线继电器设备。
+## 文档索引
 
-## 系统架构
+| 文档 | 状态 | 用途 |
+|---|---|---|
+| [ARCHITECTURE.zh.md](./ARCHITECTURE.zh.md) | 当前 | 系统架构、模块关系、主要数据流 |
+| [DEVELOPMENT.zh.md](./DEVELOPMENT.zh.md) | 当前 | 构建、调试、开发约定、常见任务 |
+| [API_REFERENCE.zh.md](./API_REFERENCE.zh.md) | 保留 | RPC/API 参考，内容较长，修改 RPC 时同步更新 |
+| [FANZHOU_CLOUD_PROTOCOL.zh.md](./FANZHOU_CLOUD_PROTOCOL.zh.md) | 保留 | 泛舟云平台 MQTT/场景同步协议 |
+| [CLOUD_UPLOAD_FEATURE.md](./CLOUD_UPLOAD_FEATURE.md) | 保留 | 云数据上传配置、UI 和 RPC 说明 |
+| [RPC_SMOKE_TCP_V13.md](./RPC_SMOKE_TCP_V13.md) | 当前 | TCP 控制板 V1.3 冒烟测试脚本说明 |
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    泛舟RPC服务器                              │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │  RPC层      │  │  核心层     │  │  设备层              │  │
-│  │             │  │             │  │                     │  │
-│  │ JSON-RPC    │◄─│ CoreContext │◄─│ CanDeviceManager    │  │
-│  │ Server      │  │             │  │                     │  │
-│  │             │  │ RpcRegistry │  │ RelayGd427          │  │
-│  │ Dispatcher  │  │             │  │                     │  │
-│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
-│                                                              │
-│  ┌─────────────────────────────────────────────────────────┐│
-│  │                     通信层                               ││
-│  │  ┌─────────────┐              ┌─────────────────────┐   ││
-│  │  │  CanComm    │              │  SerialComm         │   ││
-│  │  │  (CAN总线)  │              │  (串口/RS485)       │   ││
-│  │  └─────────────┘              └─────────────────────┘   ││
-│  └─────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────┘
-```
+## 工程概览
 
-## 目标平台
+`fanzhou_rpc_server` 是温室控制系统核心服务，基于 Qt/C++ 实现。服务端提供 JSON-RPC 2.0 接口，管理 CAN/TCP 继电器设备、传感器、设备分组、自动策略、云端 MQTT 同步和本地配置持久化。
 
-- **处理器**: 全志A133 (ARM Cortex-A53 四核)
-- **操作系统**: Linux (Buildroot/Yocto)
-- **Qt版本**: Qt 5.12+
-- **CAN接口**: SocketCAN (can0)
+相关应用：
 
-## 目录结构
+| 路径 | 说明 |
+|---|---|
+| `src/` | 服务端核心代码 |
+| `qt_app/` | 1024x600 触屏 HMI 客户端 |
+| `test_web/` | Web/Tauri 调试工具 |
+| `scripts/` | RPC 冒烟测试脚本 |
+| `config/` | 示例运行配置 |
 
-```
-fanzhou_rpc_server/
-├── main.cpp                    # 程序入口
-├── fanzhou_rpc_server.pro      # Qt项目文件
-├── config/                     # 配置文件
-│   └── config_example.json     # 配置示例
-├── docs/                       # 文档
-│   ├── README.zh.md            # 中文文档
-│   └── API_REFERENCE.zh.md     # API参考手册
-├── test_web/                   # Web调试工具
-│   └── index.html              # 调试界面
-├── qt_app/                     # Qt桌面应用程序
-│   ├── qt_app.pro              # Qt项目文件
-│   ├── resources/              # 资源文件
-│   └── src/                    # 源代码
-└── src/
-    ├── utils/                  # 工具类
-    │   ├── logger.h/cpp        # 日志系统
-    │   └── utils.h/cpp         # 通用工具
-    ├── config/                 # 配置管理
-    │   └── system_settings.h/cpp
-    ├── core/                   # 核心模块
-    │   ├── core_config.h/cpp   # 配置管理
-    │   ├── core_context.h/cpp  # 核心上下文
-    │   └── rpc_registry.h/cpp  # RPC注册
-    ├── rpc/                    # RPC模块
-    │   ├── json_rpc_dispatcher.h/cpp  # 请求分发
-    │   ├── json_rpc_server.h/cpp      # TCP服务器
-    │   ├── json_rpc_client.h/cpp      # TCP客户端
-    │   ├── rpc_helpers.h/cpp          # 辅助函数
-    │   └── rpc_error_codes.h          # 错误码
-    ├── comm/                   # 通信层
-    │   ├── base/
-    │   │   └── comm_adapter.h/cpp     # 通信适配器基类
-    │   ├── can_comm.h/cpp             # CAN通信
-    │   └── serial_comm.h/cpp          # 串口通信
-    └── device/                 # 设备层
-        ├── device_types.h      # 设备/通信/接口/协议类型定义
-        ├── base/
-        │   ├── device_adapter.h/cpp   # 设备适配器基类
-        │   └── i_sensor.h             # 传感器接口
-        ├── can/                # CAN设备
-        │   ├── i_can_device.h         # CAN设备接口
-        │   ├── can_device_manager.h/cpp
-        │   ├── relay_protocol.h       # 继电器协议
-        │   └── relay_gd427.h/cpp      # GD427继电器
-        ├── serial/             # 串口传感器（统一模块）
-        │   ├── serial_protocol.h      # 串口协议定义（Modbus/Custom/Raw）
-        │   ├── serial_sensor.h/cpp    # 串口传感器基类（支持协议切换）
-        │   └── serial_temp_sensor.h/cpp # 串口温度传感器
-        ├── modbus/             # Modbus传感器（兼容模块）
-        │   ├── modbus_sensor.h/cpp    # Modbus传感器基类
-        │   └── modbus_temp_sensor.h/cpp # 温度传感器
-        └── uart/               # UART传感器（兼容模块）
-            └── uart_sensor.h/cpp      # UART传感器基类
+## 当前运行入口
+
+服务端入口：
+
+```text
+main.cpp
 ```
 
-### 串口传感器协议选择
+启动后主要动作：
 
-新增的 `serial/` 目录提供统一的串口传感器框架，支持以下协议：
+1. 读取 `/var/lib/fanzhou_core/core.json`，失败时写入默认配置。
+2. 初始化 `Logger`，输出到 `/var/log/fanzhou_core/core.log`。
+3. 初始化 `CoreContext`，创建通讯、设备、MQTT、云同步、策略和传感器运行时对象。
+4. 通过 `RpcRegistry` 注册 JSON-RPC 方法。
+5. 启动 JSON-RPC 服务，默认端口 `12345`。
+6. 启动设备协议 TCP Server，端口 `9000`，用于控制板作为 TCP Client 接入。
 
-| 协议类型 | 说明 |
-|----------|------|
-| `Modbus` | 标准Modbus RTU协议，使用从机地址和寄存器读取数据 |
-| `Custom` | 自定义帧格式协议，支持帧头/帧尾/固定长度配置 |
-| `Raw`    | 原始数据流，无帧格式，适用于特殊传感器 |
+## 构建
 
-配置示例：
-
-```json
-{
-  "name": "temp-sensor01",
-  "type": 22,
-  "commType": 1,
-  "nodeId": 10,
-  "bus": "/dev/ttyS1",
-  "params": {
-    "protocol": "Modbus",
-    "modbusAddr": 1,
-    "baudRate": 9600,
-    "registerAddr": 0,
-    "registerCount": 1,
-    "scale": 0.1
-  }
-}
-```
-
-使用自定义协议时：
-
-```json
-{
-  "name": "custom-sensor01",
-  "type": 81,
-  "commType": 1,
-  "nodeId": 20,
-  "bus": "/dev/ttyS2",
-  "params": {
-    "protocol": "Custom",
-    "baudRate": 9600,
-    "frameHeader": "AA55",
-    "frameLength": 8
-  }
-}
-```
-
-## 编译
-
-### 依赖项
-
-- Qt 5.12+ (Core, Network)
-- Linux SocketCAN支持
-- GCC 编译器
-
-### 编译步骤
+服务端：
 
 ```bash
-# 1. 创建构建目录
-mkdir build && cd build
-
-# 2. 运行qmake
+mkdir -p build
+cd build
 qmake ../fanzhou_rpc_server.pro
-
-# 3. 编译
-make -j$(nproc)
-
-# 4. 安装
-sudo make install
-```
-
-### 交叉编译 (A133平台)
-
-```bash
-# 设置交叉编译工具链
-export PATH=/opt/a133-toolchain/bin:$PATH
-export CROSS_COMPILE=aarch64-linux-gnu-
-
-# 使用Qt交叉编译版本
-/opt/qt-a133/bin/qmake ../fanzhou_rpc_server.pro
 make -j$(nproc)
 ```
 
-## 配置文件
-
-配置文件位于 `/var/lib/fanzhou_core/core.json`：
-
-```json
-{
-  "main": {
-    "rpcPort": 12345
-  },
-  "log": {
-    "logToConsole": true,
-    "logToFile": true,
-    "logFilePath": "/var/log/fanzhou_core/core.log",
-    "logLevel": 0
-  },
-  "can": {
-    "ifname": "can0",
-    "bitrate": 125000,
-    "tripleSampling": true,
-    "canFd": false
-  },
-  "devices": [
-    {
-      "name": "relay01",
-      "type": 1,
-      "commType": 2,
-      "nodeId": 1,
-      "bus": "can0",
-      "params": {
-        "channels": 4,
-        "enabled": true
-      }
-    }
-  ],
-  "groups": [
-    {
-      "groupId": 1,
-      "name": "main-group",
-      "enabled": true,
-      "devices": [1, 2]
-    }
-  ],
-  "strategies": [
-    {
-      "id": 1,
-      "name": "default-stop",
-      "groupId": 1,
-      "channel": 0,
-      "action": "stop",
-      "intervalSec": 120,
-      "enabled": true,
-      "autoStart": false
-    }
-  ]
-}
-```
-
-### 配置项说明
-
-| 配置项 | 类型 | 说明 |
-|--------|------|------|
-| `main.rpcPort` | int | RPC服务器监听端口 |
-| `log.logLevel` | int | 日志级别 (0=Debug, 1=Info, 2=Warning, 3=Error, 4=Critical) |
-| `can.ifname` | string | CAN接口名 |
-| `can.bitrate` | int | CAN波特率 |
-| `devices[].nodeId` | int | CAN节点ID (1-255) |
-| `groups[].groupId` | int | 设备组ID |
-| `strategies[].action` | string | 控制动作 (stop/fwd/rev) |
-
-## A133平台部署
-
-### 1. CAN接口配置
+Qt HMI 客户端：
 
 ```bash
-# 配置CAN接口
-ip link set can0 down
-canconfig can0 bitrate 125000 ctrlmode triple-sampling on
-ip link set can0 up
-
-# 验证CAN接口
-canconfig can0
-candump can0
+cd qt_app
+mkdir -p build
+cd build
+qmake ../qt_app.pro
+make -j$(nproc)
 ```
 
-### 2. 系统服务配置
-
-创建 systemd 服务文件 `/etc/systemd/system/fanzhou-rpc.service`:
-
-```ini
-[Unit]
-Description=FanZhou RPC Server
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/opt/fanzhou_rpc_server/bin/fanzhou_rpc_server
-Restart=always
-RestartSec=5
-User=root
-
-[Install]
-WantedBy=multi-user.target
-```
-
-启动服务:
+Tauri/Web 调试工具：
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable fanzhou-rpc
-sudo systemctl start fanzhou-rpc
-sudo systemctl status fanzhou-rpc
+cd test_web
+cargo tauri dev
 ```
 
-### 3. 日志查看
+## 快速验证
+
+基础 RPC：
 
 ```bash
-# 查看日志文件
-tail -f /var/log/fanzhou_core/core.log
-
-# 查看系统日志
-journalctl -u fanzhou-rpc -f
-```
-
-## RPC接口
-
-### 基础方法
-
-| 方法 | 参数 | 说明 |
-|------|------|------|
-| `rpc.ping` | 无 | 测试连接 |
-| `rpc.list` | 无 | 列出所有RPC方法 |
-| `echo` | 任意 | 回显参数 |
-
-### CAN总线诊断
-
-| 方法 | 参数 | 说明 |
-|------|------|------|
-| `can.status` | 无 | 获取CAN总线状态（接口、波特率、是否打开、发送队列大小） |
-| `can.send` | `{id, dataHex, extended?}` | 发送原始CAN帧 |
-
-**说明**：当CAN控制不生效时，首先调用 `can.status` 检查CAN总线状态。如果 `opened` 为 `false`，则CAN接口未正确打开，请参考故障排除章节。
-
-### 继电器控制
-
-| 方法 | 参数 | 说明 |
-|------|------|------|
-| `relay.control` | `{node, ch, action}` | 控制继电器 |
-| `relay.query` | `{node, ch}` | 查询状态 |
-| `relay.status` | `{node, ch}` | 获取通道状态 |
-| `relay.statusAll` | `{node}` | 获取所有通道状态 |
-| `relay.nodes` | 无 | 获取设备列表 |
-
-### 分组管理
-
-| 方法 | 参数 | 说明 |
-|------|------|------|
-| `group.list` | 无 | 列出所有分组 |
-| `group.create` | `{groupId, name}` | 创建分组 |
-| `group.delete` | `{groupId}` | 删除分组 |
-| `group.addDevice` | `{groupId, node}` | 添加设备（所有通道） |
-| `group.removeDevice` | `{groupId, node}` | 移除设备 |
-| `group.addChannel` | `{groupId, node, channel}` | 添加指定通道到分组 |
-| `group.removeChannel` | `{groupId, node, channel}` | 从分组移除通道 |
-| `group.getChannels` | `{groupId}` | 获取分组的通道列表 |
-| `group.control` | `{groupId, ch, action}` | 分组控制 |
-
-### 设备管理
-
-| 方法 | 参数 | 说明 |
-|------|------|------|
-| `device.types` | 无 | 获取支持的设备类型列表 |
-| `device.list` | 无 | 获取已注册设备列表 |
-| `device.get` | `{nodeId}` | 获取设备详细信息 |
-| `device.add` | `{nodeId, type, name, ...}` | 动态添加设备 |
-| `device.remove` | `{nodeId}` | 动态移除设备 |
-
-### 屏幕配置
-
-| 方法 | 参数 | 说明 |
-|------|------|------|
-| `screen.get` | 无 | 获取屏幕配置 |
-| `screen.set` | `{brightness, contrast, ...}` | 设置屏幕参数 |
-
-### 控制队列
-
-| 方法 | 参数 | 说明 |
-|------|------|------|
-| `control.queue.status` | 无 | 获取队列状态 |
-| `control.queue.result` | `{jobId}` | 获取任务结果 |
-
-### 自动策略
-
-| 方法 | 参数 | 说明 |
-|------|------|------|
-| `auto.strategy.list` | 无 | 列出所有策略 |
-| `auto.strategy.enable` | `{id, enabled}` | 启用/禁用策略 |
-| `auto.strategy.trigger` | `{id}` | 手动触发策略 |
-
-### 场景管理（泛舟云平台）
-
-| 方法 | 参数 | 说明 |
-|------|------|------|
-| `scene.list` | `{id?}` | 获取场景列表，id为0或省略获取全部 |
-| `scene.get` | `{id}` | 获取单个场景详情 |
-| `scene.save` | `{场景对象}` | 创建或更新场景 |
-| `scene.delete` | `{id}` | 删除场景 |
-| `scene.enable` | `{id, enabled}` | 启用/禁用场景 |
-| `scene.trigger` | `{id}` | 手动触发场景 |
-| `scene.syncFromCloud` | `{id?}` | 从云端拉取场景 |
-
-> **注意**：场景管理功能按照泛舟云平台大棚智能控制柜系统技术文档实现，支持通过MQTT与云端进行场景同步。详细协议请参考 [泛舟云平台协议文档](./FANZHOU_CLOUD_PROTOCOL.zh.md)。
-
-## 使用示例
-
-### 命令行测试
-
-```bash
-# 测试连接
 echo '{"jsonrpc":"2.0","id":1,"method":"rpc.ping","params":{}}' | nc localhost 12345
-
-# 获取设备列表
-echo '{"jsonrpc":"2.0","id":2,"method":"relay.nodes","params":{}}' | nc localhost 12345
-
-# 控制继电器
-echo '{"jsonrpc":"2.0","id":3,"method":"relay.control","params":{"node":1,"ch":0,"action":"fwd"}}' | nc localhost 12345
-
-# 查询状态
-echo '{"jsonrpc":"2.0","id":4,"method":"relay.statusAll","params":{"node":1}}' | nc localhost 12345
 ```
 
-### Web调试工具
-
-项目提供了Web调试工具，位于 `test_web/dist/` 目录。可以使用任何HTTP服务器打开：
+TCP 控制板 V1.3 冒烟测试：
 
 ```bash
-# 使用Python启动简单HTTP服务器
-cd test_web/dist
-python3 -m http.server 8080
-
-# 在浏览器中访问
-# http://localhost:8080
+./scripts/rpc_smoke_tcp_v13.sh
 ```
 
-#### 连接原理
-
-由于浏览器安全限制，无法直接通过TCP连接到RPC服务器。需要使用websocat作为WebSocket到TCP的代理：
-
-```
-浏览器 → WebSocket(localhost:12346) → websocat代理 → TCP(目标设备:12345)
-```
-
-**数据流向说明：**
-- **浏览器**：通过WebSocket协议连接到本地代理（localhost:12346）
-- **websocat代理**：运行在本机，负责协议转换（WebSocket ↔ TCP）
-- **RPC服务器**：运行在目标设备上，监听TCP端口（默认12345）
-
-#### 使用Tauri桌面应用
-
-如果使用编译好的Tauri桌面应用，可以自动管理websocat代理：
-
-1. 在启动页填写目标设备的RPC服务器地址（如 `192.168.0.104`）和端口（默认 `12345`）
-2. 进入主界面后，点击"启动代理"按钮自动启动websocat
-3. 点击"连接"按钮通过WebSocket连接
-
-#### 手动启动代理（非Tauri环境）
-
-如果在普通浏览器中使用，需要手动启动websocat代理：
+严格要求 TCP 控制板在线：
 
 ```bash
-# 安装websocat
-# 下载地址: https://github.com/vi/websocat/releases
-
-# 在本机启动代理，连接到远程RPC服务器
-# 将 192.168.0.104 替换为目标设备的实际IP地址
-websocat --text ws-l:0.0.0.0:12346 tcp:192.168.0.104:12345
-
-# 然后在浏览器的连接设置中：
-# - RPC服务器地址: 192.168.0.104
-# - RPC端口: 12345
-# - WS端口: 12346
-# 点击"连接"按钮
+./scripts/rpc_smoke_tcp_v13.sh --strict-connection
 ```
 
-#### 常见问题
+## 文档维护规则
 
-**Q: 连接时显示"WebSocket连接错误"？**
-
-A: 请检查：
-1. websocat代理是否已启动
-2. 本地WS端口是否正确（默认12346）
-3. 目标RPC服务器是否可达（可用 `ping` 测试）
-4. 目标设备的防火墙是否允许12345端口连接
-
-**Q: 为什么需要websocat代理？**
-
-A: 浏览器出于安全考虑，只允许使用WebSocket协议进行实时通信，不能直接使用TCP。websocat作为中间层，将WebSocket协议转换为TCP协议，从而实现浏览器与RPC服务器的通信。
-
-## 错误码
-
-| 错误码 | 说明 |
-|--------|------|
-| -32700 | JSON解析错误 |
-| -32600 | 无效请求 |
-| -32601 | 方法不存在 |
-| -32602 | 无效参数 |
-| -60010 | 缺少必需参数 |
-| -60011 | 参数类型错误 |
-| -60012 | 参数值无效 |
-| -60013 | 无效操作状态 |
-| -60120 | CAN未打开 |
-| -60122 | CAN写入失败 |
-
-## 故障排除
-
-### CAN TX buffer full（发送缓冲区满）
-
-当日志中出现类似以下信息时：
-
-```
-[DEBUG] [CAN] TX buffer full, backing off 10ms
-[DEBUG] [CAN] TX buffer full, backing off 20ms
-[DEBUG] [CAN] TX buffer full, backing off 40ms
-...
-[DEBUG] [CAN] TX buffer full, backing off 320ms
-```
-
-**问题原因**：
-
-这表明CAN帧无法成功发送出去。服务器启动时会自动查询所有继电器设备的状态，如果CAN总线无法正常工作，发送队列会持续积压，系统进入指数退避模式。
-
-**自动恢复机制**：
-
-系统实现了自动恢复机制，防止TX缓冲区持续满载导致系统卡死：
-
-- 系统使用指数退避策略（10ms → 20ms → 40ms → 80ms → 160ms → 320ms）
-- 当连续10次达到最大退避时间（320ms）后，系统会自动丢弃当前帧并重置退避状态
-- 丢弃帧时会输出警告日志：`TX持续失败，丢弃帧: id=0x..., dlc=..., 已重试10次`
-- 这允许系统在CAN总线恢复后自动恢复正常工作
-
-**常见原因**：
-
-1. **CAN总线未连接设备**：CAN协议要求至少有一个接收设备发送ACK信号，否则发送方会认为发送失败
-2. **波特率不匹配**：发送设备和接收设备的波特率必须一致（默认125000bps）
-3. **缺少终端电阻**：CAN总线两端各需要一个120Ω的终端电阻
-4. **接线问题**：CAN_H和CAN_L接线错误或接触不良
-5. **CAN接口未正确配置**：接口未启动或配置错误
-
-**诊断步骤**：
-
-1. 检查CAN接口详细状态：
-   ```bash
-   ip -details link show can0
-   ```
-   关注 `state` 字段，正常应该是 `UP`，以及 `can_state`（应该是 `ERROR-ACTIVE`）。
-
-2. 查看CAN统计信息：
-   ```bash
-   ip -s link show can0
-   ```
-   如果 `TX errors` 持续增加，说明发送有问题。
-
-3. 检查内核CAN错误计数：
-   ```bash
-   cat /sys/class/net/can0/device/net/can0/statistics/*
-   ```
-
-4. 确认CAN接口配置：
-   ```bash
-   canconfig can0
-   ```
-
-**解决方案**：
-
-1. **确保CAN总线上至少有一个其他设备**（如继电器模块）已正确连接并通电
-
-2. **重新配置CAN接口**：
-   ```bash
-   ip link set can0 down
-   canconfig can0 bitrate 125000 ctrlmode triple-sampling on
-   ip link set can0 up
-   ```
-
-3. **检查硬件连接**：
-   - 确认CAN_H、CAN_L正确连接
-   - 确认终端电阻（120Ω）已安装在总线两端
-   - 使用万用表测量CAN_H和CAN_L之间的电阻，应约为60Ω（两个120Ω并联）
-
-4. **如果只是测试环境**，可以使用虚拟CAN：
-   ```bash
-   modprobe vcan
-   ip link add dev vcan0 type vcan
-   ip link set vcan0 up
-   ```
-   然后修改配置文件中的 `can.ifname` 为 `vcan0`。
-
-### CAN通信失败
-
-**Q: 为什么经常CAN设备掉线？是不是CAN总线超时或总线过载？怎么解决？**
-
-A: 是的，这两种情况都很常见。通常表现为 `can.status` 里 `txQueueSize` 持续偏大（总线拥堵）或设备长时间无响应（超时离线）。
-
-**建议按以下顺序处理：**
-
-1. 先调用 `can.status`，重点看 `opened`、`txQueueSize` 和 `diagnostic`
-2. 若 `txQueueSize` 持续较大，优先降低发送频率，尽量使用 `relay.controlMulti` 合并指令，减少CAN帧数量
-3. 检查波特率是否一致（默认125000）、总线两端120Ω终端电阻、CAN_H/CAN_L接线和设备供电
-4. 必要时按上一节步骤重置CAN接口（`ip link set can0 down/up` + `canconfig`）
-5. 用 `candump can0` 和核心日志持续观察是否恢复稳定
-
-1. 检查CAN接口状态：
-   ```bash
-   ip link show can0
-   ```
-
-2. 检查CAN配置：
-   ```bash
-   canconfig can0
-   ```
-
-3. 使用candump监控CAN总线：
-   ```bash
-   candump can0
-   ```
-
-### 服务无法启动
-
-1. 检查配置文件语法：
-   ```bash
-   cat /var/lib/fanzhou_core/core.json | python3 -m json.tool
-   ```
-
-2. 检查日志输出：
-   ```bash
-   journalctl -u fanzhou-rpc -n 50
-   ```
-
-3. 确保必要目录存在：
-   ```bash
-   mkdir -p /var/lib/fanzhou_core
-   mkdir -p /var/log/fanzhou_core
-   ```
-
-## 许可证
-
-本项目采用 MIT 许可证。
-
-## 联系方式
-
-如有问题，请提交 Issue 或联系开发团队。
+- RPC 方法新增、改名、参数变化时，同步更新 [API_REFERENCE.zh.md](./API_REFERENCE.zh.md)。
+- 模块边界、启动链路、设备接入方式变化时，同步更新 [ARCHITECTURE.zh.md](./ARCHITECTURE.zh.md)。
+- 构建、调试命令或开发流程变化时，同步更新 [DEVELOPMENT.zh.md](./DEVELOPMENT.zh.md)。
+- 阶段性完成总结、临时优化计划不要长期放在 `docs/` 根目录；需要保留时放到 issue/PR 或归档目录。

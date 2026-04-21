@@ -22,10 +22,10 @@ int main(int argc, char *argv[])
     app.setApplicationVersion(QStringLiteral("1.1.0"));
     app.setOrganizationName(QStringLiteral("FanZhou"));
 
-    // 设置应用程序字体 - 针对7寸1024x600触屏优化
+    // 设置应用程序字体（Cal.com风格：标题可由系统字体替代，正文偏Inter）
     QFont defaultFont = app.font();
-    defaultFont.setFamily(QStringLiteral("Ubuntu,DejaVu Sans,Noto Sans CJK SC,Sans-serif"));
-    defaultFont.setPointSize(10);  // 优化字体大小，在小屏幕上获得完美显示
+    defaultFont.setFamily(QStringLiteral("Inter,Noto Sans CJK SC,Noto Sans,DejaVu Sans,Sans-serif"));
+    defaultFont.setPointSize(10);
     app.setFont(defaultFont);
 
     // 加载浅色温和样式表
@@ -39,16 +39,15 @@ int main(int argc, char *argv[])
     MainWindow mainWindow;
     mainWindow.setWindowTitle(QStringLiteral("泛舟RPC客户端 - 温室控制系统"));
 
-    // 默认尺寸 + 最小尺寸，避免固定窗口导致卡片在高DPI/窗口管理器下被压缩
-    mainWindow.resize(UIConstants::WINDOW_WIDTH, UIConstants::WINDOW_HEIGHT);
-    mainWindow.setMinimumSize(900, 560);
+    // 7寸屏固定分辨率
+    mainWindow.setFixedSize(UIConstants::WINDOW_WIDTH, UIConstants::WINDOW_HEIGHT);
 
     // 居中显示
     const QScreen *screen = QGuiApplication::primaryScreen();
     if (screen) {
         const QRect screenGeometry = screen->availableGeometry();
-        mainWindow.move((screenGeometry.width() - UIConstants::WINDOW_WIDTH) / 2,
-                        (screenGeometry.height() - UIConstants::WINDOW_HEIGHT) / 2);
+        mainWindow.move(screenGeometry.x() + (screenGeometry.width() - UIConstants::WINDOW_WIDTH) / 2,
+                        screenGeometry.y() + (screenGeometry.height() - UIConstants::WINDOW_HEIGHT) / 2);
     }
 
     mainWindow.show();

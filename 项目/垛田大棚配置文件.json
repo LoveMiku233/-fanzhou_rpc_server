@@ -1,0 +1,294 @@
+{
+    "can": {
+        "bitrate": 125000,
+        "canFd": false,
+        "ifname": "can0",
+        "tripleSampling": false,
+        "restartMs": 200,
+        "periodicRestartMin": 0,
+        "is_fake": true,
+        "fake_can": "/dev/ttyUSB1",
+      "fake_can_baudrate": 115200
+    },
+    "cloudUpload": {
+        "currentThreshold": 0.3,
+        "enabled": true,
+        "intervalSec": 60,
+        "minUploadIntervalSec": 5,
+        "statusChangeOnly": true,
+        "uploadChannelStatus": true,
+        "uploadCurrent": true,
+        "uploadMode": "change",
+        "uploadOnlineStatus": true,
+        "uploadPhaseLoss": true,
+        "channelBindings": [
+            {
+                "channelId": 1,
+                "nodes": [
+                    {
+                        "nodeId": 1
+                    },
+                    {
+                        "nodeId": 2
+                    },
+                    {
+                        "nodeId": 3
+                    },
+                    {
+                        "nodeId": 4
+                    },
+                    {
+                        "nodeId": 5
+                    }
+                ]
+            }
+        ]
+    },
+    "devices": [
+        {
+            "bus": "can0",
+            "commType": 2,
+            "name": "正转(风机)",
+            "nodeId": 1,
+            "params": {
+                "channels": 4
+            },
+            "type": 1
+        },
+        {
+            "bus": "can0",
+            "commType": 2,
+            "name": "正转(风机)",
+            "nodeId": 2,
+            "params": {
+                "channels": 4
+            },
+            "type": 1
+        },
+        {
+            "bus": "can0",
+            "commType": 2,
+            "name": "正转(风机)",
+            "nodeId": 3,
+            "params": {
+                "channels": 4
+            },
+            "type": 1
+        },
+        {
+            "bus": "can0",
+            "commType": 2,
+            "name": "正反转(外遮阳，内保温)",
+            "nodeId": 4,
+            "params": {
+                "channels": 4
+            },
+            "type": 1
+        },
+        {
+            "bus": "can0",
+            "commType": 2,
+            "name": "正转(湿帘)",
+            "nodeId": 5,
+            "params": {
+                "channels": 4
+            },
+            "type": 1
+        }
+    ],
+    "groups": [
+        {
+            "groupId": 1,
+            "name": "风机组",
+            "enabled": true,
+            "devices": [1, 2, 3],
+            "channels": []
+        },
+        {
+            "groupId": 2,
+            "name": "外遮阳内保温组",
+            "enabled": true,
+            "devices": [4],
+            "channels": []
+        },
+        {
+            "groupId": 3,
+            "name": "湿帘组",
+            "enabled": true,
+            "devices": [5],
+            "channels": []
+        },
+        {
+            "groupId": 4,
+            "name": "全棚联动组",
+            "enabled": true,
+            "devices": [1, 2, 3, 4, 5],
+            "channels": []
+        }
+    ],
+    "log": {
+        "logFilePath": "/var/log/fanzhou_core/core.log",
+	"errorLogFilePath": "/var/log/fanzhou_core/error.log",
+        "maxFileSizeMB": 10,
+        "logLevel": 0,
+        "logToConsole": true,
+        "logToFile": true
+    },
+    "main": {
+        "rpcPort": 12345
+    },
+    "mqttChannels": [
+        {
+            "autoReconnect": true,
+            "broker": "mqtt.fanzhou.cloud",
+            "channelId": 1,
+            "clientId": "a133_10",
+            "enabled": true,
+            "keepAliveSec": 60,
+            "name": "fanzhou_test",
+            "password": "Hsx5WJuUwTagc5Ad",
+            "port": 1883,
+            "qos": 0,
+            "reconnectIntervalSec": 5,
+            "topicPrefix": "",
+            "type": 0,
+            "username": "a133_test",
+            "topicControlSub": "$thing/down/property/a133_test",
+            "topicSettingSub": "$thing/down/setting/a133_test",
+            "topicStatusPub": "$thing/up/property/a133_test",
+            "topicSettingPub": "$thing/up/setting/a133_test"
+        }
+    ],
+    "screen": {
+        "brightness": 100,
+        "contrast": 50,
+        "enabled": true,
+        "orientation": "landscape",
+        "sleepTimeoutSec": 300
+    },
+    "sensors": [
+        {
+            "enabled": true,
+            "jsonPath": "humidity",
+            "mqttChannelId": 1,
+            "name": "棚内湿度",
+            "sensorId": "humidity",
+            "source": "mqtt",
+            "topic": "$thing/down/property/A133",
+            "unit": "%RH"
+        },
+        {
+            "enabled": true,
+            "jsonPath": "temperature",
+            "mqttChannelId": 1,
+            "name": "棚内温度",
+            "sensorId": "temperature",
+            "source": "mqtt",
+            "topic": "$thing/down/property/A133",
+            "unit": "℃"
+        },
+        {
+            "enabled": true,
+            "jsonPath": "illuminance",
+            "mqttChannelId": 1,
+            "name": "棚内光照",
+            "sensorId": "illuminance",
+            "source": "mqtt",
+            "topic": "$thing/down/property/A133",
+            "unit": "lux"
+        },
+        {
+            "enabled": true,
+            "jsonPath": "co2",
+            "mqttChannelId": 1,
+            "name": "棚内CO2浓度",
+            "sensorId": "co2",
+            "source": "mqtt",
+            "topic": "$thing/down/property/A133",
+            "unit": "ppm"
+        },
+        {
+            "enabled": true,
+            "jsonPath": "soil_humidity",
+            "mqttChannelId": 1,
+            "name": "土壤湿度",
+            "sensorId": "soil_humidity",
+            "source": "mqtt",
+            "topic": "$thing/down/property/A133",
+            "unit": "%"
+        },
+        {
+            "enabled": true,
+            "jsonPath": "soil_temperature",
+            "mqttChannelId": 1,
+            "name": "土壤温度",
+            "sensorId": "soil_temperature",
+            "source": "mqtt",
+            "topic": "$thing/down/property/A133",
+            "unit": "℃"
+        },
+        {
+            "enabled": true,
+            "jsonPath": "soil_ph",
+            "mqttChannelId": 1,
+            "name": "土壤pH",
+            "sensorId": "soil_ph",
+            "source": "mqtt",
+            "topic": "$thing/down/property/A133",
+            "unit": ""
+        },
+        {
+            "enabled": true,
+            "jsonPath": "soil_ec",
+            "mqttChannelId": 1,
+            "name": "土壤电导率",
+            "sensorId": "soil_ec",
+            "source": "mqtt",
+            "topic": "$thing/down/property/A133",
+            "unit": "μS/cm"
+        },
+        {
+            "enabled": true,
+            "jsonPath": "soil_salinity",
+            "mqttChannelId": 1,
+            "name": "土壤盐分",
+            "sensorId": "soil_salinity",
+            "source": "mqtt",
+            "topic": "$thing/down/property/A133",
+            "unit": "μS/cm"
+        },
+        {
+            "enabled": true,
+            "jsonPath": "soil_N",
+            "mqttChannelId": 1,
+            "name": "土壤氮含量",
+            "sensorId": "soil_N",
+            "source": "mqtt",
+            "topic": "$thing/down/property/A133",
+            "unit": "mg/kg"
+        },
+        {
+            "enabled": true,
+            "jsonPath": "soil_P",
+            "mqttChannelId": 1,
+            "name": "土壤磷含量",
+            "sensorId": "soil_P",
+            "source": "mqtt",
+            "topic": "$thing/down/property/A133",
+            "unit": "mg/kg"
+        },
+        {
+            "enabled": true,
+            "jsonPath": "soil_K",
+            "mqttChannelId": 1,
+            "name": "土壤钾含量",
+            "sensorId": "soil_K",
+            "source": "mqtt",
+            "topic": "$thing/down/property/A133",
+            "unit": "mg/kg"
+        }
+
+    ],
+    "strategies": [
+    ]
+}

@@ -18,9 +18,17 @@
 #include "screen_manager.h"
 #include "style_constants.h"
 
+#include <QApplication>
+#include <QEvent>
+#include <QMessageBox>
 #include <QStatusBar>
+#include <QAbstractAnimation>
+#include <QEasingCurve>
+#include <QGraphicsOpacityEffect>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QPropertyAnimation>
+#include <QResizeEvent>
 #include <QScrollArea>
 #include <QScroller>
 #include <QSettings>
@@ -29,6 +37,7 @@
 #include <QJsonArray>
 #include <QJsonValue>
 #include <QJsonDocument>
+#include <algorithm>
 #include <memory>
 
 using namespace UIConstants;
@@ -42,8 +51,11 @@ MainWindow::MainWindow(QWidget *parent)
     , menuButtonGroup_(nullptr)
     , contentStack_(nullptr)
     , connectionStatusLabel_(nullptr)
+    , cloudStatusLabel_(nullptr)
     , timeLabel_(nullptr)
     , alertLabel_(nullptr)
+    , toastProgressTimer_(new QTimer(this))
+    , toastSequence_(0)
     , homeWidget_(nullptr)
     , greenhouse3dWidget_(nullptr)
     , deviceWidget_(nullptr)
@@ -61,6 +73,7 @@ MainWindow::MainWindow(QWidget *parent)
     , currentPageIndex_(0)
 {
     setupUi();
+    qApp->installEventFilter(this);
 
     // 自动刷新定时器
     connect(autoRefreshTimer_, &QTimer::timeout, this, &MainWindow::onAutoRefreshTimeout);
@@ -69,6 +82,9 @@ MainWindow::MainWindow(QWidget *parent)
     connect(statusBarTimer_, &QTimer::timeout, this, &MainWindow::updateStatusBarTime);
     statusBarTimer_->start(1000);
     updateStatusBarTime();
+
+    toastProgressTimer_->setInterval(33);
+    connect(toastProgressTimer_, &QTimer::timeout, this, &MainWindow::updateAllToastProgress);
 
     // 延迟执行自动连接
     QTimer::singleShot(800, this, [this]() {
@@ -110,8 +126,15 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    while (!activeToasts_.isEmpty()) {
+        delete activeToasts_.takeFirst();
+    }
+    if (qApp) {
+        qApp->removeEventFilter(this);
+    }
     autoRefreshTimer_->stop();
     statusBarTimer_->stop();
+    toastProgressTimer_->stop();
     qDebug() << "[MAIN_WINDOW] 主窗口销毁";
 }
 
@@ -120,6 +143,7 @@ void MainWindow::setupUi()
     statusBar()->hide();
     setupTopStatusBar();
     setupCentralWidget();
+    setupToast();
 }
 
 void MainWindow::setupTopStatusBar()
@@ -142,9 +166,11 @@ void MainWindow::setupTopStatusBar()
 
     alertLabel_ = new QLabel(QStringLiteral("[OK] 系统就绪"));
     alertLabel_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    alertLabel_->setStyleSheet(QStringLiteral(
-        "color: #e8edf0; padding: 6px 12px; "
-        "background: #3f4f58; border-radius: 14px;"));
+    updateAlertLabel(
+        QStringLiteral("[OK] 系统就绪"),
+        QStringLiteral("color: #e8edf0; padding: 6px 12px; background: #3f4f58; border-radius: 14px;"),
+        QStringLiteral("INFO"),
+        false);
 }
 
 void MainWindow::setupCentralWidget()
@@ -174,6 +200,341 @@ void MainWindow::setupCentralWidget()
 
     createBottomNavBar();
     mainLayout->addWidget(sidebar_);
+}
+
+void MainWindow::setupToast()
+{
+    activeToasts_.clear();
+    pendingToasts_.clear();
+}
+
+void MainWindow::layoutToast()
+{
+    relayoutToasts(false);
+}
+
+void MainWindow::showToast(const QString &message, const QString &level)
+{
+    const QString text = message.trimmed();
+    if (text.isEmpty()) {
+        return;
+    }
+
+    if (mergeDuplicateToast(text, level)) {
+        return;
+    }
+
+    static const int kMaxPendingToasts = 16;
+    ToastRequest request;
+    request.message = text;
+    request.level = level;
+    request.lastSeenMs = QDateTime::currentMSecsSinceEpoch();
+
+    if (activeToasts_.size() >= 4) {
+        pendingToasts_.append(request);
+        while (pendingToasts_.size() > kMaxPendingToasts) {
+            pendingToasts_.removeFirst();
+        }
+        return;
+    }
+
+    displayToast(request);
+}
+
+QString MainWindow::toastDisplayText(const QString &message, int repeatCount) const
+{
+    if (repeatCount > 1) {
+        return QStringLiteral("%1  x%2").arg(message).arg(repeatCount);
+    }
+    return message;
+}
+
+void MainWindow::displayToast(const ToastRequest &request)
+{
+    ToastItem *item = new ToastItem;
+    item->message = request.message;
+    item->level = request.level;
+    item->repeatCount = request.repeatCount;
+    item->lastSeenMs = request.lastSeenMs;
+    item->container = new QWidget(this);
+    item->container->setObjectName(QStringLiteral("globalToast_%1").arg(++toastSequence_));
+    item->container->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    item->container->setFixedSize(380, 66);
+    item->container->setStyleSheet(QStringLiteral(
+        "background: %1; border-radius: 12px; border: 1px solid rgba(255,255,255,0.24);")
+        .arg(toastBackgroundForLevel(item->level)));
+
+    QVBoxLayout *mainLayout = new QVBoxLayout(item->container);
+    mainLayout->setContentsMargins(12, 8, 12, 8);
+    mainLayout->setSpacing(6);
+
+    item->label = new QLabel(toastDisplayText(item->message, item->repeatCount), item->container);
+    item->label->setWordWrap(true);
+    item->label->setStyleSheet(QStringLiteral("color: #ffffff; font-size: 12px; font-weight: 700;"));
+    mainLayout->addWidget(item->label, 1);
+
+    item->progressTrack = new QWidget(item->container);
+    item->progressTrack->setFixedHeight(4);
+    item->progressTrack->setStyleSheet(QStringLiteral("background: rgba(255,255,255,0.25); border-radius: 2px;"));
+    mainLayout->addWidget(item->progressTrack);
+
+    item->progressFill = new QWidget(item->progressTrack);
+    item->progressFill->setStyleSheet(
+        QStringLiteral("background: %1; border-radius: 2px;").arg(toastProgressForLevel(item->level)));
+
+    item->opacityEffect = new QGraphicsOpacityEffect(item->container);
+    item->opacityEffect->setOpacity(0.0);
+    item->container->setGraphicsEffect(item->opacityEffect);
+
+    item->slideInAnim = new QPropertyAnimation(item->container, "geometry", item->container);
+    item->slideInAnim->setDuration(220);
+    item->slideInAnim->setEasingCurve(QEasingCurve::OutCubic);
+
+    item->slideOutAnim = new QPropertyAnimation(item->container, "geometry", item->container);
+    item->slideOutAnim->setDuration(220);
+    item->slideOutAnim->setEasingCurve(QEasingCurve::InCubic);
+
+    item->fadeInAnim = new QPropertyAnimation(item->opacityEffect, "opacity", item->container);
+    item->fadeInAnim->setDuration(220);
+    item->fadeInAnim->setStartValue(0.0);
+    item->fadeInAnim->setEndValue(1.0);
+
+    item->fadeOutAnim = new QPropertyAnimation(item->opacityEffect, "opacity", item->container);
+    item->fadeOutAnim->setDuration(220);
+    item->fadeOutAnim->setStartValue(1.0);
+    item->fadeOutAnim->setEndValue(0.0);
+
+    item->lifeTimer = new QTimer(item->container);
+    item->lifeTimer->setSingleShot(true);
+
+    connect(item->lifeTimer, &QTimer::timeout, this, [this, item]() {
+        closeToast(item, true);
+    });
+
+    activeToasts_.prepend(item);
+    relayoutToasts(true);
+
+    const QRect endRect = toastRectForIndex(0);
+    const QRect startRect(endRect.x() + 26, endRect.y(), endRect.width(), endRect.height());
+    item->container->setGeometry(startRect);
+    item->container->show();
+    item->container->raise();
+
+    item->slideInAnim->setStartValue(startRect);
+    item->slideInAnim->setEndValue(endRect);
+    item->slideInAnim->start();
+    item->fadeInAnim->start();
+
+    startToastTimers(item);
+}
+
+bool MainWindow::mergeDuplicateToast(const QString &message, const QString &level)
+{
+    static const qint64 kDuplicateWindowMs = 1500;
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+
+    for (ToastItem *item : activeToasts_) {
+        if (!item || item->closing || item->message != message || item->level != level) {
+            continue;
+        }
+        if (now - item->lastSeenMs > kDuplicateWindowMs) {
+            continue;
+        }
+
+        item->repeatCount++;
+        item->lastSeenMs = now;
+        item->elapsed.restart();
+        if (item->lifeTimer) {
+            item->lifeTimer->start(item->durationMs);
+        }
+        updateToastLabel(item);
+        updateToastProgress(item);
+        return true;
+    }
+
+    for (ToastRequest &request : pendingToasts_) {
+        if (request.message != message || request.level != level) {
+            continue;
+        }
+        if (now - request.lastSeenMs > kDuplicateWindowMs) {
+            continue;
+        }
+
+        request.repeatCount++;
+        request.lastSeenMs = now;
+        return true;
+    }
+
+    return false;
+}
+
+void MainWindow::updateToastLabel(ToastItem *item)
+{
+    if (!item || !item->label) {
+        return;
+    }
+    item->label->setText(toastDisplayText(item->message, item->repeatCount));
+}
+
+QString MainWindow::toastBackgroundForLevel(const QString &level) const
+{
+    if (level == QStringLiteral("WARN")) {
+        return QStringLiteral("rgba(243, 156, 18, 0.95)");
+    }
+    if (level == QStringLiteral("ERROR")) {
+        return QStringLiteral("rgba(231, 76, 60, 0.96)");
+    }
+    return QStringLiteral("rgba(52, 152, 219, 0.95)");
+}
+
+QString MainWindow::toastProgressForLevel(const QString &level) const
+{
+    if (level == QStringLiteral("WARN")) {
+        return QStringLiteral("rgba(255, 241, 178, 0.96)");
+    }
+    if (level == QStringLiteral("ERROR")) {
+        return QStringLiteral("rgba(255, 215, 210, 0.98)");
+    }
+    return QStringLiteral("rgba(220, 240, 255, 0.98)");
+}
+
+void MainWindow::startToastTimers(ToastItem *item)
+{
+    if (!item || !item->lifeTimer) {
+        return;
+    }
+    item->elapsed.restart();
+    item->lifeTimer->start(item->durationMs);
+    if (toastProgressTimer_ && !toastProgressTimer_->isActive()) {
+        toastProgressTimer_->start();
+    }
+    updateToastProgress(item);
+}
+
+void MainWindow::updateToastProgress(ToastItem *item)
+{
+    if (!item || item->closing || !item->progressTrack || !item->progressFill) {
+        return;
+    }
+
+    const int trackWidth = item->progressTrack->width();
+    const int trackHeight = item->progressTrack->height();
+    const qreal ratio = std::max<qreal>(0.0, std::min<qreal>(1.0, static_cast<qreal>(item->elapsed.elapsed()) / item->durationMs));
+    const int fillWidth = std::max(0, static_cast<int>(trackWidth * (1.0 - ratio)));
+    item->progressFill->setGeometry(0, 0, fillWidth, trackHeight);
+}
+
+void MainWindow::updateAllToastProgress()
+{
+    bool hasVisibleToast = false;
+    for (ToastItem *item : activeToasts_) {
+        if (item && !item->closing) {
+            hasVisibleToast = true;
+            updateToastProgress(item);
+        }
+    }
+
+    if (!hasVisibleToast && toastProgressTimer_) {
+        toastProgressTimer_->stop();
+    }
+}
+
+void MainWindow::closeToast(ToastItem *item, bool animated)
+{
+    if (!item || item->closing) {
+        return;
+    }
+    item->closing = true;
+
+    if (item->lifeTimer) {
+        item->lifeTimer->stop();
+    }
+
+    if (!item->container || !animated || !item->container->isVisible()) {
+        activeToasts_.removeOne(item);
+        if (item->container) {
+            item->container->deleteLater();
+        }
+        delete item;
+        if (activeToasts_.isEmpty() && toastProgressTimer_) {
+            toastProgressTimer_->stop();
+        }
+        drainToastQueue();
+        relayoutToasts(true);
+        return;
+    }
+
+    if (item->slideInAnim) item->slideInAnim->stop();
+    if (item->fadeInAnim) item->fadeInAnim->stop();
+    if (item->slideOutAnim) item->slideOutAnim->stop();
+    if (item->fadeOutAnim) item->fadeOutAnim->stop();
+
+    const QRect startRect = item->container->geometry();
+    const QRect endRect(startRect.x() + 26, startRect.y(), startRect.width(), startRect.height());
+
+    item->slideOutAnim->setStartValue(startRect);
+    item->slideOutAnim->setEndValue(endRect);
+    auto finishedConn = std::make_shared<QMetaObject::Connection>();
+    *finishedConn = connect(item->slideOutAnim, &QPropertyAnimation::finished, this, [this, item, finishedConn]() {
+        disconnect(*finishedConn);
+        activeToasts_.removeOne(item);
+        if (item->container) {
+            item->container->deleteLater();
+        }
+        delete item;
+        if (activeToasts_.isEmpty() && toastProgressTimer_) {
+            toastProgressTimer_->stop();
+        }
+        drainToastQueue();
+        relayoutToasts(true);
+    });
+
+    item->slideOutAnim->start();
+    item->fadeOutAnim->start();
+}
+
+void MainWindow::drainToastQueue()
+{
+    static const int kMaxVisibleToasts = 4;
+    while (activeToasts_.size() < kMaxVisibleToasts && !pendingToasts_.isEmpty()) {
+        displayToast(pendingToasts_.takeFirst());
+    }
+}
+
+void MainWindow::relayoutToasts(bool animated)
+{
+    for (int i = 0; i < activeToasts_.size(); ++i) {
+        ToastItem *item = activeToasts_.at(i);
+        if (!item || !item->container || item->closing) {
+            continue;
+        }
+
+        const QRect target = toastRectForIndex(i);
+        if (animated && item->container->isVisible()) {
+            QPropertyAnimation *moveAnim = new QPropertyAnimation(item->container, "geometry", item->container);
+            moveAnim->setDuration(180);
+            moveAnim->setEasingCurve(QEasingCurve::OutCubic);
+            moveAnim->setStartValue(item->container->geometry());
+            moveAnim->setEndValue(target);
+            moveAnim->start(QAbstractAnimation::DeleteWhenStopped);
+        } else {
+            item->container->setGeometry(target);
+        }
+        item->container->raise();
+        updateToastProgress(item);
+    }
+}
+
+QRect MainWindow::toastRectForIndex(int index) const
+{
+    static const int kMargin = 14;
+    static const int kSpacing = 8;
+    static const int kToastWidth = 380;
+    static const int kToastHeight = 66;
+
+    const int x = width() - kToastWidth - kMargin;
+    const int y = kMargin + index * (kToastHeight + kSpacing);
+    return QRect(std::max(0, x), std::max(0, y), kToastWidth, kToastHeight);
 }
 
 void MainWindow::createBottomNavBar()
@@ -310,7 +671,11 @@ void MainWindow::createContentArea()
     QScroller::grabGesture(logScrollArea->viewport(), QScroller::LeftMouseButtonGesture);
     connect(logWidget_, &LogWidget::newAlertMessage, this, [this](const QString &message) {
         lastAlertMessage_ = message;
-        alertLabel_->setText(QStringLiteral("[警] %1").arg(message));
+        updateAlertLabel(
+            QStringLiteral("[警] %1").arg(message),
+            QStringLiteral("color: #2f3a40; padding: 6px 12px; font-weight: 700; background: #f0c75e; border-radius: 14px;"),
+            QStringLiteral("WARN"),
+            true);
     });
     contentStack_->addWidget(logScrollArea);
 
@@ -439,10 +804,11 @@ void MainWindow::updateStatusBarConnection(bool connected)
         connectionStatusLabel_->setStyleSheet(QStringLiteral(
             "color: #ecf8ef; font-weight: 700; padding: 6px 12px; "
             "background: #2e7d32; border-radius: 14px;"));
-        alertLabel_->setText(QStringLiteral("[OK] 系统运行正常"));
-        alertLabel_->setStyleSheet(QStringLiteral(
-            "color: #e8edf0; padding: 6px 12px; "
-            "background: #3f4f58; border-radius: 14px;"));
+        updateAlertLabel(
+            QStringLiteral("[OK] 系统运行正常"),
+            QStringLiteral("color: #e8edf0; padding: 6px 12px; background: #3f4f58; border-radius: 14px;"),
+            QStringLiteral("INFO"),
+            true);
     } else {
         connectionStatusLabel_->setText(QStringLiteral("[X] 未连接"));
         connectionStatusLabel_->setStyleSheet(QStringLiteral(
@@ -469,6 +835,19 @@ void MainWindow::onAutoRefreshTimeout()
     }
 }
 
+void MainWindow::updateAlertLabel(const QString &text, const QString &style,
+                                  const QString &level, bool syncToast)
+{
+    if (!alertLabel_) {
+        return;
+    }
+    alertLabel_->setText(text);
+    alertLabel_->setStyleSheet(style);
+    if (syncToast) {
+        showToast(text, level);
+    }
+}
+
 void MainWindow::onLogMessage(const QString &message, const QString &level)
 {
     if (logWidget_) {
@@ -476,21 +855,66 @@ void MainWindow::onLogMessage(const QString &message, const QString &level)
     }
 
     if (level == QStringLiteral("ERROR")) {
-        alertLabel_->setText(QStringLiteral("[X] %1").arg(message));
-        alertLabel_->setStyleSheet(QStringLiteral(
-            "color: #fbe9e7; padding: 6px 12px; font-weight: 700; "
-            "background: #b6423a; border-radius: 14px;"));
+        updateAlertLabel(
+            QStringLiteral("[X] %1").arg(message),
+            QStringLiteral("color: #fbe9e7; padding: 6px 12px; font-weight: 700; background: #b6423a; border-radius: 14px;"),
+            QStringLiteral("ERROR"),
+            true);
     } else if (level == QStringLiteral("WARN")) {
-        alertLabel_->setText(QStringLiteral("[警] %1").arg(message));
-        alertLabel_->setStyleSheet(QStringLiteral(
-            "color: #2f3a40; padding: 6px 12px; font-weight: 700; "
-            "background: #f0c75e; border-radius: 14px;"));
+        updateAlertLabel(
+            QStringLiteral("[警] %1").arg(message),
+            QStringLiteral("color: #2f3a40; padding: 6px 12px; font-weight: 700; background: #f0c75e; border-radius: 14px;"),
+            QStringLiteral("WARN"),
+            true);
     } else if (level == QStringLiteral("INFO")) {
-        alertLabel_->setText(QStringLiteral("[OK] %1").arg(message));
-        alertLabel_->setStyleSheet(QStringLiteral(
-            "color: #e8edf0; padding: 6px 12px; "
-            "background: #3f4f58; border-radius: 14px;"));
+        updateAlertLabel(
+            QStringLiteral("[OK] %1").arg(message),
+            QStringLiteral("color: #e8edf0; padding: 6px 12px; background: #3f4f58; border-radius: 14px;"),
+            QStringLiteral("INFO"),
+            true);
     }
+}
+
+void MainWindow::resizeEvent(QResizeEvent *event)
+{
+    QMainWindow::resizeEvent(event);
+    layoutToast();
+}
+
+bool MainWindow::eventFilter(QObject *watched, QEvent *event)
+{
+    if (event && event->type() == QEvent::Show) {
+        QMessageBox *box = qobject_cast<QMessageBox *>(watched);
+        if (box && box->window() && box->window()->isVisible()) {
+            QString level = QStringLiteral("INFO");
+            switch (box->icon()) {
+            case QMessageBox::Critical:
+                level = QStringLiteral("ERROR");
+                break;
+            case QMessageBox::Warning:
+                level = QStringLiteral("WARN");
+                break;
+            case QMessageBox::Information:
+            case QMessageBox::Question:
+            case QMessageBox::NoIcon:
+            default:
+                level = QStringLiteral("INFO");
+                break;
+            }
+
+            QString text = box->text().trimmed();
+            if (text.isEmpty()) {
+                text = box->informativeText().trimmed();
+            }
+            if (text.isEmpty()) {
+                text = box->windowTitle().trimmed();
+            }
+            if (!text.isEmpty()) {
+                showToast(text, level);
+            }
+        }
+    }
+    return QMainWindow::eventFilter(watched, event);
 }
 
 void MainWindow::updateStatusBarTime()

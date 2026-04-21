@@ -278,10 +278,11 @@ Topic格式：`{topicPrefix}/device/{nodeId}/ch{channel}/change`
 ## 开发说明
 
 ### 相关文件
-- 后端配置: `src/core/core_config.h`, `src/core/core_config.cpp`
+- 后端配置: `src/core/core_config.h`, `src/core/core_config_cloud.cpp`
 - 后端上下文: `src/core/core_context.h`, `src/core/core_context.cpp`
-- RPC方法: `src/core/rpc_registry.cpp`
-- QT主窗口: `qt_app/src/mainwindow.h`, `qt_app/src/mainwindow.cpp`
+- 云上传实现: `src/cloud/fanzhoucloud/uploader.h`, `src/cloud/fanzhoucloud/uploader.cpp`
+- RPC方法: `src/core/rpc_registry_screen.cpp` (`cloud.upload.get`, `cloud.upload.set`)
+- QT状态栏: `qt_app/src/mainwindow.h`, `qt_app/src/mainwindow.cpp`
 - QT设置页面: `qt_app/src/settings_widget.h`, `qt_app/src/settings_widget.cpp`
 
 ### 扩展建议

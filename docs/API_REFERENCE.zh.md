@@ -13,7 +13,7 @@
 5. [通信模块 (src/comm)](#通信模块-srccomm)
 6. [设备模块 (src/device)](#设备模块-srcdevice)
 7. [工具模块 (src/utils)](#工具模块-srcutils)
-8. [配置模块 (src/config)](#配置模块-srcconfig)
+8. [系统设置模块 (src/utils)](#系统设置模块-srcutils)
 9. [RPC接口详细说明](#rpc接口详细说明)
 10. [错误码参考](#错误码参考)
 
@@ -45,15 +45,21 @@ fanzhou_rpc_server/
 ├── docs/                       # 文档目录
 │   ├── README.zh.md            # 中文说明文档
 │   └── API_REFERENCE.zh.md     # API参考手册（本文档）
-├── test_web/                   # Web调试工具
-│   └── index.html              # 调试界面
+├── test_web/                   # Web/Tauri调试工具
+│   ├── dist/                   # Web调试页面
+│   └── src-tauri/              # Tauri桌面壳
+├── qt_app/                     # Qt HMI客户端
+│   ├── qt_app.pro
+│   ├── resources/
+│   └── src/
 └── src/
     ├── core/                   # 核心业务模块
     ├── rpc/                    # RPC通信模块
     ├── comm/                   # 底层通信模块
     ├── device/                 # 设备驱动模块
-    ├── utils/                  # 工具函数模块
-    └── config/                 # 系统配置模块
+    ├── cloud/                  # MQTT和泛舟云平台模块
+    ├── types/                  # 公共类型定义
+    └── utils/                  # 工具函数模块
 ```
 
 ---
@@ -78,9 +84,9 @@ fanzhou_rpc_server/
 | `relays` | `QHash<quint8, RelayGd427*>` | 继电器设备表 |
 | `deviceGroups` | `QHash<int, QList<quint8>>` | 设备分组表 |
 | `groupNames` | `QHash<int, QString>` | 分组名称表 |
-| `rpcPort` | `quint16` | RPC服务端口 |
-| `canInterface` | `QString` | CAN接口名 |
-| `canBitrate` | `int` | CAN波特率 |
+| `coreConfig` | `CoreConfig` | 当前运行配置，包含RPC端口、CAN、设备、云、策略等配置 |
+| `deviceConfigs` | `QHash<quint8, DeviceConfig>` | 动态设备配置 |
+| `sensorConfigs` | `QHash<QString, SensorNodeConfig>` | 传感器配置 |
 
 **主要方法**：
 
@@ -662,9 +668,9 @@ RPC模块提供JSON-RPC 2.0协议的完整实现。
 
 ---
 
-## 配置模块 (src/config)
+## 系统设置模块 (src/utils)
 
-配置模块提供系统设置和命令执行功能。
+系统设置模块提供系统命令执行、CAN接口配置、时间和网络设置能力。
 
 ### system_settings.h / system_settings.cpp
 
