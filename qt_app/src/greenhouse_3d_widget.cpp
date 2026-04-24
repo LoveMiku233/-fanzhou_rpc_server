@@ -508,7 +508,7 @@ void Greenhouse3DWidget::onRefreshGroups()
         return;
     }
 
-    rpcClient_->callAsync(QStringLiteral("group.list"), QJsonObject(),
+    rpcClient_->callAsync(QStringLiteral("group.list"), QJsonObject(), this,
         [this](const QJsonValue &result, const QJsonObject &error) {
             if (!error.isEmpty() || !result.isObject()) {
                 const QString msg = error.value(QStringLiteral("message")).toString();
