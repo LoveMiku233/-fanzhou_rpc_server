@@ -415,6 +415,101 @@ void HomeWidget::refreshData()
     updateStats();
 }
 
+void HomeWidget::refreshSensorOverview()
+{
+    if (!rpcClient_ || !rpcClient_->isConnected()) {
+        return;
+    }
+
+    rpcClient_->callAsync(QStringLiteral("sensor.values"), QJsonObject(), this,
+        [this](const QJsonValue &result, const QJsonObject &error) {
+            QMetaObject::invokeMethod(this, [this, result, error]() {
+                if (!error.isEmpty() || !result.isObject()) {
+                    return;
+                }
+
+                QString temp = QStringLiteral("--");
+                QString humidity = QStringLiteral("--");
+                QString co2 = QStringLiteral("--");
+                QString light = QStringLiteral("--");
+                QString soil = QStringLiteral("--");
+
+                const auto formatDisplay = [](const QJsonValue &value, const QString &unit) -> QString {
+                    QString text;
+                    if (value.isDouble()) {
+                        const double v = value.toDouble();
+                        text = qFabs(v) >= 100.0 ? QString::number(v, 'f', 0) : QString::number(v, 'f', 1);
+                    } else if (value.isBool()) {
+                        text = value.toBool() ? QStringLiteral("开") : QStringLiteral("关");
+                    } else {
+                        text = value.toVariant().toString();
+                    }
+                    if (!unit.isEmpty()) {
+                        text += unit;
+                    }
+                    return text;
+                };
+
+                const QJsonArray sensors = result.toObject().value(QStringLiteral("sensors")).toArray();
+                for (const QJsonValue &v : sensors) {
+                    if (!v.isObject()) {
+                        continue;
+                    }
+                    const QJsonObject obj = v.toObject();
+                    if (!obj.value(QStringLiteral("hasValue")).toBool(false)) {
+                        continue;
+                    }
+
+                    const QString sensorId = obj.value(QStringLiteral("sensorId")).toString().toLower();
+                    const QString name = obj.value(QStringLiteral("name")).toString().toLower();
+                    const QString unit = obj.value(QStringLiteral("unit")).toString();
+                    const QJsonValue value = obj.value(QStringLiteral("value"));
+                    if (value.isUndefined() || value.isNull()) {
+                        continue;
+                    }
+
+                    const QString display = formatDisplay(value, unit);
+                    if (sensorId == QStringLiteral("temperature") ||
+                        sensorId.contains(QStringLiteral("temp")) ||
+                        name.contains(QStringLiteral("温"))) {
+                        temp = display;
+                        continue;
+                    }
+                    if (sensorId.contains(QStringLiteral("soil")) ||
+                        name.contains(QStringLiteral("土壤")) ||
+                        name.contains(QStringLiteral("基质"))) {
+                        if (soil == QStringLiteral("--")) {
+                            soil = display;
+                        }
+                        continue;
+                    }
+                    if (sensorId == QStringLiteral("humidity") ||
+                        (sensorId.contains(QStringLiteral("humid")) && !sensorId.contains(QStringLiteral("soil"))) ||
+                        name.contains(QStringLiteral("湿度"))) {
+                        humidity = display;
+                        continue;
+                    }
+                    if (sensorId.contains(QStringLiteral("co2")) || name.contains(QStringLiteral("co2"))) {
+                        co2 = display;
+                        continue;
+                    }
+                    if (sensorId.contains(QStringLiteral("light")) ||
+                        sensorId.contains(QStringLiteral("illuminance")) ||
+                        name.contains(QStringLiteral("光"))) {
+                        light = display;
+                        continue;
+                    }
+                }
+
+                if (tempValueLabel_) tempValueLabel_->setText(temp);
+                if (humidityValueLabel_) humidityValueLabel_->setText(humidity);
+                if (co2ValueLabel_) co2ValueLabel_->setText(co2);
+                if (lightValueLabel_) lightValueLabel_->setText(light);
+                if (soilValueLabel_) soilValueLabel_->setText(soil);
+            }, Qt::QueuedConnection);
+        }, 2500);
+}
+
 void HomeWidget::updateStats()
 {
     statsRefreshInFlight_ = true;

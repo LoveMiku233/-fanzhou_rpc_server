@@ -71,6 +71,7 @@ private slots:
 private:
     void setupUi();
     void updateStats();
+    void refreshSensorOverview();
     void updateStatsLegacy();  // 兼容旧版本服务器的多RPC调用方式
     void checkAndUpdateStats(std::shared_ptr<StatsData> statsData);
     void updateDutyOverview(int totalDevices, int onlineDevices, int offlineDevices,
