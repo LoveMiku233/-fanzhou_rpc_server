@@ -8,10 +8,10 @@
 
 #include <QList>
 #include <QMap>
+#include <QPixmap>
 #include <QRect>
 #include <QStringList>
 #include <QWidget>
-#include <functional>
 
 class QLabel;
 class QResizeEvent;
@@ -34,7 +34,7 @@ signals:
 
 private slots:
     void onRefreshGroups();
-    void onWorkflowClicked();
+    void onDeviceButtonClicked();
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -48,45 +48,21 @@ private:
         QString groupName;
     };
 
-    struct WorkflowStep {
-        QString role;
-        QString action;
-    };
-
-    struct Workflow {
-        QString name;
-        QString description;
-        QString trigger;
-        QString exitCondition;
-        QString protection;
-        QList<WorkflowStep> steps;
-        QPushButton *button = nullptr;
-        QString style;
-        QString runtimeStatus;
-    };
-
     void setupUi();
-    void setupWorkflows();
-    void animateWorkflowButtons();
     void showToast(const QString &message, const QString &level = QStringLiteral("INFO"));
     void hideToastAnimated();
     void layoutToast();
+    void updateGreenhouseImage();
     void updateBindingSummary();
-    QString roleDisplayName(const QString &role) const;
-    QString workflowStepsText(const Workflow &workflow) const;
-    QString workflowBindingText(const Workflow &workflow) const;
-    void updateWorkflowButtonText(int workflowIndex);
-    void updateAllWorkflowButtonText();
-    void setWorkflowButtonsEnabled(bool enabled);
-    void executeGroupControl(int groupId, const QString &groupName, const QString &action,
-                             std::function<void(bool, const QString &)> callback);
-    void runWorkflow(int workflowIndex);
+    void updateDeviceButtonStyles();
+    void showDeviceStatusDialog(const QString &deviceName);
 
     RpcClient *rpcClient_;
     QLabel *titleLabel_;
     QLabel *hintLabel_;
     QLabel *statusLabel_;
     QLabel *bindingLabel_;
+    QLabel *greenhouseImageLabel_;
     QWidget *toastWidget_;
     QLabel *toastLabel_;
     QTimer *refreshTimer_;
@@ -94,12 +70,13 @@ private:
     QPropertyAnimation *toastShowAnim_;
     QPropertyAnimation *toastHideAnim_;
     QRect toastVisibleRect_;
+    QPixmap greenhousePixmap_;
+    QPixmap greenhouseDisplayPixmap_;
+    QSize greenhouseDisplaySize_;
 
     QList<RoleBinding> roleBindings_;
-    QList<Workflow> workflows_;
-    QMap<QPushButton *, int> workflowButtonIndexMap_;
-
-    bool workflowRunning_ = false;
+    QList<QPushButton *> deviceButtons_;
+    QMap<QString, QString> deviceStatusMap_;
 };
 
 #endif  // GREENHOUSE_3D_WIDGET_H

@@ -298,13 +298,13 @@ DeviceWidget::DeviceWidget(RpcClient *rpcClient, QWidget *parent)
 void DeviceWidget::setupUi()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(PAGE_MARGIN, PAGE_MARGIN, PAGE_MARGIN, PAGE_MARGIN);
-    mainLayout->setSpacing(PAGE_SPACING);
+    mainLayout->setContentsMargins(10, 8, 10, 8);
+    mainLayout->setSpacing(8);
 
     // 页面标题
-    QLabel *titleLabel = new QLabel(QStringLiteral("[设] 设备管理"), this);
+    QLabel *titleLabel = new QLabel(QStringLiteral("设备管理"), this);
     titleLabel->setStyleSheet(QStringLiteral(
-        "font-size: %1px; font-weight: bold; color: #2c3e50; padding: 2px 0;").arg(FONT_SIZE_TITLE));
+        "font-size: 20px; font-weight: 900; color: #17364a; padding: 0 2px;"));
     mainLayout->addWidget(titleLabel);
 
     // 工具栏

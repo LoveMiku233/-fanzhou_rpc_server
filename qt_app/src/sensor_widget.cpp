@@ -375,19 +375,17 @@ SensorWidget::SensorWidget(RpcClient *rpcClient, QWidget *parent)
 void SensorWidget::setupUi()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(20, 20, 20, 20);
-    mainLayout->setSpacing(16);
+    mainLayout->setContentsMargins(10, 8, 10, 8);
+    mainLayout->setSpacing(8);
     
-    // 标题栏 - 美化
-    QHBoxLayout *titleLayout = new QHBoxLayout();
-    
-    QLabel *titleLabel = new QLabel(QStringLiteral("[感] 传感器监控"), this);
+    QLabel *titleLabel = new QLabel(QStringLiteral("传感器监控"), this);
     titleLabel->setStyleSheet(QStringLiteral(
-        "font-size: 26px; font-weight: bold; color: #2c3e50;"));
-    titleLayout->addWidget(titleLabel);
-    
+        "font-size: 20px; font-weight: 900; color: #17364a; padding: 0 2px;"));
+    mainLayout->addWidget(titleLabel);
+
+    QHBoxLayout *titleLayout = new QHBoxLayout();
     titleLayout->addStretch();
-    
+
     // 自动刷新按钮
     autoRefreshBtn_ = new QPushButton(QStringLiteral("[自] 自动刷新: 关"), this);
     autoRefreshBtn_->setCheckable(true);
@@ -412,7 +410,7 @@ void SensorWidget::setupUi()
         "QPushButton:pressed { background-color: #1c5a8a; }"));
     connect(refreshBtn_, &QPushButton::clicked, this, &SensorWidget::onRefreshClicked);
     titleLayout->addWidget(refreshBtn_);
-    
+
     mainLayout->addLayout(titleLayout);
     
     // 状态栏 - 美化

@@ -36,13 +36,13 @@ LogWidget::LogWidget(QWidget *parent)
 void LogWidget::setupUi()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(16, 16, 16, 16);
-    mainLayout->setSpacing(16);
+    mainLayout->setContentsMargins(10, 8, 10, 8);
+    mainLayout->setSpacing(8);
 
     // 页面标题 - 美化
-    QLabel *titleLabel = new QLabel(QStringLiteral("[志] 系统日志"), this);
+    QLabel *titleLabel = new QLabel(QStringLiteral("系统日志"), this);
     titleLabel->setStyleSheet(QStringLiteral(
-        "font-size: 26px; font-weight: bold; color: #2c3e50; padding: 4px 0;"));
+        "font-size: 20px; font-weight: 900; color: #17364a; padding: 0 2px;"));
     mainLayout->addWidget(titleLabel);
 
     // 工具栏 - 美化

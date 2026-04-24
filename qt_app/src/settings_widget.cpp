@@ -80,13 +80,13 @@ SettingsWidget::SettingsWidget(RpcClient *rpcClient, QWidget *parent)
 void SettingsWidget::setupUi()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(10, 10, 10, 10);
-    mainLayout->setSpacing(10);
+    mainLayout->setContentsMargins(10, 8, 10, 8);
+    mainLayout->setSpacing(8);
 
     // 页面标题
     QLabel *titleLabel = new QLabel(QStringLiteral("系统设置"), this);
     titleLabel->setStyleSheet(QStringLiteral(
-        "font-size: 18px; font-weight: bold; color: #2c3e50; padding: 4px 0;"));
+        "font-size: 20px; font-weight: 900; color: #17364a; padding: 0 2px;"));
     mainLayout->addWidget(titleLabel);
 
     // 使用TabWidget组织设置页面

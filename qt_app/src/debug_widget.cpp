@@ -48,12 +48,12 @@ DebugWidget::DebugWidget(RpcClient *rpcClient, QWidget *parent)
 void DebugWidget::setupUi()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(PAGE_MARGIN, PAGE_MARGIN, PAGE_MARGIN, PAGE_MARGIN);
-    mainLayout->setSpacing(PAGE_SPACING);
+    mainLayout->setContentsMargins(10, 8, 10, 8);
+    mainLayout->setSpacing(8);
 
     QLabel *title = new QLabel(QStringLiteral("调试中心"), this);
     title->setStyleSheet(QStringLiteral(
-        "font-size: %1px; font-weight: bold; color: #2c3e50;").arg(FONT_SIZE_TITLE));
+        "font-size: 20px; font-weight: 900; color: #17364a; padding: 0 2px;"));
     mainLayout->addWidget(title);
 
     QHBoxLayout *toolbar = new QHBoxLayout();

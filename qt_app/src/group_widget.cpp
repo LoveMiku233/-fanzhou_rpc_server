@@ -232,13 +232,13 @@ GroupWidget::GroupWidget(RpcClient *rpcClient, QWidget *parent)
 void GroupWidget::setupUi()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(PAGE_MARGIN, PAGE_MARGIN, PAGE_MARGIN, PAGE_MARGIN);
-    mainLayout->setSpacing(PAGE_SPACING);
+    mainLayout->setContentsMargins(10, 8, 10, 8);
+    mainLayout->setSpacing(8);
 
     // 页面标题
-    QLabel *titleLabel = new QLabel(QStringLiteral("[组] 分组管理"), this);
+    QLabel *titleLabel = new QLabel(QStringLiteral("分组管理"), this);
     titleLabel->setStyleSheet(QStringLiteral(
-        "font-size: %1px; font-weight: bold; color: #2c3e50; padding: 2px 0;").arg(FONT_SIZE_TITLE));
+        "font-size: 20px; font-weight: 900; color: #17364a; padding: 0 2px;"));
     mainLayout->addWidget(titleLabel);
 
     // 工具栏
@@ -249,9 +249,9 @@ void GroupWidget::setupUi()
     refreshButton_->setFixedHeight(BTN_HEIGHT);
     refreshButton_->setMinimumWidth(BTN_MIN_WIDTH);
     refreshButton_->setStyleSheet(QStringLiteral(
-        "QPushButton { background-color: #2d5f73; color: #ecf0f1; border: 1px solid #3c7186; "
+        "QPushButton { background-color: #3498db; color: white; border: none; "
         "border-radius: %1px; padding: 0 12px; font-weight: bold; font-size: %2px; }"
-        "QPushButton:hover { background-color: #376f85; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
+        "QPushButton:hover { background-color: #2980b9; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
     connect(refreshButton_, &QPushButton::clicked, this, &GroupWidget::refreshGroupList);
     toolbarLayout->addWidget(refreshButton_);
 
@@ -259,9 +259,9 @@ void GroupWidget::setupUi()
     createButton_->setFixedHeight(BTN_HEIGHT);
     createButton_->setMinimumWidth(BTN_MIN_WIDTH);
     createButton_->setStyleSheet(QStringLiteral(
-        "QPushButton { background-color: #3a6b3f; color: #ecf0f1; border: 1px solid #4a7f50; "
+        "QPushButton { background-color: #27ae60; color: white; border: none; "
         "border-radius: %1px; padding: 0 12px; font-weight: bold; font-size: %2px; }"
-        "QPushButton:hover { background-color: #467f4d; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
+        "QPushButton:hover { background-color: #229954; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
     connect(createButton_, &QPushButton::clicked, this, &GroupWidget::onCreateGroupClicked);
     toolbarLayout->addWidget(createButton_);
 
@@ -269,9 +269,9 @@ void GroupWidget::setupUi()
     manageChannelsButton_->setFixedHeight(BTN_HEIGHT);
     manageChannelsButton_->setMinimumWidth(BTN_MIN_WIDTH);
     manageChannelsButton_->setStyleSheet(QStringLiteral(
-        "QPushButton { background-color: #6b5a3a; color: #ecf0f1; border: 1px solid #7a6845; "
+        "QPushButton { background-color: #f39c12; color: white; border: none; "
         "border-radius: %1px; padding: 0 12px; font-weight: bold; font-size: %2px; }"
-        "QPushButton:hover { background-color: #806f4a; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
+        "QPushButton:hover { background-color: #d68910; }").arg(BORDER_RADIUS_BTN).arg(FONT_SIZE_BODY));
     connect(manageChannelsButton_, &QPushButton::clicked, this, &GroupWidget::onManageChannelsClicked);
     toolbarLayout->addWidget(manageChannelsButton_);
 
