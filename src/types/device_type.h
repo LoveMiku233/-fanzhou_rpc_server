@@ -31,6 +31,8 @@ struct RelayNodeConfig {
 struct DeviceGroupConfig {
     int groupId = 0;
     QString name;
+    QString specialId;  ///< 大棚控制特殊分组标识（如 fan/top_roll）
+    bool canOptimizeFrame = true;  ///< 是否允许按节点合并为controlMulti帧
     QList<int> deviceNodes;
     QList<int> channels;  ///< 指定的通道列表，空表示所有通道
     bool enabled = true;

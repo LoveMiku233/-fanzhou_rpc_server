@@ -26,7 +26,7 @@
     "restartMs": 100,
     "periodicRestartMin": 30,
     "is_fake": false,
-    "fake_can": "/dev/ttyUSB1",
+    "fake_can": "/dev/ttyUSB0",
     "fake_can_baudrate": 115200
   },
   "screen": {
@@ -75,6 +75,17 @@
       "type": 1,
       "commType": 5,
       "nodeId": 4,
+      "bus": "tcp-client",
+      "params": {
+        "channels": 4,
+        "enabled": true
+      }
+    },
+    {
+      "name": "relay05",
+      "type": 1,
+      "commType": 5,
+      "nodeId": 5,
       "bus": "tcp-client",
       "params": {
         "channels": 4,
@@ -166,33 +177,59 @@
   "groups": [
     {
       "groupId": 1,
-      "name": "zone-1",
+      "name": "fan-group-a",
+      "specialId": "fan_a",
+      "canOptimizeFrame": true,
       "enabled": true,
-      "devices": [1],
+      "devices": [1, 2],
       "channels": []
     },
     {
       "groupId": 2,
-      "name": "zone-2",
-      "enabled": true,
-      "devices": [2],
-      "channels": []
-    },
-    {
-      "groupId": 3,
-      "name": "zone-3",
+      "name": "fan-group-b",
+      "specialId": "fan_b",
+      "canOptimizeFrame": true,
       "enabled": true,
       "devices": [3],
       "channels": []
     },
     {
-      "groupId": 4,
-      "name": "zone-4",
+      "groupId": 3,
+      "name": "outer-shade",
+      "specialId": "outer_shade",
+      "canOptimizeFrame": false,
       "enabled": true,
       "devices": [4],
+      "channels": [1024, 1025]
+    },
+    {
+      "groupId": 4,
+      "name": "inner-insulation",
+      "specialId": "inner_insulation",
+      "canOptimizeFrame": false,
+      "enabled": true,
+      "devices": [4],
+      "channels": [1026, 1027]
+    },
+    {
+      "groupId": 5,
+      "name": "wet-pad-pump",
+      "specialId": "wet_pad",
+      "canOptimizeFrame": true,
+      "enabled": true,
+      "devices": [5],
       "channels": []
     }
   ],
+  "greenhouse": {
+    "state": {
+      "fan_a": "stop",
+      "fan_b": "stop",
+      "outer_shade": "stop",
+      "inner_insulation": "stop",
+      "wet_pad": "stop"
+    }
+  },
   "strategies": [
     {
       "id": 1,

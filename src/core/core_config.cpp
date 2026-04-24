@@ -106,6 +106,7 @@ bool CoreConfig::loadFromFile(const QString &path, QString *error)
     loadStrategies(root);
     loadMqttChannels(root);
     loadSensors(root);
+    loadGreenhouseState(root);
 
     return true;
 }
@@ -124,6 +125,7 @@ bool CoreConfig::saveToFile(const QString &path, QString *error) const
     saveStrategies(root);
     saveMqttChannels(root);
     saveSensors(root);
+    saveGreenhouseState(root);
 
     QJsonDocument doc(root);
     const QByteArray data = doc.toJson(QJsonDocument::Indented);

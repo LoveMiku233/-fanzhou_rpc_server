@@ -503,23 +503,31 @@ void loadRelayDevicesFromList(const QList<DeviceConfig> &deviceConfigsFromCoreCo
 
 void resetGroupMappings(QHash<int, QList<quint8>> &deviceGroups,
                         QHash<int, QString> &groupNames,
+                        QHash<int, QString> &groupSpecialIds,
+                        QHash<int, bool> &groupCanOptimizeFrame,
                         QHash<int, QList<int>> &groupChannels,
                         int reserveSize)
 {
     deviceGroups.clear();
     groupNames.clear();
+    groupSpecialIds.clear();
+    groupCanOptimizeFrame.clear();
     groupChannels.clear();
     deviceGroups.reserve(reserveSize);
     groupNames.reserve(reserveSize);
+    groupSpecialIds.reserve(reserveSize);
+    groupCanOptimizeFrame.reserve(reserveSize);
     groupChannels.reserve(reserveSize);
 }
 
 void loadGroupConfigsFromList(const QList<DeviceGroupConfig> &groups,
                               QHash<int, QList<quint8>> &deviceGroups,
                               QHash<int, QString> &groupNames,
+                              QHash<int, QString> &groupSpecialIds,
+                              QHash<int, bool> &groupCanOptimizeFrame,
                               QHash<int, QList<int>> &groupChannels)
 {
-    resetGroupMappings(deviceGroups, groupNames, groupChannels, groups.size());
+    resetGroupMappings(deviceGroups, groupNames, groupSpecialIds, groupCanOptimizeFrame, groupChannels, groups.size());
 
     LOG_INFO(kLogSource,
              QStringLiteral("Loading %1 device groups...").arg(groups.size()));
@@ -542,6 +550,10 @@ void loadGroupConfigsFromList(const QList<DeviceGroupConfig> &groups,
 
         deviceGroups.insert(grpConfig.groupId, nodes);
         groupNames.insert(grpConfig.groupId, grpConfig.name);
+        if (!grpConfig.specialId.isEmpty()) {
+            groupSpecialIds.insert(grpConfig.groupId, grpConfig.specialId);
+        }
+        groupCanOptimizeFrame.insert(grpConfig.groupId, grpConfig.canOptimizeFrame);
         if (!grpConfig.channels.isEmpty()) {
             groupChannels.insert(grpConfig.groupId, grpConfig.channels);
         }
@@ -577,6 +589,8 @@ bool isLoopbackWhitelistMatch(const QString &whitelistedIp, const QString &ip)
 QList<DeviceGroupConfig> buildGroupConfigsFromRuntime(
     const QHash<int, QList<quint8>> &deviceGroups,
     const QHash<int, QString> &groupNames,
+    const QHash<int, QString> &groupSpecialIds,
+    const QHash<int, bool> &groupCanOptimizeFrame,
     const QHash<int, QList<int>> &groupChannels)
 {
     QList<DeviceGroupConfig> groups;
@@ -588,6 +602,8 @@ QList<DeviceGroupConfig> buildGroupConfigsFromRuntime(
         DeviceGroupConfig grp;
         grp.groupId = groupId;
         grp.name = groupNames.value(groupId, QString());
+        grp.specialId = groupSpecialIds.value(groupId, QString());
+        grp.canOptimizeFrame = groupCanOptimizeFrame.value(groupId, true);
         grp.enabled = true;
         const QList<quint8> nodes = deviceGroups.value(groupId);
         for (quint8 node : nodes) {
@@ -610,6 +626,8 @@ QJsonArray toJsonIntArray(const QList<int> &values)
 
 QJsonArray buildExportGroupArray(const QHash<int, QList<quint8>> &deviceGroups,
                                  const QHash<int, QString> &groupNames,
+                                 const QHash<int, QString> &groupSpecialIds,
+                                 const QHash<int, bool> &groupCanOptimizeFrame,
                                  const QHash<int, QList<int>> &groupChannels)
 {
     QJsonArray groupArr;
@@ -619,6 +637,11 @@ QJsonArray buildExportGroupArray(const QHash<int, QList<quint8>> &deviceGroups,
         QJsonObject obj;
         obj[QStringLiteral("groupId")] = groupId;
         obj[QStringLiteral("name")] = groupNames.value(groupId, QString());
+        const QString specialId = groupSpecialIds.value(groupId, QString());
+        if (!specialId.isEmpty()) {
+            obj[QStringLiteral("specialId")] = specialId;
+        }
+        obj[QStringLiteral("canOptimizeFrame")] = groupCanOptimizeFrame.value(groupId, true);
 
         QJsonArray devNodes;
         const QList<quint8> nodes = deviceGroups.value(groupId);
@@ -995,6 +1018,7 @@ CoreContext::CoreContext(QObject *parent)
 bool CoreContext::init()
 {
     coreConfig = CoreConfig::makeDefault();
+    greenhouseState = coreConfig.greenhouseState;
     LOG_INFO(kLogSource, QStringLiteral("Initializing core context (default config)..."));
 
     if (!initSystemSettings()) {
@@ -1020,6 +1044,7 @@ bool CoreContext::init(const CoreConfig &config)
 {
 
     coreConfig = config;
+    greenhouseState = config.greenhouseState;
     LOG_INFO(kLogSource, QStringLiteral("Initializing core context with config..."));
     LOG_DEBUG(kLogSource,
               QStringLiteral("RPC port: %1, CAN interface: %2, bitrate: %3")
@@ -1134,13 +1159,13 @@ bool CoreContext::initDevices()
     LOG_DEBUG(kLogSource, QStringLiteral("Initializing devices from config..."));
     relays.clear();
     deviceConfigs.clear();
-    resetGroupMappings(deviceGroups, groupNames, groupChannels, 0);
+    resetGroupMappings(deviceGroups, groupNames, groupSpecialIds, groupCanOptimizeFrame, groupChannels, 0);
     loadSensorConfigsFromList(coreConfig.sensors, sensorConfigs);
 
     if (!coreConfig.devices.isEmpty()) {
         loadRelayDevicesFromList(coreConfig.devices, relays, deviceConfigs, canBus, canManager,
                                  deviceTcpServer_, this);
-        loadGroupConfigsFromList(coreConfig.groups, deviceGroups, groupNames, groupChannels);
+        loadGroupConfigsFromList(coreConfig.groups, deviceGroups, groupNames, groupSpecialIds, groupCanOptimizeFrame, groupChannels);
 
         return true;
     }
@@ -2030,6 +2055,23 @@ GroupControlStats CoreContext::queueGroupControlOptimized(int groupId, int chann
                                                            device::RelayProtocol::Action action,
                                                            const QString &source)
 {
+    const bool canOptimize = groupCanOptimizeFrame.value(groupId, true);
+    if (!canOptimize) {
+        GroupControlStats stats;
+        if (channel >= 0 && channel <= kMaxChannelId) {
+            stats = queueGroupControl(groupId, static_cast<quint8>(channel), action, source);
+        } else {
+            stats = queueGroupBoundChannelsControl(groupId, action, source);
+        }
+        stats.originalFrameCount = stats.total;
+        stats.optimizedFrameCount = stats.total;
+        LOG_INFO(kLogSource,
+                 QStringLiteral("[优化] 分组%1禁用帧优化，按逐通道发送: frames=%2")
+                     .arg(groupId)
+                     .arg(stats.total));
+        return stats;
+    }
+
     GroupControlStats stats;
 
     const QHash<quint8, QSet<quint8>> nodeChannels =
@@ -2166,6 +2208,8 @@ bool CoreContext::createGroup(int groupId, const QString &name, QString *error)
     }
     deviceGroups.insert(groupId, {});
     groupNames.insert(groupId, name);
+    groupSpecialIds.remove(groupId);
+    groupCanOptimizeFrame.insert(groupId, true);
     return true;
 }
 
@@ -2176,6 +2220,9 @@ bool CoreContext::deleteGroup(int groupId, QString *error)
     }
     deviceGroups.remove(groupId);
     groupNames.remove(groupId);
+    groupSpecialIds.remove(groupId);
+    groupCanOptimizeFrame.remove(groupId);
+    groupChannels.remove(groupId);
     return true;
 }
 
@@ -2223,7 +2270,8 @@ QStringList CoreContext::methodGroups() const
     return {QStringLiteral("rpc.*"), QStringLiteral("sys.*"), QStringLiteral("can.*"),
             QStringLiteral("relay.*"), QStringLiteral("group.*"),
             QStringLiteral("control.*"), QStringLiteral("auto.*"),
-            QStringLiteral("device.*"), QStringLiteral("screen.*")};
+            QStringLiteral("device.*"), QStringLiteral("screen.*"),
+            QStringLiteral("greenhouse.*")};
 }
 
 bool CoreContext::addChannelToGroup(int groupId, quint8 node, int channel, QString *error)
@@ -2599,7 +2647,8 @@ bool CoreContext::saveConfig(const QString &path, QString *error)
     }
     
     // 设备分组
-    coreConfig.groups = buildGroupConfigsFromRuntime(deviceGroups, groupNames, groupChannels);
+    coreConfig.groups = buildGroupConfigsFromRuntime(deviceGroups, groupNames, groupSpecialIds, groupCanOptimizeFrame, groupChannels);
+    coreConfig.greenhouseState = greenhouseState;
     
     // 定时策略
     coreConfig.strategies = strategies_;
@@ -2649,7 +2698,7 @@ bool CoreContext::reloadConfig(const QString &path, QString *error)
     // 完整的重新初始化需要重启服务
     
     // 更新分组配置（复用与启动时一致的加载逻辑）
-    loadGroupConfigsFromList(coreConfig.groups, deviceGroups, groupNames, groupChannels);
+    loadGroupConfigsFromList(coreConfig.groups, deviceGroups, groupNames, groupSpecialIds, groupCanOptimizeFrame, groupChannels);
     
     // 策略运行态（如 lastTriggered）保持不变，避免 reload 时丢失节流状态。
     
@@ -2658,6 +2707,7 @@ bool CoreContext::reloadConfig(const QString &path, QString *error)
     
     // 更新云数据上传配置
     cloudUploadConfig = coreConfig.cloudUpload;
+    greenhouseState = coreConfig.greenhouseState;
 
     if (!syncMqttChannelsToManager(mqttManager, coreConfig.mqttChannels)) {
         LOG_WARNING(kLogSource,
@@ -2684,7 +2734,7 @@ QJsonObject CoreContext::exportConfig() const
     
     // 设备分组
     root[QStringLiteral("groups")] =
-        buildExportGroupArray(deviceGroups, groupNames, groupChannels);
+        buildExportGroupArray(deviceGroups, groupNames, groupSpecialIds, groupCanOptimizeFrame, groupChannels);
     
     // 策略数量统计
     root[QStringLiteral("strategyCount")] = strategies_.size();
@@ -2694,6 +2744,9 @@ QJsonObject CoreContext::exportConfig() const
     
     // 配置文件路径
     root[QStringLiteral("configFilePath")] = configFilePath;
+    root[QStringLiteral("greenhouse")] = QJsonObject{
+        {QStringLiteral("state"), greenhouseState}
+    };
     
     return root;
 }

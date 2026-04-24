@@ -118,6 +118,21 @@ bool CoreConfig::loadScreen(const QJsonObject &root)
     return true;
 }
 
+bool CoreConfig::loadGreenhouseState(const QJsonObject &root)
+{
+    greenhouseState = QJsonObject();
+    if (!root.contains(QStringLiteral("greenhouse")) ||
+        !root.value(QStringLiteral("greenhouse")).isObject()) {
+        return true;
+    }
+    const QJsonObject greenhouseObj = root.value(QStringLiteral("greenhouse")).toObject();
+    if (greenhouseObj.contains(QStringLiteral("state")) &&
+        greenhouseObj.value(QStringLiteral("state")).isObject()) {
+        greenhouseState = greenhouseObj.value(QStringLiteral("state")).toObject();
+    }
+    return true;
+}
+
 void CoreConfig::saveMain(QJsonObject &root) const
 {
     // 主配置
@@ -192,6 +207,16 @@ void CoreConfig::saveScreen(QJsonObject &root) const
     screenObj[QStringLiteral("sleepTimeoutSec")] = screen.sleepTimeoutSec;
     screenObj[QStringLiteral("orientation")] = screen.orientation;
     root[QStringLiteral("screen")] = screenObj;
+}
+
+void CoreConfig::saveGreenhouseState(QJsonObject &root) const
+{
+    if (greenhouseState.isEmpty()) {
+        return;
+    }
+    QJsonObject greenhouseObj = root.value(QStringLiteral("greenhouse")).toObject();
+    greenhouseObj[QStringLiteral("state")] = greenhouseState;
+    root[QStringLiteral("greenhouse")] = greenhouseObj;
 }
 
 }

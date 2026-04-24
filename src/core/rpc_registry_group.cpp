@@ -38,6 +38,8 @@ const QString &kKeyTotal = rpc_keys::Total();
 const QString &kKeyAccepted = rpc_keys::Accepted();
 const QString &kKeyMissing = rpc_keys::Missing();
 const QString &kKeyJobIds = rpc_keys::JobIds();
+const QString kKeySpecialId = QStringLiteral("specialId");
+const QString kKeyCanOptimizeFrame = QStringLiteral("canOptimizeFrame");
 constexpr int kChannelKeyMultiplier = 256;
 
 QJsonArray buildGroupChannelsArray(const QList<int> &channelKeys)
@@ -87,6 +89,11 @@ void RpcRegistry::registerGroup()
             QJsonObject obj;
             obj[kKeyGroupId] = groupId;
             obj[kKeyName] = context_->groupNames.value(groupId, QString());
+            const QString specialId = context_->groupSpecialIds.value(groupId, QString());
+            if (!specialId.isEmpty()) {
+                obj[kKeySpecialId] = specialId;
+            }
+            obj[kKeyCanOptimizeFrame] = context_->groupCanOptimizeFrame.value(groupId, true);
 
             QJsonArray devices;
             QList<quint8> nodes = context_->deviceGroups.value(groupId);
@@ -139,6 +146,8 @@ void RpcRegistry::registerGroup()
             {kKeyOk, true},
             {kKeyGroupId, groupId},
             {kKeyName, context_->groupNames.value(groupId, QString())},
+            {kKeySpecialId, context_->groupSpecialIds.value(groupId, QString())},
+            {kKeyCanOptimizeFrame, context_->groupCanOptimizeFrame.value(groupId, true)},
             {kKeyDevices, devices},
             {kKeyDeviceCount, nodeList.size()},
             {QStringLiteral("onlineCount"), onlineCount},
@@ -150,15 +159,29 @@ void RpcRegistry::registerGroup()
                                  [this](const QJsonObject &params) {
         qint32 groupId = 0;
         QString name;
+        QString specialId;
+        bool canOptimizeFrame = true;
 
         if (!rpc::RpcHelpers::getI32InRange(params, "groupId", groupId, 1, INT_MAX))
             return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing/invalid groupId"));
         if (!rpc::RpcHelpers::getString(params, "name", name))
             return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter, QStringLiteral("missing name"));
+        if (params.contains(kKeySpecialId)) {
+            specialId = params.value(kKeySpecialId).toString().trimmed();
+        }
+        if (params.contains(kKeyCanOptimizeFrame) &&
+            !rpc::RpcHelpers::getBool(params, "canOptimizeFrame", canOptimizeFrame, true)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterType,
+                                        QStringLiteral("invalid canOptimizeFrame"));
+        }
 
         QString error;
         if (!context_->createGroup(groupId, name, &error))
             return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue, error);
+        if (!specialId.isEmpty()) {
+            context_->groupSpecialIds.insert(groupId, specialId);
+        }
+        context_->groupCanOptimizeFrame.insert(groupId, canOptimizeFrame);
         QJsonObject saveErr;
         if (!saveIfRequested(context_, params, &saveErr)) {
             return saveErr;
@@ -420,6 +443,101 @@ void RpcRegistry::registerGroup()
             {kKeyGroupId, groupId},
             {kKeyTotal, newKeys.size()},
             {kKeyChannels, buildGroupChannelsArray(context_->getGroupChannels(groupId))}
+        };
+    });
+
+    dispatcher_->registerMethod(QStringLiteral("group.setSpecialId"),
+                                 [this](const QJsonObject &params) {
+        qint32 groupId = 0;
+        if (!rpc::RpcHelpers::getI32InRange(params, "groupId", groupId, 1, INT_MAX)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter,
+                                        QStringLiteral("missing/invalid groupId"));
+        }
+        if (!context_->deviceGroups.contains(groupId)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue,
+                                        QStringLiteral("group not found"));
+        }
+        if (!params.contains(kKeySpecialId)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter,
+                                        QStringLiteral("missing specialId"));
+        }
+        const QString specialId = params.value(kKeySpecialId).toString().trimmed();
+        if (specialId.isEmpty()) {
+            context_->groupSpecialIds.remove(groupId);
+        } else {
+            context_->groupSpecialIds.insert(groupId, specialId);
+        }
+        QJsonObject saveErr;
+        if (!saveIfRequested(context_, params, &saveErr)) {
+            return saveErr;
+        }
+        return QJsonObject{
+            {kKeyOk, true},
+            {kKeyGroupId, groupId},
+            {kKeySpecialId, context_->groupSpecialIds.value(groupId, QString())}
+        };
+    });
+
+    dispatcher_->registerMethod(QStringLiteral("group.setOptimizeFrame"),
+                                 [this](const QJsonObject &params) {
+        qint32 groupId = 0;
+        bool canOptimizeFrame = true;
+        if (!rpc::RpcHelpers::getI32InRange(params, "groupId", groupId, 1, INT_MAX)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter,
+                                        QStringLiteral("missing/invalid groupId"));
+        }
+        if (!context_->deviceGroups.contains(groupId)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::BadParameterValue,
+                                        QStringLiteral("group not found"));
+        }
+        if (!params.contains(kKeyCanOptimizeFrame) ||
+            !rpc::RpcHelpers::getBool(params, "canOptimizeFrame", canOptimizeFrame, true)) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter,
+                                        QStringLiteral("missing/invalid canOptimizeFrame"));
+        }
+
+        context_->groupCanOptimizeFrame.insert(groupId, canOptimizeFrame);
+        QJsonObject saveErr;
+        if (!saveIfRequested(context_, params, &saveErr)) {
+            return saveErr;
+        }
+
+        return QJsonObject{
+            {kKeyOk, true},
+            {kKeyGroupId, groupId},
+            {kKeyCanOptimizeFrame, context_->groupCanOptimizeFrame.value(groupId, true)}
+        };
+    });
+
+    dispatcher_->registerMethod(QStringLiteral("greenhouse.state.get"),
+                                 [this](const QJsonObject &) {
+        return QJsonObject{
+            {kKeyOk, true},
+            {QStringLiteral("state"), context_->greenhouseState}
+        };
+    });
+
+    dispatcher_->registerMethod(QStringLiteral("greenhouse.state.save"),
+                                 [this](const QJsonObject &params) {
+        if (!params.contains(QStringLiteral("state")) ||
+            !params.value(QStringLiteral("state")).isObject()) {
+            return rpc::RpcHelpers::err(rpc::RpcError::MissingParameter,
+                                        QStringLiteral("missing/invalid state object"));
+        }
+
+        context_->greenhouseState = params.value(QStringLiteral("state")).toObject();
+
+        QJsonObject saveParams = params;
+        if (!saveParams.contains(QStringLiteral("save"))) {
+            saveParams.insert(QStringLiteral("save"), true);
+        }
+        QJsonObject saveErr;
+        if (!saveIfRequested(context_, saveParams, &saveErr)) {
+            return saveErr;
+        }
+        return QJsonObject{
+            {kKeyOk, true},
+            {QStringLiteral("state"), context_->greenhouseState}
         };
     });
 }

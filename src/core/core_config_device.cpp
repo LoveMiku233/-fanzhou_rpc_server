@@ -111,6 +111,8 @@ bool CoreConfig::loadGroups(const QJsonObject &root)
             DeviceGroupConfig grp;
             grp.groupId = obj.value(QStringLiteral("groupId")).toInt(0);
             grp.name = obj.value(QStringLiteral("name")).toString();
+            grp.specialId = obj.value(QStringLiteral("specialId")).toString();
+            grp.canOptimizeFrame = obj.value(QStringLiteral("canOptimizeFrame")).toBool(true);
             grp.enabled = obj.value(QStringLiteral("enabled")).toBool(true);
 
             if (obj.contains(QStringLiteral("devices")) &&
@@ -195,6 +197,10 @@ void CoreConfig::saveGroups(QJsonObject &root) const
         QJsonObject obj;
         obj[QStringLiteral("groupId")] = grp.groupId;
         obj[QStringLiteral("name")] = grp.name;
+        if (!grp.specialId.isEmpty()) {
+            obj[QStringLiteral("specialId")] = grp.specialId;
+        }
+        obj[QStringLiteral("canOptimizeFrame")] = grp.canOptimizeFrame;
         obj[QStringLiteral("enabled")] = grp.enabled;
 
         QJsonArray devNodes;

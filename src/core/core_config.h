@@ -43,6 +43,7 @@ public:
     QList<AutoStrategy> strategies;
     QList<MqttChannelConfig> mqttChannels;  ///< MQTT多通道配置列表
     QList<SensorNodeConfig> sensors;
+    QJsonObject greenhouseState;  ///< 大棚界面保存状态（specialId -> action）
 
     /**
      * @brief 从文件加载配置
@@ -78,6 +79,7 @@ private:
         bool loadMqttChannels(const QJsonObject &root);
         bool loadStrategies(const QJsonObject &root);
         bool loadSensors(const QJsonObject &root);
+        bool loadGreenhouseState(const QJsonObject &root);
 
         void saveMain(QJsonObject &root) const;
         void saveLog(QJsonObject &root) const;
@@ -89,6 +91,7 @@ private:
         void saveMqttChannels(QJsonObject &root) const;
         void saveStrategies(QJsonObject &root) const;
         void saveSensors(QJsonObject &root) const;
+        void saveGreenhouseState(QJsonObject &root) const;
 };
 
 }  // namespace core

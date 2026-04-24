@@ -194,6 +194,8 @@ public:
     // 设备分组：分组ID -> 节点ID列表
     QHash<int, QList<quint8>> deviceGroups;
     QHash<int, QString> groupNames;
+    QHash<int, QString> groupSpecialIds;  ///< 分组ID -> 特殊ID（用于大棚一键控制）
+    QHash<int, bool> groupCanOptimizeFrame;  ///< 分组ID -> 是否允许帧优化
     QHash<int, QList<int>> groupChannels;  ///< 分组ID -> 指定通道列表
     // 设备配置记录（用于动态管理）
     QHash<quint8, DeviceConfig> deviceConfigs;
@@ -202,6 +204,8 @@ public:
     ScreenConfig screenConfig;
     // 云数据上传配置
     CloudUploadConfig cloudUploadConfig;
+    // 大棚状态保存（specialId -> action）
+    QJsonObject greenhouseState;
     // 认证配置
     AuthConfig authConfig;
     QHash<QString, qint64> validTokens;  ///< Token -> 过期时间戳(ms)，0表示永不过期

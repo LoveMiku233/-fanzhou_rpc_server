@@ -7,7 +7,7 @@
         "restartMs": 200,
         "periodicRestartMin": 0,
         "is_fake": true,
-        "fake_can": "/dev/ttyUSB1",
+        "fake_can": "/dev/ttyUSB0",
       "fake_can_baudrate": 115200
     },
     "cloudUpload": {
@@ -99,30 +99,47 @@
     "groups": [
         {
             "groupId": 1,
-            "name": "风机组",
+            "name": "风机组A",
+            "specialId": "fan_a",
+            "canOptimizeFrame": true,
             "enabled": true,
-            "devices": [1, 2, 3],
+            "devices": [1, 2],
             "channels": []
         },
         {
             "groupId": 2,
-            "name": "外遮阳内保温组",
+            "name": "风机组B",
+            "specialId": "fan_b",
+            "canOptimizeFrame": true,
             "enabled": true,
-            "devices": [4],
+            "devices": [3],
             "channels": []
         },
         {
             "groupId": 3,
-            "name": "湿帘组",
+            "name": "外遮阳组",
+            "specialId": "outer_shade",
+            "canOptimizeFrame": false,
             "enabled": true,
-            "devices": [5],
-            "channels": []
+            "devices": [4],
+            "channels": [1024, 1025]
         },
         {
             "groupId": 4,
-            "name": "全棚联动组",
+            "name": "内保温组",
+            "specialId": "inner_insulation",
+            "canOptimizeFrame": false,
             "enabled": true,
-            "devices": [1, 2, 3, 4, 5],
+            "devices": [4],
+            "channels": [1026, 1027]
+        },
+        {
+            "groupId": 5,
+            "name": "湿帘水泵组",
+            "specialId": "wet_pad",
+            "canOptimizeFrame": true,
+            "enabled": true,
+            "devices": [5],
             "channels": []
         }
     ],
