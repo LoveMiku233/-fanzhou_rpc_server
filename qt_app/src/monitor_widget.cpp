@@ -262,7 +262,7 @@ void MonitorWidget::refreshData()
 
     if (rpcClient_ && rpcClient_->isConnected()) {
         // 调用RPC获取服务器状态
-        rpcClient_->callAsync(QStringLiteral("sys.info"), QJsonObject(),
+        rpcClient_->callAsync(QStringLiteral("sys.info"), QJsonObject(), this,
             [this](const QJsonValue &result, const QJsonObject &error) {
                 Q_UNUSED(result);
                 Q_UNUSED(error);

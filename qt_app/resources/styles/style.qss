@@ -1,21 +1,35 @@
-/* FanZhou RPC Client Stylesheet - Industrial Theme */
-/* 工业控制台风格配色 */
+/* FanZhou RPC Client Stylesheet - Greenhouse Tech Theme */
+/* 深蓝/青蓝主色 + 半透明卡片 + 背景图 */
 /* 针对7寸1024x600触屏优化 */
 
-/* ==================== 主窗口 - 柔和浅灰背景 ==================== */
-QMainWindow {
-    background: #d8dde1;
+/* ==================== 主窗口背景 ==================== */
+QMainWindow, QWidget#appRoot {
+    background: #0c2635;
+}
+
+QLabel#bgImageLayer {
+    background: transparent;
+}
+
+QWidget#contentStack {
+    background: #eaf2f7;
+    border: 1px solid #9fbccc;
+    border-radius: 14px;
+}
+
+QWidget#contentStack QLabel {
+    color: #1f3340;
 }
 
 /* ==================== 侧边栏菜单面板 ==================== */
 #sidebar {
-    background: #2f3a40;
-    border: 1px solid #1f272c;
-    border-radius: 14px;
+    background: rgba(15, 35, 48, 225);
+    border: 1px solid rgba(86, 143, 173, 170);
+    border-radius: 12px;
 }
 
 #sidebar QLabel {
-    color: #b9c4ca;
+    color: #d4e6f1;
 }
 
 /* ==================== 菜单按钮 ==================== */
@@ -55,32 +69,41 @@ QPushButton:disabled {
 
 /* 侧边栏菜单按钮 */
 #sidebar QPushButton {
-    background: #3b4a52;
-    border: 1px solid #4a5d67;
-    border-radius: 9px;
-    color: #d7e0e5;
-    font-weight: 600;
-    font-size: 12px;
-    min-height: 42px;
+    background: rgba(31, 60, 77, 230);
+    border: 1px solid rgba(96, 156, 188, 170);
+    border-radius: 10px;
+    color: #ecf6fb;
+    font-weight: 700;
+    font-size: 11px;
+    min-height: 36px;
     min-width: 60px;
     padding: 2px 4px;
 }
 
 #sidebar QPushButton:hover {
-    background: #4a5d67;
+    background: rgba(42, 78, 98, 245);
     color: #ffffff;
 }
 
 #sidebar QPushButton:checked {
     background: #ffd166;
-    color: #2b2f33;
+    color: #0b2a3a;
     border: 1px solid #d6a237;
 }
 
 #topStatusBar {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2d3a41, stop:1 #41535d);
-    border: 1px solid #202a30;
+    background: rgba(13, 38, 53, 220);
+    border: 1px solid rgba(104, 164, 196, 165);
     border-radius: 12px;
+}
+
+QScrollArea {
+    background: transparent;
+    border: none;
+}
+
+QScrollArea > QWidget > QWidget {
+    background: transparent;
 }
 
 /* ==================== 成功类型按钮 ==================== */

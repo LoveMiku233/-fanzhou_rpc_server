@@ -404,7 +404,7 @@ void StrategyWidget::onRefreshStrategiesClicked()
     qDebug() << "[STRATEGY_WIDGET] 刷新策略列表";
 
     // 使用异步调用避免阻塞UI线程
-    rpcClient_->callAsync(QStringLiteral("auto.strategy.list"), QJsonObject(),
+    rpcClient_->callAsync(QStringLiteral("auto.strategy.list"), QJsonObject(), this,
         [this](const QJsonValue &result, const QJsonObject &error) {
             QMetaObject::invokeMethod(this, [this, result, error]() {
                 if (!error.isEmpty() || !result.isObject()) {
@@ -623,7 +623,7 @@ void StrategyWidget::onToggleStrategy(int strategyId, bool newState)
 
     qDebug() << "[STRATEGY_WIDGET] 切换策略状态 strategyId=" << strategyId << "enabled=" << newState;
     
-    rpcClient_->callAsync(QStringLiteral("auto.strategy.enable"), params,
+    rpcClient_->callAsync(QStringLiteral("auto.strategy.enable"), params, this,
         [this, strategyId](const QJsonValue &result, const QJsonObject &error) {
             QMetaObject::invokeMethod(this, [this, strategyId, result, error]() {
                 if (error.isEmpty() && result.isObject() &&
@@ -650,7 +650,7 @@ void StrategyWidget::onTriggerStrategy(int strategyId)
 
     qDebug() << "[STRATEGY_WIDGET] 手动触发策略 strategyId=" << strategyId;
     
-    rpcClient_->callAsync(QStringLiteral("auto.strategy.trigger"), params,
+    rpcClient_->callAsync(QStringLiteral("auto.strategy.trigger"), params, this,
         [this, strategyId](const QJsonValue &result, const QJsonObject &error) {
             QMetaObject::invokeMethod(this, [this, strategyId, result, error]() {
                 if (error.isEmpty() && result.isObject() &&
@@ -681,7 +681,7 @@ void StrategyWidget::onDeleteStrategy(int strategyId)
 
     qDebug() << "[STRATEGY_WIDGET] 删除策略 strategyId=" << strategyId;
     
-    rpcClient_->callAsync(QStringLiteral("auto.strategy.delete"), params,
+    rpcClient_->callAsync(QStringLiteral("auto.strategy.delete"), params, this,
         [this, strategyId](const QJsonValue &result, const QJsonObject &error) {
             QMetaObject::invokeMethod(this, [this, strategyId, result, error]() {
                 if (error.isEmpty() && result.isObject() &&

@@ -15,12 +15,20 @@
 #include "settings_widget.h"
 #include "monitor_widget.h"
 #include "debug_widget.h"
+#include "planting_advice_widget.h"
 #include "screen_manager.h"
 #include "style_constants.h"
 
 #include <QApplication>
+#include <QCoreApplication>
+#include <QDir>
 #include <QEvent>
+#include <QFileInfo>
+#include <QIcon>
+#include <QImage>
 #include <QMessageBox>
+#include <QPainter>
+#include <QPixmap>
 #include <QStatusBar>
 #include <QAbstractAnimation>
 #include <QEasingCurve>
@@ -50,6 +58,7 @@ MainWindow::MainWindow(QWidget *parent)
     , sidebarLayout_(nullptr)
     , menuButtonGroup_(nullptr)
     , contentStack_(nullptr)
+    , backgroundImageLabel_(nullptr)
     , connectionStatusLabel_(nullptr)
     , cloudStatusLabel_(nullptr)
     , timeLabel_(nullptr)
@@ -66,12 +75,16 @@ MainWindow::MainWindow(QWidget *parent)
     , settingsWidget_(nullptr)
     , monitorWidget_(nullptr)
     , debugWidget_(nullptr)
+    , plantingAdviceWidget_(nullptr)
     , rpcClient_(new RpcClient(this))
     , screenManager_(new ScreenManager(this))
     , autoRefreshTimer_(new QTimer(this))
     , statusBarTimer_(new QTimer(this))
     , currentPageIndex_(0)
 {
+    QSettings settings;
+    lowPerformanceMode_ = settings.value(QStringLiteral("ui/lowPerformanceMode"), true).toBool();
+    useBackgroundImage_ = settings.value(QStringLiteral("ui/enableBackgroundImage"), !lowPerformanceMode_).toBool();
     setupUi();
     qApp->installEventFilter(this);
 
@@ -83,7 +96,7 @@ MainWindow::MainWindow(QWidget *parent)
     statusBarTimer_->start(1000);
     updateStatusBarTime();
 
-    toastProgressTimer_->setInterval(33);
+    toastProgressTimer_->setInterval(lowPerformanceMode_ ? 100 : 33);
     connect(toastProgressTimer_, &QTimer::timeout, this, &MainWindow::updateAllToastProgress);
 
     // 延迟执行自动连接
@@ -121,7 +134,8 @@ MainWindow::MainWindow(QWidget *parent)
         }
     });
 
-    qDebug() << "[MAIN_WINDOW] 主窗口初始化完成";
+    qDebug() << "[MAIN_WINDOW] 主窗口初始化完成 lowPerformanceMode=" << lowPerformanceMode_
+             << "useBackgroundImage=" << useBackgroundImage_;
 }
 
 MainWindow::~MainWindow()
@@ -150,25 +164,25 @@ void MainWindow::setupTopStatusBar()
 {
     connectionStatusLabel_ = new QLabel(QStringLiteral("[X] 未连接"));
     connectionStatusLabel_->setStyleSheet(QStringLiteral(
-        "color: #fbe9e7; font-weight: 700; padding: 6px 12px; "
-        "background: #b6423a; border-radius: 14px;"));
+        "color: #fff6f4; font-weight: 700; padding: 5px 10px; "
+        "background: rgba(176, 52, 41, 235); border-radius: 12px;"));
 
     cloudStatusLabel_ = new QLabel(QStringLiteral("[云] 未连接"));
     cloudStatusLabel_->setToolTip(QStringLiteral("云/MQTT连接状态"));
     cloudStatusLabel_->setStyleSheet(QStringLiteral(
-        "color: #e8edf0; padding: 6px 12px; "
-        "background: #566872; border-radius: 14px;"));
+        "color: #e7f5ff; padding: 5px 10px; "
+        "background: rgba(25, 74, 95, 220); border-radius: 12px;"));
 
     timeLabel_ = new QLabel(QStringLiteral("--:--:--"));
     timeLabel_->setStyleSheet(QStringLiteral(
-        "color: #2f3a40; padding: 6px 12px; font-weight: 700; "
-        "background: #f0c75e; border-radius: 14px;"));
+        "color: #0b2a3a; padding: 5px 10px; font-weight: 700; "
+        "background: #ffd166; border-radius: 12px;"));
 
     alertLabel_ = new QLabel(QStringLiteral("[OK] 系统就绪"));
     alertLabel_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     updateAlertLabel(
         QStringLiteral("[OK] 系统就绪"),
-        QStringLiteral("color: #e8edf0; padding: 6px 12px; background: #3f4f58; border-radius: 14px;"),
+        QStringLiteral("color: #e8edf0; padding: 5px 10px; background: rgba(24, 62, 80, 210); border-radius: 12px;"),
         QStringLiteral("INFO"),
         false);
 }
@@ -176,7 +190,27 @@ void MainWindow::setupTopStatusBar()
 void MainWindow::setupCentralWidget()
 {
     QWidget *centralWidget = new QWidget(this);
+    centralWidget->setObjectName(QStringLiteral("appRoot"));
     setCentralWidget(centralWidget);
+
+    backgroundImageLabel_ = new QLabel(centralWidget);
+    backgroundImageLabel_->setObjectName(QStringLiteral("bgImageLayer"));
+    backgroundImageLabel_->setGeometry(centralWidget->rect());
+    backgroundImageLabel_->setScaledContents(false);
+    backgroundImageLabel_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    backgroundImageLabel_->lower();
+    if (useBackgroundImage_) {
+        backgroundImageSource_ = QPixmap(QStringLiteral(":/images/bg1.png"));
+        if (backgroundImageSource_.isNull()) {
+            useBackgroundImage_ = false;
+            backgroundImageLabel_->hide();
+        } else {
+            backgroundImageLabel_->show();
+            updateBackgroundImageCache();
+        }
+    } else {
+        backgroundImageLabel_->hide();
+    }
 
     QVBoxLayout *mainLayout = new QVBoxLayout(centralWidget);
     mainLayout->setContentsMargins(6, 6, 6, 6);
@@ -196,6 +230,7 @@ void MainWindow::setupCentralWidget()
     mainLayout->addWidget(topStatusBar_);
 
     createContentArea();
+    contentStack_->setObjectName(QStringLiteral("contentStack"));
     mainLayout->addWidget(contentStack_, 1);
 
     createBottomNavBar();
@@ -282,48 +317,52 @@ void MainWindow::displayToast(const ToastRequest &request)
     item->progressFill->setStyleSheet(
         QStringLiteral("background: %1; border-radius: 2px;").arg(toastProgressForLevel(item->level)));
 
-    item->opacityEffect = new QGraphicsOpacityEffect(item->container);
-    item->opacityEffect->setOpacity(0.0);
-    item->container->setGraphicsEffect(item->opacityEffect);
+    if (!lowPerformanceMode_) {
+        item->opacityEffect = new QGraphicsOpacityEffect(item->container);
+        item->opacityEffect->setOpacity(0.0);
+        item->container->setGraphicsEffect(item->opacityEffect);
 
-    item->slideInAnim = new QPropertyAnimation(item->container, "geometry", item->container);
-    item->slideInAnim->setDuration(220);
-    item->slideInAnim->setEasingCurve(QEasingCurve::OutCubic);
+        item->slideInAnim = new QPropertyAnimation(item->container, "geometry", item->container);
+        item->slideInAnim->setDuration(220);
+        item->slideInAnim->setEasingCurve(QEasingCurve::OutCubic);
 
-    item->slideOutAnim = new QPropertyAnimation(item->container, "geometry", item->container);
-    item->slideOutAnim->setDuration(220);
-    item->slideOutAnim->setEasingCurve(QEasingCurve::InCubic);
+        item->slideOutAnim = new QPropertyAnimation(item->container, "geometry", item->container);
+        item->slideOutAnim->setDuration(220);
+        item->slideOutAnim->setEasingCurve(QEasingCurve::InCubic);
 
-    item->fadeInAnim = new QPropertyAnimation(item->opacityEffect, "opacity", item->container);
-    item->fadeInAnim->setDuration(220);
-    item->fadeInAnim->setStartValue(0.0);
-    item->fadeInAnim->setEndValue(1.0);
+        item->fadeInAnim = new QPropertyAnimation(item->opacityEffect, "opacity", item->container);
+        item->fadeInAnim->setDuration(220);
+        item->fadeInAnim->setStartValue(0.0);
+        item->fadeInAnim->setEndValue(1.0);
 
-    item->fadeOutAnim = new QPropertyAnimation(item->opacityEffect, "opacity", item->container);
-    item->fadeOutAnim->setDuration(220);
-    item->fadeOutAnim->setStartValue(1.0);
-    item->fadeOutAnim->setEndValue(0.0);
+        item->fadeOutAnim = new QPropertyAnimation(item->opacityEffect, "opacity", item->container);
+        item->fadeOutAnim->setDuration(220);
+        item->fadeOutAnim->setStartValue(1.0);
+        item->fadeOutAnim->setEndValue(0.0);
+    }
 
     item->lifeTimer = new QTimer(item->container);
     item->lifeTimer->setSingleShot(true);
 
     connect(item->lifeTimer, &QTimer::timeout, this, [this, item]() {
-        closeToast(item, true);
+        closeToast(item, !lowPerformanceMode_);
     });
 
     activeToasts_.prepend(item);
-    relayoutToasts(true);
+    relayoutToasts(!lowPerformanceMode_);
 
     const QRect endRect = toastRectForIndex(0);
     const QRect startRect(endRect.x() + 26, endRect.y(), endRect.width(), endRect.height());
-    item->container->setGeometry(startRect);
+    item->container->setGeometry(lowPerformanceMode_ ? endRect : startRect);
     item->container->show();
     item->container->raise();
 
-    item->slideInAnim->setStartValue(startRect);
-    item->slideInAnim->setEndValue(endRect);
-    item->slideInAnim->start();
-    item->fadeInAnim->start();
+    if (!lowPerformanceMode_ && item->slideInAnim && item->fadeInAnim) {
+        item->slideInAnim->setStartValue(startRect);
+        item->slideInAnim->setEndValue(endRect);
+        item->slideInAnim->start();
+        item->fadeInAnim->start();
+    }
 
     startToastTimers(item);
 }
@@ -460,7 +499,7 @@ void MainWindow::closeToast(ToastItem *item, bool animated)
             toastProgressTimer_->stop();
         }
         drainToastQueue();
-        relayoutToasts(true);
+        relayoutToasts(!lowPerformanceMode_);
         return;
     }
 
@@ -471,6 +510,20 @@ void MainWindow::closeToast(ToastItem *item, bool animated)
 
     const QRect startRect = item->container->geometry();
     const QRect endRect(startRect.x() + 26, startRect.y(), startRect.width(), startRect.height());
+
+    if (!item->slideOutAnim || !item->fadeOutAnim) {
+        activeToasts_.removeOne(item);
+        if (item->container) {
+            item->container->deleteLater();
+        }
+        delete item;
+        if (activeToasts_.isEmpty() && toastProgressTimer_) {
+            toastProgressTimer_->stop();
+        }
+        drainToastQueue();
+        relayoutToasts(!lowPerformanceMode_);
+        return;
+    }
 
     item->slideOutAnim->setStartValue(startRect);
     item->slideOutAnim->setEndValue(endRect);
@@ -486,7 +539,7 @@ void MainWindow::closeToast(ToastItem *item, bool animated)
             toastProgressTimer_->stop();
         }
         drainToastQueue();
-        relayoutToasts(true);
+        relayoutToasts(!lowPerformanceMode_);
     });
 
     item->slideOutAnim->start();
@@ -510,7 +563,7 @@ void MainWindow::relayoutToasts(bool animated)
         }
 
         const QRect target = toastRectForIndex(i);
-        if (animated && item->container->isVisible()) {
+        if (animated && !lowPerformanceMode_ && item->container->isVisible()) {
             QPropertyAnimation *moveAnim = new QPropertyAnimation(item->container, "geometry", item->container);
             moveAnim->setDuration(180);
             moveAnim->setEasingCurve(QEasingCurve::OutCubic);
@@ -541,8 +594,8 @@ void MainWindow::createBottomNavBar()
 {
     sidebar_ = new QWidget(this);
     sidebar_->setObjectName(QStringLiteral("sidebar"));
-    sidebar_->setMinimumHeight(62);
-    sidebar_->setMaximumHeight(68);
+    sidebar_->setMinimumHeight(54);
+    sidebar_->setMaximumHeight(58);
 
     sidebarLayout_ = new QHBoxLayout(sidebar_);
     sidebarLayout_->setContentsMargins(6, 6, 6, 6);
@@ -551,37 +604,114 @@ void MainWindow::createBottomNavBar()
     menuButtonGroup_ = new QButtonGroup(this);
 
     // 菜单项
-    QStringList menuNames = {
-        QStringLiteral("主页"),
-        QStringLiteral("大棚"),
-        QStringLiteral("设备"),
-        QStringLiteral("分组"),
-        QStringLiteral("策略"),
-        QStringLiteral("传感"),
-        QStringLiteral("日志"),
-        QStringLiteral("设置"),
-        QStringLiteral("监控"),
-        QStringLiteral("调试")
+    struct MenuMeta {
+        QString text;
+        QString iconKey;
+        int pageIndex;
+    };
+    const QList<MenuMeta> menuItems = {
+        {QStringLiteral("主页"), QStringLiteral("home"), 0},
+        {QStringLiteral("大棚"), QStringLiteral("greenhouse"), 1},
+        {QStringLiteral("设备"), QStringLiteral("device"), 2},
+        {QStringLiteral("策略"), QStringLiteral("strategy"), 4},
+        {QStringLiteral("建议"), QStringLiteral("advice"), 10},
+        {QStringLiteral("日志"), QStringLiteral("log"), 6},
+        {QStringLiteral("设置"), QStringLiteral("settings"), 7}
     };
 
-    for (int i = 0; i < menuNames.size(); ++i) {
-        QPushButton *btn = new QPushButton(menuNames[i], sidebar_);
+    const QStringList iconDirs = {
+        QCoreApplication::applicationDirPath() + QStringLiteral("/icons"),
+        QCoreApplication::applicationDirPath() + QStringLiteral("/../icons"),
+        QCoreApplication::applicationDirPath() + QStringLiteral("/../../res/icons"),
+        QCoreApplication::applicationDirPath() + QStringLiteral("/../../../res/icons"),
+        QCoreApplication::applicationDirPath() + QStringLiteral("/../../res/导航类"),
+        QCoreApplication::applicationDirPath() + QStringLiteral("/../../../res/导航类"),
+        QCoreApplication::applicationDirPath() + QStringLiteral("/../../res/操作类"),
+        QCoreApplication::applicationDirPath() + QStringLiteral("/../../../res/操作类"),
+        QDir::currentPath() + QStringLiteral("/res/icons"),
+        QDir::currentPath() + QStringLiteral("/res/导航类"),
+        QDir::currentPath() + QStringLiteral("/res/操作类")
+    };
+    auto iconKeysForMenu = [](const QString &key) -> QStringList {
+        if (key == QStringLiteral("home")) return {QStringLiteral("home"), QStringLiteral("nav_home")};
+        if (key == QStringLiteral("greenhouse")) return {QStringLiteral("greenhouse"), QStringLiteral("nav_greenhouse")};
+        if (key == QStringLiteral("device")) return {QStringLiteral("device"), QStringLiteral("devices"), QStringLiteral("nav_devices")};
+        if (key == QStringLiteral("strategy")) return {QStringLiteral("strategy"), QStringLiteral("nav_strategy")};
+        if (key == QStringLiteral("advice")) return {QStringLiteral("advice"), QStringLiteral("nav_monitor"), QStringLiteral("action_settings")};
+        if (key == QStringLiteral("log")) return {QStringLiteral("log"), QStringLiteral("logs"), QStringLiteral("nav_logs")};
+        if (key == QStringLiteral("settings")) return {QStringLiteral("settings"), QStringLiteral("nav_settings"), QStringLiteral("action_settings")};
+        return {key};
+    };
+    auto tryLoadIcon = [&iconDirs, &iconKeysForMenu](const QString &key) -> QIcon {
+        auto buildTintedIcon = [](const QString &path) -> QIcon {
+            const QIcon baseIcon(path);
+            if (baseIcon.isNull()) {
+                return QIcon();
+            }
+
+            auto tintPixmap = [&baseIcon](const QColor &color, QIcon::State state) -> QPixmap {
+                const QSize size(20, 20);
+                QPixmap src = baseIcon.pixmap(size, QIcon::Normal, state);
+                if (src.isNull()) {
+                    src = baseIcon.pixmap(size);
+                }
+                QImage img(src.size(), QImage::Format_ARGB32_Premultiplied);
+                img.fill(Qt::transparent);
+                QPainter painter(&img);
+                painter.drawPixmap(0, 0, src);
+                painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+                painter.fillRect(img.rect(), color);
+                painter.end();
+                return QPixmap::fromImage(img);
+            };
+
+            QIcon out;
+            out.addPixmap(tintPixmap(QColor(QStringLiteral("#ecf6fb")), QIcon::Off), QIcon::Normal, QIcon::Off);
+            out.addPixmap(tintPixmap(QColor(QStringLiteral("#ffffff")), QIcon::Off), QIcon::Active, QIcon::Off);
+            out.addPixmap(tintPixmap(QColor(QStringLiteral("#0b2a3a")), QIcon::On), QIcon::Normal, QIcon::On);
+            out.addPixmap(tintPixmap(QColor(QStringLiteral("#0b2a3a")), QIcon::On), QIcon::Active, QIcon::On);
+            return out;
+        };
+
+        const QStringList candidates = iconKeysForMenu(key);
+        const QStringList exts = {QStringLiteral(".png"), QStringLiteral(".svg"), QStringLiteral(".ico")};
+        for (const QString &dir : iconDirs) {
+            for (const QString &candidate : candidates) {
+                for (const QString &ext : exts) {
+                    const QString path = dir + QStringLiteral("/") + candidate + ext;
+                    if (QFileInfo::exists(path)) {
+                        return buildTintedIcon(path);
+                    }
+                }
+            }
+        }
+        return QIcon();
+    };
+
+    for (int i = 0; i < menuItems.size(); ++i) {
+        QPushButton *btn = new QPushButton(menuItems[i].text, sidebar_);
         btn->setCheckable(true);
-        btn->setFixedHeight(48);
+        btn->setFixedHeight(40);
         btn->setMinimumWidth(70);
         btn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         btn->setCursor(Qt::PointingHandCursor);
+        const QIcon icon = tryLoadIcon(menuItems[i].iconKey);
+        if (!icon.isNull()) {
+            btn->setIcon(icon);
+            btn->setIconSize(QSize(20, 20));
+        }
 
         menuButtonGroup_->addButton(btn, i);
         menuButtons_.append(btn);
+        menuButtonToPageIndex_.append(menuItems[i].pageIndex);
         sidebarLayout_->addWidget(btn, 1);
     }
 
     connect(menuButtonGroup_, QOverload<QAbstractButton*>::of(&QButtonGroup::buttonClicked),
             this, [this](QAbstractButton *button) {
-        int index = menuButtonGroup_->id(button);
-        if (index >= 0) {
-            onMenuButtonClicked(index);
+        const int buttonIndex = menuButtonGroup_->id(button);
+        if (buttonIndex >= 0 && buttonIndex < menuButtonToPageIndex_.size()) {
+            onMenuButtonClicked(menuButtonToPageIndex_[buttonIndex]);
         }
     });
 
@@ -673,7 +803,7 @@ void MainWindow::createContentArea()
         lastAlertMessage_ = message;
         updateAlertLabel(
             QStringLiteral("[警] %1").arg(message),
-            QStringLiteral("color: #2f3a40; padding: 6px 12px; font-weight: 700; background: #f0c75e; border-radius: 14px;"),
+            QStringLiteral("color: #2f3a40; padding: 5px 10px; font-weight: 700; background: #ffd166; border-radius: 12px;"),
             QStringLiteral("WARN"),
             true);
     });
@@ -714,6 +844,16 @@ void MainWindow::createContentArea()
     QScroller::grabGesture(debugScrollArea->viewport(), QScroller::LeftMouseButtonGesture);
     connect(debugWidget_, &DebugWidget::logMessage, this, &MainWindow::onLogMessage);
     contentStack_->addWidget(debugScrollArea);
+
+    // 创建种植建议页面
+    QScrollArea *adviceScrollArea = new QScrollArea(this);
+    adviceScrollArea->setWidgetResizable(true);
+    adviceScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    adviceScrollArea->setFrameShape(QFrame::NoFrame);
+    plantingAdviceWidget_ = new PlantingAdviceWidget(this);
+    adviceScrollArea->setWidget(plantingAdviceWidget_);
+    QScroller::grabGesture(adviceScrollArea->viewport(), QScroller::LeftMouseButtonGesture);
+    contentStack_->addWidget(adviceScrollArea);
 
     // 初始化自动息屏
     QSettings settings;
@@ -764,12 +904,15 @@ void MainWindow::switchToPage(int index)
     if (index == 9 && debugWidget_ && rpcClient_->isConnected()) {
         debugWidget_->refreshAll();
     }
+    if (index == 10 && plantingAdviceWidget_) {
+        plantingAdviceWidget_->refreshSuggestion();
+    }
 }
 
 void MainWindow::updateMenuSelection(int activeIndex)
 {
-    if (activeIndex >= 0 && activeIndex < menuButtons_.size()) {
-        menuButtons_[activeIndex]->setChecked(true);
+    for (int i = 0; i < menuButtons_.size() && i < menuButtonToPageIndex_.size(); ++i) {
+        menuButtons_[i]->setChecked(menuButtonToPageIndex_[i] == activeIndex);
     }
 }
 
@@ -802,18 +945,18 @@ void MainWindow::updateStatusBarConnection(bool connected)
     if (connected) {
         connectionStatusLabel_->setText(QStringLiteral("[OK] 已连接"));
         connectionStatusLabel_->setStyleSheet(QStringLiteral(
-            "color: #ecf8ef; font-weight: 700; padding: 6px 12px; "
-            "background: #2e7d32; border-radius: 14px;"));
+            "color: #e6fff0; font-weight: 700; padding: 5px 10px; "
+            "background: rgba(24, 124, 84, 235); border-radius: 12px;"));
         updateAlertLabel(
             QStringLiteral("[OK] 系统运行正常"),
-            QStringLiteral("color: #e8edf0; padding: 6px 12px; background: #3f4f58; border-radius: 14px;"),
+            QStringLiteral("color: #e8edf0; padding: 5px 10px; background: rgba(24, 62, 80, 210); border-radius: 12px;"),
             QStringLiteral("INFO"),
             true);
     } else {
         connectionStatusLabel_->setText(QStringLiteral("[X] 未连接"));
         connectionStatusLabel_->setStyleSheet(QStringLiteral(
-            "color: #fbe9e7; font-weight: 700; padding: 6px 12px; "
-            "background: #b6423a; border-radius: 14px;"));
+            "color: #fff6f4; font-weight: 700; padding: 5px 10px; "
+            "background: rgba(176, 52, 41, 235); border-radius: 12px;"));
     }
 }
 
@@ -857,19 +1000,19 @@ void MainWindow::onLogMessage(const QString &message, const QString &level)
     if (level == QStringLiteral("ERROR")) {
         updateAlertLabel(
             QStringLiteral("[X] %1").arg(message),
-            QStringLiteral("color: #fbe9e7; padding: 6px 12px; font-weight: 700; background: #b6423a; border-radius: 14px;"),
+            QStringLiteral("color: #fff6f4; padding: 5px 10px; font-weight: 700; background: rgba(176, 52, 41, 235); border-radius: 12px;"),
             QStringLiteral("ERROR"),
             true);
     } else if (level == QStringLiteral("WARN")) {
         updateAlertLabel(
             QStringLiteral("[警] %1").arg(message),
-            QStringLiteral("color: #2f3a40; padding: 6px 12px; font-weight: 700; background: #f0c75e; border-radius: 14px;"),
+            QStringLiteral("color: #2f3a40; padding: 5px 10px; font-weight: 700; background: #ffd166; border-radius: 12px;"),
             QStringLiteral("WARN"),
             true);
     } else if (level == QStringLiteral("INFO")) {
         updateAlertLabel(
             QStringLiteral("[OK] %1").arg(message),
-            QStringLiteral("color: #e8edf0; padding: 6px 12px; background: #3f4f58; border-radius: 14px;"),
+            QStringLiteral("color: #e8edf0; padding: 5px 10px; background: rgba(24, 62, 80, 210); border-radius: 12px;"),
             QStringLiteral("INFO"),
             true);
     }
@@ -878,7 +1021,26 @@ void MainWindow::onLogMessage(const QString &message, const QString &level)
 void MainWindow::resizeEvent(QResizeEvent *event)
 {
     QMainWindow::resizeEvent(event);
+    updateBackgroundImageCache();
     layoutToast();
+}
+
+void MainWindow::updateBackgroundImageCache()
+{
+    if (!backgroundImageLabel_ || !centralWidget()) {
+        return;
+    }
+    backgroundImageLabel_->setGeometry(centralWidget()->rect());
+    if (!useBackgroundImage_ || backgroundImageSource_.isNull()) {
+        return;
+    }
+    const QSize targetSize = backgroundImageLabel_->size();
+    if (!targetSize.isValid() || targetSize == backgroundImageScaledSize_) {
+        return;
+    }
+    backgroundImageScaledSize_ = targetSize;
+    backgroundImageLabel_->setPixmap(
+        backgroundImageSource_.scaled(targetSize, Qt::KeepAspectRatioByExpanding, Qt::FastTransformation));
 }
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
@@ -958,8 +1120,8 @@ void MainWindow::updateCloudStatus()
     if (!rpcClient_->isConnected()) {
         cloudStatusLabel_->setText(QStringLiteral("[云] 未连接"));
         cloudStatusLabel_->setStyleSheet(QStringLiteral(
-            "color: #e8edf0; padding: 6px 12px; "
-            "background: #566872; border-radius: 14px;"));
+            "color: #e7f5ff; padding: 5px 10px; "
+            "background: rgba(25, 74, 95, 220); border-radius: 12px;"));
         return;
     }
 
@@ -971,7 +1133,7 @@ void MainWindow::updateCloudStatus()
     }
     lastCallTime = now;
 
-    rpcClient_->callAsync(QStringLiteral("mqtt.channels.list"), QJsonObject(),
+    rpcClient_->callAsync(QStringLiteral("mqtt.channels.list"), QJsonObject(), this,
         [this](const QJsonValue &result, const QJsonObject &error) {
             QMetaObject::invokeMethod(this, [result, error, this]() {
                 if (!cloudStatusLabel_) return;
@@ -979,8 +1141,8 @@ void MainWindow::updateCloudStatus()
                 if (!error.isEmpty() || !result.isObject()) {
                     cloudStatusLabel_->setText(QStringLiteral("[云] 未知"));
                     cloudStatusLabel_->setStyleSheet(QStringLiteral(
-                        "color: #e8edf0; padding: 6px 12px; "
-                        "background: #566872; border-radius: 14px;"));
+                        "color: #e7f5ff; padding: 5px 10px; "
+                        "background: rgba(25, 74, 95, 220); border-radius: 12px;"));
                     return;
                 }
 
@@ -989,8 +1151,8 @@ void MainWindow::updateCloudStatus()
                 if (!resultObj.value(QStringLiteral("ok")).toBool()) {
                     cloudStatusLabel_->setText(QStringLiteral("[云] 未知"));
                     cloudStatusLabel_->setStyleSheet(QStringLiteral(
-                        "color: #e8edf0; padding: 6px 12px; "
-                        "background: #566872; border-radius: 14px;"));
+                        "color: #e7f5ff; padding: 5px 10px; "
+                        "background: rgba(25, 74, 95, 220); border-radius: 12px;"));
                     return;
                 }
 
@@ -1010,16 +1172,16 @@ void MainWindow::updateCloudStatus()
                 QString style;
                 if (totalChannels == 0) {
                     text = QStringLiteral("[云] 未配置");
-                    style = QStringLiteral("color: #e8edf0; padding: 6px 12px; background: #566872; border-radius: 14px;");
+                    style = QStringLiteral("color: #e7f5ff; padding: 5px 10px; background: rgba(25, 74, 95, 220); border-radius: 12px;");
                 } else if (connectedChannels == 0) {
                     text = QStringLiteral("[云] 断开 (0/%1)").arg(totalChannels);
-                    style = QStringLiteral("color: #fbe9e7; padding: 6px 12px; font-weight: 700; background: #b6423a; border-radius: 14px;");
+                    style = QStringLiteral("color: #fff6f4; padding: 5px 10px; font-weight: 700; background: rgba(176, 52, 41, 235); border-radius: 12px;");
                 } else if (connectedChannels == totalChannels) {
                     text = QStringLiteral("[云] 已连接 (%1)").arg(totalChannels);
-                    style = QStringLiteral("color: #ecf8ef; padding: 6px 12px; font-weight: 700; background: #2e7d32; border-radius: 14px;");
+                    style = QStringLiteral("color: #e6fff0; padding: 5px 10px; font-weight: 700; background: rgba(24, 124, 84, 235); border-radius: 12px;");
                 } else {
                     text = QStringLiteral("[云] 部分连接 (%1/%2)").arg(connectedChannels).arg(totalChannels);
-                    style = QStringLiteral("color: #2f3a40; padding: 6px 12px; font-weight: 700; background: #f0c75e; border-radius: 14px;");
+                    style = QStringLiteral("color: #2f3a40; padding: 5px 10px; font-weight: 700; background: #ffd166; border-radius: 12px;");
                 }
 
                 cloudStatusLabel_->setText(text);
@@ -1034,16 +1196,16 @@ void MainWindow::onMqttStatusFromDashboard(int connected, int total)
     QString style;
     if (total == 0) {
         text = QStringLiteral("[云] 未配置");
-        style = QStringLiteral("color: #e8edf0; padding: 6px 12px; background: #566872; border-radius: 14px;");
+        style = QStringLiteral("color: #e7f5ff; padding: 5px 10px; background: rgba(25, 74, 95, 220); border-radius: 12px;");
     } else if (connected == 0) {
         text = QStringLiteral("[云] 断开 (0/%1)").arg(total);
-        style = QStringLiteral("color: #fbe9e7; padding: 6px 12px; font-weight: 700; background: #b6423a; border-radius: 14px;");
+        style = QStringLiteral("color: #fff6f4; padding: 5px 10px; font-weight: 700; background: rgba(176, 52, 41, 235); border-radius: 12px;");
     } else if (connected == total) {
         text = QStringLiteral("[云] 已连接 (%1)").arg(total);
-        style = QStringLiteral("color: #ecf8ef; padding: 6px 12px; font-weight: 700; background: #2e7d32; border-radius: 14px;");
+        style = QStringLiteral("color: #e6fff0; padding: 5px 10px; font-weight: 700; background: rgba(24, 124, 84, 235); border-radius: 12px;");
     } else {
         text = QStringLiteral("[云] 部分连接 (%1/%2)").arg(connected).arg(total);
-        style = QStringLiteral("color: #2f3a40; padding: 6px 12px; font-weight: 700; background: #f0c75e; border-radius: 14px;");
+        style = QStringLiteral("color: #2f3a40; padding: 5px 10px; font-weight: 700; background: #ffd166; border-radius: 12px;");
     }
     cloudStatusLabel_->setText(text);
     cloudStatusLabel_->setStyleSheet(style);

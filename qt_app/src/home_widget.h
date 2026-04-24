@@ -11,6 +11,7 @@
 #include <QPushButton>
 #include <QTimer>
 #include <QGridLayout>
+#include <QDateTime>
 #include <memory>
 
 class RpcClient;
@@ -78,6 +79,9 @@ private:
                             int mqttTotal, bool mqttValid, const QString &uptime);
 
     RpcClient *rpcClient_;
+    bool lowPerformanceMode_ = true;
+    bool statsRefreshInFlight_ = false;
+    qint64 lastRefreshRequestMs_ = 0;
     // 注意：自动刷新由MainWindow统一管理，不再需要独立的定时器
 
     // 统计信息标签
@@ -102,10 +106,6 @@ private:
     QLabel *co2ValueLabel_;
     QLabel *lightValueLabel_;
     QLabel *soilValueLabel_;
-    QLabel *coolingFlowLabel_;
-    QLabel *ventFlowLabel_;
-    QLabel *irrigationFlowLabel_;
-    QLabel *protectFlowLabel_;
 
     // 快捷操作按钮
     QPushButton *refreshButton_;

@@ -2,6 +2,7 @@
 <RCC version="1.0">
     <qresource prefix="/">
         <file>images/greenhouse_page.png</file>
+        <file>images/bg1.png</file>
         <file>styles/style.qss</file>
     </qresource>
 </RCC>

@@ -197,7 +197,7 @@ void RelayControlWidget::onQueryClicked()
     params[QStringLiteral("ch")] = channel;
 
     // 使用异步调用避免阻塞UI线程
-    rpcClient_->callAsync(QStringLiteral("relay.status"), params,
+    rpcClient_->callAsync(QStringLiteral("relay.status"), params, this,
         [this, node, channel](const QJsonValue &result, const QJsonObject &error) {
             QMetaObject::invokeMethod(this, [this, node, channel, result, error]() {
                 if (!error.isEmpty()) {
@@ -227,7 +227,7 @@ void RelayControlWidget::onQueryAllClicked()
     params[QStringLiteral("node")] = node;
 
     // 使用异步调用避免阻塞UI线程
-    rpcClient_->callAsync(QStringLiteral("relay.statusAll"), params,
+    rpcClient_->callAsync(QStringLiteral("relay.statusAll"), params, this,
         [this, node](const QJsonValue &result, const QJsonObject &error) {
             QMetaObject::invokeMethod(this, [this, node, result, error]() {
                 if (!error.isEmpty()) {
@@ -295,7 +295,7 @@ void RelayControlWidget::controlRelay(int node, int channel, const QString &acti
     params[QStringLiteral("action")] = action;
 
     // 使用异步调用避免阻塞UI线程
-    rpcClient_->callAsync(QStringLiteral("relay.control"), params,
+    rpcClient_->callAsync(QStringLiteral("relay.control"), params, this,
         [this, node, channel, action](const QJsonValue &result, const QJsonObject &error) {
             QMetaObject::invokeMethod(this, [this, node, channel, action, result, error]() {
                 if (!error.isEmpty()) {

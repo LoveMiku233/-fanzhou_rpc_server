@@ -496,7 +496,7 @@ void SensorWidget::refreshSensorList()
     qDebug() << "[SENSOR_WIDGET] 正在请求传感器列表...";
     
     // 使用异步调用避免阻塞UI线程
-    rpcClient_->callAsync(QStringLiteral("sensor.list"), QJsonObject(),
+    rpcClient_->callAsync(QStringLiteral("sensor.list"), QJsonObject(), this,
         [this](const QJsonValue &result, const QJsonObject &error) {
             QMetaObject::invokeMethod(this, [this, result, error]() {
                 qDebug() << "[SENSOR_WIDGET] 收到sensor.list响应";
@@ -596,7 +596,7 @@ void SensorWidget::fetchSensorData(int nodeId)
     }
     
     // 使用异步调用避免阻塞UI线程
-    rpcClient_->callAsync(QStringLiteral("sensor.read"), params,
+    rpcClient_->callAsync(QStringLiteral("sensor.read"), params, this,
         [this, nodeId](const QJsonValue &result, const QJsonObject &error) {
             QMetaObject::invokeMethod(this, [this, nodeId, result, error]() {
                 if (!error.isEmpty() || !result.isObject()) {

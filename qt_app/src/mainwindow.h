@@ -19,6 +19,7 @@
 #include <QElapsedTimer>
 #include <QDateTime>
 #include <QButtonGroup>
+#include <QPixmap>
 
 class RpcClient;
 class HomeWidget;
@@ -31,6 +32,7 @@ class SettingsWidget;
 class MonitorWidget;
 class DebugWidget;
 class Greenhouse3DWidget;
+class PlantingAdviceWidget;
 class ScreenManager;
 class QResizeEvent;
 class QWidget;
@@ -96,6 +98,7 @@ private:
     void drainToastQueue();
     void relayoutToasts(bool animated = true);
     QRect toastRectForIndex(int index) const;
+    void updateBackgroundImageCache();
 
     QWidget *topStatusBar_;
     QHBoxLayout *topStatusLayout_;
@@ -105,7 +108,9 @@ private:
     QHBoxLayout *sidebarLayout_;
     QButtonGroup *menuButtonGroup_;
     QList<QPushButton*> menuButtons_;
+    QList<int> menuButtonToPageIndex_;
     QStackedWidget *contentStack_;
+    QLabel *backgroundImageLabel_;
 
     // 状态栏组件
     QLabel *connectionStatusLabel_;
@@ -143,6 +148,10 @@ private:
     QList<ToastRequest> pendingToasts_;
     QTimer *toastProgressTimer_;
     int toastSequence_;
+    bool lowPerformanceMode_ = true;
+    bool useBackgroundImage_ = false;
+    QPixmap backgroundImageSource_;
+    QSize backgroundImageScaledSize_;
 
     // 子页面
     HomeWidget *homeWidget_;
@@ -155,6 +164,7 @@ private:
     SettingsWidget *settingsWidget_;
     MonitorWidget *monitorWidget_;
     DebugWidget *debugWidget_;
+    PlantingAdviceWidget *plantingAdviceWidget_;
 
     // RPC客户端
     RpcClient *rpcClient_;

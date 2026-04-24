@@ -22,6 +22,8 @@
 #include <QGraphicsDropShadowEffect>
 #include <QPainter>
 #include <QScrollArea>
+#include <QSettings>
+#include <QtMath>
 
 using namespace UIConstants;
 
@@ -49,20 +51,18 @@ HomeWidget::HomeWidget(RpcClient *rpcClient, QWidget *parent)
     , co2ValueLabel_(nullptr)
     , lightValueLabel_(nullptr)
     , soilValueLabel_(nullptr)
-    , coolingFlowLabel_(nullptr)
-    , ventFlowLabel_(nullptr)
-    , irrigationFlowLabel_(nullptr)
-    , protectFlowLabel_(nullptr)
     , refreshButton_(nullptr)
     , stopAllButton_(nullptr)
     , emergencyStopButton_(nullptr)
 {
+    QSettings settings;
+    lowPerformanceMode_ = settings.value(QStringLiteral("ui/lowPerformanceMode"), true).toBool();
     setupUi();
 
     // 注意：自动刷新由MainWindow统一管理，HomeWidget不再有独立的刷新定时器
     // 这样避免了重复的RPC调用
 
-    qDebug() << "[HOME_WIDGET] 主页初始化完成";
+    qDebug() << "[HOME_WIDGET] 主页初始化完成 lowPerformanceMode=" << lowPerformanceMode_;
 }
 
 void HomeWidget::setupUi()
@@ -76,7 +76,11 @@ void HomeWidget::setupUi()
         "font-size: 20px; font-weight: 900; color: #17364a; padding: 0 2px;"));
     mainLayout->addWidget(titleLabel);
 
-    auto addShadow = [](QWidget *widget, const QColor &color = QColor(30, 50, 65, 32)) {
+    const bool useShadow = !lowPerformanceMode_;
+    auto addShadow = [useShadow](QWidget *widget, const QColor &color = QColor(30, 50, 65, 32)) {
+        if (!useShadow) {
+            return;
+        }
         auto *shadow = new QGraphicsDropShadowEffect(widget);
         shadow->setBlurRadius(18);
         shadow->setOffset(0, 5);
@@ -97,10 +101,10 @@ void HomeWidget::setupUi()
     QHBoxLayout *topLayout = new QHBoxLayout();
     topLayout->setSpacing(8);
 
-    connectionStatusLabel_ = createStatusPill(QStringLiteral("服务器"), QStringLiteral("未连接"), QStringLiteral("#fbe9e7"), QStringLiteral("#b6423a"));
-    modeLabel_ = createStatusPill(QStringLiteral("模式"), QStringLiteral("自动监控"), QStringLiteral("#e3f2fd"), QStringLiteral("#1565c0"));
-    alertSummaryLabel_ = createStatusPill(QStringLiteral("告警"), QStringLiteral("待同步"), QStringLiteral("#fff4d6"), QStringLiteral("#8a5a00"));
-    systemUptimeLabel_ = createStatusPill(QStringLiteral("运行"), QStringLiteral("--"), QStringLiteral("#edf7ed"), QStringLiteral("#2e7d32"));
+    connectionStatusLabel_ = createStatusPill(QStringLiteral("服务器"), QStringLiteral("未连接"), QStringLiteral("#c44337"), QStringLiteral("#fff5f2"));
+    modeLabel_ = createStatusPill(QStringLiteral("模式"), QStringLiteral("手动值守"), QStringLiteral("#1e688e"), QStringLiteral("#eaf7ff"));
+    alertSummaryLabel_ = createStatusPill(QStringLiteral("告警"), QStringLiteral("待同步"), QStringLiteral("#ffc15e"), QStringLiteral("#4a2f00"));
+    systemUptimeLabel_ = createStatusPill(QStringLiteral("运行"), QStringLiteral("--"), QStringLiteral("#3d9760"), QStringLiteral("#f4fff7"));
 
     topLayout->addWidget(connectionStatusLabel_, 2);
     topLayout->addWidget(modeLabel_, 1);
@@ -112,7 +116,7 @@ void HomeWidget::setupUi()
         QFrame *card = new QFrame(this);
         card->setObjectName(objectName);
         card->setStyleSheet(QStringLiteral(
-            "#%1 { %2 border-radius: 12px; border: 1px solid rgba(54, 82, 98, 0.18); }")
+            "#%1 { %2 border-radius: 12px; border: 1px solid #b8cfdd; }")
             .arg(objectName, style));
         addShadow(card);
         return card;
@@ -151,7 +155,7 @@ void HomeWidget::setupUi()
     middleLayout->setSpacing(10);
 
     QFrame *envPanel = createCard(QStringLiteral("envPanel"),
-        QStringLiteral("background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #f9fcff,stop:1 #edf6f1);"));
+        QStringLiteral("background: #f5f9fc; border: 1px solid #bfd7e5;"));
     QVBoxLayout *envLayout = new QVBoxLayout(envPanel);
     envLayout->setContentsMargins(10, 10, 10, 10);
     envLayout->setSpacing(8);
@@ -180,35 +184,31 @@ void HomeWidget::setupUi()
     middleLayout->addWidget(envPanel, 3);
 
     QFrame *flowPanel = createCard(QStringLiteral("flowPanel"),
-        QStringLiteral("background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #ffffff,stop:1 #eef8ff);"));
+        QStringLiteral("background: #f7fbff; border: 1px solid #bfd7e5;"));
     QVBoxLayout *flowLayout = new QVBoxLayout(flowPanel);
     flowLayout->setContentsMargins(10, 10, 10, 10);
     flowLayout->setSpacing(7);
-    QLabel *flowTitle = new QLabel(QStringLiteral("当前流程判断"), flowPanel);
+    QLabel *flowTitle = new QLabel(QStringLiteral("值守建议"), flowPanel);
     flowTitle->setStyleSheet(QStringLiteral("font-size: 14px; font-weight: 900; color: #17364a;"));
     flowLayout->addWidget(flowTitle);
 
-    auto createFlowLabel = [](const QString &title, const QString &color) -> QLabel* {
-        QLabel *label = new QLabel(QStringLiteral("%1：等待传感器和策略数据").arg(title));
+    auto createFlowLabel = [](const QString &text, const QString &color) -> QLabel* {
+        QLabel *label = new QLabel(text);
         label->setWordWrap(true);
         label->setMinimumHeight(44);
         label->setStyleSheet(QStringLiteral(
-            "QLabel { background: %1; color: #20343d; border-radius: 8px; "
+            "QLabel { background: %1; color: #17364a; border-radius: 8px; "
             "padding: 7px 9px; font-size: 12px; font-weight: 700; }").arg(color));
         return label;
     };
-    coolingFlowLabel_ = createFlowLabel(QStringLiteral("降温"), QStringLiteral("#dff4ff"));
-    ventFlowLabel_ = createFlowLabel(QStringLiteral("通风"), QStringLiteral("#e2f7e8"));
-    irrigationFlowLabel_ = createFlowLabel(QStringLiteral("灌溉"), QStringLiteral("#fff0cf"));
-    protectFlowLabel_ = createFlowLabel(QStringLiteral("保护"), QStringLiteral("#ffe4e0"));
-    flowLayout->addWidget(coolingFlowLabel_);
-    flowLayout->addWidget(ventFlowLabel_);
-    flowLayout->addWidget(irrigationFlowLabel_);
-    flowLayout->addWidget(protectFlowLabel_);
+    flowLayout->addWidget(createFlowLabel(QStringLiteral("默认模式：手动值守。策略配置仍保留，不会因首页模式文案而被清除。"), QStringLiteral("#dff4ff")));
+    flowLayout->addWidget(createFlowLabel(QStringLiteral("大棚一键动作建议从“大棚”页执行，减少误操作。"), QStringLiteral("#e2f7e8")));
+    flowLayout->addWidget(createFlowLabel(QStringLiteral("新增“建议”页可按作物给出固定种植建议，并预留 GPT 分析入口。"), QStringLiteral("#fff0cf")));
+    flowLayout->addWidget(createFlowLabel(QStringLiteral("遇到通讯异常请先检查 CAN/MQTT，再执行控制动作。"), QStringLiteral("#ffe4e0")));
     middleLayout->addWidget(flowPanel, 3);
 
     QFrame *opsPanel = createCard(QStringLiteral("opsPanel"),
-        QStringLiteral("background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #ffffff,stop:1 #f5f7fb);"));
+        QStringLiteral("background: #f7fbff; border: 1px solid #bfd7e5;"));
     QVBoxLayout *opsLayout = new QVBoxLayout(opsPanel);
     opsLayout->setContentsMargins(10, 10, 10, 10);
     opsLayout->setSpacing(8);
@@ -360,9 +360,7 @@ void HomeWidget::updateDutyOverview(int totalDevices, int onlineDevices, int off
                                     int mqttTotal, bool mqttValid, const QString &uptime)
 {
     if (modeLabel_) {
-        modeLabel_->setText(totalStrategies > 0
-            ? QStringLiteral("模式  自动监控")
-            : QStringLiteral("模式  手动值守"));
+        modeLabel_->setText(QStringLiteral("模式  手动值守"));
     }
 
     if (systemUptimeLabel_) {
@@ -378,64 +376,54 @@ void HomeWidget::updateDutyOverview(int totalDevices, int onlineDevices, int off
             alertSummaryLabel_->setText(QStringLiteral("告警  %1项待处理")
                 .arg((offlineDevices > 0 ? 1 : 0) + (mqttBad ? 1 : 0) + (canBad ? 1 : 0)));
             alertSummaryLabel_->setStyleSheet(QStringLiteral(
-                "QLabel { background: #fff4d6; color: #8a5a00; border-radius: 8px; "
+                "QLabel { background: #ffc15e; color: #4a2f00; border-radius: 8px; "
                 "padding: 6px 10px; font-size: 13px; font-weight: 800; }"));
         } else {
             alertSummaryLabel_->setText(QStringLiteral("告警  正常"));
             alertSummaryLabel_->setStyleSheet(QStringLiteral(
-                "QLabel { background: #edf7ed; color: #2e7d32; border-radius: 8px; "
+                "QLabel { background: #3d9760; color: #f4fff7; border-radius: 8px; "
                 "padding: 6px 10px; font-size: 13px; font-weight: 800; }"));
         }
     }
 
     if (deviceSummaryLabel_) {
-        deviceSummaryLabel_->setText(QStringLiteral("设备：在线 %1/%2，离线 %3；分组 %4 个。关键动作请优先从流程页确认绑定。")
+        deviceSummaryLabel_->setText(QStringLiteral("设备：在线 %1/%2，离线 %3；分组 %4 个。关键动作请在大棚控制页确认绑定关系后执行。")
             .arg(onlineDevices).arg(totalDevices).arg(offlineDevices).arg(totalGroups));
     }
     if (workflowSummaryLabel_) {
-        workflowSummaryLabel_->setText(QStringLiteral("策略：已配置 %1 个；常用流程页负责手动启动和分组联动。")
+        workflowSummaryLabel_->setText(QStringLiteral("策略：已配置 %1 个；默认手动值守，不影响策略配置与启停。")
             .arg(totalStrategies));
     }
     if (sensorTrustLabel_) {
         sensorTrustLabel_->setText(totalSensors > 0
             ? QStringLiteral("传感器可信度：%1 个传感器已登记，需查看更新时间和异常值后再让策略长期自动运行。").arg(totalSensors)
-            : QStringLiteral("传感器可信度：未发现传感器，自动流程只能作为手动流程使用。"));
+            : QStringLiteral("传感器可信度：未发现传感器，建议保持手动值守并按固定策略执行。"));
     }
 
-    if (tempValueLabel_) tempValueLabel_->setText(QStringLiteral("--"));
-    if (humidityValueLabel_) humidityValueLabel_->setText(QStringLiteral("--"));
-    if (co2ValueLabel_) co2ValueLabel_->setText(QStringLiteral("--"));
-    if (lightValueLabel_) lightValueLabel_->setText(QStringLiteral("--"));
-    if (soilValueLabel_) soilValueLabel_->setText(QStringLiteral("--"));
-
-    if (coolingFlowLabel_) {
-        coolingFlowLabel_->setText(QStringLiteral("降温：等待温度值；触发建议 温度高于上限 -> 顶卷/端卷/风机/湿帘联动。"));
-    }
-    if (ventFlowLabel_) {
-        ventFlowLabel_->setText(QStringLiteral("通风：等待湿度/CO2值；触发建议 湿度或CO2偏高 -> 卷膜+风机换气。"));
-    }
-    if (irrigationFlowLabel_) {
-        irrigationFlowLabel_->setText(QStringLiteral("灌溉：等待基质水分值；触发建议 水分低于下限 -> 水泵/阀组启动。"));
-    }
-    if (protectFlowLabel_) {
-        protectFlowLabel_->setText(canBad
-            ? QStringLiteral("保护：CAN 未打开，禁止依赖自动动作，请先检查通讯。")
-            : QStringLiteral("保护：大风/雨天/缺水等联锁需要接入后显示，当前仅显示通讯保护。"));
-    }
 }
 
 void HomeWidget::refreshData()
 {
-    qDebug() << "[HOME_WIDGET] 刷新数据";
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (statsRefreshInFlight_) {
+        // 避免低性能终端上异步请求堆积
+        if (now - lastRefreshRequestMs_ < 4000) {
+            return;
+        }
+    }
+    lastRefreshRequestMs_ = now;
     updateStats();
 }
 
 void HomeWidget::updateStats()
 {
+    statsRefreshInFlight_ = true;
+
     if (!rpcClient_ || !rpcClient_->isConnected()) {
+        statsRefreshInFlight_ = false;
         connectionStatusLabel_->setText(QStringLiteral("未连接"));
         connectionStatusLabel_->setStyleSheet(QStringLiteral(
-            "QLabel { background: #fbe9e7; color: #b6423a; border-radius: 8px; "
+            "QLabel { background: #c44337; color: #fff5f2; border-radius: 8px; "
             "padding: 6px 10px; font-size: 13px; font-weight: 800; }"));
         totalDevicesLabel_->setText(QStringLiteral("--"));
         onlineDevicesLabel_->setText(QStringLiteral("--"));
@@ -453,16 +441,18 @@ void HomeWidget::updateStats()
     connectionStatusLabel_->setText(QStringLiteral("已连接 %1:%2")
         .arg(rpcClient_->host()).arg(rpcClient_->port()));
     connectionStatusLabel_->setStyleSheet(QStringLiteral(
-        "QLabel { background: #edf7ed; color: #2e7d32; border-radius: 8px; "
+        "QLabel { background: #3d9760; color: #f4fff7; border-radius: 8px; "
         "padding: 6px 10px; font-size: 13px; font-weight: 800; }"));
 
     // 使用异步调用避免阻塞UI线程
-    rpcClient_->callAsync(QStringLiteral("sys.dashboard"), QJsonObject(),
+    rpcClient_->callAsync(QStringLiteral("sys.dashboard"), QJsonObject(), this,
         [this](const QJsonValue &result, const QJsonObject &error) {
             QMetaObject::invokeMethod(this, [this, result, error]() {
                 if (!error.isEmpty() || !result.isObject()) {
                     // 异步调用失败，尝试兼容模式
-                    qDebug() << "[HOME_WIDGET] sys.dashboard异步调用失败，使用兼容模式";
+                    if (!lowPerformanceMode_) {
+                        qDebug() << "[HOME_WIDGET] sys.dashboard异步调用失败，使用兼容模式";
+                    }
                     updateStatsLegacy();
                     return;
                 }
@@ -470,7 +460,9 @@ void HomeWidget::updateStats()
                 QJsonObject obj = result.toObject();
 
                 if (!obj.value(QStringLiteral("ok")).toBool()) {
-                    qDebug() << "[HOME_WIDGET] Dashboard调用返回失败";
+                    if (!lowPerformanceMode_) {
+                        qDebug() << "[HOME_WIDGET] Dashboard调用返回失败";
+                    }
                     updateStatsLegacy();
                     return;
                 }
@@ -527,8 +519,11 @@ void HomeWidget::updateStats()
                 updateDutyOverview(totalDevices, onlineDevices, offlineDevices,
                                    totalGroups, totalStrategies, totalSensors,
                                    canOpened, true, mqttConnected, mqttTotal, true, uptime);
-
-                qDebug() << "[HOME_WIDGET] Dashboard数据更新成功（异步RPC）";
+                refreshSensorOverview();
+                statsRefreshInFlight_ = false;
+                if (!lowPerformanceMode_) {
+                    qDebug() << "[HOME_WIDGET] Dashboard数据更新成功（异步RPC）";
+                }
             }, Qt::QueuedConnection);
         }, 3000);
 
@@ -536,20 +531,24 @@ void HomeWidget::updateStats()
     lastUpdateLabel_->setText(QStringLiteral("最后更新: %1")
         .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"))));
 
-    qDebug() << "[HOME_WIDGET] 统计数据更新请求已发送";
+    if (!lowPerformanceMode_) {
+        qDebug() << "[HOME_WIDGET] 统计数据更新请求已发送";
+    }
 }
 
 void HomeWidget::updateStatsLegacy()
 {
     // 兼容旧版本服务器的多RPC调用方式
     // 使用异步调用避免阻塞UI线程
-    qDebug() << "[HOME_WIDGET] 使用兼容模式更新统计数据（异步）";
+    if (!lowPerformanceMode_) {
+        qDebug() << "[HOME_WIDGET] 使用兼容模式更新统计数据（异步）";
+    }
 
     // 使用共享指针跟踪请求状态
     auto statsData = std::make_shared<StatsData>();
 
     // 1. 获取设备列表
-    rpcClient_->callAsync(QStringLiteral("relay.nodes"), QJsonObject(),
+    rpcClient_->callAsync(QStringLiteral("relay.nodes"), QJsonObject(), this,
         [this, statsData](const QJsonValue &result, const QJsonObject &error) {
             if (error.isEmpty() && result.isObject()) {
                 QJsonObject obj = result.toObject();
@@ -570,7 +569,7 @@ void HomeWidget::updateStatsLegacy()
         }, 2000);
 
     // 2. 获取分组列表
-    rpcClient_->callAsync(QStringLiteral("group.list"), QJsonObject(),
+    rpcClient_->callAsync(QStringLiteral("group.list"), QJsonObject(), this,
         [this, statsData](const QJsonValue &result, const QJsonObject &error) {
             if (error.isEmpty() && result.isObject()) {
                 QJsonObject obj = result.toObject();
@@ -583,7 +582,7 @@ void HomeWidget::updateStatsLegacy()
         }, 2000);
 
     // 3. 获取策略列表
-    rpcClient_->callAsync(QStringLiteral("auto.strategy.list"), QJsonObject(),
+    rpcClient_->callAsync(QStringLiteral("auto.strategy.list"), QJsonObject(), this,
         [this, statsData](const QJsonValue &result, const QJsonObject &error) {
             if (error.isEmpty() && result.isObject()) {
                 QJsonObject obj = result.toObject();
@@ -596,7 +595,7 @@ void HomeWidget::updateStatsLegacy()
         }, 2000);
 
     // 4. 获取传感器列表
-    rpcClient_->callAsync(QStringLiteral("sensor.list"), QJsonObject(),
+    rpcClient_->callAsync(QStringLiteral("sensor.list"), QJsonObject(), this,
         [this, statsData](const QJsonValue &result, const QJsonObject &error) {
             if (error.isEmpty() && result.isObject()) {
                 QJsonObject obj = result.toObject();
@@ -609,7 +608,7 @@ void HomeWidget::updateStatsLegacy()
         }, 2000);
 
     // 5. 获取CAN状态
-    rpcClient_->callAsync(QStringLiteral("can.status"), QJsonObject(),
+    rpcClient_->callAsync(QStringLiteral("can.status"), QJsonObject(), this,
         [this, statsData](const QJsonValue &result, const QJsonObject &error) {
             if (error.isEmpty() && result.isObject()) {
                 QJsonObject obj = result.toObject();
@@ -621,7 +620,7 @@ void HomeWidget::updateStatsLegacy()
         }, 2000);
 
     // 6. 获取MQTT状态
-    rpcClient_->callAsync(QStringLiteral("mqtt.channels.list"), QJsonObject(),
+    rpcClient_->callAsync(QStringLiteral("mqtt.channels.list"), QJsonObject(), this,
         [this, statsData](const QJsonValue &result, const QJsonObject &error) {
             if (error.isEmpty() && result.isObject()) {
                 QJsonObject obj = result.toObject();
@@ -641,7 +640,7 @@ void HomeWidget::updateStatsLegacy()
         }, 2000);
 
     // 7. 获取系统信息
-    rpcClient_->callAsync(QStringLiteral("sys.info"), QJsonObject(),
+    rpcClient_->callAsync(QStringLiteral("sys.info"), QJsonObject(), this,
         [this, statsData](const QJsonValue &result, const QJsonObject &error) {
             if (error.isEmpty() && result.isObject()) {
                 QJsonObject obj = result.toObject();
@@ -714,7 +713,10 @@ void HomeWidget::checkAndUpdateStats(std::shared_ptr<StatsData> statsData)
                            statsData->canOpened, statsData->canValid,
                            statsData->mqttConnected, statsData->mqttTotal, statsData->mqttValid,
                            statsData->uptime);
-
-        qDebug() << "[HOME_WIDGET] 兼容模式统计数据更新完成";
+        refreshSensorOverview();
+        statsRefreshInFlight_ = false;
+        if (!lowPerformanceMode_) {
+            qDebug() << "[HOME_WIDGET] 兼容模式统计数据更新完成";
+        }
     }, Qt::QueuedConnection);
 }

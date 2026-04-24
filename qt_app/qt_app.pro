@@ -2,7 +2,7 @@
 # Qt5.12 GUI Client for greenhouse control system
 # Target: Ubuntu Desktop
 
-QT += core gui network widgets
+QT += core gui network widgets svg
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -35,6 +35,7 @@ SOURCES += \
     src/greenhouse_3d_widget.cpp \
     src/log_widget.cpp \
     src/settings_widget.cpp \
+    src/planting_advice_widget.cpp \
     src/relay_control_dialog.cpp \
     src/screen_manager.cpp \
     src/monitor_widget.cpp \
@@ -55,6 +56,7 @@ HEADERS += \
     src/greenhouse_3d_widget.h \
     src/log_widget.h \
     src/settings_widget.h \
+    src/planting_advice_widget.h \
     src/relay_control_dialog.h \
     src/style_constants.h \
     src/screen_manager.h \
