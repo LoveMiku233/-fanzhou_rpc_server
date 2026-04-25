@@ -13,6 +13,7 @@
 #include <QEasingCurve>
 #include <QHBoxLayout>
 #include <QGridLayout>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QLabel>
 #include <QPaintEvent>
