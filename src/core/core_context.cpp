@@ -954,6 +954,9 @@ bool controlMultiMergedByChannels(device::RelayGd427 *device,
         actions[ch] = action;
     }
     if (!hasChange) {
+        if (action == device::RelayProtocol::Action::Stop) {
+            return device->controlMulti(actions);
+        }
         return true;
     }
     return device->controlMulti(actions);
@@ -966,6 +969,7 @@ bool controlMultiMergedByActions(
     device::RelayProtocol::Action actions[4];
     fillActionsFromDeviceState(device, actions);
     bool hasChange = false;
+    bool allRequestedStop = true;
     for (auto it = channelActions.begin(); it != channelActions.end(); ++it) {
         if (it.key() > kMaxChannelId) {
             continue;
@@ -973,9 +977,15 @@ bool controlMultiMergedByActions(
         if (actions[it.key()] != it.value()) {
             hasChange = true;
         }
+        if (it.value() != device::RelayProtocol::Action::Stop) {
+            allRequestedStop = false;
+        }
         actions[it.key()] = it.value();
     }
     if (!hasChange) {
+        if (allRequestedStop) {
+            return device->controlMulti(actions);
+        }
         return true;
     }
     return device->controlMulti(actions);
@@ -1882,7 +1892,8 @@ ControlJobResult CoreContext::executeJob(const ControlJob &job)
     // 仅在目标状态发生变化时才真正下发控制命令，避免重复控制导致误动作。
     const auto current = dev->lastStatus(job.channel);
     const auto currentAction = actionFromStatusByte(current.statusByte);
-    if (currentAction == job.action) {
+    if (currentAction == job.action &&
+        job.action != device::RelayProtocol::Action::Stop) {
         result.ok = true;
         result.message = QStringLiteral("no_change");
         jobResults_.insert(job.id, result);

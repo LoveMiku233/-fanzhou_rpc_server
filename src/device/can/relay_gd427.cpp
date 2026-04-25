@@ -240,6 +240,12 @@ bool RelayGd427::controlMulti(const RelayProtocol::Action actions[4])
             }) && ok;
         }
         if (!hasChange) {
+            if (allStop) {
+                return sendTcpCommand(QJsonObject{
+                    {QStringLiteral("id"), static_cast<double>(QDateTime::currentMSecsSinceEpoch())},
+                    {QStringLiteral("cmd"), QStringLiteral("relay.stopall")}
+                });
+            }
             return true;
         }
         return ok;
