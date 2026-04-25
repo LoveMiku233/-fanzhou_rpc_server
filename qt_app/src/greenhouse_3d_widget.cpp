@@ -12,20 +12,17 @@
 #include <QDialog>
 #include <QEasingCurve>
 #include <QHBoxLayout>
-#include <QGraphicsDropShadowEffect>
 #include <QGridLayout>
-#include <QImage>
-#include <QJsonArray>
 #include <QJsonObject>
 #include <QLabel>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPixmap>
+#include <QPointer>
 #include <QPropertyAnimation>
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QSizePolicy>
-#include <QStringList>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -33,20 +30,59 @@
 
 namespace {
 
-bool groupNameMatchesRole(const QString &groupName, const QStringList &keywords)
+struct DeviceButtonDef {
+    const char *label;
+    const char *specialId;
+};
+
+const DeviceButtonDef kDeviceButtons[] = {
+    {"风机组A", "fan_a"},
+    {"风机组B", "fan_b"},
+    {"外遮阳", "outer_shade"},
+    {"内保温", "inner_insulation"},
+    {"湿帘水泵", "wet_pad"},
+};
+
+bool isBinarySpecialId(const QString &specialId)
 {
-    const QString lower = groupName.toLower();
-    for (const QString &kw : keywords) {
-        if (lower.contains(kw.toLower())) {
-            return true;
-        }
-    }
-    return false;
+    return specialId == QStringLiteral("fan_a") ||
+           specialId == QStringLiteral("fan_b") ||
+           specialId == QStringLiteral("wet_pad");
 }
 
-bool isFanDevice(const QString &deviceName)
+bool isFanLikeSpecialId(const QString &specialId)
 {
-    return deviceName.startsWith(QStringLiteral("风机"));
+    return specialId == QStringLiteral("fan_a") ||
+           specialId == QStringLiteral("fan_b");
+}
+
+QString defaultStatusForSpecialIdImpl(const QString &specialId)
+{
+    return isBinarySpecialId(specialId) ? QStringLiteral("关闭") : QStringLiteral("停止");
+}
+
+QString statusToAction(const QString &status)
+{
+    if (status == QStringLiteral("打开") ||
+        status == QStringLiteral("运行中") ||
+        status == QStringLiteral("放")) {
+        return QStringLiteral("fwd");
+    }
+    if (status == QStringLiteral("收")) {
+        return QStringLiteral("rev");
+    }
+    return QStringLiteral("stop");
+}
+
+QString actionToStatus(const QString &specialId, const QString &action)
+{
+    if (action == QStringLiteral("fwd")) {
+        return isBinarySpecialId(specialId) ? QStringLiteral("打开") : QStringLiteral("放");
+    }
+    if (action == QStringLiteral("rev")) {
+        return QStringLiteral("收");
+    }
+    return defaultStatusForSpecialIdImpl(specialId);
 }
 
 }  // namespace
@@ -72,6 +108,7 @@ Greenhouse3DWidget::Greenhouse3DWidget(RpcClient *rpcClient, QWidget *parent)
     connect(refreshTimer_, &QTimer::timeout, this, &Greenhouse3DWidget::onRefreshGroups);
     refreshTimer_->start(5000);
     QTimer::singleShot(200, this, &Greenhouse3DWidget::onRefreshGroups);
+    QTimer::singleShot(300, this, [this]() { loadSavedState(); });
 
     toastHideTimer_->setSingleShot(true);
     connect(toastHideTimer_, &QTimer::timeout, this, &Greenhouse3DWidget::hideToastAnimated);
@@ -80,30 +117,22 @@ Greenhouse3DWidget::Greenhouse3DWidget(RpcClient *rpcClient, QWidget *parent)
 void Greenhouse3DWidget::setupUi()
 {
     roleBindings_.clear();
-    auto addRole = [this](const QString &role, const QStringList &keywords) {
+    auto addRole = [this](const QString &specialId, const QString &title) {
         RoleBinding binding;
-        binding.role = role;
-        binding.keywords = keywords;
+        binding.specialId = specialId;
+        binding.title = title;
         roleBindings_.append(binding);
     };
-    addRole(QStringLiteral("fan"), QStringList{QStringLiteral("风机"), QStringLiteral("fan")});
-    addRole(QStringLiteral("top_roll"), QStringList{QStringLiteral("顶卷"), QStringLiteral("顶膜"), QStringLiteral("天窗")});
-    addRole(QStringLiteral("end_roll"), QStringList{QStringLiteral("端面"), QStringLiteral("端卷"), QStringLiteral("端膜")});
-    addRole(QStringLiteral("side_roll"), QStringList{QStringLiteral("侧卷"), QStringLiteral("侧膜")});
-    addRole(QStringLiteral("wet_pad"), QStringList{QStringLiteral("湿帘")});
-    addRole(QStringLiteral("pump"), QStringList{QStringLiteral("水泵"), QStringLiteral("泵")});
+    addRole(QStringLiteral("fan_a"), QStringLiteral("风机组A"));
+    addRole(QStringLiteral("fan_b"), QStringLiteral("风机组B"));
+    addRole(QStringLiteral("outer_shade"), QStringLiteral("外遮阳"));
+    addRole(QStringLiteral("inner_insulation"), QStringLiteral("内保温"));
+    addRole(QStringLiteral("wet_pad"), QStringLiteral("湿帘水泵"));
 
-    const QStringList deviceNames{
-        QStringLiteral("风机1"), QStringLiteral("风机2"),
-        QStringLiteral("湿帘1"), QStringLiteral("湿帘2"),
-        QStringLiteral("顶帘1"), QStringLiteral("顶帘2"),
-        QStringLiteral("端面1"), QStringLiteral("端面2"),
-        QStringLiteral("外遮阳1"), QStringLiteral("外遮阳2"),
-        QStringLiteral("内遮阳1"), QStringLiteral("内遮阳2")
-    };
     deviceStatusMap_.clear();
-    for (const QString &name : deviceNames) {
-        deviceStatusMap_.insert(name, isFanDevice(name) ? QStringLiteral("关闭") : QStringLiteral("停止"));
+    for (const DeviceButtonDef &def : kDeviceButtons) {
+        const QString name = QString::fromUtf8(def.label);
+        deviceStatusMap_.insert(name, defaultStatusForSpecialIdImpl(QString::fromUtf8(def.specialId)));
     }
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
@@ -114,6 +143,21 @@ void Greenhouse3DWidget::setupUi()
     titleLabel_->setStyleSheet(QStringLiteral(
         "font-size: 20px; font-weight: 900; color: #17364a; padding: 0 2px;"));
     mainLayout->addWidget(titleLabel_);
+
+    hintLabel_ = new QLabel(QStringLiteral("风机/湿帘为启停控制，外遮阳/内保温为放-停-收控制。"), this);
+    hintLabel_->setStyleSheet(QStringLiteral("color: #456273; font-size: 13px; padding: 0 2px;"));
+    mainLayout->addWidget(hintLabel_);
+
+    statusLabel_ = new QLabel(QStringLiteral("正在同步大棚分组..."), this);
+    statusLabel_->setStyleSheet(QStringLiteral(
+        "background: #eff6fb; color: #234356; border: 1px solid #d1e0ea; border-radius: 10px; padding: 8px 10px;"));
+    mainLayout->addWidget(statusLabel_);
+
+    bindingLabel_ = new QLabel(QStringLiteral("正在加载绑定信息..."), this);
+    bindingLabel_->setWordWrap(true);
+    bindingLabel_->setStyleSheet(QStringLiteral(
+        "background: #f7fafc; color: #476371; border: 1px solid #d9e4ec; border-radius: 10px; padding: 8px 10px;"));
+    mainLayout->addWidget(bindingLabel_);
 
     QWidget *visualPanel = new QWidget(this);
     visualPanel->setStyleSheet(QStringLiteral(
@@ -130,9 +174,12 @@ void Greenhouse3DWidget::setupUi()
     buttonLayout->setVerticalSpacing(12);
 
     deviceButtons_.clear();
-    for (int i = 0; i < deviceNames.size(); ++i) {
-        QPushButton *button = new QPushButton(deviceNames.at(i), buttonPanel);
-        button->setProperty("deviceName", deviceNames.at(i));
+    for (int i = 0; i < static_cast<int>(sizeof(kDeviceButtons) / sizeof(kDeviceButtons[0])); ++i) {
+        const QString deviceName = QString::fromUtf8(kDeviceButtons[i].label);
+        const QString specialId = QString::fromUtf8(kDeviceButtons[i].specialId);
+        QPushButton *button = new QPushButton(deviceName, buttonPanel);
+        button->setProperty("deviceName", deviceName);
+        button->setProperty("specialId", specialId);
         button->setCursor(Qt::PointingHandCursor);
         button->setMinimumSize(92, 48);
         button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
@@ -314,22 +361,22 @@ void Greenhouse3DWidget::updateDeviceButtonStyles()
             continue;
         }
         const QString deviceName = button->property("deviceName").toString();
-        const QString defaultStatus = isFanDevice(deviceName) ? QStringLiteral("关闭") : QStringLiteral("停止");
-        const QString status = deviceStatusMap_.value(deviceName, defaultStatus);
-        if (isFanDevice(deviceName) &&
+        const QString specialId = button->property("specialId").toString();
+        const QString status = deviceStatusMap_.value(deviceName, defaultStatusForSpecialId(specialId));
+        if (isBinarySpecialId(specialId) &&
             (status == QStringLiteral("打开") || status == QStringLiteral("运行中"))) {
             button->setStyleSheet(QStringLiteral(
                 "QPushButton { background: #4f9f69; color: #ffffff; border: 1px solid #2f6f45; "
                 "border-radius: 8px; font-size: 14px; font-weight: 700; }"
                 "QPushButton:hover { background: #468f5f; }"
                 "QPushButton:pressed { background: #3b7a50; }"));
-        } else if (status == QStringLiteral("收起")) {
+        } else if (status == QStringLiteral("收")) {
             button->setStyleSheet(QStringLiteral(
                 "QPushButton { background: #4f9f69; color: #ffffff; border: 1px solid #2f6f45; "
                 "border-radius: 8px; font-size: 14px; font-weight: 700; }"
                 "QPushButton:hover { background: #468f5f; }"
                 "QPushButton:pressed { background: #3b7a50; }"));
-        } else if (status == QStringLiteral("展开")) {
+        } else if (status == QStringLiteral("放")) {
             button->setStyleSheet(QStringLiteral(
                 "QPushButton { background: #3f7fd9; color: #ffffff; border: 1px solid #295aa0; "
                 "border-radius: 8px; font-size: 14px; font-weight: 700; }"
@@ -345,8 +392,159 @@ void Greenhouse3DWidget::updateDeviceButtonStyles()
     }
 }
 
+QString Greenhouse3DWidget::defaultStatusForSpecialId(const QString &specialId) const
+{
+    return defaultStatusForSpecialIdImpl(specialId);
+}
+
+Greenhouse3DWidget::RoleBinding *Greenhouse3DWidget::findBinding(const QString &specialId)
+{
+    for (RoleBinding &binding : roleBindings_) {
+        if (binding.specialId == specialId) {
+            return &binding;
+        }
+    }
+    return nullptr;
+}
+
+void Greenhouse3DWidget::applyStatusToSpecialId(const QString &specialId, const QString &statusText)
+{
+    for (QPushButton *button : deviceButtons_) {
+        if (!button || button->property("specialId").toString() != specialId) {
+            continue;
+        }
+        const QString deviceName = button->property("deviceName").toString();
+        if (!deviceName.isEmpty()) {
+            deviceStatusMap_[deviceName] = statusText;
+        }
+    }
+    updateDeviceButtonStyles();
+}
+
+void Greenhouse3DWidget::loadSavedState()
+{
+    if (!rpcClient_ || !rpcClient_->isConnected()) {
+        return;
+    }
+
+    rpcClient_->callAsync(QStringLiteral("greenhouse.state.get"), QJsonObject(), this,
+        [this](const QJsonValue &result, const QJsonObject &error) {
+            if (!error.isEmpty() || !result.isObject()) {
+                return;
+            }
+            const QJsonObject state = result.toObject().value(QStringLiteral("state")).toObject();
+            for (const RoleBinding &binding : roleBindings_) {
+                applyStatusToSpecialId(binding.specialId,
+                    actionToStatus(binding.specialId, state.value(binding.specialId).toString(QStringLiteral("stop"))));
+            }
+        },
+        2500);
+}
+
+void Greenhouse3DWidget::saveCurrentState()
+{
+    if (!rpcClient_ || !rpcClient_->isConnected()) {
+        return;
+    }
+
+    QJsonObject state;
+    for (const RoleBinding &binding : roleBindings_) {
+        QString sampleStatus = defaultStatusForSpecialId(binding.specialId);
+        for (QPushButton *button : deviceButtons_) {
+            if (!button || button->property("specialId").toString() != binding.specialId) {
+                continue;
+            }
+            sampleStatus = deviceStatusMap_.value(button->property("deviceName").toString(), sampleStatus);
+            break;
+        }
+        state.insert(binding.specialId, statusToAction(sampleStatus));
+    }
+
+    QJsonObject params;
+    params.insert(QStringLiteral("state"), state);
+    params.insert(QStringLiteral("save"), true);
+    rpcClient_->callAsync(QStringLiteral("greenhouse.state.save"), params, this,
+        [](const QJsonValue &, const QJsonObject &) {}, 2500);
+}
+
+void Greenhouse3DWidget::sendGroupAction(const QString &deviceName,
+                                         const QString &specialId,
+                                         const QString &action,
+                                         const QString &statusText,
+                                         QPointer<QDialog> dialog,
+                                         QPointer<QLabel> statusValue)
+{
+    if (!rpcClient_ || !rpcClient_->isConnected()) {
+        showToast(QStringLiteral("RPC未连接，无法控制 %1").arg(deviceName), QStringLiteral("WARN"));
+        return;
+    }
+
+    RoleBinding *binding = findBinding(specialId);
+    if (!binding || binding->groupId <= 0) {
+        showToast(QStringLiteral("%1 未绑定分组，无法下发控制").arg(deviceName), QStringLiteral("WARN"));
+        return;
+    }
+
+    QJsonObject params;
+    params.insert(QStringLiteral("groupId"), binding->groupId);
+    params.insert(QStringLiteral("ch"), -1);
+    params.insert(QStringLiteral("action"), action);
+
+    if (statusLabel_) {
+        statusLabel_->setText(QStringLiteral("正在控制 %1 -> %2 ...").arg(deviceName, statusText));
+    }
+
+    rpcClient_->callAsync(QStringLiteral("group.control"), params, this,
+        [this, deviceName, specialId, action, statusText, dialog, statusValue](const QJsonValue &result, const QJsonObject &error) {
+            if (!error.isEmpty()) {
+                const QString msg = error.value(QStringLiteral("message")).toString();
+                if (statusLabel_) {
+                    statusLabel_->setText(QStringLiteral("%1 控制失败：%2").arg(deviceName, msg));
+                }
+                showToast(QStringLiteral("%1 控制失败：%2").arg(deviceName, msg), QStringLiteral("ERROR"));
+                return;
+            }
+
+            const QJsonObject obj = result.toObject();
+            if (!obj.value(QStringLiteral("ok")).toBool()) {
+                const QString msg = obj.value(QStringLiteral("error")).toString(QStringLiteral("unknown error"));
+                if (statusLabel_) {
+                    statusLabel_->setText(QStringLiteral("%1 控制失败：%2").arg(deviceName, msg));
+                }
+                showToast(QStringLiteral("%1 控制失败：%2").arg(deviceName, msg), QStringLiteral("ERROR"));
+                return;
+            }
+
+            applyStatusToSpecialId(specialId, statusText);
+            saveCurrentState();
+            if (statusValue) {
+                statusValue->setText(statusText);
+            }
+            if (statusLabel_) {
+                statusLabel_->setText(QStringLiteral("%1 已执行 %2").arg(deviceName, statusText));
+            }
+            showToast(QStringLiteral("%1 已执行 %2 (%3)").arg(deviceName, statusText, action), QStringLiteral("INFO"));
+            if (dialog) {
+                dialog->accept();
+            }
+        },
+        3000);
+}
+
 void Greenhouse3DWidget::showDeviceStatusDialog(const QString &deviceName)
 {
+    QString specialId;
+    for (QPushButton *button : deviceButtons_) {
+        if (button && button->property("deviceName").toString() == deviceName) {
+            specialId = button->property("specialId").toString();
+            break;
+        }
+    }
+    if (specialId.isEmpty()) {
+        showToast(QStringLiteral("%1 未配置 specialId").arg(deviceName), QStringLiteral("WARN"));
+        return;
+    }
+
     QDialog dialog(this);
     dialog.setWindowTitle(deviceName + QStringLiteral("状态"));
     dialog.setModal(true);
@@ -368,8 +566,7 @@ void Greenhouse3DWidget::showDeviceStatusDialog(const QString &deviceName)
     statusLayout->setSpacing(12);
     QLabel *statusTitle = new QLabel(QStringLiteral("当前状态："), &dialog);
     statusTitle->setStyleSheet(QStringLiteral("font-size: 24px; font-weight: 700;"));
-    const QString defaultStatus = isFanDevice(deviceName) ? QStringLiteral("关闭") : QStringLiteral("停止");
-    QLabel *statusValue = new QLabel(deviceStatusMap_.value(deviceName, defaultStatus), &dialog);
+    QLabel *statusValue = new QLabel(deviceStatusMap_.value(deviceName, defaultStatusForSpecialId(specialId)), &dialog);
     statusValue->setStyleSheet(QStringLiteral("font-size: 24px; font-weight: 800; color: #2f9e5b;"));
     statusLayout->addWidget(statusTitle);
     statusLayout->addWidget(statusValue);
@@ -382,8 +579,8 @@ void Greenhouse3DWidget::showDeviceStatusDialog(const QString &deviceName)
     buttonLayout->setSpacing(18);
     buttonLayout->addStretch(1);
 
-    if (isFanDevice(deviceName)) {
-        QPushButton *openButton = new QPushButton(QStringLiteral("打开"), &dialog);
+    if (isBinarySpecialId(specialId)) {
+        QPushButton *openButton = new QPushButton(isFanLikeSpecialId(specialId) ? QStringLiteral("开启") : QStringLiteral("打开"), &dialog);
         openButton->setStyleSheet(QStringLiteral(
             "QPushButton { background: #eef7f1; color: #17663b; border: 1px solid #90d2a6; }"
             "QPushButton:hover { background: #e0f1e6; }"
@@ -397,56 +594,41 @@ void Greenhouse3DWidget::showDeviceStatusDialog(const QString &deviceName)
         buttonLayout->addWidget(openButton);
         buttonLayout->addWidget(closeButton);
 
-        connect(openButton, &QPushButton::clicked, &dialog, [this, deviceName, statusValue, &dialog]() {
-            deviceStatusMap_[deviceName] = QStringLiteral("打开");
-            statusValue->setText(QStringLiteral("打开"));
-            updateDeviceButtonStyles();
-            dialog.accept();
+        connect(openButton, &QPushButton::clicked, &dialog, [this, deviceName, specialId, statusValue, &dialog]() {
+            sendGroupAction(deviceName, specialId, QStringLiteral("fwd"), QStringLiteral("打开"), &dialog, statusValue);
         });
-        connect(closeButton, &QPushButton::clicked, &dialog, [this, deviceName, statusValue, &dialog]() {
-            deviceStatusMap_[deviceName] = QStringLiteral("关闭");
-            statusValue->setText(QStringLiteral("关闭"));
-            updateDeviceButtonStyles();
-            dialog.accept();
+        connect(closeButton, &QPushButton::clicked, &dialog, [this, deviceName, specialId, statusValue, &dialog]() {
+            sendGroupAction(deviceName, specialId, QStringLiteral("stop"), QStringLiteral("关闭"), &dialog, statusValue);
         });
     } else {
-        QPushButton *collapseButton = new QPushButton(QStringLiteral("收起"), &dialog);
-        collapseButton->setStyleSheet(QStringLiteral(
-            "QPushButton { background: #eef7f1; color: #17663b; border: 1px solid #90d2a6; }"
-            "QPushButton:hover { background: #e0f1e6; }"
-            "QPushButton:pressed { background: #d2eadb; }"));
+        QPushButton *expandButton = new QPushButton(QStringLiteral("放"), &dialog);
+        expandButton->setStyleSheet(QStringLiteral(
+            "QPushButton { background: #eef4ff; color: #2559a7; border: 1px solid #9ab8e6; }"
+            "QPushButton:hover { background: #e2ecff; }"
+            "QPushButton:pressed { background: #d5e3ff; }"));
         QPushButton *stopButton = new QPushButton(QStringLiteral("停止"), &dialog);
         stopButton->setStyleSheet(QStringLiteral(
             "QPushButton { background: #f6f8fa; color: #384852; border: 1px solid #b9c7d0; }"
             "QPushButton:hover { background: #ebf0f4; }"
             "QPushButton:pressed { background: #dee7ed; }"));
-        QPushButton *expandButton = new QPushButton(QStringLiteral("展开"), &dialog);
-        expandButton->setStyleSheet(QStringLiteral(
-            "QPushButton { background: #eef4ff; color: #2559a7; border: 1px solid #9ab8e6; }"
-            "QPushButton:hover { background: #e2ecff; }"
-            "QPushButton:pressed { background: #d5e3ff; }"));
+        QPushButton *collapseButton = new QPushButton(QStringLiteral("收"), &dialog);
+        collapseButton->setStyleSheet(QStringLiteral(
+            "QPushButton { background: #eef7f1; color: #17663b; border: 1px solid #90d2a6; }"
+            "QPushButton:hover { background: #e0f1e6; }"
+            "QPushButton:pressed { background: #d2eadb; }"));
 
-        buttonLayout->addWidget(collapseButton);
-        buttonLayout->addWidget(stopButton);
         buttonLayout->addWidget(expandButton);
+        buttonLayout->addWidget(stopButton);
+        buttonLayout->addWidget(collapseButton);
 
-        connect(collapseButton, &QPushButton::clicked, &dialog, [this, deviceName, statusValue, &dialog]() {
-            deviceStatusMap_[deviceName] = QStringLiteral("收起");
-            statusValue->setText(QStringLiteral("收起"));
-            updateDeviceButtonStyles();
-            dialog.accept();
+        connect(expandButton, &QPushButton::clicked, &dialog, [this, deviceName, specialId, statusValue, &dialog]() {
+            sendGroupAction(deviceName, specialId, QStringLiteral("fwd"), QStringLiteral("放"), &dialog, statusValue);
         });
-        connect(stopButton, &QPushButton::clicked, &dialog, [this, deviceName, statusValue, &dialog]() {
-            deviceStatusMap_[deviceName] = QStringLiteral("停止");
-            statusValue->setText(QStringLiteral("停止"));
-            updateDeviceButtonStyles();
-            dialog.accept();
+        connect(stopButton, &QPushButton::clicked, &dialog, [this, deviceName, specialId, statusValue, &dialog]() {
+            sendGroupAction(deviceName, specialId, QStringLiteral("stop"), QStringLiteral("停止"), &dialog, statusValue);
         });
-        connect(expandButton, &QPushButton::clicked, &dialog, [this, deviceName, statusValue, &dialog]() {
-            deviceStatusMap_[deviceName] = QStringLiteral("展开");
-            statusValue->setText(QStringLiteral("展开"));
-            updateDeviceButtonStyles();
-            dialog.accept();
+        connect(collapseButton, &QPushButton::clicked, &dialog, [this, deviceName, specialId, statusValue, &dialog]() {
+            sendGroupAction(deviceName, specialId, QStringLiteral("rev"), QStringLiteral("收"), &dialog, statusValue);
         });
     }
 
@@ -481,19 +663,10 @@ void Greenhouse3DWidget::updateBindingSummary()
     }
     QStringList rows;
     for (const RoleBinding &binding : roleBindings_) {
-        QString roleName;
-        if (binding.role == QStringLiteral("fan")) roleName = QStringLiteral("风机");
-        else if (binding.role == QStringLiteral("top_roll")) roleName = QStringLiteral("顶卷");
-        else if (binding.role == QStringLiteral("end_roll")) roleName = QStringLiteral("端面卷膜");
-        else if (binding.role == QStringLiteral("side_roll")) roleName = QStringLiteral("侧卷膜");
-        else if (binding.role == QStringLiteral("wet_pad")) roleName = QStringLiteral("湿帘");
-        else if (binding.role == QStringLiteral("pump")) roleName = QStringLiteral("水泵");
-        else roleName = binding.role;
-
         if (binding.groupId > 0) {
-            rows << QStringLiteral("%1 -> G%2(%3)").arg(roleName).arg(binding.groupId).arg(binding.groupName);
+            rows << QStringLiteral("%1 -> G%2(%3)").arg(binding.title).arg(binding.groupId).arg(binding.groupName);
         } else {
-            rows << QStringLiteral("%1 -> 未匹配到分组").arg(roleName);
+            rows << QStringLiteral("%1 -> 未匹配到分组").arg(binding.title);
         }
     }
     bindingLabel_->setText(rows.join(QStringLiteral("  |  ")));
@@ -526,20 +699,20 @@ void Greenhouse3DWidget::onRefreshGroups()
                 binding.groupName.clear();
                 for (const QJsonValue &v : groups) {
                     const QJsonObject g = v.toObject();
-                    const QString name = g.value(QStringLiteral("name")).toString();
                     const int groupId = g.value(QStringLiteral("groupId")).toInt(-1);
                     if (groupId <= 0) {
                         continue;
                     }
-                    if (groupNameMatchesRole(name, binding.keywords)) {
+                    if (g.value(QStringLiteral("specialId")).toString() == binding.specialId) {
                         binding.groupId = groupId;
-                        binding.groupName = name;
+                        binding.groupName = g.value(QStringLiteral("name")).toString();
                         break;
                     }
                 }
             }
 
             updateBindingSummary();
+            loadSavedState();
             if (statusLabel_) {
                 statusLabel_->setText(QStringLiteral("分组绑定已同步：%1")
                     .arg(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss"))));

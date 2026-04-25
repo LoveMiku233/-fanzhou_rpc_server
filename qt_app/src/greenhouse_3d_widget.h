@@ -9,11 +9,13 @@
 #include <QList>
 #include <QMap>
 #include <QPixmap>
+#include <QPointer>
 #include <QRect>
 #include <QStringList>
 #include <QWidget>
 
 class QLabel;
+class QDialog;
 class QResizeEvent;
 class QPaintEvent;
 class QPushButton;
@@ -42,8 +44,8 @@ protected:
 
 private:
     struct RoleBinding {
-        QString role;
-        QStringList keywords;
+        QString specialId;
+        QString title;
         int groupId = -1;
         QString groupName;
     };
@@ -55,6 +57,17 @@ private:
     void updateGreenhouseImage();
     void updateBindingSummary();
     void updateDeviceButtonStyles();
+    void loadSavedState();
+    void saveCurrentState();
+    void applyStatusToSpecialId(const QString &specialId, const QString &statusText);
+    QString defaultStatusForSpecialId(const QString &specialId) const;
+    RoleBinding *findBinding(const QString &specialId);
+    void sendGroupAction(const QString &deviceName,
+                         const QString &specialId,
+                         const QString &action,
+                         const QString &statusText,
+                         QPointer<QDialog> dialog = nullptr,
+                         QPointer<QLabel> statusValue = nullptr);
     void showDeviceStatusDialog(const QString &deviceName);
 
     RpcClient *rpcClient_;
